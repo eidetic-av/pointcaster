@@ -1,0 +1,30 @@
+#+title: Box of Birds PointCaster
+#+author: Matt Hughes
+* Building
+To configure the project and build all dependencies, find the location of
+vcpkg's CMake toolchain file (e.g. mine is located at
+`/opt/vcpkg/scripts/buildsystems/vcpkg.cmake`) and run the following command
+from the root directory:
+#+begin_src fish
+cmake -B build -S . -DVCPKG_OVERLAY_PORTS=ports \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg.cmake
+#+end_src
+Building on Windows defaults to dynamic linking. We can switch to static
+linking to ship a single binary if desired. Building on 'nix will always use
+static linking so the project doesn't attempt to use any conflicting libraries
+on the system path.
+#+begin_src fish
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg.cmake \
+  -DVCPKG_TARGET_TRIPLET=x64-windows-static
+#+end_src
+Now that you are configured, the following command will compile the project
+into the `build` directory:
+#+begin_src fish
+cmake --build build
+#+end_src
+If you are on Windows, make sure to set the Visual Studio configuration when
+building:
+#+begin_src fish
+cmake --build build -- /p:configuration=Release
+#+end_src
+

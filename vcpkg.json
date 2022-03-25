@@ -1,0 +1,25 @@
+{
+  "name": "bob-pointcaster",
+  "version-string": "0.0.1",
+  "builtin-baseline": "24b19046151b0ca32250603547a113ccad3b808a",
+  "dependencies": [
+    {
+      "name": "spdlog",
+      "version>=": "1.9.2"
+    },
+    {
+      "name": "zeromq",
+      "version>=": "4.3.4#2",
+      "default-features": false,
+      "features": [ "draft" ]
+    },
+    {
+      "name": "ebml",
+      "version>=": "1.4.2"
+    },
+    {
+      "name": "azure-kinect-sensor-sdk",
+      "version>=": "1.4.1#4"
+    }
+  ]
+}
