@@ -20,6 +20,13 @@
     {
       "name": "azure-kinect-sensor-sdk",
       "version>=": "1.4.1#4"
+    },
+    {
+	"name": "magnum",
+	"version>=": "2020.06#9",
+	"default-features": false,
+	"features": [ "vk", "meshtools", "primitives",
+		      "scenegraph", "sdl2application" ]
     }
   ]
 }

@@ -13,6 +13,8 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(ZeroMQ CONFIG REQUIRED)
 find_package(EBML CONFIG REQUIRED)
 find_package(k4a CONFIG REQUIRED)
+find_package(Magnum CONFIG REQUIRED
+  Vk Primitives SceneGraph Sdl2Application)
 
 include_directories(include)
 
@@ -33,6 +35,8 @@ set_property(TARGET ssp_server PROPERTY
 endif()
 
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
+  Magnum::Magnum Magnum::Vk Magnum::Primitives
+  Magnum::SceneGraph Magnum::Sdl2Application
   spdlog::spdlog EBML::ebml k4a::k4a libzmq-static)
 
 # copy compile_commands.json for lsp integration 
