@@ -1,4 +1,5 @@
 build/
+bin/
 vcpkg_installed/
 .cache/
 
