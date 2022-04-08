@@ -74,8 +74,14 @@ namespace bob {
       return *this;
     }
 
+    ParticleGroup& setPoints(const std::vector<Vector3>& points) {
+      _points = points;
+      return *this;
+    }
+
   private:
     const std::vector<Vector3>& _points;
+
     bool _dirty = false;
 
     Float _particleRadius = 1.0f;

@@ -15,8 +15,9 @@ namespace bob::sensors {
       return open_;
     };
 
-  private:
     k4a_device_t device_ = nullptr;
+    k4a_device_configuration_t _config;
+  private:
     bool open_ = false;
   };
 } //namespace bob::sensors

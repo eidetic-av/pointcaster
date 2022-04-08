@@ -28,7 +28,7 @@ corrade_add_resource(RESOURCES resources.conf)
 
 set(SOURCE_FILES
   src/pointcaster.cc src/k4a_driver.cc 
-  src/shaders/particle_sphere.cc)
+  src/particle_group.cc src/shaders/particle_sphere.cc)
 
 set(PLATFORM_LIBS)
 if (WIN32)
