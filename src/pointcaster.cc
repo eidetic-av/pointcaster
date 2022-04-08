@@ -32,8 +32,9 @@
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
 
-#include "k4a_driver.h"
-#include "particle_group.h"
+#include "devices/k4a/k4a_driver.h"
+#include "devices/k4a/k4a_device.h"
+#include "point_cloud.h"
 #include "wireframe_objects.h"
 
 namespace bob {
@@ -50,13 +51,13 @@ std::random_device rd;
 std::default_random_engine eng(rd());
 std::uniform_real_distribution<> distr(-1.0f, 1.0f);
 
-K4ADriver kinect;
 k4a_transformation_t kinect_transformation;
+
+K4ADevice kinect;
 
 class PointCaster : public Platform::Application {
 public:
   explicit PointCaster(const Arguments &args);
-  ~PointCaster();
 
 protected:
   ImGuiIntegration::Context _imgui_context{NoCreate};
@@ -74,7 +75,7 @@ protected:
   Containers::Pointer<SceneGraph::Camera3D> _camera;
 
   // Our particle system
-  Containers::Pointer<ParticleGroup> _particle_system;
+  Containers::Pointer<PointCloud> _particle_system;
   const std::vector<Vector3> _particle_positions {
     Vector3(1, 1, 0)
   };
@@ -183,19 +184,10 @@ PointCaster::PointCaster(const Arguments &args)
   // Set up particle system
   {
     // _particle_positions.reset(new std::vector<Vector3>);
-    _particle_system.reset(new ParticleGroup{_particle_positions, 0.005f});
+    _particle_system.reset(new PointCloud{_particle_positions, 0.005f});
     _particle_system->setColorMode(ParticleSphereShader::ColorMode(1));
     // _particle_system->setDiffuseColor(Color3(255, 0, 0));
     _particle_system->setDirty();
-  }
-
-  // Set up kinect
-  {
-    kinect.Open();
-    k4a_calibration_t calibration;
-    k4a_device_get_calibration(kinect.device_, kinect._config.depth_mode,
-			       kinect._config.color_resolution, &calibration);
-    kinect_transformation = k4a_transformation_create(&calibration);
   }
 
   // Enable depth test, render particles as sprites
@@ -210,8 +202,6 @@ PointCaster::PointCaster(const Arguments &args)
   setMinimalLoopPeriod(7);
 }
 
-PointCaster::~PointCaster() { kinect.Close(); }
-
 void PointCaster::drawEvent() {
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
 			       GL::FramebufferClear::Depth);
@@ -225,51 +215,7 @@ void PointCaster::drawEvent() {
 
   // Fill point cloud
   {
-    k4a_capture_t capture;
-    constexpr int color_pixel_size = 4 * static_cast<int>(sizeof(uint8_t));
-    constexpr int depth_pixel_size = static_cast<int>(sizeof(int16_t));
-    constexpr int depth_point_size = 3 * static_cast<int>(sizeof(int16_t));
-
-    const auto result = k4a_device_get_capture(kinect.device_, &capture, 1000);
-    auto depth_image = k4a_capture_get_depth_image(capture);
-    const int depth_width = k4a_image_get_width_pixels(depth_image);
-    const int depth_height = k4a_image_get_height_pixels(depth_image);
-    // auto color_image = k4a_capture_get_color_image(capture);
-
-    // k4a_image_t transformed_color_image;
-    // k4a_image_create(K4A_IMAGE_FORMAT_COLOR_BGRA32, depth_width, depth_height,
-    // 		     depth_width * color_pixel_size, &transformed_color_image);
-    k4a_image_t point_cloud_image;
-    k4a_image_create(K4A_IMAGE_FORMAT_CUSTOM, depth_width, depth_height,
-		     depth_width * depth_point_size, &point_cloud_image);
-
-    // // transform the color image to the depth image
-    // k4a_transformation_color_image_to_depth_camera(kinect_transformation,
-    // 						   depth_image, color_image,
-    //                                                transformed_color_image);
-    // // transform the depth image to a point cloud
-    k4a_transformation_depth_image_to_point_cloud(
-	kinect_transformation, depth_image, K4A_CALIBRATION_TYPE_DEPTH,
-	point_cloud_image);
-
-    auto point_cloud_buffer =
-	reinterpret_cast<int16_t *>(k4a_image_get_buffer(point_cloud_image));
-    auto point_cloud_buffer_size = k4a_image_get_size(point_cloud_image);
-    auto point_count = point_cloud_buffer_size / sizeof(int16_t) / 3;
-
-    std::vector<Vector3> points;
-
-    for (int i = 0; i < point_count; i++) {
-      const int index = i * 3;
-      const auto x = point_cloud_buffer[index] / -1000.f;
-      const auto y = (point_cloud_buffer[index + 1] / -1000.f) + 1.f;
-      const auto z = point_cloud_buffer[index + 2] / -1000.f;
-      points.push_back(Vector3{x, y, z});
-    }
-
-    // Vector3 point{distr(eng), distr(eng), distr(eng)};
-    // points.push_back(point);
-
+    auto points = kinect.getPointCloud();
     _particle_system->setPoints(points);
     _particle_system->setDirty();
   }
@@ -362,6 +308,9 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 
 void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
+  case KeyEvent::Key::Q:
+    exit(0);
+    break;
   default:
     if (_imgui_context.handleKeyPressEvent(event)) {
       event.setAccepted(true);

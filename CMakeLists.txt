@@ -27,8 +27,10 @@ find_package(MagnumIntegration CONFIG REQUIRED ImGui)
 corrade_add_resource(RESOURCES resources.conf)
 
 set(SOURCE_FILES
-  src/pointcaster.cc src/k4a_driver.cc 
-  src/particle_group.cc src/shaders/particle_sphere.cc)
+  src/pointcaster.cc src/point_cloud.cc
+  src/shaders/particle_sphere.cc
+  src/devices/k4a/k4a_driver.cc
+  src/devices/k4a/k4a_device.cc)
 
 set(PLATFORM_LIBS)
 if (WIN32)

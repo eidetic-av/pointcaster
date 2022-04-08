@@ -1,4 +1,4 @@
-#include "particle_group.h"
+#include "point_cloud.h"
 
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Utility/Assert.h>
@@ -15,7 +15,7 @@ namespace bob {
 using namespace Magnum;
 using namespace Math::Literals;
 
-ParticleGroup::ParticleGroup(const std::vector<Vector3> &points,
+PointCloud::PointCloud(const std::vector<Vector3> &points,
                              float particleRadius)
     : _points(points), _particleRadius(particleRadius),
       _meshParticles(GL::MeshPrimitive::Points) {
@@ -24,8 +24,8 @@ ParticleGroup::ParticleGroup(const std::vector<Vector3> &points,
   _particleShader.reset(new ParticleSphereShader);
 }
 
-ParticleGroup &
-ParticleGroup::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
+PointCloud &
+PointCloud::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
 		    const Vector2i &viewportSize) {
   if (_points.empty()) return *this;
 

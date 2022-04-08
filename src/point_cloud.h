@@ -12,69 +12,69 @@ namespace bob {
   using namespace Magnum;
   using namespace bob::shaders;
 
-  class ParticleGroup {
+  class PointCloud {
   public:
-    explicit ParticleGroup(const std::vector<Vector3>& points, float particleRadius);
+    explicit PointCloud(const std::vector<Vector3>& points, float particleRadius);
 
-    ParticleGroup& draw(Containers::Pointer<SceneGraph::Camera3D>& camera, const Vector2i& viewportSize);
+    PointCloud& draw(Containers::Pointer<SceneGraph::Camera3D>& camera, const Vector2i& viewportSize);
 
     bool isDirty() const { return _dirty; }
 
-    ParticleGroup& setDirty() {
+    PointCloud& setDirty() {
       _dirty = true;
       return *this;
     }
 
     Float particleRadius() const { return _particleRadius; }
 
-    ParticleGroup& setParticleRadius(Float radius) {
+    PointCloud& setParticleRadius(Float radius) {
       _particleRadius = radius;
       return *this;
     }
 
     ParticleSphereShader::ColorMode colorMode() const { return _colorMode; }
 
-    ParticleGroup& setColorMode(ParticleSphereShader::ColorMode colorMode) {
+    PointCloud& setColorMode(ParticleSphereShader::ColorMode colorMode) {
       _colorMode = colorMode;
       return *this;
     }
 
     Color3 ambientColor() const { return _ambientColor; }
 
-    ParticleGroup& setAmbientColor(const Color3& color) {
+    PointCloud& setAmbientColor(const Color3& color) {
       _ambientColor = color;
       return *this;
     }
 
     Color3 diffuseColor() const { return _diffuseColor; }
 
-    ParticleGroup& setDiffuseColor(const Color3& color) {
+    PointCloud& setDiffuseColor(const Color3& color) {
       _diffuseColor = color;
       return *this;
     }
 
     Color3 specularColor() const { return _specularColor; }
 
-    ParticleGroup& setSpecularColor(const Color3& color) {
+    PointCloud& setSpecularColor(const Color3& color) {
       _specularColor = color;
       return *this;
     }
 
     Float shininess() const { return _shininess; }
 
-    ParticleGroup& setShininess(Float shininess) {
+    PointCloud& setShininess(Float shininess) {
       _shininess = shininess;
       return *this;
     }
 
     Vector3 lightDirection() const { return _lightDir; }
 
-    ParticleGroup& setLightDirection(const Vector3& lightDir) {
+    PointCloud& setLightDirection(const Vector3& lightDir) {
       _lightDir = lightDir;
       return *this;
     }
 
-    ParticleGroup& setPoints(const std::vector<Vector3>& points) {
+    PointCloud& setPoints(const std::vector<Vector3>& points) {
       _points = points;
       return *this;
     }
