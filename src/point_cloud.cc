@@ -2,6 +2,7 @@
 
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Utility/Assert.h>
+#include <Magnum/GL/Attribute.h>
 #include <Magnum/GL/Renderer.h>
 #include <Magnum/Math/Functions.h>
 #include <Magnum/SceneGraph/Drawable.h>
@@ -12,49 +13,59 @@
 
 namespace bob {
 
+using Color16 = std::array<char, 4>;
+
 using namespace Magnum;
 using namespace Math::Literals;
 
-PointCloud::PointCloud(const std::vector<Vector3> &points,
-                             float particleRadius)
-    : _points(points), _particleRadius(particleRadius),
+PointCloudRenderer::PointCloudRenderer(float particleRadius)
+    : _particleRadius(particleRadius),
       _meshParticles(GL::MeshPrimitive::Points) {
-  _meshParticles.addVertexBuffer(_bufferParticles, 0,
-				 Shaders::Generic3D::Position{});
+  _meshParticles.addVertexBuffer(_positions_buffer, 0,
+				 Shaders::Generic3D::Position());
+
+  // _meshParticles.addVertexBuffer(_color_buffer, 0, Shaders::Generic3D::Color4());
+  _meshParticles.addVertexBuffer(_color_buffer, 0, GL::Attribute<2, float>());
+
   _particleShader.reset(new ParticleSphereShader);
 }
 
-PointCloud &
-PointCloud::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
+PointCloudRenderer &
+PointCloudRenderer::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
 		    const Vector2i &viewportSize) {
+  // spdlog::info("draw: {}", _points.size());
   if (_points.empty()) return *this;
 
+  spdlog::info("p: {}, c: {}", _points.positions.size(), _points.colors.size());
+
   if (_dirty) {
-    Containers::ArrayView<const float> data(
-	reinterpret_cast<const float *>(&_points[0]), _points.size() * 3);
-    _bufferParticles.setData(data);
+    Containers::ArrayView<const float> position_data(
+	reinterpret_cast<const float *>(&_points.positions[0]),
+	_points.size() * 3);
+    _positions_buffer.setData(position_data);
+
+    Containers::ArrayView<const float> color_data(
+	reinterpret_cast<const float *>(&_points.colors[0]), _points.size());
+    _color_buffer.setData(color_data);
+
     _meshParticles.setCount(static_cast<int>(_points.size()));
     _dirty = false;
   }
 
+  // spdlog::info(_points.size());
+
   (*_particleShader)
       /* particle data */
-      .setNumParticles(static_cast<int>(_points.size()))
       .setParticleRadius(_particleRadius)
       /* sphere render data */
       .setPointSizeScale(
 	  static_cast<float>(viewportSize.y()) /
 	  Math::tan(22.5_degf)) /* tan(half field-of-view angle (45_deg)*/
-      .setColorMode(_colorMode)
-      .setAmbientColor(_ambientColor)
-      .setDiffuseColor(_diffuseColor)
-      .setSpecularColor(_specularColor)
-      .setShininess(_shininess)
       /* view/prj matrices and light */
       .setViewMatrix(camera->cameraMatrix())
       .setProjectionMatrix(camera->projectionMatrix())
-      .setLightDirection(_lightDir)
       .draw(_meshParticles);
+    ;
 
   return *this;
 }

@@ -47,12 +47,6 @@ using namespace Math::Literals;
 using Object3D = SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
 using Scene3D = SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 
-std::random_device rd;
-std::default_random_engine eng(rd());
-std::uniform_real_distribution<> distr(-1.0f, 1.0f);
-
-k4a_transformation_t kinect_transformation;
-
 K4ADevice kinect;
 
 class PointCaster : public Platform::Application {
@@ -75,10 +69,7 @@ protected:
   Containers::Pointer<SceneGraph::Camera3D> _camera;
 
   // Our particle system
-  Containers::Pointer<PointCloud> _particle_system;
-  const std::vector<Vector3> _particle_positions {
-    Vector3(1, 1, 0)
-  };
+  Containers::Pointer<PointCloudRenderer> _point_cloud_renderer;
 
   // Ground grid
   Containers::Pointer<WireframeGrid> _grid;
@@ -86,8 +77,8 @@ protected:
   bool _mouse_pressed = false;
 
   // helper functions for camera movement
-  Float depthAt(const Vector2i& windowPosition);
-  Vector3 unproject(const Vector2i& windowPosition, Float depth) const;
+  Float depthAt(const Vector2i& window_position);
+  Vector3 unproject(const Vector2i& window_position, Float depth) const;
 
   void drawGui();
 
@@ -106,21 +97,16 @@ PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
 
   // Set up the window
-  {
-    const Vector2 dpi_scaling = this->dpiScaling({});
-    Configuration conf;
-    conf.setTitle("PointCaster")
-	.setSize(conf.size(), dpi_scaling)
-	.setWindowFlags(Configuration::WindowFlag::Resizable);
-    GLConfiguration gl_conf;
-    gl_conf.setSampleCount(dpi_scaling.max() < 2.0f ? 8 : 2);
-    if (!tryCreate(conf, gl_conf)) {
-      create(conf, gl_conf.setSampleCount(0));
-    }
-  }
+  const Vector2 dpi_scaling = this->dpiScaling({});
+  Configuration conf;
+  conf.setTitle("pointcaster");
+  conf.setSize(conf.size(), dpi_scaling);
+  conf.setWindowFlags(Configuration::WindowFlag::Resizable);
+  GLConfiguration gl_conf;
+  gl_conf.setSampleCount(dpi_scaling.max() < 2.0f ? 8 : 2);
+  if (!tryCreate(conf, gl_conf)) create(conf, gl_conf.setSampleCount(0));
 
   // Set up ImGui
-  {
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
@@ -145,10 +131,8 @@ PointCaster::PointCaster(const Arguments &args)
     Magnum::GL::Renderer::setBlendFunction(
 	Magnum::GL::Renderer::BlendFunction::SourceAlpha,
 	Magnum::GL::Renderer::BlendFunction::OneMinusSourceAlpha);
-  }
 
   // Set up scene and camera
-  {
     _scene.reset(new Scene3D{});
     _drawable_group.reset(new SceneGraph::DrawableGroup3D{});
 
@@ -157,7 +141,7 @@ PointCaster::PointCaster(const Arguments &args)
 	Vector3(0, 1.5, 8), Vector3(0, 1, 0), Vector3(0, 1, 0)));
 
     const auto viewport_size = GL::defaultFramebuffer.viewport().size();
-    _camera.reset(new SceneGraph::Camera3D{*_object_camera});
+    _camera.reset(new SceneGraph::Camera3D(*_object_camera));
     _camera
 	->setProjectionMatrix(Matrix4::perspectiveProjection(
 	    45.0_degf, Vector2{viewport_size}.aspectRatio(), 0.01f, 1000.0f))
@@ -172,34 +156,30 @@ PointCaster::PointCaster(const Arguments &args)
     // initialise depth to the value at scene center
     _last_depth = ((_camera->projectionMatrix() * _camera->cameraMatrix())
 		       .transformPoint({}) .z() + 1.0f) * 0.5f;
-  }
 
   // Set up ground grid
-  {
     _grid.reset(new WireframeGrid(_scene.get(), _drawable_group.get()));
     _grid->transform(Matrix4::scaling(Vector3(0.5f)) *
 		     Matrix4::translation(Vector3(3, 0, -5)));
-  }
 
-  // Set up particle system
-  {
-    // _particle_positions.reset(new std::vector<Vector3>);
-    _particle_system.reset(new PointCloud{_particle_positions, 0.005f});
-    _particle_system->setColorMode(ParticleSphereShader::ColorMode(1));
-    // _particle_system->setDiffuseColor(Color3(255, 0, 0));
-    _particle_system->setDirty();
-  }
+    // Set up particle system
+    // auto positions = std::vector<Vector3>{ {0, 0, 0 } };
+    // auto colors = std::vector<Color3>{ {1, 0, 0 } };
+    // PointCloud point_cloud { positions, colors };
+    // _particle_system.reset(new PointCloudRenderer(point_cloud, 0.5f));
+    // _particle_system->setColorMode(ParticleSphereShader::ColorMode(1));
+    // _particle_system->setDirty();
 
-  // Enable depth test, render particles as sprites
-  GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-  GL::Renderer::enable(GL::Renderer::Feature::ProgramPointSize);
+    // Enable depth test, render particles as sprites
+    GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+    GL::Renderer::enable(GL::Renderer::Feature::ProgramPointSize);
 
-  // set background color
-  GL::Renderer::setClearColor(0x0d1117_rgbf);
+    // set background color
+    GL::Renderer::setClearColor(0x0d1117_rgbf);
 
-  // Start the timer, loop at 144 Hz max
-  setSwapInterval(1);
-  setMinimalLoopPeriod(7);
+    // Start the timer, loop at 144 Hz max
+    setSwapInterval(1);
+    setMinimalLoopPeriod(7);
 }
 
 void PointCaster::drawEvent() {
@@ -214,36 +194,41 @@ void PointCaster::drawEvent() {
     stopTextInput();
 
   // Fill point cloud
-  {
-    auto points = kinect.getPointCloud();
-    _particle_system->setPoints(points);
-    _particle_system->setDirty();
-  }
+  auto points = kinect.getPointCloud();
+  // spdlog::info("points.size(): {}", points.size());
+  _point_cloud_renderer.reset(new PointCloudRenderer(0.005f));
+  _point_cloud_renderer->_points = points;
+  // spdlog::info("color size: {}", _point_cloud_renderer->_points.colors.size());
+  _point_cloud_renderer->setDirty();
+
+
+    // auto positions = std::vector<Vector3>{ {0, 0, 0 } };
+    // auto colors = std::vector<Color3>{ {0, 0, 1 } };
+    // PointCloud point_cloud { positions, colors };
+    // _particle_system.reset(new PointCloudRenderer(point_cloud, 0.5f));
+    // _point_cloud_renderer->setColorMode(ParticleSphereShader::ColorMode(2));
+    // _point_cloud_renderer->setDirty();
 
   // Draw objects
-  {
-    _particle_system->draw(_camera, framebufferSize());
-    _camera->draw(*_drawable_group);
-  }
+  _point_cloud_renderer->draw(_camera, framebufferSize());
+  _camera->draw(*_drawable_group);
 
   drawGui();
 
   _imgui_context.updateApplicationCursor(*this);
 
   // Render ImGui window
-  {
-    GL::Renderer::enable(GL::Renderer::Feature::Blending);
-    GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
-    GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
-    GL::Renderer::enable(GL::Renderer::Feature::ScissorTest);
+  GL::Renderer::enable(GL::Renderer::Feature::Blending);
+  GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
+  GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
+  GL::Renderer::enable(GL::Renderer::Feature::ScissorTest);
 
-    _imgui_context.drawFrame();
+  _imgui_context.drawFrame();
 
-    GL::Renderer::disable(GL::Renderer::Feature::ScissorTest);
-    GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-    GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
-    GL::Renderer::disable(GL::Renderer::Feature::Blending);
-  }
+  GL::Renderer::disable(GL::Renderer::Feature::ScissorTest);
+  GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+  GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
+  GL::Renderer::disable(GL::Renderer::Feature::Blending);
 
   // The context is double-buffered, swap buffers
   swapBuffers();
@@ -255,41 +240,41 @@ void PointCaster::drawEvent() {
 void PointCaster::drawGui() {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.5f);
-  ImGui::Begin("Options", nullptr);
+  ImGui::Begin("options", nullptr);
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.6f);
   ImGui::PopItemWidth();
   ImGui::End();
 }
 
-Float PointCaster::depthAt(const Vector2i &windowPosition) {
+Float PointCaster::depthAt(const Vector2i &window_position) {
   /* First scale the position from being relative to window size to being
      relative to framebuffer size as those two can be different on HiDPI
      systems */
   const Vector2i position =
-      windowPosition * Vector2{framebufferSize()} / Vector2{windowSize()};
-  const Vector2i fbPosition{position.x(),
+      window_position * Vector2(framebufferSize()) / Vector2(windowSize());
+  const Vector2i fbPosition(position.x(),
 			    GL::defaultFramebuffer.viewport().sizeY() -
-				position.y() - 1};
+				position.y() - 1);
 
   GL::defaultFramebuffer.mapForRead(
       GL::DefaultFramebuffer::ReadAttachment::Front);
   Image2D data = GL::defaultFramebuffer.read(
-      Range2Di::fromSize(fbPosition, Vector2i{1}).padded(Vector2i{2}),
+      Range2Di::fromSize(fbPosition, Vector2i(1)).padded(Vector2i(2)),
       {GL::PixelFormat::DepthComponent, GL::PixelType::Float});
 
   return Math::min<Float>(Containers::arrayCast<const Float>(data.data()));
 }
 
-Vector3 PointCaster::unproject(const Vector2i &windowPosition,
+Vector3 PointCaster::unproject(const Vector2i &window_position,
 			       float depth) const {
   /* We have to take window size, not framebuffer size, since the position is
      in window coordinates and the two can be different on HiDPI systems */
   const Vector2i viewSize = windowSize();
   const Vector2i viewPosition =
-      Vector2i{windowPosition.x(), viewSize.y() - windowPosition.y() - 1};
-  const Vector3 in{2.0f * Vector2{viewPosition} / Vector2{viewSize} -
-		       Vector2{1.0f},
-                   depth * 2.0f - 1.0f};
+      Vector2i(window_position.x(), viewSize.y() - window_position.y() - 1);
+  const Vector3 in(2.0f * Vector2(viewPosition) / Vector2(viewSize) -
+		       Vector2(1.0f),
+                   depth * 2.0f - 1.0f);
 
   return _camera->projectionMatrix().inverted().transformPoint(in);
 }
@@ -312,24 +297,19 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     exit(0);
     break;
   default:
-    if (_imgui_context.handleKeyPressEvent(event)) {
+    if (_imgui_context.handleKeyPressEvent(event))
       event.setAccepted(true);
-    }
   }
 }
 
 void PointCaster::keyReleaseEvent(KeyEvent &event) {
-  if (_imgui_context.handleKeyReleaseEvent(event)) {
+  if (_imgui_context.handleKeyReleaseEvent(event))
     event.setAccepted(true);
-    return;
-  }
 }
 
 void PointCaster::textInputEvent(TextInputEvent &event) {
-
-  if (_imgui_context.handleTextInputEvent(event)) {
+  if (_imgui_context.handleTextInputEvent(event))
     event.setAccepted(true);
-  }
 }
 
 void PointCaster::mousePressEvent(MouseEvent &event) {
@@ -338,19 +318,17 @@ void PointCaster::mousePressEvent(MouseEvent &event) {
     return;
   }
 
-  /* Update camera */
-  {
-    _prev_mouse_position = event.position();
-    const Float currentDepth = depthAt(event.position());
-    const Float depth = currentDepth == 1.0f ? _last_depth : currentDepth;
-    _translation_point = unproject(event.position(), depth);
+  // Update camera
+  _prev_mouse_position = event.position();
+  const Float currentDepth = depthAt(event.position());
+  const Float depth = currentDepth == 1.0f ? _last_depth : currentDepth;
+  _translation_point = unproject(event.position(), depth);
 
-    /* Update the rotation point only if we're not zooming against infinite
-       depth or if the original rotation point is not yet initialized */
-    if (currentDepth != 1.0f || _rotation_point.isZero()) {
-      _rotation_point = _translation_point;
-      _last_depth = depth;
-    }
+  /* Update the rotation point only if we're not zooming against infinite
+     depth or if the original rotation point is not yet initialized */
+  if (currentDepth != 1.0f || _rotation_point.isZero()) {
+    _rotation_point = _translation_point;
+    _last_depth = depth;
   }
 
   _mouse_pressed = true;
@@ -370,12 +348,11 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
   }
 
   const Vector2 delta = 3.0f *
-			Vector2{event.position() - _prev_mouse_position} /
-                        Vector2{framebufferSize()};
+			Vector2(event.position() - _prev_mouse_position) /
+			Vector2(framebufferSize());
   _prev_mouse_position = event.position();
 
-  if (!event.buttons())
-    return;
+  if (!event.buttons()) return;
 
   /* Translate */
   if (event.modifiers() & MouseMoveEvent::Modifier::Shift) {
@@ -396,9 +373,7 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
 
 void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
   const Float delta = event.offset().y();
-  if (Math::abs(delta) < 1.0e-2f) {
-    return;
-  }
+  if (Math::abs(delta) < 1.0e-2f) return;
 
   if (_imgui_context.handleMouseScrollEvent(event)) {
     /* Prevent scrolling the page */

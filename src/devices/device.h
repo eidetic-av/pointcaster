@@ -1,28 +1,24 @@
 #pragma once
 
+#include "../point_cloud.h"
 #include "driver.h"
 
 namespace bob::sensors {
 
-  template<class driver_t> class Device {
+template <class driver_t> class Device {
 
-  public:
+public:
+  Device() { _driver.Open(); }
 
-    Device() {
-      _driver.Open();
-    }
+  ~Device() {
+    if (_driver.IsOpen())
+      _driver.Close();
+  }
 
-    ~Device() {
-      if (_driver.IsOpen()) _driver.Close();
-    }
+  virtual void spin() = 0;
 
-    virtual void spin() = 0;
-    virtual std::vector<Magnum::Vector3> getPointCloud() = 0;
-
-  protected:
-
-    driver_t _driver;
-
-  };
+protected:
+  driver_t _driver;
+};
 
 } // namespace bob::sensors

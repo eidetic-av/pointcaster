@@ -8,7 +8,9 @@ namespace bob::sensors {
   class K4ADevice : Device<K4ADriver> {
   public:
     void spin() override;
-    std::vector<Magnum::Vector3> getPointCloud() override;
+    bob::PointCloud<Vector3, float> getPointCloud() {
+      return _driver.getPointCloud();
+    };
   };
   
 }

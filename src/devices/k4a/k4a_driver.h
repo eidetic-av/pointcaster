@@ -2,8 +2,10 @@
 
 #include <k4a/k4a.h>
 #include "../driver.h"
+#include "../../point_cloud.h"
 
 namespace bob::sensors {
+
   class K4ADriver : Driver {
   public:
     int device_index;
@@ -17,7 +19,7 @@ namespace bob::sensors {
       return _open;
     };
 
-    std::vector<Magnum::Vector3> getPointCloud() override;
+    PointCloud<Vector3, float> getPointCloud();
 
   private:
     k4a_device_t _device;

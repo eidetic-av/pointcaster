@@ -6,6 +6,7 @@
 #include <Magnum/GL/Version.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/Math/Matrix4.h>
+#include <Magnum/Shaders/Generic.h>
 
 namespace bob::shaders {
 
@@ -23,24 +24,10 @@ ParticleSphereShader::ParticleSphereShader() {
   attachShaders({vertShader, fragShader});
   CORRADE_INTERNAL_ASSERT(link());
 
-  _uNumParticles = uniformLocation("numParticles");
   _uParticleRadius = uniformLocation("particleRadius");
-
   _uPointSizeScale = uniformLocation("pointSizeScale");
-  _uColorMode = uniformLocation("colorMode");
-  _uAmbientColor = uniformLocation("ambientColor");
-  _uDiffuseColor = uniformLocation("diffuseColor");
-  _uSpecularColor = uniformLocation("specularColor");
-  _uShininess = uniformLocation("shininess");
-
   _uViewMatrix = uniformLocation("viewMatrix");
   _uProjectionMatrix = uniformLocation("projectionMatrix");
-  _uLightDir = uniformLocation("lightDir");
-}
-
-ParticleSphereShader &ParticleSphereShader::setNumParticles(Int numParticles) {
-  setUniform(_uNumParticles, numParticles);
-  return *this;
 }
 
 ParticleSphereShader &ParticleSphereShader::setParticleRadius(Float radius) {
@@ -53,34 +40,6 @@ ParticleSphereShader &ParticleSphereShader::setPointSizeScale(Float scale) {
   return *this;
 }
 
-ParticleSphereShader &ParticleSphereShader::setColorMode(Int colorMode) {
-  setUniform(_uColorMode, colorMode);
-  return *this;
-}
-
-ParticleSphereShader &
-ParticleSphereShader::setAmbientColor(const Color3 &color) {
-  setUniform(_uAmbientColor, color);
-  return *this;
-}
-
-ParticleSphereShader &
-ParticleSphereShader::setDiffuseColor(const Color3 &color) {
-  setUniform(_uDiffuseColor, color);
-  return *this;
-}
-
-ParticleSphereShader &
-ParticleSphereShader::setSpecularColor(const Color3 &color) {
-  setUniform(_uSpecularColor, color);
-  return *this;
-}
-
-ParticleSphereShader &ParticleSphereShader::setShininess(Float shininess) {
-  setUniform(_uShininess, shininess);
-  return *this;
-}
-
 ParticleSphereShader &
 ParticleSphereShader::setViewMatrix(const Matrix4 &matrix) {
   setUniform(_uViewMatrix, matrix);
@@ -90,12 +49,6 @@ ParticleSphereShader::setViewMatrix(const Matrix4 &matrix) {
 ParticleSphereShader &
 ParticleSphereShader::setProjectionMatrix(const Matrix4 &matrix) {
   setUniform(_uProjectionMatrix, matrix);
-  return *this;
-}
-
-ParticleSphereShader &
-ParticleSphereShader::setLightDirection(const Vector3 &lightDir) {
-  setUniform(_uLightDir, lightDir);
   return *this;
 }
 
