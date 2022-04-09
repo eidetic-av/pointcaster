@@ -25,8 +25,7 @@ void main() {
 
     /* output */
     viewCenter = posEye;
-
-    // color = vec3(in_color.r, in_color.g, in_color.b);
+       
     color = decodeColor(in_color);
 
     gl_PointSize = particleRadius*pointSizeScale/length(posEye);

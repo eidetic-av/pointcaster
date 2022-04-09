@@ -201,14 +201,6 @@ void PointCaster::drawEvent() {
   // spdlog::info("color size: {}", _point_cloud_renderer->_points.colors.size());
   _point_cloud_renderer->setDirty();
 
-
-    // auto positions = std::vector<Vector3>{ {0, 0, 0 } };
-    // auto colors = std::vector<Color3>{ {0, 0, 1 } };
-    // PointCloud point_cloud { positions, colors };
-    // _particle_system.reset(new PointCloudRenderer(point_cloud, 0.5f));
-    // _point_cloud_renderer->setColorMode(ParticleSphereShader::ColorMode(2));
-    // _point_cloud_renderer->setDirty();
-
   // Draw objects
   _point_cloud_renderer->draw(_camera, framebufferSize());
   _camera->draw(*_drawable_group);

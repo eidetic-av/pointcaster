@@ -36,12 +36,9 @@ PointCloudRenderer::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
   // spdlog::info("draw: {}", _points.size());
   if (_points.empty()) return *this;
 
-  spdlog::info("p: {}, c: {}", _points.positions.size(), _points.colors.size());
-
   if (_dirty) {
     Containers::ArrayView<const float> position_data(
-	reinterpret_cast<const float *>(&_points.positions[0]),
-	_points.size() * 3);
+	reinterpret_cast<const float *>(&_points.positions[0]), _points.size() * 3);
     _positions_buffer.setData(position_data);
 
     Containers::ArrayView<const float> color_data(

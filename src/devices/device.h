@@ -8,11 +8,11 @@ namespace bob::sensors {
 template <class driver_t> class Device {
 
 public:
-  Device() { _driver.Open(); }
+  Device() { _driver.open(); }
 
   ~Device() {
-    if (_driver.IsOpen())
-      _driver.Close();
+    if (_driver.isOpen())
+      _driver.close();
   }
 
   virtual void spin() = 0;
