@@ -20,7 +20,7 @@ namespace bob::sensors {
       return _open;
     };
 
-    PointCloud<Vector3, float> getPointCloud();
+    PointCloud getPointCloud();
 
   private:
     k4a_device_t _device;
@@ -34,7 +34,7 @@ namespace bob::sensors {
     size_t _point_count;
     bool _buffers_updated = false;
 
-    PointCloud<Vector3, float> _point_cloud {
+    PointCloud _point_cloud {
       std::vector<Vector3>{ },
       std::vector<float>{ 1 }
     };

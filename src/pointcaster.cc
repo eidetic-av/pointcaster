@@ -14,9 +14,9 @@
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/Utility/StlMath.h>
 
+#include <Magnum/Image.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/Math/FunctionsBatch.h>
-#include <Magnum/Image.h>
 #include <Magnum/Platform/Sdl2Application.h>
 
 #include <Magnum/GL/Context.h>
@@ -32,8 +32,8 @@
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
 
-#include "devices/k4a/k4a_driver.h"
 #include "devices/k4a/k4a_device.h"
+#include "devices/k4a/k4a_driver.h"
 #include "point_cloud.h"
 #include "wireframe_objects.h"
 
@@ -77,8 +77,8 @@ protected:
   bool _mouse_pressed = false;
 
   // helper functions for camera movement
-  Float depthAt(const Vector2i& window_position);
-  Vector3 unproject(const Vector2i& window_position, Float depth) const;
+  Float depthAt(const Vector2i &window_position);
+  Vector3 unproject(const Vector2i &window_position, Float depth) const;
 
   void drawGui();
 
@@ -107,79 +107,71 @@ PointCaster::PointCaster(const Arguments &args)
   if (!tryCreate(conf, gl_conf)) create(conf, gl_conf.setSampleCount(0));
 
   // Set up ImGui
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
+  ImGui::CreateContext();
+  ImGui::StyleColorsDark();
 
-    // load SpaceGrotesk font for imgui
-    ImFontConfig font_config;
-    font_config.FontDataOwnedByAtlas = false;
-    const auto size = Vector2(windowSize()) / dpiScaling();
-    Utility::Resource rs("data");
-    Containers::ArrayView<const char> font = rs.getRaw("SpaceGrotesk");
-    ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-	const_cast<char *>(font.data()), Int(font.size()),
-	14.0f * framebufferSize().x() / size.x(), &font_config);
+  // load SpaceGrotesk font for imgui
+  ImFontConfig font_config;
+  font_config.FontDataOwnedByAtlas = false;
+  const auto size = Vector2(windowSize()) / dpiScaling();
+  Utility::Resource rs("data");
+  Containers::ArrayView<const char> font = rs.getRaw("SpaceGrotesk");
+  ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+      const_cast<char *>(font.data()), Int(font.size()),
+      14.0f * framebufferSize().x() / size.x(), &font_config);
 
-    _imgui_context = ImGuiIntegration::Context(
-	*ImGui::GetCurrentContext(), Vector2(windowSize()) / dpiScaling(),
-	windowSize(), framebufferSize());
+  _imgui_context = ImGuiIntegration::Context(
+      *ImGui::GetCurrentContext(), Vector2(windowSize()) / dpiScaling(),
+      windowSize(), framebufferSize());
 
-    // Set up blending to be used by imgui
-    Magnum::GL::Renderer::setBlendEquation(
-	Magnum::GL::Renderer::BlendEquation::Add,
-	Magnum::GL::Renderer::BlendEquation::Add);
-    Magnum::GL::Renderer::setBlendFunction(
-	Magnum::GL::Renderer::BlendFunction::SourceAlpha,
-	Magnum::GL::Renderer::BlendFunction::OneMinusSourceAlpha);
+  // Set up blending to be used by imgui
+  Magnum::GL::Renderer::setBlendEquation(
+      Magnum::GL::Renderer::BlendEquation::Add,
+      Magnum::GL::Renderer::BlendEquation::Add);
+  Magnum::GL::Renderer::setBlendFunction(
+      Magnum::GL::Renderer::BlendFunction::SourceAlpha,
+      Magnum::GL::Renderer::BlendFunction::OneMinusSourceAlpha);
 
   // Set up scene and camera
-    _scene.reset(new Scene3D{});
-    _drawable_group.reset(new SceneGraph::DrawableGroup3D{});
+  _scene.reset(new Scene3D{});
+  _drawable_group.reset(new SceneGraph::DrawableGroup3D{});
 
-    _object_camera.reset(new Object3D{_scene.get()});
-    _object_camera->setTransformation(Matrix4::lookAt(
-	Vector3(0, 1.5, 8), Vector3(0, 1, 0), Vector3(0, 1, 0)));
+  _object_camera.reset(new Object3D{_scene.get()});
+  _object_camera->setTransformation(
+      Matrix4::lookAt(Vector3(0, 1.5, 8), Vector3(0, 1, 0), Vector3(0, 1, 0)));
 
-    const auto viewport_size = GL::defaultFramebuffer.viewport().size();
-    _camera.reset(new SceneGraph::Camera3D(*_object_camera));
-    _camera
-	->setProjectionMatrix(Matrix4::perspectiveProjection(
-	    45.0_degf, Vector2{viewport_size}.aspectRatio(), 0.01f, 1000.0f))
-	.setViewport(viewport_size);
+  const auto viewport_size = GL::defaultFramebuffer.viewport().size();
+  _camera.reset(new SceneGraph::Camera3D(*_object_camera));
+  _camera
+      ->setProjectionMatrix(Matrix4::perspectiveProjection(
+	  45.0_degf, Vector2{viewport_size}.aspectRatio(), 0.01f, 1000.0f))
+      .setViewport(viewport_size);
 
-    // set default camera parameters
-    _default_cam_position = Vector3(1.5f, 3.3f, 6.0f);
-    _default_cam_target = Vector3(1.5f, 1.3f, 0.0f);
-    _object_camera->setTransformation(Matrix4::lookAt(
-	_default_cam_position, _default_cam_target, Vector3(0, 1, 0)));
+  // set default camera parameters
+  _default_cam_position = Vector3(1.5f, 3.3f, 6.0f);
+  _default_cam_target = Vector3(1.5f, 1.3f, 0.0f);
+  _object_camera->setTransformation(Matrix4::lookAt(
+      _default_cam_position, _default_cam_target, Vector3(0, 1, 0)));
 
-    // initialise depth to the value at scene center
-    _last_depth = ((_camera->projectionMatrix() * _camera->cameraMatrix())
-		       .transformPoint({}) .z() + 1.0f) * 0.5f;
+  // initialise depth to the value at scene center
+  _last_depth = ((_camera->projectionMatrix() * _camera->cameraMatrix())
+		     .transformPoint({}) .z() + 1.0f) * 0.5f;
 
   // Set up ground grid
-    _grid.reset(new WireframeGrid(_scene.get(), _drawable_group.get()));
-    _grid->transform(Matrix4::scaling(Vector3(0.5f)) *
-		     Matrix4::translation(Vector3(3, 0, -5)));
+  _grid.reset(new WireframeGrid(_scene.get(), _drawable_group.get()));
+  _grid->transform(Matrix4::scaling(Vector3(0.5f)) *
+		   Matrix4::translation(Vector3(3, 0, -5)));
 
-    // Set up particle system
-    // auto positions = std::vector<Vector3>{ {0, 0, 0 } };
-    // auto colors = std::vector<Color3>{ {1, 0, 0 } };
-    // PointCloud point_cloud { positions, colors };
-    // _particle_system.reset(new PointCloudRenderer(point_cloud, 0.5f));
-    // _particle_system->setColorMode(ParticleSphereShader::ColorMode(1));
-    // _particle_system->setDirty();
+  // Enable depth test, render particles as sprites
+  GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+  GL::Renderer::enable(GL::Renderer::Feature::ProgramPointSize);
 
-    // Enable depth test, render particles as sprites
-    GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-    GL::Renderer::enable(GL::Renderer::Feature::ProgramPointSize);
+  // set background color
+  GL::Renderer::setClearColor(0x0d1117_rgbf);
 
-    // set background color
-    GL::Renderer::setClearColor(0x0d1117_rgbf);
-
-    // Start the timer, loop at 144 Hz max
-    setSwapInterval(1);
-    setMinimalLoopPeriod(7);
+  // Start the timer, loop at 144 Hz max
+  setSwapInterval(1);
+  setMinimalLoopPeriod(7);
 }
 
 void PointCaster::drawEvent() {
@@ -195,10 +187,8 @@ void PointCaster::drawEvent() {
 
   // Fill point cloud
   auto points = kinect.getPointCloud();
-  // spdlog::info("points.size(): {}", points.size());
   _point_cloud_renderer.reset(new PointCloudRenderer(0.005f));
   _point_cloud_renderer->_points = points;
-  // spdlog::info("color size: {}", _point_cloud_renderer->_points.colors.size());
   _point_cloud_renderer->setDirty();
 
   // Draw objects
@@ -266,7 +256,7 @@ Vector3 PointCaster::unproject(const Vector2i &window_position,
       Vector2i(window_position.x(), viewSize.y() - window_position.y() - 1);
   const Vector3 in(2.0f * Vector2(viewPosition) / Vector2(viewSize) -
 		       Vector2(1.0f),
-                   depth * 2.0f - 1.0f);
+		   depth * 2.0f - 1.0f);
 
   return _camera->projectionMatrix().inverted().transformPoint(in);
 }
@@ -344,7 +334,8 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
 			Vector2(framebufferSize());
   _prev_mouse_position = event.position();
 
-  if (!event.buttons()) return;
+  if (!event.buttons())
+    return;
 
   /* Translate */
   if (event.modifiers() & MouseMoveEvent::Modifier::Shift) {
@@ -355,9 +346,9 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
     /* Rotate around rotation point */
   } else {
     _object_camera->transformLocal(Matrix4::translation(_rotation_point) *
-			       Matrix4::rotationX(-0.51_radf * delta.y()) *
-			       Matrix4::rotationY(-0.51_radf * delta.x()) *
-			       Matrix4::translation(-_rotation_point));
+				   Matrix4::rotationX(-0.51_radf * delta.y()) *
+				   Matrix4::rotationY(-0.51_radf * delta.x()) *
+				   Matrix4::translation(-_rotation_point));
   }
 
   event.setAccepted();
@@ -365,7 +356,8 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
 
 void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
   const Float delta = event.offset().y();
-  if (Math::abs(delta) < 1.0e-2f) return;
+  if (Math::abs(delta) < 1.0e-2f)
+    return;
 
   if (_imgui_context.handleMouseScrollEvent(event)) {
     /* Prevent scrolling the page */
@@ -387,7 +379,6 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
   _object_camera->translateLocal(_rotation_point * delta * 0.1f);
 }
 
-
 } // namespace bob
 
-MAGNUM_APPLICATION_MAIN(bob::PointCaster); 
+MAGNUM_APPLICATION_MAIN(bob::PointCaster);

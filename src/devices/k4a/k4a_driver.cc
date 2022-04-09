@@ -93,7 +93,7 @@ bool K4ADriver::close() {
   return true;
 }
 
-PointCloud<Vector3, float> K4ADriver::getPointCloud() {
+PointCloud K4ADriver::getPointCloud() {
   _buffer_mutex.lock();
 
   std::vector<Vector3> positions(_point_count);
@@ -112,7 +112,7 @@ PointCloud<Vector3, float> K4ADriver::getPointCloud() {
 
   _buffer_mutex.unlock();
 
-  PointCloud<Vector3, float> points { positions, colors };
+  PointCloud points { positions, colors };
   return points;
 }
 } // namespace bob::sensors

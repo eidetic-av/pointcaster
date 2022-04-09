@@ -15,19 +15,13 @@ namespace bob {
   using namespace Magnum;
   using namespace bob::shaders;
 
-  template<typename pos_type = Vector3, typename color_type = Color3>
   struct PointCloud {
-    std::vector<pos_type> positions;
-    std::vector<color_type> colors;
-
+    std::vector<Vector3> positions;
+    // TODO this colors list really shouldn't be typed as 'float', as it's
+    // really four packed bytes
+    std::vector<float> colors;
     size_t size() { return positions.size(); }
     bool empty() { return positions.empty(); }
-
-    PointCloud& operator=(PointCloud& other) {
-      positions = other.positions;
-      colors = other.colors;
-      return *this;
-    }
   };
 
   class PointCloudRenderer {
@@ -58,7 +52,7 @@ namespace bob {
     //   return *this;
     // }
 
-    PointCloud<Vector3, float> _points;
+    PointCloud _points;
 
   private:
     bool _dirty = false;
