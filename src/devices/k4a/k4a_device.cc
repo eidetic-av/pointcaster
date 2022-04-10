@@ -13,7 +13,6 @@ K4ADevice::K4ADevice() {
 }
 
 std::string K4ADevice::getBroadcastId() {
-  spdlog::debug(_driver->getId().size());
   return _driver->getId();
 }
 

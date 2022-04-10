@@ -98,11 +98,12 @@ protected:
 
 PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
+  spdlog::info("This is Box of Birds PointCaster");
 
   // Set up the window
   const Vector2 dpi_scaling = this->dpiScaling({});
   Configuration conf;
-  conf.setTitle("box of birds pointcaster");
+  conf.setTitle("pointcaster");
   conf.setSize(conf.size(), dpi_scaling);
   conf.setWindowFlags(Configuration::WindowFlag::Resizable);
   GLConfiguration gl_conf;
@@ -178,18 +179,47 @@ PointCaster::PointCaster(const Arguments &args)
 
   // // Start a thread that handles networking
   std::thread network_thread([&]() {
+    using namespace zmq;
     using namespace std::chrono_literals;
+
     constexpr auto network_broadcast_rate = 1ms;
+    const int broadcast_port = 9999;
+
+    context_t zmq_context;
+    // create the radio that broadcasts point clouds
+    socket_t radio(zmq_context, socket_type::radio);
+    // prioritise latency to clients
+    radio.set(sockopt::sndhwm, 1);
+    radio.set(sockopt::linger, 0);
+
+    auto destination = fmt::format("tcp://0.0.0.0:{}", broadcast_port);
+    radio.bind(destination);
+    spdlog::info("Broadcasting on port {}", broadcast_port);
+
     while (1) {
       std::this_thread::sleep_for(network_broadcast_rate);
+
       std::lock_guard<std::mutex> lock(_devices_access);
+
       for (auto device : *_devices) {
 	if (!device->broadcastEnabled()) continue;
 	auto broadcast_id = device->getBroadcastId();
+
 	// serialize the point cloud
-	auto [data, out] = zpp::bits::data_out();
-	out(device->getPointCloud());
-	spdlog::debug(broadcast_id);
+	auto [packed_point_cloud, serialize] = zpp::bits::data_out();
+	auto pack_result = serialize(device->getPointCloud());
+	if (zpp::bits::failure(pack_result)) {
+	  spdlog::error("Failed to pack point cloud from device {}",
+			broadcast_id);
+	  continue;
+        }
+        size_t packed_size = packed_point_cloud.size();
+	
+	// create and send the zmq message
+	zmq::message_t message(packed_size);
+	memcpy(message.data(), packed_point_cloud.data(), packed_size);
+	message.set_group(broadcast_id.c_str());
+	radio.send(message, send_flags::none);
       }
     }
   });
