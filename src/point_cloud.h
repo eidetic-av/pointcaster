@@ -15,8 +15,12 @@ namespace bob {
   using namespace Magnum;
   using namespace bob::shaders;
 
+  struct float3 {
+    float x, y, z = 0;
+  };
+
   struct PointCloud {
-    std::vector<Vector3> positions;
+    std::vector<float3> positions;
     // TODO this colors list really shouldn't be typed as 'float', as it's
     // really four packed bytes
     std::vector<float> colors;

@@ -1,14 +1,20 @@
 #include "k4a_device.h"
 #include "../device.h"
+#include "k4a_driver.h"
+#include <fmt/format.h>
 
 namespace bob::sensors {
 
 using namespace Magnum;
 
-void K4ADevice::spin() {}
+K4ADevice::K4ADevice() {
+  _driver.reset(new K4ADriver());
+  _name = fmt::format("k4a {}", _driver->device_index);
+}
 
-// PointCloud<Vector3, std::array<char, 4>> K4ADriver::getPointCloud() {
-//   return _driver.getPointCloud();
-// }
+std::string K4ADevice::getBroadcastId() {
+  spdlog::debug(_driver->getId().size());
+  return _driver->getId();
+}
 
 } // namespace bob::sensors

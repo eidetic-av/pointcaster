@@ -5,12 +5,12 @@
 
 namespace bob::sensors {
 
-  class K4ADevice : Device<K4ADriver> {
-  public:
-    void spin() override;
-    bob::PointCloud getPointCloud() {
-      return _driver.getPointCloud();
-    };
-  };
-  
-}
+class K4ADevice : public Device {
+public:
+  K4ADevice();
+  ~K4ADevice();
+
+  bob::PointCloud getPointCloud() override { return _driver->getPointCloud(); };
+  std::string getBroadcastId() override;
+};
+} // namespace bob::sensors

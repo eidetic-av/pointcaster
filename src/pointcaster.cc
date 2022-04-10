@@ -1,3 +1,8 @@
+#include <mutex>
+#include <random>
+#include <thread>
+#include <chrono>
+
 #ifdef _WIN32
 #include <WinSock2.h>
 #include <io.h>
@@ -6,10 +11,9 @@
 #endif
 #include <spdlog/spdlog.h>
 
-#include <random>
-
 #define ZMQ_BUILD_DRAFT_API
 #include <zmq.hpp>
+#include <zpp_bits.h>
 
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/Utility/StlMath.h>
@@ -32,8 +36,8 @@
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
 
+#include "devices/device.h"
 #include "devices/k4a/k4a_device.h"
-#include "devices/k4a/k4a_driver.h"
 #include "point_cloud.h"
 #include "wireframe_objects.h"
 
@@ -46,8 +50,6 @@ using namespace Math::Literals;
 
 using Object3D = SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
 using Scene3D = SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
-
-K4ADevice kinect;
 
 class PointCaster : public Platform::Application {
 public:
@@ -74,13 +76,14 @@ protected:
   // Ground grid
   Containers::Pointer<WireframeGrid> _grid;
 
-  bool _mouse_pressed = false;
-
   // helper functions for camera movement
   Float depthAt(const Vector2i &window_position);
   Vector3 unproject(const Vector2i &window_position, Float depth) const;
+  bool _mouse_pressed = false;
 
-  void drawGui();
+  // our connected devices
+  std::shared_ptr<std::vector<Device*>> _devices;
+  std::mutex _devices_access;
 
   void drawEvent() override;
   void viewportEvent(ViewportEvent &event) override;
@@ -99,7 +102,7 @@ PointCaster::PointCaster(const Arguments &args)
   // Set up the window
   const Vector2 dpi_scaling = this->dpiScaling({});
   Configuration conf;
-  conf.setTitle("pointcaster");
+  conf.setTitle("box of birds pointcaster");
   conf.setSize(conf.size(), dpi_scaling);
   conf.setWindowFlags(Configuration::WindowFlag::Resizable);
   GLConfiguration gl_conf;
@@ -172,6 +175,30 @@ PointCaster::PointCaster(const Arguments &args)
   // Start the timer, loop at 144 Hz max
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
+
+  // // Start a thread that handles networking
+  std::thread network_thread([&]() {
+    using namespace std::chrono_literals;
+    constexpr auto network_broadcast_rate = 1ms;
+    while (1) {
+      std::this_thread::sleep_for(network_broadcast_rate);
+      std::lock_guard<std::mutex> lock(_devices_access);
+      for (auto device : *_devices) {
+	if (!device->broadcastEnabled()) continue;
+	auto broadcast_id = device->getBroadcastId();
+	// serialize the point cloud
+	auto [data, out] = zpp::bits::data_out();
+	out(device->getPointCloud());
+	spdlog::debug(broadcast_id);
+      }
+    }
+  });
+  network_thread.detach();
+
+  // Init our devices
+  std::lock_guard<std::mutex> lock(_devices_access);
+  _devices.reset(new std::vector<Device *>);
+  _devices->push_back(new K4ADevice());
 }
 
 void PointCaster::drawEvent() {
@@ -185,19 +212,29 @@ void PointCaster::drawEvent() {
   else if (!ImGui::GetIO().WantTextInput && isTextInputActive())
     stopTextInput();
 
-  // Fill point cloud
-  auto points = kinect.getPointCloud();
+  // Fill point cloud from each device TODO this is all so ugly. no need to
+  // reset the renderer, and also need to add to the renderer's points not
+  // just set them
   _point_cloud_renderer.reset(new PointCloudRenderer(0.005f));
-  _point_cloud_renderer->_points = points;
-  _point_cloud_renderer->setDirty();
 
-  // Draw objects
+  _devices_access.lock();
+
+  for (auto device : *_devices) {
+    auto points = device->getPointCloud();
+    _point_cloud_renderer->_points = points;
+    _point_cloud_renderer->setDirty();
+  }
+
+  // Draw the scene
   _point_cloud_renderer->draw(_camera, framebufferSize());
   _camera->draw(*_drawable_group);
 
-  drawGui();
+  // Draw gui windows for each device
+  for (auto device : *_devices) device->Device::drawGuiWindow();
 
   _imgui_context.updateApplicationCursor(*this);
+
+  _devices_access.unlock();
 
   // Render ImGui window
   GL::Renderer::enable(GL::Renderer::Feature::Blending);
@@ -217,15 +254,6 @@ void PointCaster::drawEvent() {
 
   // Run the next frame immediately
   redraw();
-}
-
-void PointCaster::drawGui() {
-  ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowBgAlpha(0.5f);
-  ImGui::Begin("options", nullptr);
-  ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.6f);
-  ImGui::PopItemWidth();
-  ImGui::End();
 }
 
 Float PointCaster::depthAt(const Vector2i &window_position) {

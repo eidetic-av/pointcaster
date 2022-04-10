@@ -2,23 +2,39 @@
 
 #include "../point_cloud.h"
 #include "driver.h"
+#include <imgui.h>
+#include <spdlog/spdlog.h>
+#include <thread>
 
 namespace bob::sensors {
 
-template <class driver_t> class Device {
+class Device {
 
 public:
-  Device() { _driver.open(); }
+  void drawGuiWindow() {
+    // spdlog::info("drawGuiWindow");
+    ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowBgAlpha(0.8f);
+    ImGui::Begin(_name.c_str(), nullptr);
+    ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.6f);
 
-  ~Device() {
-    if (_driver.isOpen())
-      _driver.close();
-  }
+    ImGui::BeginGroup();
+    ImGui::Checkbox("enable broadcast", &_enable_broadcast);
+    ImGui::EndGroup();
 
-  virtual void spin() = 0;
+    ImGui::PopItemWidth();
+    ImGui::End();
+  };
+
+  bool broadcastEnabled() { return _enable_broadcast; }
+
+  virtual bob::PointCloud getPointCloud() = 0;
+  virtual std::string getBroadcastId() = 0;
 
 protected:
-  driver_t _driver;
+  std::unique_ptr<Driver> _driver;
+  std::string _name = "";
+  bool _enable_broadcast = false;
 };
 
 } // namespace bob::sensors

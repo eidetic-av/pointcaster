@@ -3,8 +3,8 @@
     "version-string": "0.0.1",
     "builtin-baseline": "24b19046151b0ca32250603547a113ccad3b808a",
     "dependencies": [
-	"spdlog", "azure-kinect-sensor-sdk", "corrade", "eigen3",
-	"sdl2",
+	"spdlog", "azure-kinect-sensor-sdk", "corrade",
+	"zpp-bits", "sdl2",
 	{
 	    "name": "sdl2",
 	    "default-features": false,
@@ -36,9 +36,7 @@
 	{
 	    "name": "magnum-integration",
 	    "version>=": "2020.06#1",
-	    "features": [
-		"eigen", "imgui"
-	    ]
+	    "features": [ "imgui" ]
 	},
 	{
 	    "name": "imgui",
