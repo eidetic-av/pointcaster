@@ -15,12 +15,12 @@ namespace bob {
   using namespace Magnum;
   using namespace bob::shaders;
 
-  struct float3 {
-    float x, y, z = 0;
+  struct position {
+    float x, y, z, __pad = 0;
   };
 
   struct PointCloud {
-    std::vector<float3> positions;
+    std::vector<position> positions;
     // TODO this colors list really shouldn't be typed as 'float', as it's
     // really four packed bytes
     std::vector<float> colors;
@@ -47,14 +47,6 @@ namespace bob {
       _particleRadius = radius;
       return *this;
     }
-
-    // PointCloudRenderer& setPoints(PointCloud& points) {
-    //   _points = points;
-    //   // _points.positions.clear();
-    //   // _points.positions.assign(points.positions.begin(), points.positions.end());
-    //   // _points.positions.insert(points.positions.begin(), points.positions.end(), _points.positions.begin());
-    //   return *this;
-    // }
 
     PointCloud _points;
 

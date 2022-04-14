@@ -22,7 +22,7 @@ PointCloudRenderer::PointCloudRenderer(float particleRadius)
     : _particleRadius(particleRadius),
       _meshParticles(GL::MeshPrimitive::Points) {
   _meshParticles.addVertexBuffer(_positions_buffer, 0,
-				 Shaders::Generic3D::Position());
+				 GL::Attribute<0, Vector4>());
 
   // _meshParticles.addVertexBuffer(_color_buffer, 0, Shaders::Generic3D::Color4());
   _meshParticles.addVertexBuffer(_color_buffer, 0, GL::Attribute<2, float>());

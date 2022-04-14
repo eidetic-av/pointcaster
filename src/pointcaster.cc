@@ -218,8 +218,12 @@ PointCaster::PointCaster(const Arguments &args)
 	// create and send the zmq message
 	zmq::message_t message(packed_size);
 	memcpy(message.data(), packed_point_cloud.data(), packed_size);
-	message.set_group(broadcast_id.c_str());
+	// message.set_group(broadcast_id.c_str());
+	message.set_group("a");
 	radio.send(message, send_flags::none);
+
+	// if (device->getPointCloud().size() > 94010)
+	// spdlog::debug("{}", device->getPointCloud().positions[94012].z);
       }
     }
   });

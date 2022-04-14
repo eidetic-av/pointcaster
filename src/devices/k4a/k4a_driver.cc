@@ -40,10 +40,6 @@ bool K4ADriver::open() {
 
   // start a thread that captures new frames and dumps them into raw buffers
   std::thread capture_loop([&]() {
-    constexpr int color_pixel_size = 4 * static_cast<int>(sizeof(uint8_t));
-    constexpr int depth_pixel_size = static_cast<int>(sizeof(int16_t));
-    constexpr int depth_point_size = 3 * static_cast<int>(sizeof(int16_t));
-
     while (isOpen()) {
       k4a::capture capture;
       bool result = _device.get_capture(&capture, 1000ms);
@@ -94,19 +90,39 @@ PointCloud K4ADriver::getPointCloud() {
     return _point_cloud;
   std::lock_guard<std::mutex> lock(_buffer_mutex);
 
-  std::vector<float3> positions(_point_count);
+  std::vector<position> positions(_point_count);
   std::vector<float> colors(_point_count);
-  memcpy(colors.data(), _colors_buffer.data(), _point_count * sizeof(float));
+  // memcpy(colors.data(), _colors_buffer.data(), _point_count * sizeof(float));
+  auto colors_input = reinterpret_cast<float*>(_colors_buffer.data());
+
+  constexpr position k4a_offset{ 0.0f, 1.0f, 0.0f };
 
   // TODO the following transform from short to float should be done in the
   // shader
+  size_t point_count_out = 0;
   for (int i = 0; i < _point_count; i++) {
     const int pos = i * 3;
-    const float x = (_positions_buffer[pos] / -1100.0f) + 1.25f;
-    const float y = (_positions_buffer[pos + 1] / -1100.0f) + 0.55f;
-    const float z = _positions_buffer[pos + 2] / -1100.0f;
-    positions[i] = (float3{x, y, z});
+    const float z_in = _positions_buffer[pos + 2] / -1000.0f;
+    // without any z value, it's an empty point, discard it
+    if (z_in == 0) continue;
+    // check if it's within user-defined crop boundaries
+    if (!crop_z.contains(z_in)) continue;
+    const float x_in = (_positions_buffer[pos] / -1000.0f);
+    if (!crop_x.contains(x_in)) continue;
+    const float y_in = (_positions_buffer[pos + 1] / -1000.0f);
+    if (!crop_y.contains(y_in)) continue;
+    // apply device offset
+    const float x_out = x_in + k4a_offset.x;
+    const float y_out = y_in + k4a_offset.y;
+    const float z_out = z_in + k4a_offset.z;
+    // add to our point cloud buffers
+    positions[point_count_out] = (position{x_out, y_out, z_out, 0});
+    colors[point_count_out] = colors_input[i];
+    point_count_out++;
   }
+  // resize buffers to the cropped count
+  positions.resize(point_count_out);
+  colors.resize(point_count_out);
 
   _point_cloud = PointCloud{positions, colors};
   _buffers_updated = false;
