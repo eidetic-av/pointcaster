@@ -105,6 +105,9 @@ PointCloud K4ADriver::getPointCloud() {
     const float z_in = _positions_buffer[pos + 2] / -1000.0f;
     // without any z value, it's an empty point, discard it
     if (z_in == 0) continue;
+    // without any color value, it's an empty point, discard it
+    auto color = colors_input[i];
+    if (color == std::numeric_limits<float>::min()) continue;
     // check if it's within user-defined crop boundaries
     if (!crop_z.contains(z_in)) continue;
     const float x_in = (_positions_buffer[pos] / -1000.0f);
@@ -112,12 +115,12 @@ PointCloud K4ADriver::getPointCloud() {
     const float y_in = (_positions_buffer[pos + 1] / -1000.0f);
     if (!crop_y.contains(y_in)) continue;
     // apply device offset
-    const float x_out = x_in + k4a_offset.x;
-    const float y_out = y_in + k4a_offset.y;
-    const float z_out = z_in + k4a_offset.z;
+    const float x_out = x_in + k4a_offset.x + offset.x;
+    const float y_out = y_in + k4a_offset.y + offset.y;
+    const float z_out = z_in + k4a_offset.z + offset.z;
     // add to our point cloud buffers
     positions[point_count_out] = (position{x_out, y_out, z_out, 0});
-    colors[point_count_out] = colors_input[i];
+    colors[point_count_out] = color;
     point_count_out++;
   }
   // resize buffers to the cropped count

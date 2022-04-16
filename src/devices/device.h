@@ -19,10 +19,15 @@ public:
 
     ImGui::Checkbox("Enable Broadcast", &_enable_broadcast);
 
-    ImGui::TextDisabled("Crop");
+    ImGui::TextDisabled("Crop Input");
     ImGui::SliderFloat2("x", _driver->crop_x.arr(), -10, 10);
     ImGui::SliderFloat2("y", _driver->crop_y.arr(), -10, 10);
     ImGui::SliderFloat2("z", _driver->crop_z.arr(), -10, 10);
+
+    ImGui::TextDisabled("Offset Output");
+    ImGui::SliderFloat("x", &_driver->offset.x, -10, 10);
+    ImGui::SliderFloat("y", &_driver->offset.y, -10, 10);
+    ImGui::SliderFloat("z", &_driver->offset.z, -10, 10);
 
     ImGui::PopItemWidth();
     ImGui::End();

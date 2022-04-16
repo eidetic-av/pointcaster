@@ -27,6 +27,8 @@ public:
   minMax crop_y;
   minMax crop_z;
 
+  position offset = { 0, 0, 0 };
+
   virtual bool open() = 0;
   virtual bool close() = 0;
   virtual bool isOpen() = 0;
