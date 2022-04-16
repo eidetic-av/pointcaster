@@ -7,6 +7,7 @@
 #include <Magnum/GL/Mesh.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/SceneGraph/Camera.h>
+#include "structs.h"
 
 #include "shaders/particle_sphere.h"
 
@@ -14,10 +15,6 @@ namespace bob {
 
   using namespace Magnum;
   using namespace bob::shaders;
-
-  struct position {
-    float x, y, z, __pad = 0;
-  };
 
   struct PointCloud {
     std::vector<position> positions;

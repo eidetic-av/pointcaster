@@ -28,6 +28,8 @@ bool K4ADriver::open() {
   _config.color_resolution = K4A_COLOR_RESOLUTION_720P;
   _config.depth_mode = K4A_DEPTH_MODE_WFOV_2X2BINNED;
   _config.camera_fps = K4A_FRAMES_PER_SECOND_30;
+  // _config.depth_mode = K4A_DEPTH_MODE_WFOV_UNBINNED;
+  // _config.camera_fps = K4A_FRAMES_PER_SECOND_15;
   _config.synchronized_images_only = true;
 
   _device.start_cameras(&_config);
@@ -85,7 +87,7 @@ bool K4ADriver::close() {
   return true;
 }
 
-PointCloud K4ADriver::getPointCloud() {
+PointCloud K4ADriver::getPointCloud(const DeviceConfiguration& config) {
   if (!_buffers_updated)
     return _point_cloud;
   std::lock_guard<std::mutex> lock(_buffer_mutex);
@@ -102,22 +104,25 @@ PointCloud K4ADriver::getPointCloud() {
   size_t point_count_out = 0;
   for (int i = 0; i < _point_count; i++) {
     const int pos = i * 3;
-    const float z_in = _positions_buffer[pos + 2] / -1000.0f;
+    float z_in = _positions_buffer[pos + 2] / -1000.0f;
+    if (config.flip_z) z_in *= -1;
     // without any z value, it's an empty point, discard it
     if (z_in == 0) continue;
     // without any color value, it's an empty point, discard it
     auto color = colors_input[i];
     if (color == std::numeric_limits<float>::min()) continue;
     // check if it's within user-defined crop boundaries
-    if (!crop_z.contains(z_in)) continue;
-    const float x_in = (_positions_buffer[pos] / -1000.0f);
-    if (!crop_x.contains(x_in)) continue;
-    const float y_in = (_positions_buffer[pos + 1] / -1000.0f);
-    if (!crop_y.contains(y_in)) continue;
+    if (!config.crop_z.contains(z_in)) continue;
+    float x_in = (_positions_buffer[pos] / -1000.0f);
+    if (config.flip_x) x_in *= -1;
+    if (!config.crop_x.contains(x_in)) continue;
+    float y_in = (_positions_buffer[pos + 1] / -1000.0f);
+    if (config.flip_y) y_in *= -1;
+    if (!config.crop_y.contains(y_in)) continue;
     // apply device offset
-    const float x_out = x_in + k4a_offset.x + offset.x;
-    const float y_out = y_in + k4a_offset.y + offset.y;
-    const float z_out = z_in + k4a_offset.z + offset.z;
+    const float x_out = (x_in * config.scale) + k4a_offset.x + config.offset.x;
+    const float y_out = (y_in * config.scale) + k4a_offset.y + config.offset.y;
+    const float z_out = (z_in * config.scale) + k4a_offset.z + config.offset.z;
     // add to our point cloud buffers
     positions[point_count_out] = (position{x_out, y_out, z_out, 0});
     colors[point_count_out] = color;
