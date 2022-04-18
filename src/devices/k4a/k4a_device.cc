@@ -9,7 +9,7 @@ using namespace Magnum;
 
 K4ADevice::K4ADevice() {
   _driver.reset(new K4ADriver());
-  _name = fmt::format("k4a {}", _driver->device_index);
+  name = fmt::format("k4a {}", _driver->device_index);
 }
 
 std::string K4ADevice::getBroadcastId() {

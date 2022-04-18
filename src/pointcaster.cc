@@ -267,8 +267,18 @@ void PointCaster::drawEvent() {
   _point_cloud_renderer->draw(_camera, framebufferSize());
   _camera->draw(*_drawable_group);
 
-  // Draw gui windows for each device
-  for (auto device : *_devices) device->Device::drawGuiWindow();
+  // Draw gui options for each device
+  ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowBgAlpha(0.8f);
+  ImGui::Begin("Sensors", nullptr);
+  ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
+  for (auto device : *_devices) {
+    if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
+    device->Device::drawImGuiControls();
+  }
+
+  ImGui::PopItemWidth();
+  ImGui::End();
 
   _imgui_context.updateApplicationCursor(*this);
 

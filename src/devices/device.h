@@ -11,6 +11,7 @@ namespace bob::sensors {
 
 class Device {
 public:
+  std::string name = "";
   bool flip_x = false;
   bool flip_y = false;
   bool flip_z = false;
@@ -20,13 +21,8 @@ public:
   position offset = { 0.f, 0.f, 0.f };
   float scale = 1.f;
 
-  void drawGuiWindow() {
+  void drawImGuiControls() {
     // spdlog::info("drawGuiWindow");
-    ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowBgAlpha(0.8f);
-    ImGui::Begin(_name.c_str(), nullptr);
-    ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.6f);
-
     ImGui::Checkbox("Enable Broadcast", &_enable_broadcast);
 
     ImGui::TextDisabled("Flip Input");
@@ -48,9 +44,6 @@ public:
 
     ImGui::TextDisabled("Scale output");
     ImGui::SliderFloat("overall scale", &scale, 0.0f, 3.0f);
-
-    ImGui::PopItemWidth();
-    ImGui::End();
   };
 
   bool broadcastEnabled() { return _enable_broadcast; }
@@ -68,7 +61,6 @@ public:
 
 protected:
   std::unique_ptr<Driver> _driver;
-  std::string _name = "";
   bool _enable_broadcast = true;
 };
 
