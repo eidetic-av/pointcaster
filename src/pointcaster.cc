@@ -6,6 +6,8 @@
 #ifdef _WIN32
 #include <WinSock2.h>
 #include <io.h>
+#undef max
+#undef min
 #else
 #include <unistd.h>
 #endif
@@ -29,6 +31,7 @@
 #include <Magnum/GL/Renderer.h>
 #include <Magnum/GL/Version.h>
 
+#include <imgui.h>
 #include <Magnum/ImGuiIntegration/Context.hpp>
 
 #include <Magnum/SceneGraph/Camera.h>

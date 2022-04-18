@@ -2,5 +2,5 @@ build/
 bin/
 vcpkg_installed/
 .cache/
-
+.vs/
 compile_commands.json

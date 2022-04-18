@@ -1,0 +1,15 @@
+﻿{
+  "configurations": [
+    {
+      "name": "x64-Clang",
+      "generator": "Ninja",
+      "configurationType": "Release",
+      "inheritEnvironments": [ "clang_cl_x64" ],
+      "buildRoot": "${projectDir}\\build\\${name}",
+      "installRoot": "${projectDir}\\build\\install\\${name}",
+      "cmakeCommandArgs": "-DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_OVERLAY_PORTS=\"${projectDir}\\ports\"",
+      "ctestCommandArgs": "",
+      "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake"
+    }
+  ]
+}

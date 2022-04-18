@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.23.0)
+cmake_minimum_required(VERSION 3.22.0)
 project(bob-pointcaster)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -33,18 +33,16 @@ set(SOURCE_FILES
   src/devices/k4a/k4a_device.cc)
 
 set(PLATFORM_LIBS)
+set(ZMQ_LIB libzmq-static)
 if (WIN32)
+  # have to link dynamically to zeromq on windows
+  set(ZMQ_LIB libzmq)
   # include bcrypt from the Windows SDK
   set(PLATFORM_LIBS ${PLATFORM_LIBS} bcrypt)
 endif()
 
 add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
 
-# set msvc runtime to static if compiling with a *-windows-static triplet
-if (WIN32 AND (VCPKG_TARGET_TRIPLET MATCHES static))
-set_property(TARGET ssp_server PROPERTY
-  MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
 
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui
@@ -57,8 +55,7 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   Magnum::SceneGraph
   Magnum::Shaders
   MagnumIntegration::ImGui
-  spdlog::spdlog EBML::ebml k4a::k4a libzmq-static
-  )
+  spdlog::spdlog EBML::ebml k4a::k4a ${ZMQ_LIB})
 
 # copy compile_commands.json for lsp integration 
 # (assume we don't need this on Windows)
