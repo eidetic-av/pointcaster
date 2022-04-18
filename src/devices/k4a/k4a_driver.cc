@@ -102,7 +102,7 @@ PointCloud K4ADriver::getPointCloud(const DeviceConfiguration& config) {
   // TODO the following transform from short to float should be done in the
   // shader
   size_t point_count_out = 0;
-  for (int i = 0; i < _point_count; i++) {
+  for (size_t i = 0; i < _point_count; i++) {
     const int pos = i * 3;
     float z_in = _positions_buffer[pos + 2] / -1000.0f;
     if (config.flip_z) z_in *= -1;
