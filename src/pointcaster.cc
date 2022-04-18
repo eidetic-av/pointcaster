@@ -185,7 +185,9 @@ PointCaster::PointCaster(const Arguments &args)
     using namespace zmq;
     using namespace std::chrono_literals;
 
-    constexpr auto network_broadcast_rate = 1ms;
+    // TODO the broadcast rate should somehow be
+    // tied to the device frame rate
+    const auto network_broadcast_rate = 16ms;
     const int broadcast_port = 9999;
 
     context_t zmq_context;
@@ -217,7 +219,6 @@ PointCaster::PointCaster(const Arguments &args)
 	  continue;
         }
         size_t packed_size = packed_point_cloud.size();
-	
 	// create and send the zmq message
 	zmq::message_t message(packed_size);
 	memcpy(message.data(), packed_point_cloud.data(), packed_size);

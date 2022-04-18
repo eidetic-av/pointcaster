@@ -10,7 +10,6 @@ public:
   K4ADevice();
   ~K4ADevice();
 
-  bob::PointCloud getPointCloud() override { return _driver->getPointCloud(); };
   std::string getBroadcastId() override;
 };
 } // namespace bob::sensors

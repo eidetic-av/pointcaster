@@ -2,6 +2,7 @@
 
 #include "../../point_cloud.h"
 #include "../driver.h"
+#include "../device.h"
 #include <k4a/k4a.h>
 #include <k4a/k4a.hpp>
 #include <spdlog/spdlog.h>
@@ -19,7 +20,7 @@ public:
 
   bool isOpen() override { return _open; };
 
-  PointCloud getPointCloud() override;
+  PointCloud getPointCloud(const DeviceConfiguration& config) override;
 
   std::string getId() override {
     if (_serial_number.empty())
