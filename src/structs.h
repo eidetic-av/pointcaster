@@ -6,7 +6,7 @@ struct minMax {
 
   float* arr() { return &min; }
 
-  bool contains(float value) {
+  bool contains(float value) const {
     if (value < min) return false;
     if (value > max) return false;
     return true;
