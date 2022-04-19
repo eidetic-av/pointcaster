@@ -12,8 +12,10 @@ endif()
 
 find_package(spdlog CONFIG REQUIRED)
 find_package(ZeroMQ CONFIG REQUIRED)
+
 find_package(EBML CONFIG REQUIRED)
 find_package(k4a CONFIG REQUIRED)
+find_package(realsense2 CONFIG REQUIRED)
 
 find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
@@ -30,7 +32,9 @@ set(SOURCE_FILES
   src/pointcaster.cc src/point_cloud.cc
   src/shaders/particle_sphere.cc
   src/devices/k4a/k4a_driver.cc
-  src/devices/k4a/k4a_device.cc)
+  src/devices/k4a/k4a_device.cc
+  src/devices/rs2/rs2_driver.cc
+  src/devices/rs2/rs2_device.cc)
 
 set(PLATFORM_LIBS)
 set(ZMQ_LIB libzmq-static)
@@ -55,7 +59,8 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   Magnum::SceneGraph
   Magnum::Shaders
   MagnumIntegration::ImGui
-  spdlog::spdlog EBML::ebml k4a::k4a ${ZMQ_LIB})
+  spdlog::spdlog EBML::ebml k4a::k4a
+  realsense2::realsense2 ${ZMQ_LIB})
 
 # copy compile_commands.json for lsp integration 
 # (assume we don't need this on Windows)

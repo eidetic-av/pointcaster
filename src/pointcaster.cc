@@ -41,6 +41,7 @@
 
 #include "devices/device.h"
 #include "devices/k4a/k4a_device.h"
+#include "devices/rs2/rs2_device.h"
 #include "point_cloud.h"
 #include "wireframe_objects.h"
 
@@ -237,6 +238,7 @@ PointCaster::PointCaster(const Arguments &args)
   std::lock_guard<std::mutex> lock(_devices_access);
   _devices.reset(new std::vector<Device *>);
   _devices->push_back(new K4ADevice());
+  // _devices->push_back(new Rs2Device());
 }
 
 void PointCaster::drawEvent() {
@@ -257,11 +259,23 @@ void PointCaster::drawEvent() {
 
   _devices_access.lock();
 
-  for (auto device : *_devices) {
-    auto points = device->getPointCloud();
-    _point_cloud_renderer->_points = points;
+  // for (auto device : *_devices) {
+  // TODO this should be appending to the point array after clearing it
+  // rn it only sets the entire cloud
+    auto k4a_points = (*_devices)[0]->getPointCloud();
+    _point_cloud_renderer->_points = k4a_points;
+    // auto rs2_points = (*_devices)[1]->getPointCloud();
+    // auto renderer_points_ptr = &_point_cloud_renderer->_points.positions;
+    // auto renderer_colors_ptr = &_point_cloud_renderer->_points.colors;
+    // renderer_points_ptr->insert(renderer_points_ptr->end(),
+    // 				rs2_points.positions.begin(),
+    // 				rs2_points.positions.end());
+    // renderer_colors_ptr->insert(renderer_colors_ptr->end(),
+    // 				rs2_points.colors.begin(),
+    // 				rs2_points.colors.end());
+
     _point_cloud_renderer->setDirty();
-  }
+  // }
 
   // Draw the scene
   _point_cloud_renderer->draw(_camera, framebufferSize());
