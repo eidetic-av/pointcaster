@@ -19,47 +19,58 @@ Rs2Driver::~Rs2Driver() { close(); }
 bool Rs2Driver::open() {
   auto device_list = _context.query_devices(RS2_PRODUCT_LINE_ANY);
   if (device_list.size() < 1) return false;
-  _device = device_list.front();
-  spdlog::info("Found {} Rs2 devices", device_list.size());
-  spdlog::info("  -> Enabling stream for device at index 0");
-  _config.enable_stream(RS2_STREAM_COLOR);
+  _config.enable_stream(RS2_STREAM_COLOR, RS2_FORMAT_BGR8);
   _config.enable_stream(RS2_STREAM_DEPTH);
-  // _config.enable_all_streams();
-  _pipe.start(_config);
+  auto profile = _pipe.start(_config);
+  _device = profile.get_device();
+  _serial_number = _device.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER);
+  _open = true;
 
   // start a thread that captures new frames and dumps them into raw buffers
   std::thread capture_loop([&]() {
     rs2::pointcloud point_cloud;
     rs2::points points;
+    // wait until we open the device
     while (isOpen()) {
       // just block until we receive both depth and color data
       auto frames = _pipe.wait_for_frames();
       const rs2::depth_frame depth_frame = frames.get_depth_frame();
-      // generate the pointcloud and texture mappings
-      points = point_cloud.calculate(depth_frame);
       const rs2::video_frame color_frame = frames.get_color_frame();
 
-      // tell point cloud to map to this color frame
+      // generate the vertex real-world positions from the depth_frame
+      points = point_cloud.calculate(depth_frame);
       point_cloud.map_to(color_frame);
+      // and the color texture coordinates
+      auto texture = points.get_texture_coordinates();
 
-      auto vertices = points.get_vertices();
-
-      // move points into buffers
       std::lock_guard<std::mutex> lock(_buffer_mutex);
+      // move positions into buffer
+      auto vertices = points.get_vertices();
       _point_count = depth_frame.get_width() * depth_frame.get_height();
       const size_t buffer_float_count = _point_count * 3;
       _positions_buffer.resize(buffer_float_count);
       memcpy(_positions_buffer.data(), vertices, buffer_float_count * sizeof(float));
-
-      // spdlog::info(point_buffer.get_vertices()[1000].x);
-
-      _colors_buffer.resize(_point_count);
+      
+      // get metadata needed to unpack colors from uvs
+      _texture_width = color_frame.get_width();
+      _texture_height = color_frame.get_height();
+      _texture_pixel_size = color_frame.get_bytes_per_pixel();
+      _texture_stride = color_frame.get_stride_in_bytes();
+      auto pixel_count = _texture_width * _texture_height;
+      // move colors into buffer
+      _colors_buffer.resize(pixel_count * 3);
+      memcpy(_colors_buffer.data(), color_frame.get_data(),
+          pixel_count * sizeof(uint8_t) * 3);
+      // move uv map into buffer
+      _uvs_buffer.resize(_point_count);
+      memcpy(_uvs_buffer.data(), texture,
+          _point_count * sizeof(rs2::texture_coordinate));
 
       _buffers_updated = true;
     }
   });
   capture_loop.detach();
-  _open = true;
+
   return true;
 }
 
@@ -72,13 +83,12 @@ bool Rs2Driver::close() {
 PointCloud Rs2Driver::getPointCloud(const DeviceConfiguration& config) {
   if (!_buffers_updated)
     return _point_cloud;
+
   std::lock_guard<std::mutex> lock(_buffer_mutex);
 
   std::vector<position> positions(_point_count);
   std::vector<float> colors(_point_count);
   // memcpy(colors.data(), _colors_buffer.data(), _point_count * sizeof(float));
-  auto colors_input = reinterpret_cast<float*>(_colors_buffer.data());
-
   // TODO this offset can be made part of each device,
   // and this entire function can pretty much be made generic as long as
   // the buffers are filled with the right types
@@ -95,9 +105,6 @@ PointCloud Rs2Driver::getPointCloud(const DeviceConfiguration& config) {
     if (config.flip_z) z_in *= -1;
     // // without any z value, it's an empty point, discard it
     if (z_in == 0) continue;
-    // // without any color value, it's an empty point, discard it
-    // auto color = colors_input[i];
-    // if (color == std::numeric_limits<float>::min()) continue;
     // // check if it's within user-defined crop boundaries
     if (!config.crop_z.contains(z_in)) continue;
     float x_in = -_positions_buffer[pos];
@@ -110,10 +117,27 @@ PointCloud Rs2Driver::getPointCloud(const DeviceConfiguration& config) {
     const float x_out = (x_in * config.scale) + rs2_offset.x + config.offset.x;
     const float y_out = (y_in * config.scale) + rs2_offset.y + config.offset.y;
     const float z_out = (z_in * config.scale) + rs2_offset.z + config.offset.z;
-    // // add to our point cloud buffers
-    positions[point_count_out] = (position{x_out, y_out, z_out, 0});
-    // colors[point_count_out] = color;
-    colors[point_count_out] = std::numeric_limits<float>::max();
+    // add position to our point cloud buffer
+    positions[point_count_out] = (position{ x_out, y_out, z_out, 0 });
+
+    // convert color from u/v to bgra8
+    auto uv = _uvs_buffer[i];
+    // normals to texture coordinates conversion
+    int x_value = std::min(std::max(int(uv.u * _texture_width + .5f), 0), _texture_width - 1);
+    int y_value = std::min(std::max(int(uv.v * _texture_height + .5f), 0), _texture_height - 1);
+    int texture_index = (x_value * _texture_pixel_size) + (y_value * _texture_stride);
+    // set the color now that we have the buffer index
+    uint8_t color[] = {
+        _colors_buffer[texture_index],
+        _colors_buffer[texture_index + 1],
+        _colors_buffer[texture_index + 2],
+        std::numeric_limits<uint8_t>::max()
+    };
+    // and send it out as a packed float
+    float packed;
+    memcpy(&packed, &color, sizeof(float));
+    colors[point_count_out] = packed;
+
     point_count_out++;
   }
   // resize buffers to the cropped count
@@ -125,5 +149,6 @@ PointCloud Rs2Driver::getPointCloud(const DeviceConfiguration& config) {
 
   return _point_cloud;
 }
+
 
 } // namespace bob::sensors

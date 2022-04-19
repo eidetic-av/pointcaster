@@ -11,5 +11,8 @@ public:
   ~Rs2Device();
 
   std::string getBroadcastId() override;
+
+protected:
+  void drawDeviceSpecificControls() override;
 };
 } // namespace bob::sensors

@@ -36,7 +36,7 @@ private:
   std::string _serial_number;
 
   std::mutex _buffer_mutex;
-  std::atomic<bool> _buffers_updated = false;
+  std::atomic<bool> _buffers_updated;
   std::vector<int16_t> _positions_buffer;
   std::vector<uint8_t> _colors_buffer;
   size_t _point_count;

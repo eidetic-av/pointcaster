@@ -6,6 +6,7 @@
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 #include <thread>
+#include <fmt/format.h>
 
 namespace bob::sensors {
 
@@ -22,28 +23,35 @@ public:
   float scale = 1.f;
 
   void drawImGuiControls() {
-    // spdlog::info("drawGuiWindow");
+
     ImGui::Checkbox("Enable Broadcast", &_enable_broadcast);
 
-    ImGui::TextDisabled("Flip Input");
-    ImGui::Checkbox("x", &flip_x);
-    ImGui::SameLine();
-    ImGui::Checkbox("y", &flip_y);
-    ImGui::SameLine();
-    ImGui::Checkbox("z", &flip_z);
+    if (ImGui::TreeNode("Transform")) {
+        ImGui::TextDisabled("Flip Input");
+        ImGui::Checkbox(label("x", 0).c_str(), &flip_x);
+        ImGui::SameLine();
+        ImGui::Checkbox(label("y", 0).c_str(), &flip_y);
+        ImGui::SameLine();
+        ImGui::Checkbox(label("z", 0).c_str(), &flip_z);
 
-    ImGui::TextDisabled("Crop Input");
-    ImGui::SliderFloat2("min-max x", crop_x.arr(), -10, 10);
-    ImGui::SliderFloat2("min-max y", crop_y.arr(), -10, 10);
-    ImGui::SliderFloat2("min-max z", crop_z.arr(), -10, 10);
+        ImGui::TextDisabled("Crop Input");
+        ImGui::SliderFloat2(label("x", 1).c_str(), crop_x.arr(), -10, 10);
+        ImGui::SliderFloat2(label("y", 1).c_str(), crop_y.arr(), -10, 10);
+        ImGui::SliderFloat2(label("z", 1).c_str(), crop_z.arr(), -10, 10);
 
-    ImGui::TextDisabled("Offset Output");
-    ImGui::SliderFloat("offset x", &offset.x, -10, 10);
-    ImGui::SliderFloat("offset y", &offset.y, -10, 10);
-    ImGui::SliderFloat("offset z", &offset.z, -10, 10);
+        ImGui::TextDisabled("Offset Output");
+        ImGui::SliderFloat(label("x", 2).c_str(), &offset.x, -10, 10);
+        ImGui::SliderFloat(label("y", 2).c_str(), &offset.y, -10, 10);
+        ImGui::SliderFloat(label("z", 2).c_str(), &offset.z, -10, 10);
 
-    ImGui::TextDisabled("Scale output");
-    ImGui::SliderFloat("overall scale", &scale, 0.0f, 3.0f);
+        ImGui::TextDisabled("Scale output");
+        ImGui::SliderFloat(label("uniform").c_str(), &scale, 0.0f, 3.0f);
+        ImGui::TreePop();
+    }
+    if (ImGui::TreeNode("Device options")) {
+        drawDeviceSpecificControls();
+        ImGui::TreePop();
+    }
   };
 
   bool broadcastEnabled() { return _enable_broadcast; }
@@ -62,6 +70,15 @@ public:
 protected:
   std::unique_ptr<Driver> _driver;
   bool _enable_broadcast = true;
+
+  // implement this to add device-specific options with imgui
+  virtual void drawDeviceSpecificControls() { }
+
+  const std::string label(std::string label_text, int index = 0) {
+      ImGui::Text("%s", label_text.c_str());
+      ImGui::SameLine();
+      return fmt::format("##{}_{}_{}_{}", name, _driver->getId(), label_text, index);
+  }
 };
 
 } // namespace bob::sensors

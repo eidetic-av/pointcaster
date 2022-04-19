@@ -28,6 +28,16 @@ public:
     return _serial_number;
   }
 
+  rs2::device getDevice() { return _device; }
+
+  rs2::depth_sensor getDepthSensor() {
+      return _device.first<rs2::depth_sensor>();
+  }
+
+  rs2::color_sensor getColorSensor() {
+      return _device.first<rs2::color_sensor>();
+  }
+
 private:
   rs2::context _context;
   rs2::config _config;
@@ -36,10 +46,17 @@ private:
   std::string _serial_number;
 
   std::mutex _buffer_mutex;
-  std::atomic<bool> _buffers_updated = false;
+  std::atomic<bool> _buffers_updated;
   std::vector<float> _positions_buffer;
-  std::vector<uint8_t> _colors_buffer;
   size_t _point_count;
+
+  std::vector<rs2::texture_coordinate> _uvs_buffer;
+  std::vector<uint8_t> _colors_buffer;
+
+  int _texture_width;
+  int _texture_height;
+  size_t _texture_pixel_size;
+  size_t _texture_stride;
 
   PointCloud _point_cloud{std::vector<position>{{0, 0, 0, 0}},
 			  std::vector<float>{1}};
