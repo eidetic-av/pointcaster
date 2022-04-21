@@ -61,7 +61,10 @@ public:
   explicit PointCaster(const Arguments &args);
 
 protected:
+  // GUI
   ImGuiIntegration::Context _imgui_context{NoCreate};
+  bool _show_sensors_window;
+  bool _show_controllers_window;
 
   Containers::Pointer<Scene3D> _scene;
   Containers::Pointer<SceneGraph::DrawableGroup3D> _drawable_group;
@@ -263,37 +266,54 @@ void PointCaster::drawEvent() {
   else if (!ImGui::GetIO().WantTextInput && isTextInputActive())
     stopTextInput();
 
+  // Draw the application's menu bar
+  if (ImGui::BeginMainMenuBar()) {
+      if (ImGui::BeginMenu("File")) {
+          ImGui::EndMenu();
+      }
+      if (ImGui::BeginMenu("Window")) {
+          ImGui::BeginDisabled();
+          ImGui::Checkbox("##Window_Sensors", &_show_sensors_window);
+          ImGui::EndDisabled();
+          ImGui::SameLine();
+          if (ImGui::MenuItem("Sensors", "")) 
+              _show_sensors_window = !_show_sensors_window;
+
+          ImGui::BeginDisabled();
+          ImGui::Checkbox("##Window_Controllers", &_show_controllers_window);
+          ImGui::EndDisabled();
+          ImGui::SameLine();
+          if (ImGui::MenuItem("Controllers", "")) 
+              _show_controllers_window = !_show_controllers_window;
+
+          ImGui::EndMenu();
+      }
+      ImGui::EndMainMenuBar();
+  }
+
   // Fill point cloud from each device TODO this is all so ugly. no need to
   // reset the renderer, and also need to add to the renderer's points not
   // just set them
   _point_cloud_renderer.reset(new PointCloudRenderer(0.005f));
 
   _devices_access.lock();
-
   // for (auto device : *_devices) {
   // TODO this should be appending to the point array after clearing it
   // rn it only sets the entire cloud
     auto k4a_points = (*_devices)[0]->getPointCloud();
     _point_cloud_renderer->_points = k4a_points;
-    // auto rs2_points = (*_devices)[1]->getPointCloud();
-    // auto renderer_points_ptr = &_point_cloud_renderer->_points.positions;
-    // auto renderer_colors_ptr = &_point_cloud_renderer->_points.colors;
-    // renderer_points_ptr->insert(renderer_points_ptr->end(),
-    // 				rs2_points.positions.begin(),
-    // 				rs2_points.positions.end());
-    // renderer_colors_ptr->insert(renderer_colors_ptr->end(),
-    // 				rs2_points.colors.begin(),
-    // 				rs2_points.colors.end());
 
     _point_cloud_renderer->setDirty();
   // }
+  _devices_access.unlock();
 
   // Draw the scene
   _point_cloud_renderer->draw(_camera, framebufferSize());
   _camera->draw(*_drawable_group);
 
   // Draw gui options for each device
-  ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
+  if (_show_sensors_window) {
+	  ImGui::SetNextWindowPos({ 50.0f, 50.0f }, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Sensors", nullptr);
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
@@ -303,10 +323,8 @@ void PointCaster::drawEvent() {
   }
   ImGui::PopItemWidth();
   ImGui::End();
-
+  }
   _imgui_context.updateApplicationCursor(*this);
-
-  _devices_access.unlock();
 
   // Render ImGui window
   GL::Renderer::enable(GL::Renderer::Feature::Blending);
