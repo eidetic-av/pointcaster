@@ -52,6 +52,7 @@ using namespace bob::sensors;
 using namespace Magnum;
 using namespace Math::Literals;
 
+using uint = unsigned int;
 using Object3D = SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
 using Scene3D = SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 
@@ -204,19 +205,33 @@ PointCaster::PointCaster(const Arguments &args)
 
     while (1) {
       std::this_thread::sleep_for(network_broadcast_rate);
+      if (_devices->empty()) continue;
 
-      std::lock_guard<std::mutex> lock(_devices_access);
-
-      for (auto device : *_devices) {
+      _devices_access.lock();
+      // combine all incoming point clouds into one
+      // TODO decide whether it should be done on this network thread or elsewhere
+      // -> maybe before it's sent to the local machine renderer
+      auto point_cloud = (*_devices)[0]->getPointCloud();
+      auto positions = &point_cloud.positions;
+      auto colors = &point_cloud.colors;
+      for (uint i = 1; i < _devices->size(); i++) {
+        auto device = (*_devices)[i];
 	if (!device->broadcastEnabled()) continue;
-	auto broadcast_id = device->getBroadcastId();
+        auto additional_point_cloud = device->getPointCloud();
+        positions->insert(positions->end(),
+            additional_point_cloud.positions.begin(),
+            additional_point_cloud.positions.end());
+        colors->insert(colors->end(),
+            additional_point_cloud.colors.begin(),
+            additional_point_cloud.colors.end());
+      }
+      _devices_access.unlock();
 
 	// serialize the point cloud
 	auto [packed_point_cloud, serialize] = zpp::bits::data_out();
-	auto pack_result = serialize(device->getPointCloud());
+	  auto pack_result = serialize(point_cloud);
 	if (zpp::bits::failure(pack_result)) {
-	  spdlog::error("Failed to pack point cloud from device {}",
-			broadcast_id);
+		  spdlog::error("Failed to serialize point cloud");
 	  continue;
         }
         size_t packed_size = packed_point_cloud.size();
@@ -226,11 +241,7 @@ PointCaster::PointCaster(const Arguments &args)
 	// message.set_group(broadcast_id.c_str());
 	message.set_group("a");
 	radio.send(message, send_flags::none);
-
-	// if (device->getPointCloud().size() > 94010)
-	// spdlog::debug("{}", device->getPointCloud().positions[94012].z);
       }
-    }
   });
   network_thread.detach();
 
@@ -290,7 +301,6 @@ void PointCaster::drawEvent() {
     if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
     device->Device::drawImGuiControls();
   }
-
   ImGui::PopItemWidth();
   ImGui::End();
 
