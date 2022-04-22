@@ -12,6 +12,7 @@ endif()
 
 find_package(spdlog CONFIG REQUIRED)
 find_package(ZeroMQ CONFIG REQUIRED)
+find_package(libremidi CONFIG REQUIRED)
 
 find_package(EBML CONFIG REQUIRED)
 find_package(k4a CONFIG REQUIRED)
@@ -50,6 +51,7 @@ add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
 
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui
+  libremidi
   Corrade::Main
   Magnum::Application
   Magnum::GL

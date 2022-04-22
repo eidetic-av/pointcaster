@@ -3,7 +3,7 @@
     "version-string": "0.0.1",
     "dependencies": [
 	"spdlog", "azure-kinect-sensor-sdk", "corrade",
-	"zpp-bits", "sdl2", "cppzmq", "realsense2",
+	"zpp-bits", "sdl2", "cppzmq", "realsense2", "libremidi",
 	{
 	    "name": "sdl2",
 	    "default-features": false,

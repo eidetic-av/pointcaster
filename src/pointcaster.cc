@@ -1,7 +1,7 @@
+#include <chrono>
 #include <mutex>
 #include <random>
 #include <thread>
-#include <chrono>
 
 #ifdef _WIN32
 #include <WinSock2.h>
@@ -20,6 +20,8 @@
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/Utility/StlMath.h>
 
+#include <libremidi/libremidi.hpp>
+
 #include <Magnum/Image.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/Math/FunctionsBatch.h>
@@ -31,8 +33,8 @@
 #include <Magnum/GL/Renderer.h>
 #include <Magnum/GL/Version.h>
 
-#include <imgui.h>
 #include <Magnum/ImGuiIntegration/Context.hpp>
+#include <imgui.h>
 
 #include <Magnum/SceneGraph/Camera.h>
 #include <Magnum/SceneGraph/Drawable.h>
@@ -63,8 +65,8 @@ public:
 protected:
   // GUI
   ImGuiIntegration::Context _imgui_context{NoCreate};
-  bool _show_sensors_window;
-  bool _show_controllers_window;
+  bool _show_sensors_window = false;
+  bool _show_controllers_window = false;
 
   Containers::Pointer<Scene3D> _scene;
   Containers::Pointer<SceneGraph::DrawableGroup3D> _drawable_group;
@@ -90,8 +92,10 @@ protected:
   bool _mouse_pressed = false;
 
   // our connected devices
-  std::shared_ptr<std::vector<Device*>> _devices;
+  std::shared_ptr<std::vector<Device *>> _devices;
   std::mutex _devices_access;
+
+  void initControllers();
 
   void drawEvent() override;
   void viewportEvent(ViewportEvent &event) override;
@@ -112,11 +116,13 @@ PointCaster::PointCaster(const Arguments &args)
   const Vector2 dpi_scaling = this->dpiScaling({});
   Configuration conf;
   conf.setTitle("pointcaster");
+  conf.setSize({1600, 1200});
   conf.setSize(conf.size(), dpi_scaling);
   conf.setWindowFlags(Configuration::WindowFlag::Resizable);
   GLConfiguration gl_conf;
   gl_conf.setSampleCount(dpi_scaling.max() < 2.0f ? 8 : 2);
-  if (!tryCreate(conf, gl_conf)) create(conf, gl_conf.setSampleCount(0));
+  if (!tryCreate(conf, gl_conf))
+    create(conf, gl_conf.setSampleCount(0));
 
   // Set up ImGui
   ImGui::CreateContext();
@@ -167,7 +173,7 @@ PointCaster::PointCaster(const Arguments &args)
 
   // initialise depth to the value at scene center
   _last_depth = ((_camera->projectionMatrix() * _camera->cameraMatrix())
-		     .transformPoint({}) .z() + 1.0f) * 0.5f;
+		     .transformPoint({}).z() + 1.0f) * 0.5f;
 
   // Set up ground grid
   _grid.reset(new WireframeGrid(_scene.get(), _drawable_group.get()));
@@ -208,51 +214,63 @@ PointCaster::PointCaster(const Arguments &args)
 
     while (1) {
       std::this_thread::sleep_for(network_broadcast_rate);
-      if (_devices->empty()) continue;
+      if (_devices->empty())
+	continue;
 
       _devices_access.lock();
       // combine all incoming point clouds into one
-      // TODO decide whether it should be done on this network thread or elsewhere
+      // TODO decide whether it should be done on this network thread or
+      // elsewhere
       // -> maybe before it's sent to the local machine renderer
       auto point_cloud = (*_devices)[0]->getPointCloud();
       auto positions = &point_cloud.positions;
       auto colors = &point_cloud.colors;
       for (uint i = 1; i < _devices->size(); i++) {
-        auto device = (*_devices)[i];
-	if (!device->broadcastEnabled()) continue;
-        auto additional_point_cloud = device->getPointCloud();
-        positions->insert(positions->end(),
-            additional_point_cloud.positions.begin(),
-            additional_point_cloud.positions.end());
-        colors->insert(colors->end(),
-            additional_point_cloud.colors.begin(),
-            additional_point_cloud.colors.end());
+	auto device = (*_devices)[i];
+	if (!device->broadcastEnabled())
+	  continue;
+	auto additional_point_cloud = device->getPointCloud();
+	positions->insert(positions->end(),
+			  additional_point_cloud.positions.begin(),
+			  additional_point_cloud.positions.end());
+	colors->insert(colors->end(), additional_point_cloud.colors.begin(),
+		       additional_point_cloud.colors.end());
       }
       _devices_access.unlock();
 
-	// serialize the point cloud
-	auto [packed_point_cloud, serialize] = zpp::bits::data_out();
-	  auto pack_result = serialize(point_cloud);
-	if (zpp::bits::failure(pack_result)) {
-		  spdlog::error("Failed to serialize point cloud");
-	  continue;
-        }
-        size_t packed_size = packed_point_cloud.size();
-	// create and send the zmq message
-	zmq::message_t message(packed_size);
-	memcpy(message.data(), packed_point_cloud.data(), packed_size);
-	// message.set_group(broadcast_id.c_str());
-	message.set_group("a");
-	radio.send(message, send_flags::none);
+      // serialize the point cloud
+      auto [packed_point_cloud, serialize] = zpp::bits::data_out();
+      auto pack_result = serialize(point_cloud);
+      if (zpp::bits::failure(pack_result)) {
+	spdlog::error("Failed to serialize point cloud");
+	continue;
       }
+      size_t packed_size = packed_point_cloud.size();
+      // create and send the zmq message
+      zmq::message_t message(packed_size);
+      memcpy(message.data(), packed_point_cloud.data(), packed_size);
+      message.set_group("pc");
+      radio.send(message, send_flags::none);
+    }
   });
   network_thread.detach();
 
-  // Init our devices
+  // Init our controllers
+  initControllers();
+
+  // Init our sensors
   std::lock_guard<std::mutex> lock(_devices_access);
   _devices.reset(new std::vector<Device *>);
   _devices->push_back(new K4ADevice());
   // _devices->push_back(new Rs2Device());
+}
+
+void PointCaster::initControllers() {
+  libremidi::midi_in midi;
+  for (uint i = 0, N = midi.get_port_count(); i < N; i++) {
+    std::string name = midi.get_port_name(i);
+    spdlog::info("Found MIDI device '{}'", name.c_str());
+  }
 }
 
 void PointCaster::drawEvent() {
@@ -268,27 +286,27 @@ void PointCaster::drawEvent() {
 
   // Draw the application's menu bar
   if (ImGui::BeginMainMenuBar()) {
-      if (ImGui::BeginMenu("File")) {
-          ImGui::EndMenu();
-      }
-      if (ImGui::BeginMenu("Window")) {
-          ImGui::BeginDisabled();
-          ImGui::Checkbox("##Window_Sensors", &_show_sensors_window);
-          ImGui::EndDisabled();
-          ImGui::SameLine();
-          if (ImGui::MenuItem("Sensors", "")) 
-              _show_sensors_window = !_show_sensors_window;
+    if (ImGui::BeginMenu("File")) {
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Window")) {
+      ImGui::BeginDisabled();
+      ImGui::Checkbox("##Window_Sensors", &_show_sensors_window);
+      ImGui::EndDisabled();
+      ImGui::SameLine();
+      if (ImGui::MenuItem("Sensors", ""))
+	_show_sensors_window = !_show_sensors_window;
 
-          ImGui::BeginDisabled();
-          ImGui::Checkbox("##Window_Controllers", &_show_controllers_window);
-          ImGui::EndDisabled();
-          ImGui::SameLine();
-          if (ImGui::MenuItem("Controllers", "")) 
-              _show_controllers_window = !_show_controllers_window;
+      ImGui::BeginDisabled();
+      ImGui::Checkbox("##Window_Controllers", &_show_controllers_window);
+      ImGui::EndDisabled();
+      ImGui::SameLine();
+      if (ImGui::MenuItem("Controllers", ""))
+	_show_controllers_window = !_show_controllers_window;
 
-          ImGui::EndMenu();
-      }
-      ImGui::EndMainMenuBar();
+      ImGui::EndMenu();
+    }
+    ImGui::EndMainMenuBar();
   }
 
   // Fill point cloud from each device TODO this is all so ugly. no need to
@@ -300,10 +318,10 @@ void PointCaster::drawEvent() {
   // for (auto device : *_devices) {
   // TODO this should be appending to the point array after clearing it
   // rn it only sets the entire cloud
-    auto k4a_points = (*_devices)[0]->getPointCloud();
-    _point_cloud_renderer->_points = k4a_points;
+  auto k4a_points = (*_devices)[0]->getPointCloud();
+  _point_cloud_renderer->_points = k4a_points;
 
-    _point_cloud_renderer->setDirty();
+  _point_cloud_renderer->setDirty();
   // }
   _devices_access.unlock();
 
@@ -313,16 +331,16 @@ void PointCaster::drawEvent() {
 
   // Draw gui options for each device
   if (_show_sensors_window) {
-	  ImGui::SetNextWindowPos({ 50.0f, 50.0f }, ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowBgAlpha(0.8f);
-  ImGui::Begin("Sensors", nullptr);
-  ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
-  for (auto device : *_devices) {
-    if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
-    device->Device::drawImGuiControls();
-  }
-  ImGui::PopItemWidth();
-  ImGui::End();
+    ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowBgAlpha(0.8f);
+    ImGui::Begin("Sensors", nullptr);
+    ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
+    for (auto device : *_devices) {
+      if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
+	device->Device::drawImGuiControls();
+    }
+    ImGui::PopItemWidth();
+    ImGui::End();
   }
   _imgui_context.updateApplicationCursor(*this);
 
