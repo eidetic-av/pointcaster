@@ -338,6 +338,7 @@ void PointCaster::initControllers() {
       float value;
       uint controller_number;
       if (type == message_type::PITCH_BEND) {
+	controller_number = 999;
 	int first_byte = message[1];
 	int second_byte = message[2];
 	int pb_value = (second_byte * 128) + first_byte;
@@ -403,10 +404,18 @@ void PointCaster::handleMidiLearn(const libremidi::message &message) {
   auto channel = message.get_channel();
   auto type = message.get_message_type();
 
-  // TODO only handling cc messages for now
   if (type == message_type::CONTROL_CHANGE) {
     gui::assigned_midi_parameters.push_back(gui::AssignedMidiParameter {
 	*gui::midi_learn_parameter, channel, message[1]});
+    gui::midi_learn_parameter.reset();
+    gui::midi_learn_mode = false;
+    return;
+  }
+
+  if (type == message_type::PITCH_BEND) {
+    // use controller number 999 for pitch bends
+    gui::assigned_midi_parameters.push_back(gui::AssignedMidiParameter {
+	*gui::midi_learn_parameter, channel, 999});
     gui::midi_learn_parameter.reset();
     gui::midi_learn_mode = false;
   }
