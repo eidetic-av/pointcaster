@@ -4,6 +4,7 @@
 #include "../structs.h"
 #include "driver.h"
 #include <imgui.h>
+#include "../gui_helpers.h"
 #include <spdlog/spdlog.h>
 #include <thread>
 #include <fmt/format.h>
@@ -41,11 +42,15 @@ public:
 
         ImGui::TextDisabled("Offset Output");
         ImGui::SliderFloat(label("x", 2).c_str(), &offset.x, -10, 10);
+	gui::enableParameterLearn(&offset.x, gui::ParameterType::Float, -10, 10);
         ImGui::SliderFloat(label("y", 2).c_str(), &offset.y, -10, 10);
+	gui::enableParameterLearn(&offset.y, gui::ParameterType::Float, -10, 10);
         ImGui::SliderFloat(label("z", 2).c_str(), &offset.z, -10, 10);
+	gui::enableParameterLearn(&offset.z, gui::ParameterType::Float, -10, 10);
 
         ImGui::TextDisabled("Scale output");
         ImGui::SliderFloat(label("uniform").c_str(), &scale, 0.0f, 3.0f);
+	gui::enableParameterLearn(&scale, gui::ParameterType::Float, 0, 3);
         ImGui::TreePop();
     }
     if (ImGui::TreeNode("Device options")) {

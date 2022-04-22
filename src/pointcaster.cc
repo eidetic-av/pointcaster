@@ -35,6 +35,7 @@
 
 #include <Magnum/ImGuiIntegration/Context.hpp>
 #include <imgui.h>
+#include "gui_helpers.h"
 
 #include <Magnum/SceneGraph/Camera.h>
 #include <Magnum/SceneGraph/Drawable.h>
@@ -63,10 +64,7 @@ public:
   explicit PointCaster(const Arguments &args);
 
 protected:
-  // GUI
   ImGuiIntegration::Context _imgui_context{NoCreate};
-  bool _show_sensors_window = false;
-  bool _show_controllers_window = false;
 
   Containers::Pointer<Scene3D> _scene;
   Containers::Pointer<SceneGraph::DrawableGroup3D> _drawable_group;
@@ -95,7 +93,16 @@ protected:
   std::shared_ptr<std::vector<Device *>> _devices;
   std::mutex _devices_access;
 
+  void drawMenuBar();
+  void quit();
+
+  bool _show_sensors_window = true;
+  void drawSensorsWindow();
+
+  bool _show_controllers_window = true;
   void initControllers();
+  void drawControllersWindow();
+  void handleMidiLearn(const libremidi::message &message);
 
   void drawEvent() override;
   void viewportEvent(ViewportEvent &event) override;
@@ -249,7 +256,8 @@ PointCaster::PointCaster(const Arguments &args)
       // create and send the zmq message
       zmq::message_t message(packed_size);
       memcpy(message.data(), packed_point_cloud.data(), packed_size);
-      message.set_group("pc");
+      // message.set_group("pc");
+      message.set_group("k");
       radio.send(message, send_flags::none);
     }
   });
@@ -262,40 +270,152 @@ PointCaster::PointCaster(const Arguments &args)
   std::lock_guard<std::mutex> lock(_devices_access);
   _devices.reset(new std::vector<Device *>);
   _devices->push_back(new K4ADevice());
-  // _devices->push_back(new Rs2Device());
+  _devices->push_back(new Rs2Device());
+}
+
+void PointCaster::quit() {
+  exit(0);
+}
+
+void PointCaster::drawMenuBar() {
+  if (ImGui::BeginMainMenuBar()) {
+    if (ImGui::BeginMenu("File")) {
+      if (ImGui::MenuItem("Quit", "q")) quit();
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Window")) {
+      ImGui::BeginDisabled();
+      ImGui::Checkbox("##Window_Sensors", &_show_sensors_window);
+      ImGui::EndDisabled();
+      ImGui::SameLine();
+      if (ImGui::MenuItem("Sensors", "s"))
+	_show_sensors_window = !_show_sensors_window;
+
+      ImGui::BeginDisabled();
+      ImGui::Checkbox("##Window_Controllers", &_show_controllers_window);
+      ImGui::EndDisabled();
+      ImGui::SameLine();
+      if (ImGui::MenuItem("Controllers", "c")) {
+	_show_controllers_window = !_show_controllers_window;
+	if (!_show_controllers_window) gui::midi_learn_mode = false;
+      }
+
+      ImGui::EndMenu();
+    }
+    ImGui::EndMainMenuBar();
+  }
+}
+
+void PointCaster::drawSensorsWindow() {
+  ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowBgAlpha(0.8f);
+  ImGui::Begin("Sensors", nullptr);
+  ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
+  for (auto device : *_devices) {
+    if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
+      device->Device::drawImGuiControls();
+    ImGui::Separator();
+  }
+  ImGui::PopItemWidth();
+  ImGui::End();
 }
 
 void PointCaster::initControllers() {
   using namespace libremidi;
-  const float midi_max = 127.f;
-
-  std::thread midi_startup_thread([&]() {
+  std::thread midi_startup([&]() {
     midi_in midi;
     auto port_count = midi.get_port_count();
     spdlog::info("Detected {} MIDI ports", port_count);
     midi.open_port(0);
     midi.set_callback([&](const message &message) {
+      if (gui::midi_learn_mode) {
+	handleMidiLearn(message);
+	return;
+      }
+      // parse the midi message
       auto channel = message.get_channel();
       auto type = message.get_message_type();
-      float data;
+      float value;
+      uint controller_number;
       if (type == message_type::PITCH_BEND) {
 	int first_byte = message[1];
 	int second_byte = message[2];
 	int pb_value = (second_byte * 128) + first_byte;
-	data = pb_value / 128.f / 128.f;
+	value = pb_value / 128.f / 128.f;
       } else if (type == message_type::CONTROL_CHANGE) {
+	controller_number = message[1];
 	int control_change_value = message[2];
-	data = control_change_value / 127.f;
+	value = control_change_value / 127.f;
       }
-      spdlog::info("data: {}", data);
+
+      // check if we have assigned the midi message to any parameters
+      gui::AssignedMidiParameter learned_parameter;
+      for (auto assigned_parameter : gui::assigned_midi_parameters) {
+	if (assigned_parameter.channel != channel) continue;
+	if (assigned_parameter.controller_number != controller_number) continue;
+	// copy it locally
+	learned_parameter = assigned_parameter;
+	break;
+      }
+      if (learned_parameter.parameter.value == nullptr) return;
+      // if we have assigned this parameter, apply the change
+      auto min = learned_parameter.parameter.range_min;
+      auto max = learned_parameter.parameter.range_max;
+      auto output = min + value * (max - min);
+      // TODO this is only implemented for float parameters
+      if (learned_parameter.parameter.param_type == gui::ParameterType::Float) {
+	auto value_ptr = reinterpret_cast<float*>(learned_parameter.parameter.value);
+	*value_ptr = output;
+      }
     });
   });
-  midi_startup_thread.detach();
+ midi_startup.detach();
+}
+
+void PointCaster::drawControllersWindow() {
+  ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowBgAlpha(0.8f);
+  ImGui::Begin("Controllers", nullptr);
+  ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
+  if (gui::midi_learn_mode) ImGui::BeginDisabled();
+  if (ImGui::Button("Midi Learn")) {
+    gui::midi_learn_mode = true;
+    ImGui::BeginDisabled();
+  }
+  if (gui::midi_learn_mode) {
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel")) gui::midi_learn_mode = false;
+  }
+  // for (auto device : *_devices) {
+  //   if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
+  //     device->Device::drawImGuiControls();
+  // }
+  ImGui::PopItemWidth();
+  ImGui::End();
+}
+
+void PointCaster::handleMidiLearn(const libremidi::message &message) {
+  using namespace libremidi;
+
+  if (!gui::midi_learn_parameter) return;
+
+  auto channel = message.get_channel();
+  auto type = message.get_message_type();
+
+  // TODO only handling cc messages for now
+  if (type == message_type::CONTROL_CHANGE) {
+    gui::assigned_midi_parameters.push_back(gui::AssignedMidiParameter {
+	*gui::midi_learn_parameter, channel, message[1]});
+    gui::midi_learn_parameter.reset();
+    gui::midi_learn_mode = false;
+  }
+
 }
 
 void PointCaster::drawEvent() {
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
-			       GL::FramebufferClear::Depth);
+                               GL::FramebufferClear::Depth);
   _imgui_context.newFrame();
 
   // Enable text input, if needed/
@@ -304,30 +424,7 @@ void PointCaster::drawEvent() {
   else if (!ImGui::GetIO().WantTextInput && isTextInputActive())
     stopTextInput();
 
-  // Draw the application's menu bar
-  if (ImGui::BeginMainMenuBar()) {
-    if (ImGui::BeginMenu("File")) {
-      ImGui::EndMenu();
-    }
-    if (ImGui::BeginMenu("Window")) {
-      ImGui::BeginDisabled();
-      ImGui::Checkbox("##Window_Sensors", &_show_sensors_window);
-      ImGui::EndDisabled();
-      ImGui::SameLine();
-      if (ImGui::MenuItem("Sensors", ""))
-	_show_sensors_window = !_show_sensors_window;
-
-      ImGui::BeginDisabled();
-      ImGui::Checkbox("##Window_Controllers", &_show_controllers_window);
-      ImGui::EndDisabled();
-      ImGui::SameLine();
-      if (ImGui::MenuItem("Controllers", ""))
-	_show_controllers_window = !_show_controllers_window;
-
-      ImGui::EndMenu();
-    }
-    ImGui::EndMainMenuBar();
-  }
+  drawMenuBar();
 
   // Fill point cloud from each device TODO this is all so ugly. no need to
   // reset the renderer, and also need to add to the renderer's points not
@@ -339,6 +436,14 @@ void PointCaster::drawEvent() {
   // TODO this should be appending to the point array after clearing it
   // rn it only sets the entire cloud
   auto k4a_points = (*_devices)[0]->getPointCloud();
+  auto positions = &k4a_points.positions;
+  auto colors = &k4a_points.colors;
+  auto additional_point_cloud = (*_devices)[1]->getPointCloud();
+  positions->insert(positions->end(), additional_point_cloud.positions.begin(),
+		    additional_point_cloud.positions.end());
+  colors->insert(colors->end(), additional_point_cloud.colors.begin(),
+		 additional_point_cloud.colors.end());
+
   _point_cloud_renderer->_points = k4a_points;
 
   _point_cloud_renderer->setDirty();
@@ -349,19 +454,10 @@ void PointCaster::drawEvent() {
   _point_cloud_renderer->draw(_camera, framebufferSize());
   _camera->draw(*_drawable_group);
 
-  // Draw gui options for each device
-  if (_show_sensors_window) {
-    ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowBgAlpha(0.8f);
-    ImGui::Begin("Sensors", nullptr);
-    ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
-    for (auto device : *_devices) {
-      if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
-	device->Device::drawImGuiControls();
-    }
-    ImGui::PopItemWidth();
-    ImGui::End();
-  }
+  // Draw gui windows
+  if (_show_sensors_window) drawSensorsWindow();
+  if (_show_controllers_window) drawControllersWindow();
+
   _imgui_context.updateApplicationCursor(*this);
 
   // Render ImGui window
@@ -432,7 +528,14 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
   case KeyEvent::Key::Q:
-    exit(0);
+    quit();
+    break;
+  case KeyEvent::Key::S:
+    _show_sensors_window = !_show_sensors_window;
+    break;
+  case KeyEvent::Key::C:
+    _show_controllers_window = !_show_controllers_window;
+    if (!_show_controllers_window) gui::midi_learn_mode = false;
     break;
   default:
     if (_imgui_context.handleKeyPressEvent(event))

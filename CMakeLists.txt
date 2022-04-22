@@ -31,6 +31,7 @@ corrade_add_resource(RESOURCES resources.conf)
 
 set(SOURCE_FILES
   src/pointcaster.cc src/point_cloud.cc
+  src/gui_helpers.cc
   src/shaders/particle_sphere.cc
   src/devices/k4a/k4a_driver.cc
   src/devices/k4a/k4a_device.cc
