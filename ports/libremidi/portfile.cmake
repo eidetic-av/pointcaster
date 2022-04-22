@@ -37,10 +37,8 @@ endforeach(header)
 file(
   INSTALL "${SOURCE_PATH}/LICENSE.ModernMidi"
   DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}"
-  RENAME copyright.modernmidi
 )
 file(
   INSTALL "${SOURCE_PATH}/LICENSE.RtMidi"
   DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}"
-  RENAME copyright.rtmidi
 )

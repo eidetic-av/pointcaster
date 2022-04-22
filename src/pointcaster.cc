@@ -266,11 +266,31 @@ PointCaster::PointCaster(const Arguments &args)
 }
 
 void PointCaster::initControllers() {
-  libremidi::midi_in midi;
-  for (uint i = 0, N = midi.get_port_count(); i < N; i++) {
-    std::string name = midi.get_port_name(i);
-    spdlog::info("Found MIDI device '{}'", name.c_str());
-  }
+  using namespace libremidi;
+  const float midi_max = 127.f;
+
+  std::thread midi_startup_thread([&]() {
+    midi_in midi;
+    auto port_count = midi.get_port_count();
+    spdlog::info("Detected {} MIDI ports", port_count);
+    midi.open_port(0);
+    midi.set_callback([&](const message &message) {
+      auto channel = message.get_channel();
+      auto type = message.get_message_type();
+      float data;
+      if (type == message_type::PITCH_BEND) {
+	int first_byte = message[1];
+	int second_byte = message[2];
+	int pb_value = (second_byte * 128) + first_byte;
+	data = pb_value / 128.f / 128.f;
+      } else if (type == message_type::CONTROL_CHANGE) {
+	int control_change_value = message[2];
+	data = control_change_value / 127.f;
+      }
+      spdlog::info("data: {}", data);
+    });
+  });
+  midi_startup_thread.detach();
 }
 
 void PointCaster::drawEvent() {
