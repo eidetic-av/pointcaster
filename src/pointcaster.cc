@@ -441,9 +441,8 @@ void PointCaster::drawEvent() {
   _point_cloud_renderer.reset(new PointCloudRenderer(0.005f));
 
   _devices_access.lock();
+  // TODO loop more than two devices
   // for (auto device : *_devices) {
-  // TODO this should be appending to the point array after clearing it
-  // rn it only sets the entire cloud
   auto k4a_points = (*_devices)[0]->getPointCloud();
   auto positions = &k4a_points.positions;
   auto colors = &k4a_points.colors;
@@ -452,11 +451,9 @@ void PointCaster::drawEvent() {
 		    additional_point_cloud.positions.end());
   colors->insert(colors->end(), additional_point_cloud.colors.begin(),
 		 additional_point_cloud.colors.end());
-
   _point_cloud_renderer->_points = k4a_points;
-
   _point_cloud_renderer->setDirty();
-  // }
+  //}
   _devices_access.unlock();
 
   // Draw the scene

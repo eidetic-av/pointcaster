@@ -13,27 +13,20 @@
 
 namespace bob {
 
-using Color16 = std::array<char, 4>;
-
 using namespace Magnum;
 using namespace Math::Literals;
 
 PointCloudRenderer::PointCloudRenderer(float particleRadius)
     : _particleRadius(particleRadius),
       _meshParticles(GL::MeshPrimitive::Points) {
-  _meshParticles.addVertexBuffer(_positions_buffer, 0,
-				 GL::Attribute<0, Vector4>());
-
-  // _meshParticles.addVertexBuffer(_color_buffer, 0, Shaders::Generic3D::Color4());
+  _meshParticles.addVertexBuffer(_positions_buffer, 0, GL::Attribute<0, Vector4>());
   _meshParticles.addVertexBuffer(_color_buffer, 0, GL::Attribute<2, float>());
-
   _particleShader.reset(new ParticleSphereShader);
 }
 
 PointCloudRenderer &
 PointCloudRenderer::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
 		    const Vector2i &viewportSize) {
-  // spdlog::info("draw: {}", _points.size());
   if (_points.empty()) return *this;
 
   if (_dirty) {
