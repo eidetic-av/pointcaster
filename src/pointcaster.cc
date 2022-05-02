@@ -104,6 +104,27 @@ protected:
   void drawControllersWindow();
   void handleMidiLearn(const libremidi::message &message);
 
+  PointCloud getSynthesizedPointCloud() {
+    // TODO put the return value in a cache to use until
+    // at least one of the devices has received new points
+    std::lock_guard<std::mutex> lock(_devices_access);
+    auto point_cloud = (*_devices)[0]->getPointCloud();
+    auto positions = &point_cloud.positions;
+    auto colors = &point_cloud.colors;
+    for (uint i = 1; i < _devices->size(); i++) {
+      auto device = (*_devices)[i];
+      if (!device->broadcastEnabled())
+	continue;
+      auto additional_point_cloud = device->getPointCloud();
+      positions->insert(positions->end(),
+			additional_point_cloud.positions.begin(),
+			additional_point_cloud.positions.end());
+      colors->insert(colors->end(), additional_point_cloud.colors.begin(),
+                     additional_point_cloud.colors.end());
+    }
+    return point_cloud;
+  }
+
   void drawEvent() override;
   void viewportEvent(ViewportEvent &event) override;
   void keyPressEvent(KeyEvent &event) override;
@@ -224,26 +245,7 @@ PointCaster::PointCaster(const Arguments &args)
       if (_devices->empty())
 	continue;
 
-      _devices_access.lock();
-      // combine all incoming point clouds into one
-      // TODO decide whether it should be done on this network thread or
-      // elsewhere
-      // -> maybe before it's sent to the local machine renderer
-      auto point_cloud = (*_devices)[0]->getPointCloud();
-      auto positions = &point_cloud.positions;
-      auto colors = &point_cloud.colors;
-      for (uint i = 1; i < _devices->size(); i++) {
-	auto device = (*_devices)[i];
-	if (!device->broadcastEnabled())
-	  continue;
-	auto additional_point_cloud = device->getPointCloud();
-	positions->insert(positions->end(),
-			  additional_point_cloud.positions.begin(),
-			  additional_point_cloud.positions.end());
-	colors->insert(colors->end(), additional_point_cloud.colors.begin(),
-		       additional_point_cloud.colors.end());
-      }
-      _devices_access.unlock();
+      auto point_cloud = getSynthesizedPointCloud();
 
       // serialize the point cloud
       auto [packed_point_cloud, serialize] = zpp::bits::data_out();
@@ -270,7 +272,7 @@ PointCaster::PointCaster(const Arguments &args)
   std::lock_guard<std::mutex> lock(_devices_access);
   _devices.reset(new std::vector<Device *>);
   _devices->push_back(new K4ADevice());
-  _devices->push_back(new Rs2Device());
+  // _devices->push_back(new Rs2Device());
 }
 
 void PointCaster::quit() {
@@ -439,22 +441,8 @@ void PointCaster::drawEvent() {
   // reset the renderer, and also need to add to the renderer's points not
   // just set them
   _point_cloud_renderer.reset(new PointCloudRenderer(0.005f));
-
-  _devices_access.lock();
-  // TODO loop more than two devices
-  // for (auto device : *_devices) {
-  auto k4a_points = (*_devices)[0]->getPointCloud();
-  auto positions = &k4a_points.positions;
-  auto colors = &k4a_points.colors;
-  auto additional_point_cloud = (*_devices)[1]->getPointCloud();
-  positions->insert(positions->end(), additional_point_cloud.positions.begin(),
-		    additional_point_cloud.positions.end());
-  colors->insert(colors->end(), additional_point_cloud.colors.begin(),
-		 additional_point_cloud.colors.end());
-  _point_cloud_renderer->_points = k4a_points;
+  _point_cloud_renderer->_points = getSynthesizedPointCloud();
   _point_cloud_renderer->setDirty();
-  //}
-  _devices_access.unlock();
 
   // Draw the scene
   _point_cloud_renderer->draw(_camera, framebufferSize());
