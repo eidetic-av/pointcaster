@@ -12,39 +12,33 @@
 #include <unistd.h>
 #endif
 #include <spdlog/spdlog.h>
-
 #define ZMQ_BUILD_DRAFT_API
 #include <zmq.hpp>
 #include <zpp_bits.h>
 
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/Utility/StlMath.h>
-
-#include <libremidi/libremidi.hpp>
-
 #include <Magnum/Image.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/Math/FunctionsBatch.h>
 #include <Magnum/Platform/Sdl2Application.h>
-
 #include <Magnum/GL/Context.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
 #include <Magnum/GL/PixelFormat.h>
 #include <Magnum/GL/Renderer.h>
 #include <Magnum/GL/Version.h>
-
-#include <Magnum/ImGuiIntegration/Context.hpp>
-#include <imgui.h>
-#include "gui_helpers.h"
-
 #include <Magnum/SceneGraph/Camera.h>
 #include <Magnum/SceneGraph/Drawable.h>
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
+#include <Magnum/ImGuiIntegration/Context.hpp>
+#include <imgui.h>
 
+#include <libremidi/libremidi.hpp>
+
+#include "gui_helpers.h"
 #include "devices/device.h"
-#include "devices/k4a/k4a_device.h"
-#include "devices/rs2/rs2_device.h"
+#include "devices/usb.h"
 #include "point_cloud.h"
 #include "wireframe_objects.h"
 
@@ -105,6 +99,8 @@ protected:
   void handleMidiLearn(const libremidi::message &message);
 
   PointCloud getSynthesizedPointCloud() {
+    if (_devices->empty()) return PointCloud{
+	std::vector<position>{}, std::vector<float>{}};
     // TODO put the return value in a cache to use until
     // at least one of the devices has received new points
     std::lock_guard<std::mutex> lock(_devices_access);
@@ -113,8 +109,7 @@ protected:
     auto colors = &point_cloud.colors;
     for (uint i = 1; i < _devices->size(); i++) {
       auto device = (*_devices)[i];
-      if (!device->broadcastEnabled())
-	continue;
+      if (!device->broadcastEnabled()) continue;
       auto additional_point_cloud = device->getPointCloud();
       positions->insert(positions->end(),
 			additional_point_cloud.positions.begin(),
@@ -134,6 +129,7 @@ protected:
   void mouseReleaseEvent(MouseEvent &event) override;
   void mouseMoveEvent(MouseMoveEvent &event) override;
   void mouseScrollEvent(MouseScrollEvent &event) override;
+
 };
 
 PointCaster::PointCaster(const Arguments &args)
@@ -242,8 +238,7 @@ PointCaster::PointCaster(const Arguments &args)
 
     while (1) {
       std::this_thread::sleep_for(network_broadcast_rate);
-      if (_devices->empty())
-	continue;
+      if (_devices->empty()) continue;
 
       auto point_cloud = getSynthesizedPointCloud();
 
@@ -268,14 +263,26 @@ PointCaster::PointCaster(const Arguments &args)
   // Init our controllers
   initControllers();
 
+  // Init usb device hotplugging
+  initUsb();
+
   // Init our sensors
   std::lock_guard<std::mutex> lock(_devices_access);
   _devices.reset(new std::vector<Device *>);
-  _devices->push_back(new K4ADevice());
-  // _devices->push_back(new Rs2Device());
+  // create a callback for the USB handler thread
+  // that will add new devices to our main sensor list
+  registerUsbAttachCallback([&](Device* attached_device) {
+    spdlog::info("Attached device from pointcaster.cc!");
+    // _devices->push_back(attached_device);
+  });
+  registerUsbDetachCallback([&](Device* detached_device) {
+    spdlog::info("Detached device from pointcaster.cc!");
+    std::remove(_devices->begin(), _devices->end(), detached_device);
+  });
 }
 
 void PointCaster::quit() {
+  freeUsb();
   exit(0);
 }
 
@@ -631,6 +638,7 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
   /* Move towards/backwards the rotation point in cam coords */
   _object_camera->translateLocal(_rotation_point * delta * 0.1f);
 }
+
 
 } // namespace bob
 

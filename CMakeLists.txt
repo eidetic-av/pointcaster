@@ -21,6 +21,8 @@ find_package(realsense2 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
 
+find_package(libusb CONFIG REQUIRED)
+
 find_package(Corrade CONFIG REQUIRED Main)
 find_package(Magnum CONFIG REQUIRED
   GL MeshTools Primitives SceneGraph
@@ -31,8 +33,9 @@ corrade_add_resource(RESOURCES resources.conf)
 
 set(SOURCE_FILES
   src/pointcaster.cc src/point_cloud.cc
-  src/gui_helpers.cc
+  src/gui_helpers.cc 
   src/shaders/particle_sphere.cc
+  src/devices/usb.cc
   src/devices/k4a/k4a_driver.cc
   src/devices/k4a/k4a_device.cc
   src/devices/rs2/rs2_driver.cc
@@ -49,6 +52,8 @@ endif()
 
 add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
 
+target_include_directories(pointcaster PRIVATE
+  ${LIBUSB_INCLUDE_DIRS})
 
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui
@@ -62,6 +67,7 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   Magnum::SceneGraph
   Magnum::Shaders
   MagnumIntegration::ImGui
+  ${LIBUSB_LIBRARIES}
   spdlog::spdlog EBML::ebml k4a::k4a
   realsense2::realsense2 ${ZMQ_LIB})
 

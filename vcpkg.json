@@ -4,6 +4,7 @@
     "dependencies": [
 	"spdlog", "azure-kinect-sensor-sdk", "corrade",
 	"zpp-bits", "sdl2", "cppzmq", "realsense2", "libremidi",
+  "libusb",
 	{
 	    "name": "sdl2",
 	    "default-features": false,
