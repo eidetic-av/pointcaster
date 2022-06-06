@@ -2,6 +2,7 @@
 
 #include <libusb.h>
 #include <vector>
+#include <map>
 #include <spdlog/spdlog.h>
 #include "device.h"
 #include "k4a/k4a_device.h"
@@ -17,6 +18,12 @@ namespace bob {
   extern std::vector<UsbDevice> _current_usb_devices;
   extern libusb_hotplug_callback_handle _usb_hotplug_callback_handle;
 
+  // a constant map that holds the type of sensor given by a "product string" that is
+  // discoverable via libusb. The product string is defined as the vendor id followed
+  // by the product id, delimited by a colon.
+  const std::map<std::string, bob::sensors::SensorType> UsbSensorTypeFromProductString = {
+    { "0x045e:0x097c", bob::sensors::K4A }
+  };
   void initUsb();
   void freeUsb();
   int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,

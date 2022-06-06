@@ -11,6 +11,12 @@
 
 namespace bob::sensors {
 
+enum SensorType {
+  UnknownDevice,
+  K4A,
+  Rs2
+};
+
 class Device {
 public:
   std::string name = "";
