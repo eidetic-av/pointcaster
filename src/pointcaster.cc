@@ -263,22 +263,19 @@ PointCaster::PointCaster(const Arguments &args)
   // Init our controllers
   initControllers();
 
-  // Init usb device hotplugging
-  initUsb();
-
   // Init our sensors
   std::lock_guard<std::mutex> lock(_devices_access);
   _devices.reset(new std::vector<Device *>);
   // create a callback for the USB handler thread
   // that will add new devices to our main sensor list
   registerUsbAttachCallback([&](Device* attached_device) {
-    spdlog::info("Attached device from pointcaster.cc!");
-    // _devices->push_back(attached_device);
+    _devices->push_back(attached_device);
   });
   registerUsbDetachCallback([&](Device* detached_device) {
-    spdlog::info("Detached device from pointcaster.cc!");
     std::remove(_devices->begin(), _devices->end(), detached_device);
   });
+  // init libusb and any attached devices
+  initUsb();
 }
 
 void PointCaster::quit() {

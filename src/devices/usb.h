@@ -24,6 +24,12 @@ namespace bob {
   const std::map<std::string, bob::sensors::SensorType> UsbSensorTypeFromProductString = {
     { "0x045e:0x097c", bob::sensors::K4A }
   };
+
+  // Given a libusb device descriptor, return the sensor type.
+  // This is handy since we can get device_descriptors from
+  // various libusb callbacks.
+  bob::sensors::SensorType getSensorTypeFromUsbDescriptor(struct libusb_device_descriptor desc);
+
   void initUsb();
   void freeUsb();
   int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,

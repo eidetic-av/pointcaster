@@ -1,4 +1,9 @@
 #include "usb.h"
+#include "device.h"
+#include "k4a/k4a_device.h"
+#include "libusb.h"
+#include <iomanip>
+#include <sstream>
 #include <thread>
 
 namespace bob {
@@ -11,6 +16,30 @@ std::atomic<bool> run_usb_handler = true;
 
 void initUsb() {
   libusb_init(nullptr);
+
+  // get attached USB devices and check if any are sensors we have
+  // drivers for
+  struct libusb_device **device_list;
+  int device_count = libusb_get_device_list(nullptr, &device_list);
+  for (int i = 0; i < device_count; i++) {
+    struct libusb_device *device = device_list[i];
+    struct libusb_device_descriptor desc;
+    libusb_get_device_descriptor(device, &desc);
+    auto sensor_type = getSensorTypeFromUsbDescriptor(desc);
+    if (sensor_type == bob::sensors::UnknownDevice) continue;
+    bob::sensors::Device* attached_device = nullptr;
+    if (sensor_type == bob::sensors::K4A) {
+      attached_device = new sensors::K4ADevice();
+    }
+    if (attached_device != nullptr) {
+      for (auto cb : _usb_attach_callbacks) cb(attached_device);
+    }
+  }
+  libusb_free_device_list(device_list, 1);
+
+  // // if we were able to initialise a new device, run any attach event callbacks
+  // for (auto cb : _usb_attach_callbacks)
+  //   cb(attached_device);
 
   // register a callback for hotplug access
   auto libusb_rc_result = libusb_hotplug_register_callback(
@@ -45,12 +74,49 @@ void freeUsb() {
   run_usb_handler = false;
 }
 
+bob::sensors::SensorType
+getSensorTypeFromUsbDescriptor(struct libusb_device_descriptor desc) {
+    // then with info from the descriptor, generate the product string...
+    // although we need the ids as hex strings
+    std::stringstream hex_stream;
+    hex_stream << "0x" << std::setfill('0') << std::setw(sizeof(uint16_t) * 2)
+		     << std::hex << desc.idVendor;
+    auto vendor_id = hex_stream.str();
+    // clear the stream and get the product id
+    hex_stream.str("");
+    hex_stream << "0x" << std::setfill('0') << std::setw(sizeof(uint16_t) * 2)
+		     << std::hex << desc.idProduct;
+    auto product_id = hex_stream.str();
+
+    auto product_string = vendor_id + ":" + product_id;
+
+    // with the product string we can determine what device type we need to initialise
+    if (UsbSensorTypeFromProductString.contains(product_string))
+	return UsbSensorTypeFromProductString[product_string];
+    else return bob::sensors::UnknownDevice;
+}
+
 int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,
 			 libusb_hotplug_event event, void *user_data) {
   if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
-    for (auto cb : _usb_attach_callbacks) cb(nullptr);
+    // when a device is plugged in, get the device descriptor
+    struct libusb_device_descriptor desc;
+    (void) libusb_get_device_descriptor(dev, &desc);
+    auto sensor_type = getSensorTypeFromUsbDescriptor(desc);
+
+    bob::sensors::Device* attached_device = nullptr;
+    if (sensor_type == bob::sensors::K4A) {
+      attached_device = new sensors::K4ADevice();
+    }
+    if (attached_device == nullptr) return 0;
+
+    // if we were able to initialise a new device, run any attach event callbacks
+    for (auto cb : _usb_attach_callbacks) cb(attached_device);
+
   } else if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT) {
-    for (auto cb : _usb_detach_callbacks) cb(nullptr);
+
+    // for (auto cb : _usb_detach_callbacks) cb(nullptr);
+
   }
   return 0;
 }
