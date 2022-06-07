@@ -1,6 +1,7 @@
 #include <chrono>
 #include <mutex>
 #include <random>
+#include <vector>
 #include <thread>
 
 #ifdef _WIN32
@@ -272,7 +273,7 @@ PointCaster::PointCaster(const Arguments &args)
     _devices->push_back(attached_device);
   });
   registerUsbDetachCallback([&](Device* detached_device) {
-    std::remove(_devices->begin(), _devices->end(), detached_device);
+    std::erase(*_devices, detached_device);
   });
   // init libusb and any attached devices
   initUsb();
