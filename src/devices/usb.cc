@@ -92,7 +92,7 @@ getSensorTypeFromUsbDescriptor(struct libusb_device_descriptor desc) {
 
     // with the product string we can determine what device type we need to initialise
     if (UsbSensorTypeFromProductString.contains(product_string))
-	return UsbSensorTypeFromProductString[product_string];
+	return UsbSensorTypeFromProductString.at(product_string);
     else return bob::sensors::UnknownDevice;
 }
 

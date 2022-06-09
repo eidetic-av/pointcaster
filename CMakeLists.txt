@@ -12,7 +12,7 @@ endif()
 
 find_package(spdlog CONFIG REQUIRED)
 find_package(ZeroMQ CONFIG REQUIRED)
-find_package(libremidi CONFIG REQUIRED)
+# find_package(libremidi CONFIG REQUIRED)
 
 find_package(EBML CONFIG REQUIRED)
 find_package(k4a CONFIG REQUIRED)
@@ -23,6 +23,7 @@ add_library(ImGui::ImGui ALIAS imgui::imgui)
 
 find_package(libusb CONFIG REQUIRED)
 
+set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
 find_package(Corrade CONFIG REQUIRED Main)
 find_package(Magnum CONFIG REQUIRED
   GL MeshTools Primitives SceneGraph
@@ -57,7 +58,7 @@ target_include_directories(pointcaster PRIVATE
 
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui
-  libremidi
+  #libremidi
   Corrade::Main
   Magnum::Application
   Magnum::GL

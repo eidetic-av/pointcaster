@@ -5,10 +5,9 @@
 #include <thread>
 
 #ifdef _WIN32
+#define NOMINMAX
 #include <WinSock2.h>
 #include <io.h>
-#undef max
-#undef min
 #else
 #include <unistd.h>
 #endif
@@ -35,7 +34,7 @@
 #include <Magnum/ImGuiIntegration/Context.hpp>
 #include <imgui.h>
 
-#include <libremidi/libremidi.hpp>
+//#include <libremidi/libremidi.hpp>
 
 #include "gui_helpers.h"
 #include "devices/device.h"
@@ -95,9 +94,9 @@ protected:
   void drawSensorsWindow();
 
   bool _show_controllers_window = true;
-  void initControllers();
+  //void initControllers();
   void drawControllersWindow();
-  void handleMidiLearn(const libremidi::message &message);
+  //void handleMidiLearn(const libremidi::message &message);
 
   PointCloud getSynthesizedPointCloud() {
     if (_devices->empty()) return PointCloud{
@@ -262,7 +261,7 @@ PointCaster::PointCaster(const Arguments &args)
   network_thread.detach();
 
   // Init our controllers
-  initControllers();
+  //initControllers();
 
   // Init our sensors
   std::lock_guard<std::mutex> lock(_devices_access);
@@ -326,59 +325,59 @@ void PointCaster::drawSensorsWindow() {
   ImGui::PopItemWidth();
   ImGui::End();
 }
-
-void PointCaster::initControllers() {
-  using namespace libremidi;
-  std::thread midi_startup([&]() {
-    midi_in midi;
-    auto port_count = midi.get_port_count();
-    spdlog::info("Detected {} MIDI ports", port_count);
-    midi.open_port(0);
-    midi.set_callback([&](const message &message) {
-      if (gui::midi_learn_mode) {
-	handleMidiLearn(message);
-	return;
-      }
-      // parse the midi message
-      auto channel = message.get_channel();
-      auto type = message.get_message_type();
-      float value;
-      uint controller_number;
-      if (type == message_type::PITCH_BEND) {
-	controller_number = 999;
-	int first_byte = message[1];
-	int second_byte = message[2];
-	int pb_value = (second_byte * 128) + first_byte;
-	value = pb_value / 128.f / 128.f;
-      } else if (type == message_type::CONTROL_CHANGE) {
-	controller_number = message[1];
-	int control_change_value = message[2];
-	value = control_change_value / 127.f;
-      }
-
-      // check if we have assigned the midi message to any parameters
-      gui::AssignedMidiParameter learned_parameter;
-      for (auto assigned_parameter : gui::assigned_midi_parameters) {
-	if (assigned_parameter.channel != channel) continue;
-	if (assigned_parameter.controller_number != controller_number) continue;
-	// copy it locally
-	learned_parameter = assigned_parameter;
-	break;
-      }
-      if (learned_parameter.parameter.value == nullptr) return;
-      // if we have assigned this parameter, apply the change
-      auto min = learned_parameter.parameter.range_min;
-      auto max = learned_parameter.parameter.range_max;
-      auto output = min + value * (max - min);
-      // TODO this is only implemented for float parameters
-      if (learned_parameter.parameter.param_type == gui::ParameterType::Float) {
-	auto value_ptr = reinterpret_cast<float*>(learned_parameter.parameter.value);
-	*value_ptr = output;
-      }
-    });
-  });
- midi_startup.detach();
-}
+//
+//void PointCaster::initControllers() {
+//  using namespace libremidi;
+//  std::thread midi_startup([&]() {
+//    midi_in midi;
+//    auto port_count = midi.get_port_count();
+//    spdlog::info("Detected {} MIDI ports", port_count);
+//    midi.open_port(0);
+//    midi.set_callback([&](const message &message) {
+//      if (gui::midi_learn_mode) {
+//	handleMidiLearn(message);
+//	return;
+//      }
+//      // parse the midi message
+//      auto channel = message.get_channel();
+//      auto type = message.get_message_type();
+//      float value;
+//      uint controller_number;
+//      if (type == message_type::PITCH_BEND) {
+//	controller_number = 999;
+//	int first_byte = message[1];
+//	int second_byte = message[2];
+//	int pb_value = (second_byte * 128) + first_byte;
+//	value = pb_value / 128.f / 128.f;
+//      } else if (type == message_type::CONTROL_CHANGE) {
+//	controller_number = message[1];
+//	int control_change_value = message[2];
+//	value = control_change_value / 127.f;
+//      }
+//
+//      // check if we have assigned the midi message to any parameters
+//      gui::AssignedMidiParameter learned_parameter;
+//      for (auto assigned_parameter : gui::assigned_midi_parameters) {
+//	if (assigned_parameter.channel != channel) continue;
+//	if (assigned_parameter.controller_number != controller_number) continue;
+//	// copy it locally
+//	learned_parameter = assigned_parameter;
+//	break;
+//      }
+//      if (learned_parameter.parameter.value == nullptr) return;
+//      // if we have assigned this parameter, apply the change
+//      auto min = learned_parameter.parameter.range_min;
+//      auto max = learned_parameter.parameter.range_max;
+//      auto output = min + value * (max - min);
+//      // TODO this is only implemented for float parameters
+//      if (learned_parameter.parameter.param_type == gui::ParameterType::Float) {
+//	auto value_ptr = reinterpret_cast<float*>(learned_parameter.parameter.value);
+//	*value_ptr = output;
+//      }
+//    });
+//  });
+// midi_startup.detach();
+//}
 
 void PointCaster::drawControllersWindow() {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
@@ -403,31 +402,31 @@ void PointCaster::drawControllersWindow() {
   ImGui::End();
 }
 
-void PointCaster::handleMidiLearn(const libremidi::message &message) {
-  using namespace libremidi;
-
-  if (!gui::midi_learn_parameter) return;
-
-  auto channel = message.get_channel();
-  auto type = message.get_message_type();
-
-  if (type == message_type::CONTROL_CHANGE) {
-    gui::assigned_midi_parameters.push_back(gui::AssignedMidiParameter {
-	*gui::midi_learn_parameter, channel, message[1]});
-    gui::midi_learn_parameter.reset();
-    gui::midi_learn_mode = false;
-    return;
-  }
-
-  if (type == message_type::PITCH_BEND) {
-    // use controller number 999 for pitch bends
-    gui::assigned_midi_parameters.push_back(gui::AssignedMidiParameter {
-	*gui::midi_learn_parameter, channel, 999});
-    gui::midi_learn_parameter.reset();
-    gui::midi_learn_mode = false;
-  }
-
-}
+//void PointCaster::handleMidiLearn(const libremidi::message &message) {
+//  using namespace libremidi;
+//
+//  if (!gui::midi_learn_parameter) return;
+//
+//  auto channel = message.get_channel();
+//  auto type = message.get_message_type();
+//
+//  if (type == message_type::CONTROL_CHANGE) {
+//    gui::assigned_midi_parameters.push_back(gui::AssignedMidiParameter {
+//	*gui::midi_learn_parameter, channel, message[1]});
+//    gui::midi_learn_parameter.reset();
+//    gui::midi_learn_mode = false;
+//    return;
+//  }
+//
+//  if (type == message_type::PITCH_BEND) {
+//    // use controller number 999 for pitch bends
+//    gui::assigned_midi_parameters.push_back(gui::AssignedMidiParameter {
+//	*gui::midi_learn_parameter, channel, 999});
+//    gui::midi_learn_parameter.reset();
+//    gui::midi_learn_mode = false;
+//  }
+//
+//}
 
 void PointCaster::drawEvent() {
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |

@@ -16,6 +16,13 @@ vcpkg_fixup_cmake_targets(
   CONFIG_PATH "lib/cmake/${PORT}"
 )
 
+# if dynamic linkage, remove static directories
+if (${VCPKG_LIBRARY_LINKAGE} EQUAL dynamic)
+  SET(VCPKG_POLICY_DLLS_WITHOUT_LIBS enabled)
+  # TODO for release folder too
+  file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}\debug\lib\static" "${CURRENT_PACKAGES_DIR}\lib\static")
+endif()
+
 file(GLOB LIBREMIDI_HEADERS
   "${SOURCE_PATH}/include/libremidi/*.hpp")
 foreach(header ${LIBREMIDI_HEADERS})
