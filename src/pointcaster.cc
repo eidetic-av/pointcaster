@@ -5,7 +5,6 @@
 #include <thread>
 
 #ifdef _WIN32
-#define NOMINMAX
 #include <WinSock2.h>
 #include <io.h>
 #else
@@ -41,7 +40,7 @@
 #include "devices/usb.h"
 #include "point_cloud.h"
 #include "wireframe_objects.h"
-#include "skybridge.h";
+#include "skybridge.h"
 
 namespace bob {
 
@@ -143,7 +142,8 @@ PointCaster::PointCaster(const Arguments &args)
   const Vector2 dpi_scaling = this->dpiScaling({});
   Configuration conf;
   conf.setTitle("pointcaster");
-  conf.setSize({1600, 1200});
+  //conf.setSize({1600, 1200});
+  conf.setSize({1600, 960});
   conf.setSize(conf.size(), dpi_scaling);
   conf.setWindowFlags(Configuration::WindowFlag::Resizable);
   GLConfiguration gl_conf;

@@ -11,8 +11,11 @@ endif()
 
 
 find_package(spdlog CONFIG REQUIRED)
+
 find_package(ZeroMQ CONFIG REQUIRED)
-# find_package(libremidi CONFIG REQUIRED)
+
+find_package(ZLIB REQUIRED)
+find_package(ixwebsocket CONFIG REQUIRED)
 
 find_package(EBML CONFIG REQUIRED)
 find_package(k4a CONFIG REQUIRED)
@@ -21,6 +24,7 @@ find_package(realsense2 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
 
+# find_package(libremidi CONFIG REQUIRED)
 find_package(libusb CONFIG REQUIRED)
 
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
@@ -59,6 +63,7 @@ target_include_directories(pointcaster PRIVATE
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui
   #libremidi
+  ixwebsocket::ixwebsocket
   Corrade::Main
   Magnum::Application
   Magnum::GL

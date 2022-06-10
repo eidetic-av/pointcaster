@@ -1,48 +1,65 @@
 {
-    "name": "bob-pointcaster",
-    "version-string": "0.0.1",
-    "dependencies": [
-	"spdlog", "azure-kinect-sensor-sdk", "corrade",
-			"zpp-bits",
-			"sdl2",
-			"cppzmq",
-			"realsense2", 
-  "libusb",
-	{
-	    "name": "sdl2",
-	    "default-features": false,
-	    "features": [ "x11" ],
-	    "platform": "linux"
-	},
-	{
-	    "name": "zeromq",
-	    "default-features": false,
-	    "features": [ "draft" ]
-	},
-	{
-	    "name": "magnum",
-	    "features": [
-		"anyimageconverter", "anyimageimporter",
-		"anysceneconverter", "anysceneimporter",
-		"anyshaderconverter", "debugtools",
-		"distancefieldconverter", "gl",
-		"sdl2application", "glxcontext",
-		"imageconverter", "magnumfont",
-		"magnumfontconverter", "meshtools",
-		"objimporter", "primitives", "scenegraph",
-		"shaderconverter", "shaders", "shadertools",
-		"text", "texturetools", "trade"
-	    ]
-	},
-	{
-	    "name": "magnum-integration",
-	    "features": [ "imgui" ]
-	},
-	{
-	    "name": "imgui",
-	    "features": [
-		"docking-experimental"
-	    ]
-	}
-    ]
+  "name": "bob-pointcaster",
+  "version-string": "0.0.1",
+  "dependencies": [
+    "spdlog",
+    "azure-kinect-sensor-sdk",
+    "corrade",
+    "zpp-bits",
+    "sdl2",
+    "cppzmq",
+    "realsense2",
+    "libusb",
+    "ixwebsocket",
+    "zlib",
+    {
+      "name": "sdl2",
+      "default-features": false,
+      "features": [ "x11" ],
+      "platform": "linux"
+    },
+    {
+      "name": "zeromq",
+      "default-features": false,
+      "features": [ "draft" ]
+    },
+    {
+      "name": "magnum",
+      "features": [
+        "anyimageconverter",
+        "anyimageimporter",
+        "anysceneconverter",
+        "anysceneimporter",
+        "anyshaderconverter",
+        "debugtools",
+        "distancefieldconverter",
+        "gl",
+        "sdl2application",
+        "glxcontext",
+        "imageconverter",
+        "magnumfont",
+        "magnumfontconverter",
+        "meshtools",
+        "objimporter",
+        "primitives",
+        "scenegraph",
+        "shaderconverter",
+        "shaders",
+        "shadertools",
+        "text",
+        "texturetools",
+        "trade"
+      ]
+    },
+    {
+      "name": "magnum-integration",
+      "features": [ "imgui" ]
+    },
+    {
+      "name": "imgui",
+      "features": [
+        "docking-experimental"
+      ]
+    }
+  ]
 }
