@@ -13,8 +13,7 @@ namespace bob::sensors {
 
 enum SensorType {
   UnknownDevice,
-  K4A,
-  Rs2
+  K4A, K4W2, Rs2
 };
 
 class Device {

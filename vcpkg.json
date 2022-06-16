@@ -4,11 +4,15 @@
   "dependencies": [
     "spdlog",
     "azure-kinect-sensor-sdk",
+    {
+      "name": "kinectsdk2",
+      "platform":  "windows"
+    },
+    "realsense2",
     "corrade",
     "zpp-bits",
     "sdl2",
     "cppzmq",
-    "realsense2",
     "libusb",
     "ixwebsocket",
     "zlib",

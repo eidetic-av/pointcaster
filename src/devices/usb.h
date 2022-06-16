@@ -5,8 +5,6 @@
 #include <map>
 #include <spdlog/spdlog.h>
 #include "device.h"
-#include "k4a/k4a_device.h"
-#include "rs2/rs2_device.h"
 
 namespace bob {
 
@@ -23,6 +21,7 @@ namespace bob {
   // by the product id, delimited by a colon.
   const std::map<std::string, bob::sensors::SensorType> UsbSensorTypeFromProductString = {
 	{ "0x045e:0x097c", bob::sensors::K4A },
+	{ "0x045e:0x02c4", bob::sensors::K4W2 },
 	{ "0x8086:0x0b64", bob::sensors::Rs2 }
   };
 
@@ -33,6 +32,9 @@ namespace bob {
 
   void initUsb();
   void freeUsb();
+  
+  bob::sensors::Device* createUsbDevice(bob::sensors::SensorType sensor_type);
+
   int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,
 		      libusb_hotplug_event event, void* user_data);
 
