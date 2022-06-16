@@ -40,7 +40,10 @@
 #include "devices/usb.h"
 #include "point_cloud.h"
 #include "wireframe_objects.h"
-#include "skybridge.h"
+
+#if WITH_SKYBRIDGE
+  #include "skybridge.h"
+#endif
 
 namespace bob {
 
@@ -136,7 +139,9 @@ PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
   spdlog::info("This is Box of Birds PointCaster");
 
-  skybridge::initSubscriber();
+#if WITH_SKYBRIDGE
+  skybridge::initConnection();
+#endif
 
   // Set up the window
   const Vector2 dpi_scaling = this->dpiScaling({});

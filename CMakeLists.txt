@@ -3,16 +3,17 @@ project(bob-pointcaster)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(WITH_K4A "Build with Azure Kinect support" ON)
-option(WITH_K4W2 "Build with Kinect for Windows v2 support" ON)
-option(WITH_RS2 "Build with Realsense device support" ON)
+option(WITH_K4A "Enable Azure Kinect support" ON)
+option(WITH_K4W2 "Enable Kinect for Windows v2 support" ON)
+option(WITH_RS2 "Enable Realsense device support" ON)
+option(WITH_SKYBRIDGE "Enable global sessions using the BoB Skybridge server" ON)
 
 find_package(spdlog CONFIG REQUIRED)
 find_package(EBML CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 
 find_package(ZeroMQ CONFIG REQUIRED)
-find_package(ixwebsocket CONFIG REQUIRED)
+set(ZMQ_LIB libzmq-static)
 
 find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
@@ -28,38 +29,45 @@ find_package(libusb CONFIG REQUIRED)
 
 if (WITH_K4A)
   find_package(k4a CONFIG REQUIRED)
-  set(DEVICES_SRC ${DEVICES_SRC}
+  set(OPTIONAL_SRC ${OPTIONAL_SRC}
       src/devices/k4a/k4a_driver.cc 
       src/devices/k4a/k4a_device.cc)
-  set (DEVICES_LIBS ${DEVICES_LIBS} k4a::k4a)
+  set (OPTIONAL_LIBS ${OPTIONAL_LIBS} k4a::k4a)
   add_compile_definitions(WITH_K4A)
 endif()
 
 if (WITH_K4W2)
   find_package(unofficial-kinectsdk2 CONFIG REQUIRED)
-  set(DEVICES_SRC ${DEVICES_SRC}
+  set(OPTIONAL_SRC ${OPTIONAL_SRC}
       src/devices/k4w2/k4w2_driver.cc 
       src/devices/k4w2/k4w2_device.cc)
-  set (DEVICES_LIBS ${DEVICES_LIBS} unofficial::kinectsdk2::kinectsdk2)
+  set (OPTIONAL_LIBS ${OPTIONAL_LIBS} unofficial::kinectsdk2::kinectsdk2)
   add_compile_definitions(WITH_K4W2)
 endif()
 
 if (WITH_RS2)
   find_package(realsense2 CONFIG REQUIRED)
-  set(DEVICES_SRC ${DEVICES_SRC}
+  set(OPTIONAL_SRC ${OPTIONAL_SRC}
       src/devices/rs2/rs2_driver.cc 
       src/devices/rs2/rs2_device.cc)
-  set (DEVICES_LIBS ${DEVICES_LIBS} realsense2::realsense2)
+  set (OPTIONAL_LIBS ${OPTIONAL_LIBS} realsense2::realsense2)
   add_compile_definitions(WITH_RS2)
+endif()
+
+if (WITH_SKYBRIDGE)
+  find_package(ixwebsocket CONFIG REQUIRED)
+  set(OPTIONAL_SRC ${OPTIONAL_SRC} src/skybridge.cc)
+  set(OPTIONAL_LIBS ${OPTIONAL_LIBS} ixwebsocket::ixwebsocket)
+  add_compile_definitions(WITH_SKYBRIDGE)
 endif()
 
 set(SOURCE_FILES
   src/pointcaster.cc src/point_cloud.cc
-  src/skybridge.cc src/gui_helpers.cc
+  src/gui_helpers.cc
   src/shaders/particle_sphere.cc
-  src/devices/usb.cc ${DEVICES_SRC})
+  src/devices/usb.cc
+  ${OPTIONAL_SRC})
 
-set(ZMQ_LIB libzmq-static)
 if (WIN32)
   # have to link dynamically to zeromq on windows
   set(ZMQ_LIB libzmq)
@@ -74,7 +82,6 @@ target_include_directories(pointcaster PRIVATE
 
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui #libremidi 
-  ixwebsocket::ixwebsocket
   Corrade::Main
   Magnum::Application
   Magnum::GL
@@ -86,7 +93,7 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   MagnumIntegration::ImGui
   spdlog::spdlog EBML::ebml
   ${LIBUSB_LIBRARIES} ${ZMQ_LIB}
-  ${DEVICES_LIBS} ${PLATFORM_LIBS})
+  ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
 
 # copy compile_commands.json for lsp integration 
 # (assume we don't need this on Windows)

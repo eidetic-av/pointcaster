@@ -1,5 +1,5 @@
 namespace bob::skybridge {
 
-	void initSubscriber();
+	void initConnection();
 
 }
