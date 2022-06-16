@@ -93,7 +93,7 @@ protected:
   bool _show_sensors_window = true;
   void drawSensorsWindow();
 
-  bool _show_controllers_window = true;
+  bool _show_controllers_window = false;
   //void initControllers();
   void drawControllersWindow();
   //void handleMidiLearn(const libremidi::message &message);
