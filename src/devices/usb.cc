@@ -28,9 +28,9 @@ void initUsb() {
     auto sensor_type = getSensorTypeFromUsbDescriptor(desc);
     if (sensor_type == bob::sensors::UnknownDevice) continue;
     bob::sensors::Device* attached_device = nullptr;
-    if (sensor_type == bob::sensors::K4A) {
-      attached_device = new sensors::K4ADevice();
-    }
+    // TODO the following is repeated in the hotplug callback
+    if (sensor_type == bob::sensors::K4A) attached_device = new sensors::K4ADevice();
+    else if (sensor_type == bob::sensors::Rs2) attached_device = new sensors::Rs2Device();
     if (attached_device != nullptr) {
       for (auto cb : _usb_attach_callbacks) cb(attached_device);
     }
@@ -92,7 +92,7 @@ getSensorTypeFromUsbDescriptor(struct libusb_device_descriptor desc) {
 
     // with the product string we can determine what device type we need to initialise
     if (UsbSensorTypeFromProductString.contains(product_string))
-	return UsbSensorTypeFromProductString.at(product_string);
+	    return UsbSensorTypeFromProductString.at(product_string);
     else return bob::sensors::UnknownDevice;
 }
 
@@ -105,9 +105,8 @@ int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,
     auto sensor_type = getSensorTypeFromUsbDescriptor(desc);
 
     bob::sensors::Device* attached_device = nullptr;
-    if (sensor_type == bob::sensors::K4A) {
-      attached_device = new sensors::K4ADevice();
-    }
+    if (sensor_type == bob::sensors::K4A) attached_device = new sensors::K4ADevice();
+    else if (sensor_type == bob::sensors::Rs2) attached_device = new sensors::Rs2Device();
     if (attached_device == nullptr) return 0;
 
     // if we were able to initialise a new device, run any attach event callbacks

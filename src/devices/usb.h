@@ -22,7 +22,8 @@ namespace bob {
   // discoverable via libusb. The product string is defined as the vendor id followed
   // by the product id, delimited by a colon.
   const std::map<std::string, bob::sensors::SensorType> UsbSensorTypeFromProductString = {
-    { "0x045e:0x097c", bob::sensors::K4A }
+	{ "0x045e:0x097c", bob::sensors::K4A },
+	{ "0x8086:0x0b64", bob::sensors::Rs2 }
   };
 
   // Given a libusb device descriptor, return the sensor type.

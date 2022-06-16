@@ -143,7 +143,8 @@ PointCaster::PointCaster(const Arguments &args)
   Configuration conf;
   conf.setTitle("pointcaster");
   //conf.setSize({1600, 1200});
-  conf.setSize({1600, 960});
+  //conf.setSize({1600, 960});
+  conf.setSize({960, 640});
   conf.setSize(conf.size(), dpi_scaling);
   conf.setWindowFlags(Configuration::WindowFlag::Resizable);
   GLConfiguration gl_conf;
@@ -235,7 +236,7 @@ PointCaster::PointCaster(const Arguments &args)
     radio.set(sockopt::sndhwm, 1);
     radio.set(sockopt::linger, 0);
 
-    auto destination = fmt::format("tcp://0.0.0.0:{}", broadcast_port);
+    auto destination = fmt::format("tcp://*:{}", broadcast_port);
     radio.bind(destination);
     spdlog::info("Broadcasting on port {}", broadcast_port);
 
@@ -257,7 +258,7 @@ PointCaster::PointCaster(const Arguments &args)
       zmq::message_t message(packed_size);
       memcpy(message.data(), packed_point_cloud.data(), packed_size);
       // message.set_group("pc");
-      message.set_group("k");
+      message.set_group("a");
       radio.send(message, send_flags::none);
     }
   });
