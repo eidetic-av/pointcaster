@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(WITH_K4A "Enable Azure Kinect support" ON)
-option(WITH_K4W2 "Enable Kinect for Windows v2 support" ON)
+option(WITH_K4W2 "Enable Kinect for Windows v2 support" ${WIN32})
 option(WITH_RS2 "Enable Realsense device support" ON)
 option(WITH_SKYBRIDGE "Enable global sessions using the BoB Skybridge server" ON)
 
