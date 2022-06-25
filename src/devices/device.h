@@ -25,7 +25,7 @@ public:
   minMax crop_x { -10.f, 10.f };
   minMax crop_y { -10.f, 10.f };
   minMax crop_z { -10.f, 10.f };
-  position offset = { 0.f, 0.f, 0.f };
+  float3 offset = { 0.f, 0.f, 0.f };
   float scale = 1.f;
 
   void drawImGuiControls() {

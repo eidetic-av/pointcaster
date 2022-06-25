@@ -4,7 +4,7 @@ uniform highp mat4 projectionMatrix;
 uniform float particleRadius;
 uniform float pointSizeScale;
 
-layout(location = 0) in highp vec4 position;
+layout(location = 0) in vec3 position;
 layout(location = 2) in float in_color;
 
 flat out vec3 viewCenter;
@@ -20,14 +20,17 @@ vec3 decodeColor(float raw) {
 }
 
 void main() {
-    vec4 eyeCoord = viewMatrix*vec4(position.x, position.y, position.z, 1.0);
-    vec3 posEye = vec3(eyeCoord);
+  // convert short millimetres back to float metres
+  vec3 pos_m = position / 1000.0;
 
-    /* output */
-    viewCenter = posEye;
+  vec4 eye_coord = viewMatrix*vec4(pos_m.x, pos_m.y, pos_m.z, 1.0);
+  vec3 pos_eye = vec3(eye_coord);
+
+  /* output */
+  viewCenter = pos_eye;
        
-    color = decodeColor(in_color);
+  color = decodeColor(in_color);
 
-    gl_PointSize = particleRadius*pointSizeScale/length(posEye);
-    gl_Position = projectionMatrix*eyeCoord;
+  gl_PointSize = particleRadius*pointSizeScale/length(pos_eye);
+  gl_Position = projectionMatrix*eye_coord;
 }

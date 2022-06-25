@@ -63,7 +63,7 @@ bool K4ADriver::open() {
       auto colors_buffer_size = transformed_color_image.get_size();
 
       auto positions_buffer =
-	  reinterpret_cast<int16_t *>(point_cloud_image.get_buffer());
+	  reinterpret_cast<short *>(point_cloud_image.get_buffer());
       const auto positions_buffer_size = point_cloud_image.get_size();
 
       std::lock_guard<std::mutex> lock(_buffer_mutex);
@@ -92,12 +92,12 @@ PointCloud K4ADriver::getPointCloud(const DeviceConfiguration& config) {
     return _point_cloud;
   std::lock_guard<std::mutex> lock(_buffer_mutex);
 
-  std::vector<position> positions(_point_count);
+  std::vector<short3> positions(_point_count);
   std::vector<float> colors(_point_count);
   // memcpy(colors.data(), _colors_buffer.data(), _point_count * sizeof(float));
   auto colors_input = reinterpret_cast<float*>(_colors_buffer.data());
 
-  constexpr position k4a_offset{ 0.0f, 1.0f, 0.0f };
+  constexpr float3 k4a_offset{ 0, 1.0, 0 };
 
   // TODO the following transform from short to float should be done in the
   // shader
@@ -120,11 +120,11 @@ PointCloud K4ADriver::getPointCloud(const DeviceConfiguration& config) {
     if (config.flip_y) y_in *= -1;
     if (!config.crop_y.contains(y_in)) continue;
     // apply device offset
-    const float x_out = (x_in * config.scale) + k4a_offset.x + config.offset.x;
-    const float y_out = (y_in * config.scale) + k4a_offset.y + config.offset.y;
-    const float z_out = (z_in * config.scale) + k4a_offset.z + config.offset.z;
+    const short x_out = ((x_in * config.scale) + k4a_offset.x + config.offset.x) * 1000;
+    const short y_out = ((y_in * config.scale) + k4a_offset.y + config.offset.y) * 1000;
+    const short z_out = ((z_in * config.scale) + k4a_offset.z + config.offset.z) * 1000;
     // add to our point cloud buffers
-    positions[point_count_out] = (position{x_out, y_out, z_out, 0});
+    positions[point_count_out] = {x_out, y_out, z_out};
     colors[point_count_out] = color;
     point_count_out++;
   }

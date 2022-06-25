@@ -2,6 +2,7 @@
 
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Utility/Assert.h>
+#include <Magnum/Magnum.h>
 #include <Magnum/GL/Attribute.h>
 #include <Magnum/GL/Renderer.h>
 #include <Magnum/Math/Functions.h>
@@ -14,12 +15,17 @@
 namespace bob {
 
 using namespace Magnum;
+using namespace Shaders;
 using namespace Math::Literals;
 
 PointCloudRenderer::PointCloudRenderer(float particleRadius)
     : _particleRadius(particleRadius),
       _meshParticles(GL::MeshPrimitive::Points) {
-  _meshParticles.addVertexBuffer(_positions_buffer, 0, GL::Attribute<0, Vector4>());
+
+  _meshParticles.addVertexBuffer(_positions_buffer, 0,
+      Generic3D::Position{Generic3D::Position::Components::Three,
+			  Generic3D::Position::DataType::Short});
+
   _meshParticles.addVertexBuffer(_color_buffer, 0, GL::Attribute<2, float>());
   _particleShader.reset(new ParticleSphereShader);
 }
@@ -30,8 +36,8 @@ PointCloudRenderer::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
   if (_points.empty()) return *this;
 
   if (_dirty) {
-    Containers::ArrayView<const float> position_data(
-	reinterpret_cast<const float *>(&_points.positions[0]), _points.size() * 3);
+    Containers::ArrayView<const short> position_data(
+	reinterpret_cast<const short *>(&_points.positions[0]), _points.size() * 3);
     _positions_buffer.setData(position_data);
 
     Containers::ArrayView<const float> color_data(
@@ -41,8 +47,6 @@ PointCloudRenderer::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
     _meshParticles.setCount(static_cast<int>(_points.size()));
     _dirty = false;
   }
-
-  // spdlog::info(_points.size());
 
   (*_particleShader)
       /* particle data */
@@ -55,7 +59,6 @@ PointCloudRenderer::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
       .setViewMatrix(camera->cameraMatrix())
       .setProjectionMatrix(camera->projectionMatrix())
       .draw(_meshParticles);
-    ;
 
   return *this;
 }

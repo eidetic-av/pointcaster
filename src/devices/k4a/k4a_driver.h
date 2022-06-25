@@ -41,8 +41,7 @@ private:
   std::vector<uint8_t> _colors_buffer;
   size_t _point_count;
 
-  PointCloud _point_cloud{std::vector<position>{{0, 0, 0, 0}},
-			  std::vector<float>{1}};
+  PointCloud _point_cloud;
 
   bool _open = false;
 };

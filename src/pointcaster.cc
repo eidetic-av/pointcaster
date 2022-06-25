@@ -102,8 +102,7 @@ protected:
   //void handleMidiLearn(const libremidi::message &message);
 
   PointCloud getSynthesizedPointCloud() {
-    if (_devices->empty()) return PointCloud{
-	std::vector<position>{}, std::vector<float>{}};
+    if (_devices->empty()) return PointCloud{};
     // TODO put the return value in a cache to use until
     // at least one of the devices has received new points
     std::lock_guard<std::mutex> lock(_devices_access);

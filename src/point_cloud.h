@@ -17,10 +17,10 @@ namespace bob {
   using namespace bob::shaders;
 
   struct PointCloud {
-    std::vector<position> positions;
+    std::vector<short3> positions = {{}};
     // TODO this colors list really shouldn't be typed as 'float', as it's
     // really four packed bytes
-    std::vector<float> colors;
+    std::vector<float> colors = {};
     size_t size() { return positions.size(); }
     bool empty() { return positions.empty(); }
   };
