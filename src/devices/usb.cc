@@ -102,9 +102,15 @@ getSensorTypeFromUsbDescriptor(struct libusb_device_descriptor desc) {
 }
 
 bob::sensors::Device* createUsbDevice(bob::sensors::SensorType sensor_type) {
+#if WITH_K4A
     if (sensor_type == bob::sensors::K4A) return new sensors::K4ADevice();
+#endif
+#if WITH_K4W2
     if (sensor_type == bob::sensors::K4W2) return new sensors::K4W2Device();
+#endif
+#if WITH_RS2
     if (sensor_type == bob::sensors::Rs2) return new sensors::Rs2Device();
+#endif
     return nullptr;
 }
 
