@@ -61,6 +61,9 @@ public:
   explicit PointCaster(const Arguments &args);
 
 protected:
+  std::vector<std::thread> _threads;
+  std::atomic<bool> _quit_threads = false;
+  
   ImGuiIntegration::Context _imgui_context{NoCreate};
 
   Containers::Pointer<Scene3D> _scene;
@@ -224,7 +227,7 @@ PointCaster::PointCaster(const Arguments &args)
   setMinimalLoopPeriod(7);
 
   // // Start a thread that handles networking
-  std::thread network_thread([&]() {
+  _threads.push_back(std::thread([&]() {
     using namespace zmq;
     using namespace std::chrono_literals;
 
@@ -244,7 +247,7 @@ PointCaster::PointCaster(const Arguments &args)
     radio.bind(destination);
     spdlog::info("Broadcasting on port {}", broadcast_port);
 
-    while (1) {
+    while (!_quit_threads) {
       std::this_thread::sleep_for(network_broadcast_rate);
       if (_devices->empty()) continue;
 
@@ -265,8 +268,7 @@ PointCaster::PointCaster(const Arguments &args)
       message.set_group("a");
       radio.send(message, send_flags::none);
     }
-  });
-  network_thread.detach();
+  }));
 
   // Init our controllers
   //initControllers();
@@ -287,6 +289,8 @@ PointCaster::PointCaster(const Arguments &args)
 }
 
 void PointCaster::quit() {
+  _quit_threads = true;
+  for (auto &thread : _threads) thread.join();
   freeUsb();
   exit(0);
 }
