@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../../point_cloud.h"
 #include "../driver.h"
 #include "../device.h"
 #include <k4a/k4a.h>
@@ -20,7 +19,7 @@ public:
 
   bool isOpen() override { return _open; };
 
-  PointCloud getPointCloud(const DeviceConfiguration& config) override;
+  bob::types::PointCloud getPointCloud(const DeviceConfiguration& config) override;
 
   std::string getId() override {
     if (_serial_number.empty())
@@ -29,6 +28,7 @@ public:
   }
 
 private:
+  std::jthread _capture_loop;
   k4a::device _device;
   k4a_device_configuration_t _config;
   k4a::calibration _calibration;
@@ -41,7 +41,7 @@ private:
   std::vector<uint8_t> _colors_buffer;
   size_t _point_count;
 
-  PointCloud _point_cloud;
+  bob::types::PointCloud _point_cloud;
 
   bool _open = false;
 };

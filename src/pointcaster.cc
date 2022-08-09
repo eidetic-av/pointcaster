@@ -1,8 +1,13 @@
 #include <chrono>
+#include <limits>
 #include <mutex>
 #include <random>
 #include <vector>
 #include <thread>
+#include <iostream>
+#include <fstream>
+
+#include <zpp_bits.h>
 
 #ifdef _WIN32
 #include <WinSock2.h>
@@ -13,7 +18,6 @@
 #include <spdlog/spdlog.h>
 #define ZMQ_BUILD_DRAFT_API
 #include <zmq.hpp>
-#include <zpp_bits.h>
 
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/Utility/StlMath.h>
@@ -34,20 +38,32 @@
 #include <imgui.h>
 
 //#include <libremidi/libremidi.hpp>
+#include <pointclouds.h>
 
 #include "gui_helpers.h"
 #include "devices/device.h"
 #include "devices/usb.h"
-#include "point_cloud.h"
 #include "wireframe_objects.h"
+#include "point_cloud_renderer.h"
+
 
 #if WITH_SKYBRIDGE
-  #include "skybridge.h"
+#include "skybridge.h"
 #endif
+
+  struct PCP {
+    long timestamp;
+    unsigned long point_count;
+    bool compressed;
+    std::vector<std::byte> data;
+  };
+
+
 
 namespace bob {
 
 using namespace bob;
+using namespace bob::types;
 using namespace bob::sensors;
 using namespace Magnum;
 using namespace Math::Literals;
@@ -61,59 +77,57 @@ public:
   explicit PointCaster(const Arguments &args);
 
 protected:
-  std::vector<std::thread> _threads;
-  std::atomic<bool> _quit_threads = false;
+  std::jthread network_thread;
   
-  ImGuiIntegration::Context _imgui_context{NoCreate};
+  ImGuiIntegration::Context imgui_context{NoCreate};
 
-  Containers::Pointer<Scene3D> _scene;
-  Containers::Pointer<SceneGraph::DrawableGroup3D> _drawable_group;
+  Containers::Pointer<Scene3D> scene;
+  Containers::Pointer<SceneGraph::DrawableGroup3D> drawable_group;
 
   // camera helpers
-  Vector3 _default_cam_position{0.0f, 1.5f, 8.0f};
-  Vector3 _default_cam_target{0.0f, 1.0f, 0.0f};
-  Vector2i _prev_mouse_position;
-  Vector3 _rotation_point, _translation_point;
-  Float _last_depth;
-  Containers::Pointer<Object3D> _object_camera;
-  Containers::Pointer<SceneGraph::Camera3D> _camera;
+  Vector3 default_cam_position{0.0f, 1.5f, 8.0f};
+  Vector3 default_cam_target{0.0f, 1.0f, 0.0f};
+  Vector2i prev_mouse_position;
+  Vector3 rotation_point, translation_point;
+  Float last_depth;
+  Containers::Pointer<Object3D> object_camera;
+  Containers::Pointer<SceneGraph::Camera3D> camera;
 
-  // Our particle system
-  Containers::Pointer<PointCloudRenderer> _point_cloud_renderer;
+  Containers::Pointer<PointCloudRenderer> point_cloud_renderer;
 
   // Ground grid
-  Containers::Pointer<WireframeGrid> _grid;
+  Containers::Pointer<WireframeGrid> grid;
 
   // helper functions for camera movement
   Float depthAt(const Vector2i &window_position);
   Vector3 unproject(const Vector2i &window_position, Float depth) const;
-  bool _mouse_pressed = false;
+  bool mouse_pressed = false;
 
   // our connected devices
-  std::shared_ptr<std::vector<Device *>> _devices;
-  std::mutex _devices_access;
+  std::shared_ptr<std::vector<Device *>> devices;
+  std::mutex devices_access;
 
   void drawMenuBar();
   void quit();
 
-  bool _show_sensors_window = true;
+  bool show_sensors_window = true;
   void drawSensorsWindow();
 
-  bool _show_controllers_window = false;
+  bool show_controllers_window = false;
   //void initControllers();
   void drawControllersWindow();
   //void handleMidiLearn(const libremidi::message &message);
 
-  PointCloud getSynthesizedPointCloud() {
-    if (_devices->empty()) return PointCloud{};
+  PointCloud synthesizedPointCloud() {
+    if (devices->empty()) return PointCloud{};
     // TODO put the return value in a cache to use until
     // at least one of the devices has received new points
-    std::lock_guard<std::mutex> lock(_devices_access);
-    auto point_cloud = (*_devices)[0]->getPointCloud();
+    std::lock_guard<std::mutex> lock(devices_access);
+    auto point_cloud = (*devices)[0]->getPointCloud();
     auto positions = &point_cloud.positions;
     auto colors = &point_cloud.colors;
-    for (uint i = 1; i < _devices->size(); i++) {
-      auto device = (*_devices)[i];
+    for (uint i = 1; i < devices->size(); i++) {
+      auto device = (*devices)[i];
       if (!device->broadcastEnabled()) continue;
       auto additional_point_cloud = device->getPointCloud();
       positions->insert(positions->end(),
@@ -142,7 +156,7 @@ PointCaster::PointCaster(const Arguments &args)
   spdlog::info("This is Box of Birds PointCaster");
 
 #if WITH_SKYBRIDGE
-  skybridge::initConnection();
+  /* skybridge::initConnection(); */
 #endif
 
   // Set up the window
@@ -156,8 +170,7 @@ PointCaster::PointCaster(const Arguments &args)
   conf.setWindowFlags(Configuration::WindowFlag::Resizable);
   GLConfiguration gl_conf;
   gl_conf.setSampleCount(dpi_scaling.max() < 2.0f ? 8 : 2);
-  if (!tryCreate(conf, gl_conf))
-    create(conf, gl_conf.setSampleCount(0));
+  if (!tryCreate(conf, gl_conf)) create(conf, gl_conf.setSampleCount(0));
 
   // Set up ImGui
   ImGui::CreateContext();
@@ -173,7 +186,7 @@ PointCaster::PointCaster(const Arguments &args)
       const_cast<char *>(font.data()), Int(font.size()),
       14.0f * framebufferSize().x() / size.x(), &font_config);
 
-  _imgui_context = ImGuiIntegration::Context(
+  imgui_context = ImGuiIntegration::Context(
       *ImGui::GetCurrentContext(), Vector2(windowSize()) / dpiScaling(),
       windowSize(), framebufferSize());
 
@@ -186,33 +199,32 @@ PointCaster::PointCaster(const Arguments &args)
       Magnum::GL::Renderer::BlendFunction::OneMinusSourceAlpha);
 
   // Set up scene and camera
-  _scene.reset(new Scene3D{});
-  _drawable_group.reset(new SceneGraph::DrawableGroup3D{});
+  scene.reset(new Scene3D{});
+  drawable_group.reset(new SceneGraph::DrawableGroup3D{});
 
-  _object_camera.reset(new Object3D{_scene.get()});
-  _object_camera->setTransformation(
+  object_camera.reset(new Object3D({scene.get()}));
+  object_camera->setTransformation(
       Matrix4::lookAt(Vector3(0, 1.5, 8), Vector3(0, 1, 0), Vector3(0, 1, 0)));
 
   const auto viewport_size = GL::defaultFramebuffer.viewport().size();
-  _camera.reset(new SceneGraph::Camera3D(*_object_camera));
-  _camera
-      ->setProjectionMatrix(Matrix4::perspectiveProjection(
+  camera.reset(new SceneGraph::Camera3D(*object_camera));
+  camera->setProjectionMatrix(Matrix4::perspectiveProjection(
 	  45.0_degf, Vector2{viewport_size}.aspectRatio(), 0.01f, 1000.0f))
       .setViewport(viewport_size);
 
   // set default camera parameters
-  _default_cam_position = Vector3(1.5f, 3.3f, 6.0f);
-  _default_cam_target = Vector3(1.5f, 1.3f, 0.0f);
-  _object_camera->setTransformation(Matrix4::lookAt(
-      _default_cam_position, _default_cam_target, Vector3(0, 1, 0)));
+  default_cam_position = Vector3(1.5f, 3.3f, 6.0f);
+  default_cam_target = Vector3(1.5f, 1.3f, 0.0f);
+  object_camera->setTransformation(Matrix4::lookAt(
+      default_cam_position, default_cam_target, Vector3(0, 1, 0)));
 
   // initialise depth to the value at scene center
-  _last_depth = ((_camera->projectionMatrix() * _camera->cameraMatrix())
+  last_depth = ((camera->projectionMatrix() * camera->cameraMatrix())
 		     .transformPoint({}).z() + 1.0f) * 0.5f;
 
   // Set up ground grid
-  _grid.reset(new WireframeGrid(_scene.get(), _drawable_group.get()));
-  _grid->transform(Matrix4::scaling(Vector3(0.5f)) *
+  grid.reset(new WireframeGrid(scene.get(), drawable_group.get()));
+  grid->transform(Matrix4::scaling(Vector3(0.5f)) *
 		   Matrix4::translation(Vector3(3, 0, -5)));
 
   // Enable depth test, render particles as sprites
@@ -227,7 +239,7 @@ PointCaster::PointCaster(const Arguments &args)
   setMinimalLoopPeriod(7);
 
   // // Start a thread that handles networking
-  _threads.push_back(std::thread([&]() {
+  network_thread = std::jthread([&](std::stop_token st) {
     using namespace zmq;
     using namespace std::chrono_literals;
 
@@ -239,58 +251,55 @@ PointCaster::PointCaster(const Arguments &args)
     context_t zmq_context;
     // create the radio that broadcasts point clouds
     socket_t radio(zmq_context, socket_type::radio);
-    // prioritise latency to clients
+    // prioritise latest frame to clients
     radio.set(sockopt::sndhwm, 1);
+    // and don't keep excess frames in memory
     radio.set(sockopt::linger, 0);
 
     auto destination = fmt::format("tcp://*:{}", broadcast_port);
     radio.bind(destination);
     spdlog::info("Broadcasting on port {}", broadcast_port);
 
-    while (!_quit_threads) {
+    while (!st.stop_requested()) {
       std::this_thread::sleep_for(network_broadcast_rate);
-      if (_devices->empty()) continue;
-
-      auto point_cloud = getSynthesizedPointCloud();
-
-      // serialize the point cloud
-      auto [packed_point_cloud, serialize] = zpp::bits::data_out();
-      auto pack_result = serialize(point_cloud);
-      if (zpp::bits::failure(pack_result)) {
-	spdlog::error("Failed to serialize point cloud");
-	continue;
-      }
-      size_t packed_size = packed_point_cloud.size();
-      // create and send the zmq message
-      zmq::message_t message(packed_size);
-      memcpy(message.data(), packed_point_cloud.data(), packed_size);
-      // message.set_group("pc");
-      message.set_group("a");
-      radio.send(message, send_flags::none);
+      if (devices->empty()) continue;
+      // get the combined point cloud from all sensors
+      using namespace std::chrono;
+      auto start = high_resolution_clock::now();
+      // auto point_cloud = synthesizedPointCloud();
+      // if (point_cloud.size() == 0) continue;
+      // // serialize (and optionally compress)
+      // auto buffer = point_cloud.serialize(false);
+      // auto end = high_resolution_clock::now();
+      // auto duration = duration_cast<milliseconds>(end - start).count();
+      // // move the serialization buffer into a zmq message
+      // zmq::message_t message(std::move(buffer));
+      // message.set_group("a");
+      // // broadcast the buffer
+      // radio.send(message, send_flags::none);
+      // spdlog::info("Frame send took: {}ms", duration);
     }
-  }));
+  });
 
   // Init our controllers
   //initControllers();
 
   // Init our sensors
-  std::lock_guard<std::mutex> lock(_devices_access);
-  _devices.reset(new std::vector<Device *>);
+  std::lock_guard<std::mutex> lock(devices_access);
+  devices.reset(new std::vector<Device *>);
   // create a callback for the USB handler thread
   // that will add new devices to our main sensor list
   registerUsbAttachCallback([&](Device* attached_device) {
-    _devices->push_back(attached_device);
+    devices->push_back(attached_device);
   });
   registerUsbDetachCallback([&](Device* detached_device) {
-    std::erase(*_devices, detached_device);
+    std::erase(*devices, detached_device);
   });
   // init libusb and any attached devices
   initUsb();
 }
 
 void PointCaster::quit() {
-  _quit_threads = true;
-  for (auto &thread : _threads) thread.join();
   freeUsb();
   exit(0);
 }
@@ -303,19 +312,19 @@ void PointCaster::drawMenuBar() {
     }
     if (ImGui::BeginMenu("Window")) {
       ImGui::BeginDisabled();
-      ImGui::Checkbox("##Window_Sensors", &_show_sensors_window);
+      ImGui::Checkbox("##Window_Sensors", &show_sensors_window);
       ImGui::EndDisabled();
       ImGui::SameLine();
       if (ImGui::MenuItem("Sensors", "s"))
-	_show_sensors_window = !_show_sensors_window;
+	show_sensors_window = !show_sensors_window;
 
       ImGui::BeginDisabled();
-      ImGui::Checkbox("##Window_Controllers", &_show_controllers_window);
+      ImGui::Checkbox("##Window_Controllers", &show_controllers_window);
       ImGui::EndDisabled();
       ImGui::SameLine();
       if (ImGui::MenuItem("Controllers", "c")) {
-	_show_controllers_window = !_show_controllers_window;
-	if (!_show_controllers_window) gui::midi_learn_mode = false;
+	show_controllers_window = !show_controllers_window;
+	if (!show_controllers_window) gui::midi_learn_mode = false;
       }
 
       ImGui::EndMenu();
@@ -329,7 +338,7 @@ void PointCaster::drawSensorsWindow() {
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Sensors", nullptr);
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
-  for (auto device : *_devices) {
+  for (auto device : *devices) {
     if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
       device->Device::drawImGuiControls();
     ImGui::Separator();
@@ -406,7 +415,7 @@ void PointCaster::drawControllersWindow() {
     ImGui::SameLine();
     if (ImGui::Button("Cancel")) gui::midi_learn_mode = false;
   }
-  // for (auto device : *_devices) {
+  // for (auto device : *devices) {
   //   if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
   //     device->Device::drawImGuiControls();
   // }
@@ -440,10 +449,12 @@ void PointCaster::drawControllersWindow() {
 //
 //}
 
+auto output_count = 0;
+
 void PointCaster::drawEvent() {
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
                                GL::FramebufferClear::Depth);
-  _imgui_context.newFrame();
+  imgui_context.newFrame();
 
   // Enable text input, if needed/
   if (ImGui::GetIO().WantTextInput && !isTextInputActive())
@@ -456,19 +467,35 @@ void PointCaster::drawEvent() {
   // Fill point cloud from each device TODO this is all so ugly. no need to
   // reset the renderer, and also need to add to the renderer's points not
   // just set them
-  _point_cloud_renderer.reset(new PointCloudRenderer(0.005f));
-  _point_cloud_renderer->_points = getSynthesizedPointCloud();
-  _point_cloud_renderer->setDirty();
+  point_cloud_renderer.reset(new PointCloudRenderer(0.005f));
+  auto points = synthesizedPointCloud();
+  if (!points.empty()) {
 
-  // Draw the scene
-  _point_cloud_renderer->draw(_camera, framebufferSize());
-  _camera->draw(*_drawable_group);
+    // auto buffer = points.serialize(false);
+    // auto output_file = std::fstream(fmt::format("demo_{}", output_count++),
+    // 				    std::ios::out | std::ios::binary);
+    // output_file.write((char*)buffer.data(), buffer.size());
+    // output_file.close();
+
+    // auto new_cloud = PointCloud::deserialize(buffer);
+    // auto buffer = serialize(points);
+    // auto lib_point_cloud = PointCloud::deserialize(buffer);
+
+    // spdlog::info("lib_point_cloud.size(): {}", lib_point_cloud.size());
+    
+    point_cloud_renderer->_points = std::move(points);
+    point_cloud_renderer->setDirty();
+  }
+
+  // // Draw the scene
+  point_cloud_renderer->draw(camera, framebufferSize());
+  camera->draw(*drawable_group);
 
   // Draw gui windows
-  if (_show_sensors_window) drawSensorsWindow();
-  if (_show_controllers_window) drawControllersWindow();
+  if (show_sensors_window) drawSensorsWindow();
+  if (show_controllers_window) drawControllersWindow();
 
-  _imgui_context.updateApplicationCursor(*this);
+  imgui_context.updateApplicationCursor(*this);
 
   // Render ImGui window
   GL::Renderer::enable(GL::Renderer::Feature::Blending);
@@ -476,7 +503,7 @@ void PointCaster::drawEvent() {
   GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
   GL::Renderer::enable(GL::Renderer::Feature::ScissorTest);
 
-  _imgui_context.drawFrame();
+  imgui_context.drawFrame();
 
   GL::Renderer::disable(GL::Renderer::Feature::ScissorTest);
   GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
@@ -520,7 +547,7 @@ Vector3 PointCaster::unproject(const Vector2i &window_position,
 		       Vector2(1.0f),
 		   depth * 2.0f - 1.0f);
 
-  return _camera->projectionMatrix().inverted().transformPoint(in);
+  return camera->projectionMatrix().inverted().transformPoint(in);
 }
 
 void PointCaster::viewportEvent(ViewportEvent &event) {
@@ -528,11 +555,11 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
   GL::defaultFramebuffer.setViewport({{}, event.framebufferSize()});
 
   // relayout imgui
-  _imgui_context.relayout(Vector2{event.windowSize()} / event.dpiScaling(),
+  imgui_context.relayout(Vector2{event.windowSize()} / event.dpiScaling(),
 			  event.windowSize(), event.framebufferSize());
 
   // recompute the camera's projection matrix
-  _camera->setViewport(event.framebufferSize());
+  camera->setViewport(event.framebufferSize());
 }
 
 void PointCaster::keyPressEvent(KeyEvent &event) {
@@ -541,83 +568,83 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     quit();
     break;
   case KeyEvent::Key::S:
-    _show_sensors_window = !_show_sensors_window;
+    show_sensors_window = !show_sensors_window;
     break;
   case KeyEvent::Key::C:
-    _show_controllers_window = !_show_controllers_window;
-    if (!_show_controllers_window) gui::midi_learn_mode = false;
+    show_controllers_window = !show_controllers_window;
+    if (!show_controllers_window) gui::midi_learn_mode = false;
     break;
   default:
-    if (_imgui_context.handleKeyPressEvent(event))
+    if (imgui_context.handleKeyPressEvent(event))
       event.setAccepted(true);
   }
 }
 
 void PointCaster::keyReleaseEvent(KeyEvent &event) {
-  if (_imgui_context.handleKeyReleaseEvent(event))
+  if (imgui_context.handleKeyReleaseEvent(event))
     event.setAccepted(true);
 }
 
 void PointCaster::textInputEvent(TextInputEvent &event) {
-  if (_imgui_context.handleTextInputEvent(event))
+  if (imgui_context.handleTextInputEvent(event))
     event.setAccepted(true);
 }
 
 void PointCaster::mousePressEvent(MouseEvent &event) {
-  if (_imgui_context.handleMousePressEvent(event)) {
+  if (imgui_context.handleMousePressEvent(event)) {
     event.setAccepted(true);
     return;
   }
 
   // Update camera
-  _prev_mouse_position = event.position();
+  prev_mouse_position = event.position();
   const Float currentDepth = depthAt(event.position());
-  const Float depth = currentDepth == 1.0f ? _last_depth : currentDepth;
-  _translation_point = unproject(event.position(), depth);
+  const Float depth = currentDepth == 1.0f ? last_depth : currentDepth;
+  translation_point = unproject(event.position(), depth);
 
   /* Update the rotation point only if we're not zooming against infinite
      depth or if the original rotation point is not yet initialized */
-  if (currentDepth != 1.0f || _rotation_point.isZero()) {
-    _rotation_point = _translation_point;
-    _last_depth = depth;
+  if (currentDepth != 1.0f || rotation_point.isZero()) {
+    rotation_point = translation_point;
+    last_depth = depth;
   }
 
-  _mouse_pressed = true;
+  mouse_pressed = true;
 }
 
 void PointCaster::mouseReleaseEvent(MouseEvent &event) {
-  _mouse_pressed = false;
-  if (_imgui_context.handleMouseReleaseEvent(event)) {
+  mouse_pressed = false;
+  if (imgui_context.handleMouseReleaseEvent(event)) {
     event.setAccepted(true);
   }
 }
 
 void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
-  if (_imgui_context.handleMouseMoveEvent(event)) {
+  if (imgui_context.handleMouseMoveEvent(event)) {
     event.setAccepted(true);
     return;
   }
 
   const Vector2 delta = 3.0f *
-			Vector2(event.position() - _prev_mouse_position) /
+			Vector2(event.position() - prev_mouse_position) /
 			Vector2(framebufferSize());
-  _prev_mouse_position = event.position();
+  prev_mouse_position = event.position();
 
   if (!event.buttons())
     return;
 
   /* Translate */
   if (event.modifiers() & MouseMoveEvent::Modifier::Shift) {
-    const Vector3 p = unproject(event.position(), _last_depth);
-    _object_camera->translateLocal(_translation_point - p); /* is Z always 0? */
-    _translation_point = p;
+    const Vector3 p = unproject(event.position(), last_depth);
+    object_camera->translateLocal(translation_point - p); /* is Z always 0? */
+    translation_point = p;
 
     /* Rotate around rotation point */
   } else {
-    _object_camera->transformLocal(Matrix4::translation(_rotation_point) *
+    object_camera->transformLocal(Matrix4::translation(rotation_point) *
 				   Matrix4::rotationX(-0.51_radf * delta.y()) *
 				   Matrix4::rotationY(-0.51_radf * delta.x()) *
-				   Matrix4::translation(-_rotation_point));
+				   Matrix4::translation(-rotation_point));
   }
 
   event.setAccepted();
@@ -628,24 +655,24 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
   if (Math::abs(delta) < 1.0e-2f)
     return;
 
-  if (_imgui_context.handleMouseScrollEvent(event)) {
+  if (imgui_context.handleMouseScrollEvent(event)) {
     /* Prevent scrolling the page */
     event.setAccepted();
     return;
   }
 
   const Float current_depth = depthAt(event.position());
-  const Float depth = current_depth == 1.0f ? _last_depth : current_depth;
+  const Float depth = current_depth == 1.0f ? last_depth : current_depth;
   const Vector3 p = unproject(event.position(), depth);
   /* Update the rotation point only if we're not zooming against infinite
      depth or if the original rotation point is not yet initialized */
-  if (current_depth != 1.0f || _rotation_point.isZero()) {
-    _rotation_point = p;
-    _last_depth = depth;
+  if (current_depth != 1.0f || rotation_point.isZero()) {
+    rotation_point = p;
+    last_depth = depth;
   }
 
   /* Move towards/backwards the rotation point in cam coords */
-  _object_camera->translateLocal(_rotation_point * delta * 0.1f);
+  object_camera->translateLocal(rotation_point * delta * 0.1f);
 }
 
 

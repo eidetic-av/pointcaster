@@ -1,0 +1,22 @@
+{
+    "name": "bob-pointclouds",
+    "version": "0.0.1",
+    "description": "",
+    "homepage": "https://git.sr.ht/~eidetic/bob-pointclouds",
+    "dependencies": [ "zpp-bits", "vcpkg-cmake", "vcpkg-cmake-config" ],
+    "default-features": [ "draco" ],
+    "features": {
+	"draco": {
+	    "description": "Build using Google's Draco point-cloud codec",
+	    "dependencies": [ "draco" ]
+	},
+	"zstd": {
+	    "description": "Build using Facebook's zstd codec",
+	    "dependencies": [ "zstd" ]
+	},
+	"tests": {
+	    "description": "Build with unit tests",
+	    "dependencies": [ "bext-ut", "fmt" ]
+	}
+    }
+}

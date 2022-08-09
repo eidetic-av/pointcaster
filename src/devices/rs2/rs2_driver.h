@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../../point_cloud.h"
 #include "../driver.h"
 #include "../device.h"
 #include <spdlog/spdlog.h>
@@ -20,7 +19,7 @@ public:
 
   bool isOpen() override { return _open; };
 
-  PointCloud getPointCloud(const DeviceConfiguration& config) override;
+  bob::types::PointCloud getPointCloud(const DeviceConfiguration& config) override;
 
   std::string getId() override {
     if (_serial_number.empty())
@@ -58,8 +57,7 @@ private:
   size_t _texture_pixel_size;
   size_t _texture_stride;
 
-  PointCloud _point_cloud{std::vector<position>{{0, 0, 0, 0}},
-			  std::vector<float>{1}};
+  bob::types::PointCloud _point_cloud;
 
   bool _open = false;
 };

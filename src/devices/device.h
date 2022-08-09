@@ -1,11 +1,8 @@
 #pragma once
 
-#include "../point_cloud.h"
-#include "../structs.h"
 #include "driver.h"
 #include <imgui.h>
 #include "../gui_helpers.h"
-#include <spdlog/spdlog.h>
 #include <thread>
 #include <fmt/format.h>
 
@@ -68,7 +65,7 @@ public:
 
   virtual std::string getBroadcastId() = 0;
 
-  bob::PointCloud getPointCloud() {
+  bob::types::PointCloud getPointCloud() {
     DeviceConfiguration config {
       flip_x, flip_y, flip_z,
       crop_x, crop_y, crop_z,

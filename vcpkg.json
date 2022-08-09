@@ -2,6 +2,7 @@
   "name": "bob-pointcaster",
   "version-string": "0.0.1",
   "dependencies": [
+    "zpp-bits",
     "spdlog",
     "azure-kinect-sensor-sdk",
     {
@@ -10,7 +11,6 @@
     },
     "realsense2",
     "corrade",
-    "zpp-bits",
     "sdl2",
     "cppzmq",
     "libusb",

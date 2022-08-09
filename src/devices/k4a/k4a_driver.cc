@@ -4,9 +4,13 @@
 #include <k4a/k4atypes.h>
 #include <limits>
 #include <spdlog/spdlog.h>
+#include <yaclib/executor/thread_pool.hpp>
+#include <yaclib/executor/strand.hpp>
+#include <yaclib/executor/submit.hpp>
 
 namespace bob::sensors {
 
+using namespace bob::types;
 using namespace Magnum;
 using namespace std::chrono_literals;
 
@@ -26,7 +30,8 @@ bool K4ADriver::open() {
   _config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
   _config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
   _config.color_resolution = K4A_COLOR_RESOLUTION_720P;
-  _config.depth_mode = K4A_DEPTH_MODE_WFOV_2X2BINNED;
+  /* _config.depth_mode = K4A_DEPTH_MODE_WFOV_2X2BINNED; */
+  _config.depth_mode = K4A_DEPTH_MODE_NFOV_2X2BINNED;
   _config.camera_fps = K4A_FRAMES_PER_SECOND_30;
   // _config.depth_mode = K4A_DEPTH_MODE_WFOV_UNBINNED;
   // _config.camera_fps = K4A_FRAMES_PER_SECOND_15;
@@ -41,8 +46,8 @@ bool K4ADriver::open() {
   _transformation = k4a::transformation(_calibration);
 
   // start a thread that captures new frames and dumps them into raw buffers
-  std::thread capture_loop([&]() {
-    while (isOpen()) {
+  _capture_loop = std::jthread([&](std::stop_token st) {
+    while (!st.stop_requested()) {
       k4a::capture capture;
       bool result = _device.get_capture(&capture, 1000ms);
       if (!result)
@@ -75,7 +80,6 @@ bool K4ADriver::open() {
       _buffers_updated = true;
     }
   });
-  capture_loop.detach();
 
   _open = true;
   return true;
@@ -87,20 +91,42 @@ bool K4ADriver::close() {
   return true;
 }
 
+auto tp = yaclib::MakeThreadPool(4);
+auto strand = yaclib::MakeStrand(tp);
+
 PointCloud K4ADriver::getPointCloud(const DeviceConfiguration& config) {
-  if (!_buffers_updated)
-    return _point_cloud;
+  if (!_buffers_updated) return _point_cloud;
   std::lock_guard<std::mutex> lock(_buffer_mutex);
 
   std::vector<short3> positions(_point_count);
-  std::vector<float> colors(_point_count);
-  // memcpy(colors.data(), _colors_buffer.data(), _point_count * sizeof(float));
-  auto colors_input = reinterpret_cast<float*>(_colors_buffer.data());
+  std::vector<color> colors(_point_count);
+  auto colors_input = reinterpret_cast<color*>(_colors_buffer.data());
 
   constexpr float3 k4a_offset{ 0, 1.0, 0 };
 
-  // TODO the following transform from short to float should be done in the
-  // shader
+  // TODO the following should be handled in a yaclib thread pool
+  // compute shader, or p
+
+  {
+    // size_t point_count_out = 0;
+    // spdlog::debug("Started serial");
+    // for (std::size_t i = 0; i < _point_count; i++) {
+    //   point_count_out++;
+    // }
+
+    // spdlog::debug("--> output {}", point_count_out);
+
+    // point_count_out = 0;
+    // spdlog::debug("Started parallel");
+    // for (std::size_t i = 0; i < _point_count; i++) {
+    //   Submit(*tp, [&] {
+    // 	  point_count_out++;
+    //   });
+    // }
+    // spdlog::debug("--> output {}", point_count_out);
+
+  }
+
   size_t point_count_out = 0;
   for (size_t i = 0; i < _point_count; i++) {
     const int pos = i * 3;
@@ -110,7 +136,7 @@ PointCloud K4ADriver::getPointCloud(const DeviceConfiguration& config) {
     if (z_in == 0) continue;
     // without any color value, it's an empty point, discard it
     auto color = colors_input[i];
-    if (color == std::numeric_limits<float>::min()) continue;
+
     // check if it's within user-defined crop boundaries
     if (!config.crop_z.contains(z_in)) continue;
     float x_in = (_positions_buffer[pos] / -1000.0f);
@@ -132,7 +158,9 @@ PointCloud K4ADriver::getPointCloud(const DeviceConfiguration& config) {
   positions.resize(point_count_out);
   colors.resize(point_count_out);
 
-  _point_cloud = PointCloud{positions, colors};
+  _point_cloud.positions = std::move(positions);
+  _point_cloud.colors = std::move(colors);
+
   _buffers_updated = false;
 
   return _point_cloud;

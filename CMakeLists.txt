@@ -3,10 +3,12 @@ project(bob-pointcaster)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+
 option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_K4W2 "Enable Kinect for Windows v2 support" ${WIN32})
-option(WITH_RS2 "Enable Realsense device support" ON)
-option(WITH_SKYBRIDGE "Enable global sessions using the BoB Skybridge server" ON)
+option(WITH_RS2 "Enable Realsense device support" OFF)
+option(WITH_SKYBRIDGE "Enable global sessions using the BoB Skybridge server" OFF)
 
 find_package(spdlog CONFIG REQUIRED)
 find_package(EBML CONFIG REQUIRED)
@@ -17,7 +19,6 @@ set(ZMQ_LIB libzmq-static)
 
 find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
-set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
 find_package(Corrade CONFIG REQUIRED Main)
 find_package(Magnum CONFIG REQUIRED
   GL MeshTools Primitives SceneGraph
@@ -26,6 +27,20 @@ find_package(MagnumIntegration CONFIG REQUIRED ImGui)
 corrade_add_resource(RESOURCES resources.conf)
 
 find_package(libusb CONFIG REQUIRED)
+
+find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
+# find_package(bob-pointclouds CONFIG REQUIRED)
+include_directories(~/bob/bob-pointclouds/include)
+link_directories(~/bob/bob-pointclouds/build)
+
+include(FetchContent)
+FetchContent_Declare(yaclib
+  GIT_REPOSITORY https://github.com/YACLib/YACLib.git
+  GIT_TAG main
+  )
+FetchContent_MakeAvailable(yaclib)
+link_libraries(yaclib)
+
 
 if (WITH_K4A)
   find_package(k4a CONFIG REQUIRED)
@@ -62,8 +77,9 @@ if (WITH_SKYBRIDGE)
 endif()
 
 set(SOURCE_FILES
-  src/pointcaster.cc src/point_cloud.cc
+  src/pointcaster.cc
   src/gui_helpers.cc
+  src/point_cloud_renderer.cc
   src/shaders/particle_sphere.cc
   src/devices/usb.cc
   ${OPTIONAL_SRC})
@@ -78,7 +94,7 @@ endif()
 add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
 
 target_include_directories(pointcaster PRIVATE
-  ${LIBUSB_INCLUDE_DIRS})
+  ${LIBUSB_INCLUDE_DIRS} ${ZPP_BITS_INCLUDE_DIRS})
 
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui #libremidi 
@@ -92,6 +108,8 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   Magnum::Shaders
   MagnumIntegration::ImGui
   spdlog::spdlog EBML::ebml
+  # ${BOB_POINTCLOUDS_LIB}
+  pointclouds
   ${LIBUSB_LIBRARIES} ${ZMQ_LIB}
   ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
 

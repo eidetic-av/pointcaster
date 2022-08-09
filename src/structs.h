@@ -17,10 +17,6 @@ struct float3 {
   float x, y, z = 0;
 };
 
-struct short3 {
-  short x, y, z = 0;
-};
-
 struct DeviceConfiguration {
   bool flip_x, flip_y, flip_z;
   minMax crop_x, crop_y, crop_z;

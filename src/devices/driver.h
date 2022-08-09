@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../point_cloud.h"
+#include <pointclouds.h>
 #include "../structs.h"
 #include <Magnum/Magnum.h>
 #include <Magnum/Math/Vector3.h>
@@ -18,7 +18,7 @@ public:
   virtual bool close() = 0;
   virtual bool isOpen() = 0;
 
-  virtual PointCloud getPointCloud(const DeviceConfiguration& config) = 0;
+  virtual bob::types::PointCloud getPointCloud(const DeviceConfiguration& config) = 0;
   virtual std::string getId() = 0;
 };
 

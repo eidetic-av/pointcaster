@@ -2,6 +2,7 @@
 
 namespace bob::sensors {
 
+using namespace bob::types;
 using namespace Magnum; 
 
 //libfreenect2::Freenect2 K4W2Driver::_freenect2;
