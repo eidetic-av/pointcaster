@@ -8,6 +8,7 @@
 #include <pointclouds.h>
 #include <Corrade/Containers/Pointer.h>
 #include <vector>
+#include <mutex>
 #include "../pointer.h"
 
 namespace bob::sensors {
