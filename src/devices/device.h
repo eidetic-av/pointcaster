@@ -5,8 +5,16 @@
 #include "../gui_helpers.h"
 #include <thread>
 #include <fmt/format.h>
+#include <pointclouds.h>
+#include <Corrade/Containers/Pointer.h>
+#include <vector>
+#include "../pointer.h"
+
+#include <spdlog/spdlog.h>
 
 namespace bob::sensors {
+
+using namespace bob::types;
 
 enum SensorType {
   UnknownDevice,
@@ -74,8 +82,9 @@ public:
     return _driver->getPointCloud(config);
   };
 
-protected:
   std::unique_ptr<Driver> _driver;
+
+protected:
   bool _enable_broadcast = true;
 
   // implement this to add device-specific options with imgui
@@ -87,5 +96,20 @@ protected:
       return fmt::format("##{}_{}_{}_{}", name, _driver->getId(), label_text, index);
   }
 };
+
+// TODO the following free functions should probably be wrapped into some
+// class?
+
+static std::vector<pointer<Device>> attached_devices;
+static std::mutex devices_access;
+
+static PointCloud synthesizedPointCloud() {
+  auto result = PointCloud{};
+  if (attached_devices.size() == 0) return result;
+  std::lock_guard<std::mutex> lock(devices_access);
+  for (auto& device : attached_devices)
+    result += device->getPointCloud();
+  return result;
+}
 
 } // namespace bob::sensors

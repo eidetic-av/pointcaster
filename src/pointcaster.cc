@@ -19,7 +19,8 @@
 #define ZMQ_BUILD_DRAFT_API
 #include <zmq.hpp>
 
-#include <Corrade/Containers/Pointer.h>
+#include "pointer.h"
+
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/Image.h>
 #include <Magnum/Math/Color.h>
@@ -42,33 +43,33 @@
 
 #include "gui_helpers.h"
 #include "devices/device.h"
-#include "devices/usb.h"
+// #include "devices/usb.h"
 #include "wireframe_objects.h"
 #include "point_cloud_renderer.h"
+#include "radio.h"
+
+// TODO these need to be removed when initialisation loop is made generic
+#include <k4a/k4a.h>
+#include "devices/k4a/k4a_device.h"
 
 
 #if WITH_SKYBRIDGE
 #include "skybridge.h"
 #endif
 
-  struct PCP {
-    long timestamp;
-    unsigned long point_count;
-    bool compressed;
-    std::vector<std::byte> data;
-  };
-
-
-
 namespace bob {
 
+// I guess we probably shouldn't be using namespace like this except for the
+// literals... should probs replace thes with using aliases
 using namespace bob;
+using namespace bob::pointcaster;
 using namespace bob::types;
 using namespace bob::sensors;
 using namespace Magnum;
 using namespace Math::Literals;
 
 using uint = unsigned int;
+
 using Object3D = SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
 using Scene3D = SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 
@@ -77,12 +78,11 @@ public:
   explicit PointCaster(const Arguments &args);
 
 protected:
-  std::jthread network_thread;
-  
+  pointer<Radio> radio;
   ImGuiIntegration::Context imgui_context{NoCreate};
 
-  Containers::Pointer<Scene3D> scene;
-  Containers::Pointer<SceneGraph::DrawableGroup3D> drawable_group;
+  pointer<Scene3D> scene;
+  pointer<SceneGraph::DrawableGroup3D> drawable_group;
 
   // camera helpers
   Vector3 default_cam_position{0.0f, 1.5f, 8.0f};
@@ -90,22 +90,18 @@ protected:
   Vector2i prev_mouse_position;
   Vector3 rotation_point, translation_point;
   Float last_depth;
-  Containers::Pointer<Object3D> object_camera;
-  Containers::Pointer<SceneGraph::Camera3D> camera;
+  pointer<Object3D> object_camera;
+  pointer<SceneGraph::Camera3D> camera;
 
-  Containers::Pointer<PointCloudRenderer> point_cloud_renderer;
+  pointer<PointCloudRenderer> point_cloud_renderer;
 
   // Ground grid
-  Containers::Pointer<WireframeGrid> grid;
+  pointer<WireframeGrid> grid;
 
   // helper functions for camera movement
   Float depthAt(const Vector2i &window_position);
   Vector3 unproject(const Vector2i &window_position, Float depth) const;
   bool mouse_pressed = false;
-
-  // our connected devices
-  std::shared_ptr<std::vector<Device *>> devices;
-  std::mutex devices_access;
 
   void drawMenuBar();
   void quit();
@@ -117,27 +113,6 @@ protected:
   //void initControllers();
   void drawControllersWindow();
   //void handleMidiLearn(const libremidi::message &message);
-
-  PointCloud synthesizedPointCloud() {
-    if (devices->empty()) return PointCloud{};
-    // TODO put the return value in a cache to use until
-    // at least one of the devices has received new points
-    std::lock_guard<std::mutex> lock(devices_access);
-    auto point_cloud = (*devices)[0]->getPointCloud();
-    auto positions = &point_cloud.positions;
-    auto colors = &point_cloud.colors;
-    for (uint i = 1; i < devices->size(); i++) {
-      auto device = (*devices)[i];
-      if (!device->broadcastEnabled()) continue;
-      auto additional_point_cloud = device->getPointCloud();
-      positions->insert(positions->end(),
-			additional_point_cloud.positions.begin(),
-			additional_point_cloud.positions.end());
-      colors->insert(colors->end(), additional_point_cloud.colors.begin(),
-                     additional_point_cloud.colors.end());
-    }
-    return point_cloud;
-  }
 
   void drawEvent() override;
   void viewportEvent(ViewportEvent &event) override;
@@ -181,7 +156,7 @@ PointCaster::PointCaster(const Arguments &args)
   font_config.FontDataOwnedByAtlas = false;
   const auto size = Vector2(windowSize()) / dpiScaling();
   Utility::Resource rs("data");
-  Containers::ArrayView<const char> font = rs.getRaw("SpaceGrotesk");
+  auto font = rs.getRaw("SpaceGrotesk");
   ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(font.data()), Int(font.size()),
       14.0f * framebufferSize().x() / size.x(), &font_config);
@@ -234,73 +209,52 @@ PointCaster::PointCaster(const Arguments &args)
   // set background color
   GL::Renderer::setClearColor(0x0d1117_rgbf);
 
+  // TODO renderer class should be RAII
+  // initialise our main pc renderer
+  point_cloud_renderer.reset(new PointCloudRenderer(0.005f));
+  point_cloud_renderer->points = PointCloud{};
+  point_cloud_renderer->setDirty();
+
+
   // Start the timer, loop at 144 Hz max
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  // // Start a thread that handles networking
-  network_thread = std::jthread([&](std::stop_token st) {
-    using namespace zmq;
-    using namespace std::chrono_literals;
-
-    // TODO the broadcast rate should somehow be
-    // tied to the device frame rate
-    const auto network_broadcast_rate = 16ms;
-    const int broadcast_port = 9999;
-
-    context_t zmq_context;
-    // create the radio that broadcasts point clouds
-    socket_t radio(zmq_context, socket_type::radio);
-    // prioritise latest frame to clients
-    radio.set(sockopt::sndhwm, 1);
-    // and don't keep excess frames in memory
-    radio.set(sockopt::linger, 0);
-
-    auto destination = fmt::format("tcp://*:{}", broadcast_port);
-    radio.bind(destination);
-    spdlog::info("Broadcasting on port {}", broadcast_port);
-
-    while (!st.stop_requested()) {
-      std::this_thread::sleep_for(network_broadcast_rate);
-      if (devices->empty()) continue;
-      // get the combined point cloud from all sensors
-      using namespace std::chrono;
-      auto start = high_resolution_clock::now();
-      // auto point_cloud = synthesizedPointCloud();
-      // if (point_cloud.size() == 0) continue;
-      // // serialize (and optionally compress)
-      // auto buffer = point_cloud.serialize(false);
-      // auto end = high_resolution_clock::now();
-      // auto duration = duration_cast<milliseconds>(end - start).count();
-      // // move the serialization buffer into a zmq message
-      // zmq::message_t message(std::move(buffer));
-      // message.set_group("a");
-      // // broadcast the buffer
-      // radio.send(message, send_flags::none);
-      // spdlog::info("Frame send took: {}ms", duration);
-    }
-  });
+  // Initialise our network radio for points
+  // const int broadcast_port = 9999;
+  // radio.reset(new Radio(broadcast_port));
 
   // Init our controllers
   //initControllers();
 
   // Init our sensors
-  std::lock_guard<std::mutex> lock(devices_access);
-  devices.reset(new std::vector<Device *>);
-  // create a callback for the USB handler thread
-  // that will add new devices to our main sensor list
-  registerUsbAttachCallback([&](Device* attached_device) {
-    devices->push_back(attached_device);
-  });
-  registerUsbDetachCallback([&](Device* detached_device) {
-    std::erase(*devices, detached_device);
-  });
+  // TODO the following should be moved into bob::sensors ns and outside this
+  // source file
+  // std::lock_guard<std::mutex> lock(bob::sensors::devices_access);
+  // bob::sensors::attached_devices.reset(new std::vector<pointer<Device>>);
+  // // create a callback for the USB handler thread
+  // // that will add new devices to our main sensor list
+  // registerUsbAttachCallback([&](Device* attached_device) {
+  //   devices->push_back(attached_device);
+  // });
+  // registerUsbDetachCallback([&](Device* detached_device) {
+  //   std::erase(*devices, detached_device);
+  // });
   // init libusb and any attached devices
-  initUsb();
+  // initUsb();
+
+  // TODO replace the k4a routine with something generic in usb.cc
+  for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
+    pointer<bob::sensors::Device> p;
+    p.reset(new bob::sensors::K4ADevice());
+    bob::sensors::attached_devices.push_back(std::move(p));
+  }
+
+  spdlog::debug("{} devices attached", bob::sensors::attached_devices.size());
 }
 
 void PointCaster::quit() {
-  freeUsb();
+  // freeUsb();
   exit(0);
 }
 
@@ -338,7 +292,7 @@ void PointCaster::drawSensorsWindow() {
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Sensors", nullptr);
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
-  for (auto device : *devices) {
+  for (auto& device : bob::sensors::attached_devices) {
     if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
       device->Device::drawImGuiControls();
     ImGui::Separator();
@@ -464,31 +418,13 @@ void PointCaster::drawEvent() {
 
   drawMenuBar();
 
-  // Fill point cloud from each device TODO this is all so ugly. no need to
-  // reset the renderer, and also need to add to the renderer's points not
-  // just set them
-  point_cloud_renderer.reset(new PointCloudRenderer(0.005f));
-  auto points = synthesizedPointCloud();
+  auto points = bob::sensors::synthesizedPointCloud();
   if (!points.empty()) {
-
-    // auto buffer = points.serialize(false);
-    // auto output_file = std::fstream(fmt::format("demo_{}", output_count++),
-    // 				    std::ios::out | std::ios::binary);
-    // output_file.write((char*)buffer.data(), buffer.size());
-    // output_file.close();
-
-    // auto new_cloud = PointCloud::deserialize(buffer);
-    // auto buffer = serialize(points);
-    // auto lib_point_cloud = PointCloud::deserialize(buffer);
-
-    // spdlog::info("lib_point_cloud.size(): {}", lib_point_cloud.size());
-    
-    point_cloud_renderer->_points = std::move(points);
+    point_cloud_renderer->points = std::move(points);
     point_cloud_renderer->setDirty();
   }
-
-  // // Draw the scene
   point_cloud_renderer->draw(camera, framebufferSize());
+
   camera->draw(*drawable_group);
 
   // Draw gui windows

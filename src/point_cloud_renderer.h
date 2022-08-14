@@ -36,7 +36,7 @@ namespace bob {
       return *this;
     }
 
-    bob::types::PointCloud _points;
+    bob::types::PointCloud points;
 
   private:
     bool _dirty = false;

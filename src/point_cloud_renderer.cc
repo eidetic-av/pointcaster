@@ -33,18 +33,18 @@ PointCloudRenderer::PointCloudRenderer(float particleRadius)
 PointCloudRenderer &
 PointCloudRenderer::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
 		    const Vector2i &viewportSize) {
-  if (_points.empty()) return *this;
+  if (points.empty()) return *this;
 
   if (_dirty) {
     Containers::ArrayView<const short> position_data(
-	reinterpret_cast<const short *>(&_points.positions[0]), _points.size() * 3);
+	reinterpret_cast<const short *>(&points.positions[0]), points.size() * 3);
     _positions_buffer.setData(position_data);
 
     Containers::ArrayView<const float> color_data(
-	reinterpret_cast<const float *>(&_points.colors[0]), _points.size());
+	reinterpret_cast<const float *>(&points.colors[0]), points.size());
     _color_buffer.setData(color_data);
 
-    _meshParticles.setCount(static_cast<int>(_points.size()));
+    _meshParticles.setCount(static_cast<int>(points.size()));
     _dirty = false;
   }
 

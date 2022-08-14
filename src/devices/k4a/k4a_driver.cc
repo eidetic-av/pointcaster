@@ -7,6 +7,7 @@
 #include <yaclib/executor/thread_pool.hpp>
 #include <yaclib/executor/strand.hpp>
 #include <yaclib/executor/submit.hpp>
+#include <spdlog/spdlog.h>
 
 namespace bob::sensors {
 
@@ -22,7 +23,9 @@ K4ADriver::K4ADriver(int device_index_) {
 K4ADriver::~K4ADriver() { close(); }
 
 bool K4ADriver::open() {
+  spdlog::info("Opening k4a device at index {}", device_index);
   _device = k4a::device::open(device_index);
+  spdlog::info(" --> Open");
 
   // TODO move the rest of this to the cpp api
 
@@ -31,13 +34,15 @@ bool K4ADriver::open() {
   _config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
   _config.color_resolution = K4A_COLOR_RESOLUTION_720P;
   /* _config.depth_mode = K4A_DEPTH_MODE_WFOV_2X2BINNED; */
-  _config.depth_mode = K4A_DEPTH_MODE_NFOV_2X2BINNED;
+  _config.depth_mode = K4A_DEPTH_MODE_WFOV_2X2BINNED;
   _config.camera_fps = K4A_FRAMES_PER_SECOND_30;
   // _config.depth_mode = K4A_DEPTH_MODE_WFOV_UNBINNED;
   // _config.camera_fps = K4A_FRAMES_PER_SECOND_15;
   _config.synchronized_images_only = true;
 
+  spdlog::info("Attempting to start camera");
   _device.start_cameras(&_config);
+  spdlog::info("Started camera");
 
   // need to store the calibration and transformation data, as they are used
   // later to transform colour camera to point cloud space

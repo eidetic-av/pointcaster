@@ -5,10 +5,6 @@
     "zpp-bits",
     "spdlog",
     "azure-kinect-sensor-sdk",
-    {
-      "name": "kinectsdk2",
-      "platform":  "windows"
-    },
     "realsense2",
     "corrade",
     "sdl2",
@@ -16,6 +12,8 @@
     "libusb",
     "ixwebsocket",
     "zlib",
+    "range-v3",
+    "imgui",
     {
       "name": "sdl2",
       "default-features": false,
@@ -58,12 +56,6 @@
     {
       "name": "magnum-integration",
       "features": [ "imgui" ]
-    },
-    {
-      "name": "imgui",
-      "features": [
-        "docking-experimental"
-      ]
     }
   ]
 }

@@ -5,6 +5,7 @@
 #include <map>
 #include <spdlog/spdlog.h>
 #include "device.h"
+#include "../pointer.h"
 
 namespace bob {
 
@@ -20,7 +21,7 @@ namespace bob {
   // discoverable via libusb. The product string is defined as the vendor id followed
   // by the product id, delimited by a colon.
   const std::map<std::string, bob::sensors::SensorType> UsbSensorTypeFromProductString = {
-	{ "0x045e:0x097c", bob::sensors::K4A },
+	{ "0x045e:0x097d", bob::sensors::K4A },
 	{ "0x045e:0x02c4", bob::sensors::K4W2 },
 	{ "0x8086:0x0b64", bob::sensors::Rs2 }
   };
@@ -33,15 +34,15 @@ namespace bob {
   void initUsb();
   void freeUsb();
   
-  bob::sensors::Device* createUsbDevice(bob::sensors::SensorType sensor_type);
+  pointer<bob::sensors::Device> createUsbDevice(bob::sensors::SensorType sensor_type);
 
   int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,
 		      libusb_hotplug_event event, void* user_data);
 
-  extern std::vector<std::function<void(bob::sensors::Device *)>> _usb_attach_callbacks;
-  extern void registerUsbAttachCallback(std::function<void(bob::sensors::Device *)> cb);
+  extern std::vector<std::function<void(pointer<bob::sensors::Device>)>> _usb_attach_callbacks;
+  extern void registerUsbAttachCallback(std::function<void(pointer<bob::sensors::Device>)> cb);
 
-  extern std::vector<std::function<void(bob::sensors::Device *)>> _usb_detach_callbacks;
-  extern void registerUsbDetachCallback(std::function<void(bob::sensors::Device *)> cb);
+  extern std::vector<std::function<void(pointer<bob::sensors::Device>)>> _usb_detach_callbacks;
+  extern void registerUsbDetachCallback(std::function<void(pointer<bob::sensors::Device>)> cb);
 
 }

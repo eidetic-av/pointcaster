@@ -1,6 +1,7 @@
 #include "usb.h"
 #include "libusb.h"
 #include <iomanip>
+#include <mutex>
 #include <sstream>
 #include <thread>
 #include "device.h"
@@ -18,14 +19,15 @@
 namespace bob {
 
 libusb_hotplug_callback_handle _usb_hotplug_callback_handle;
-std::vector<std::function<void(bob::sensors::Device *)>> _usb_attach_callbacks;
-std::vector<std::function<void(bob::sensors::Device *)>> _usb_detach_callbacks;
+std::vector<std::function<void(pointer<bob::sensors::Device>)>> _usb_attach_callbacks;
+std::vector<std::function<void(pointer<bob::sensors::Device>)>> _usb_detach_callbacks;
 
 std::atomic<bool> run_usb_handler = true;
 
 void initUsb() {
   libusb_init(nullptr);
 
+  std::lock_guard<std::mutex> lock(bob::sensors::devices_access);
   // get attached USB devices and check if any are sensors we have
   // drivers for
   struct libusb_device **device_list;
@@ -36,9 +38,10 @@ void initUsb() {
     libusb_get_device_descriptor(device, &desc);
     auto sensor_type = getSensorTypeFromUsbDescriptor(desc);
     auto attached_device = createUsbDevice(sensor_type);
-    if (attached_device != nullptr) {
-      for (auto cb : _usb_attach_callbacks) cb(attached_device);
-    }
+    bob::sensors::attached_devices.push_back(std::move(attached_device));
+    // if (attached_device != nullptr) {
+    //   for (auto cb : _usb_attach_callbacks) cb(attached_device);
+    // }
   }
   libusb_free_device_list(device_list, 1);
 
@@ -94,6 +97,7 @@ getSensorTypeFromUsbDescriptor(struct libusb_device_descriptor desc) {
     auto product_id = hex_stream.str();
 
     auto product_string = vendor_id + ":" + product_id;
+    spdlog::info("string: {}", product_string);
 
     // with the product string we can determine what device type we need to initialise
     if (UsbSensorTypeFromProductString.contains(product_string))
@@ -101,21 +105,23 @@ getSensorTypeFromUsbDescriptor(struct libusb_device_descriptor desc) {
     else return bob::sensors::UnknownDevice;
 }
 
-bob::sensors::Device* createUsbDevice(bob::sensors::SensorType sensor_type) {
+pointer<bob::sensors::Device>
+createUsbDevice(bob::sensors::SensorType sensor_type) {
+  pointer<bob::sensors::Device> p = nullptr;
 #if WITH_K4A
-    if (sensor_type == bob::sensors::K4A) return new sensors::K4ADevice();
+  if (sensor_type == bob::sensors::K4A) p.reset(new sensors::K4ADevice());
 #endif
 #if WITH_K4W2
-    if (sensor_type == bob::sensors::K4W2) return new sensors::K4W2Device();
+  if (sensor_type == bob::sensors::K4W2) p.reset(new sensors::K4W2Device());
 #endif
 #if WITH_RS2
-    if (sensor_type == bob::sensors::Rs2) return new sensors::Rs2Device();
+  if (sensor_type == bob::sensors::Rs2) p.reset(new sensors::Rs2Device());
 #endif
-    return nullptr;
+  return p;
 }
 
 int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,
-			 libusb_hotplug_event event, void *user_data) {
+                    libusb_hotplug_event event, void *user_data) {
   if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
     // when a device is plugged in, get the device descriptor
     struct libusb_device_descriptor desc;
@@ -126,7 +132,7 @@ int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,
     if (attached_device == nullptr) return 1;
 
     // if we were able to initialise a new device, run any attach event callbacks
-    for (auto cb : _usb_attach_callbacks) cb(attached_device);
+    // for (auto cb : _usb_attach_callbacks) cb(attached_device);
 
   } else if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT) {
 
@@ -137,11 +143,11 @@ int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,
   return 0;
 }
 
-void registerUsbAttachCallback(std::function<void(bob::sensors::Device *)> cb) {
+void registerUsbAttachCallback(std::function<void(pointer<bob::sensors::Device>)> cb) {
   _usb_attach_callbacks.push_back(cb);
 }
 
-void registerUsbDetachCallback(std::function<void(bob::sensors::Device *)> cb) {
+void registerUsbDetachCallback(std::function<void(pointer<bob::sensors::Device>)> cb) {
   _usb_detach_callbacks.push_back(cb);
 }
 
