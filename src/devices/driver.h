@@ -5,6 +5,7 @@
 #include <Magnum/Magnum.h>
 #include <Magnum/Math/Vector3.h>
 #include <vector>
+#include <string>
 
 namespace bob::sensors {
 
