@@ -21,6 +21,11 @@ set(ZMQ_LIB libzmq-static)
 
 find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
+
+# Corrade won't build on windows without the following flag
+if (WIN32)
+    set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
+endif()
 find_package(Corrade CONFIG REQUIRED Main)
 find_package(Magnum CONFIG REQUIRED
   GL MeshTools Primitives SceneGraph
