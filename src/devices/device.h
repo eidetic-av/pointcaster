@@ -10,8 +10,6 @@
 #include <vector>
 #include "../pointer.h"
 
-#include <spdlog/spdlog.h>
-
 namespace bob::sensors {
 
 using namespace bob::types;
@@ -97,19 +95,10 @@ protected:
   }
 };
 
-// TODO the following free functions should probably be wrapped into some
-// class?
-
-static std::vector<pointer<Device>> attached_devices;
-static std::mutex devices_access;
-
-static PointCloud synthesizedPointCloud() {
-  auto result = PointCloud{};
-  if (attached_devices.size() == 0) return result;
-  std::lock_guard<std::mutex> lock(devices_access);
-  for (auto& device : attached_devices)
-    result += device->getPointCloud();
-  return result;
-}
+// TODO the following free objects and functions should probably be wrapped
+// into some class?
+extern std::vector<pointer<Device>> attached_devices;
+extern std::mutex devices_access;
+extern PointCloud synthesizedPointCloud();
 
 } // namespace bob::sensors

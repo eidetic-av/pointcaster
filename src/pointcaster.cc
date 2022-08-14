@@ -221,8 +221,8 @@ PointCaster::PointCaster(const Arguments &args)
   setMinimalLoopPeriod(7);
 
   // Initialise our network radio for points
-  // const int broadcast_port = 9999;
-  // radio.reset(new Radio(broadcast_port));
+  const int broadcast_port = 9999;
+  radio.reset(new Radio(broadcast_port));
 
   // Init our controllers
   //initControllers();
@@ -250,7 +250,7 @@ PointCaster::PointCaster(const Arguments &args)
     bob::sensors::attached_devices.push_back(std::move(p));
   }
 
-  spdlog::debug("{} devices attached", bob::sensors::attached_devices.size());
+  spdlog::debug("{} k4a devices attached", bob::sensors::attached_devices.size());
 }
 
 void PointCaster::quit() {

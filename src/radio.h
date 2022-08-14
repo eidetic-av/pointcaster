@@ -8,6 +8,7 @@ namespace bob::pointcaster {
   public:
     const int port;
     Radio(const int _port);
+    ~Radio();
   };
 
 }

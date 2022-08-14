@@ -77,6 +77,7 @@ endif()
 set(SOURCE_FILES
   src/pointcaster.cc
   src/radio.cc
+  src/devices/device.cc
   src/gui_helpers.cc
   src/point_cloud_renderer.cc
   src/shaders/particle_sphere.cc
