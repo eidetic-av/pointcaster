@@ -9,7 +9,6 @@ set(VCPKG_OVERLAY_PORTS "${VCPKG_OVERLAY_PORTS};${CMAKE_CURRENT_LIST_DIR}/ports"
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
 
 option(WITH_K4A "Enable Azure Kinect support" ON)
-option(WITH_K4W2 "Enable Kinect for Windows v2 support" ${WIN32})
 option(WITH_RS2 "Enable Realsense device support" OFF)
 option(WITH_SKYBRIDGE "Enable global sessions using the BoB Skybridge server" OFF)
 
@@ -52,15 +51,6 @@ if (WITH_K4A)
       src/devices/k4a/k4a_device.cc)
   set (OPTIONAL_LIBS ${OPTIONAL_LIBS} k4a::k4a)
   add_compile_definitions(WITH_K4A)
-endif()
-
-if (WITH_K4W2)
-  find_package(unofficial-kinectsdk2 CONFIG REQUIRED)
-  set(OPTIONAL_SRC ${OPTIONAL_SRC}
-      src/devices/k4w2/k4w2_driver.cc 
-      src/devices/k4w2/k4w2_device.cc)
-  set (OPTIONAL_LIBS ${OPTIONAL_LIBS} unofficial::kinectsdk2::kinectsdk2)
-  add_compile_definitions(WITH_K4W2)
 endif()
 
 if (WITH_RS2)
