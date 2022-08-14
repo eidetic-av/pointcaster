@@ -1,11 +1,9 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO eyalz800/zpp_bits
-    REF v4.3.3
-    SHA512 6534711a75d62e4244125329db436ca27bf6b8c31aa9ecb92473f4e5687aa390d9d197d1cb91ed3452363af1537ffdef4a13fe6a1c3049616576a475ba69a548
+    REF v4.4.5
+    SHA512 a20f6803dc85849c9198743d39866ac09e8cfd3eb8b66c9e5ec460bf20d9736589ada1b82ebce550265886a6bcf52402b47977b53b5415ef319db3b831ec2dc5
     HEAD_REF master
-    PATCHES 
-    	no-xor-keyword.patch
 )
 
 file(
