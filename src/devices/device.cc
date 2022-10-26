@@ -8,9 +8,9 @@ std::mutex devices_access;
 PointCloud synthesizedPointCloud() {
   auto result = PointCloud{};
   if (attached_devices.size() == 0) return result;
-  std::lock_guard<std::mutex> lock(devices_access);
+  // std::lock_guard<std::mutex> lock(devices_access);
   for (auto &device : attached_devices)
-    result += device->getPointCloud();
+    result += device->pointCloud();
   return result;
 }
 

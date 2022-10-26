@@ -25,7 +25,8 @@ namespace bob::gui {
     uint controller_number;
   };
 
-  extern std::atomic<bool> midi_learn_mode;
+  // extern std::atomic<bool> midi_learn_mode;
+  extern bool midi_learn_mode;
   extern std::unique_ptr<GuiParameter> midi_learn_parameter;
   extern std::vector<AssignedMidiParameter> assigned_midi_parameters;
 

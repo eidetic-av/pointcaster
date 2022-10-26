@@ -3,7 +3,8 @@
 
 namespace bob::gui {
 
-  std::atomic<bool> midi_learn_mode = false;
+  // std::atomic<bool> midi_learn_mode = false;
+  bool midi_learn_mode = false;
   std::unique_ptr<GuiParameter> midi_learn_parameter;
   std::vector<AssignedMidiParameter> assigned_midi_parameters;
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.0)
-project(bob-pointcaster)
+project(bob-pointcaster LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -11,6 +11,7 @@ set(VCPKG_OVERLAY_PORTS "${VCPKG_OVERLAY_PORTS};${CMAKE_CURRENT_LIST_DIR}/ports"
 option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_RS2 "Enable Realsense device support" OFF)
 option(WITH_SKYBRIDGE "Enable global sessions using the BoB Skybridge server" OFF)
+option(WITH_PLY_PLAYBACK "Enable .ply file pointcloud loading and playback" ON)
 
 find_package(spdlog CONFIG REQUIRED)
 find_package(EBML CONFIG REQUIRED)
@@ -21,6 +22,8 @@ set(ZMQ_LIB libzmq-static)
 
 find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
+
+find_package(Eigen3 CONFIG REQUIRED)
 
 # Corrade won't build on windows without the following flag
 if (WIN32)
@@ -40,21 +43,17 @@ find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
 include_directories(~/bob/bob-pointclouds/include)
 link_directories(~/bob/bob-pointclouds/build)
 
-include(FetchContent)
-FetchContent_Declare(yaclib
-  GIT_REPOSITORY https://github.com/YACLib/YACLib.git
-  GIT_TAG main
-  )
-FetchContent_MakeAvailable(yaclib)
-link_libraries(yaclib)
-
-
 if (WITH_K4A)
   find_package(k4a CONFIG REQUIRED)
   set(OPTIONAL_SRC ${OPTIONAL_SRC}
-      src/devices/k4a/k4a_driver.cc 
+      src/devices/k4a/k4a_driver.cu
       src/devices/k4a/k4a_device.cc)
   set (OPTIONAL_LIBS ${OPTIONAL_LIBS} k4a::k4a)
+
+  # TODO create a port for using k4abt
+  find_package(k4abt CONFIG REQUIRED)
+  set(OPTIONAL_LIBS ${OPTIONAL_LIBS} k4abt)
+  
   add_compile_definitions(WITH_K4A)
 endif()
 
@@ -65,6 +64,13 @@ if (WITH_RS2)
       src/devices/rs2/rs2_device.cc)
   set (OPTIONAL_LIBS ${OPTIONAL_LIBS} realsense2::realsense2)
   add_compile_definitions(WITH_RS2)
+endif()
+
+if (WITH_PLY_PLAYBACK)
+    find_path(HAPPLY_INCLUDE_DIRS "happly.h")
+    set(OPTIONAL_INCLUDE_DIRS ${OPTIONAL_INCLUDE_DIRS} ${HAPPY_INCLUDE_DIRS})
+    find_package(unofficial-nativefiledialog CONFIG REQUIRED)
+    set(OPTIONAL_LIBS ${OPTIONAL_LIBS} unofficial::nativefiledialog::nfd)
 endif()
 
 if (WITH_SKYBRIDGE)
@@ -93,8 +99,11 @@ endif()
 
 add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
 
+set_target_properties(pointcaster PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+
 target_include_directories(pointcaster PRIVATE
-  ${LIBUSB_INCLUDE_DIRS} ${ZPP_BITS_INCLUDE_DIRS})
+  ${LIBUSB_INCLUDE_DIRS} ${ZPP_BITS_INCLUDE_DIRS}
+  ${OPTIONAL_INCLUDE_DIRS})
 
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui #libremidi 
@@ -107,6 +116,7 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   Magnum::SceneGraph
   Magnum::Shaders
   MagnumIntegration::ImGui
+  Eigen3::Eigen
   spdlog::spdlog EBML::ebml
   # ${BOB_POINTCLOUDS_LIB}
   pointclouds

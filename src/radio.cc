@@ -6,8 +6,8 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 #include "./devices/device.h"
-#include <yaclib/executor/thread_pool.hpp>
-#include <yaclib/executor/submit.hpp>
+// #include <yaclib/executor/thread_pool.hpp>
+// #include <yaclib/executor/submit.hpp>
 
 namespace bob::pointcaster {
 
@@ -34,7 +34,7 @@ Radio::Radio(const int _port) : port(_port) {
 
     spdlog::info("Initialising Radio worker thread pool ({} threads)",
 		 worker_thread_count);
-    auto worker_threads = yaclib::MakeThreadPool(worker_thread_count);
+    // auto worker_threads = yaclib::MakeThreadPool(worker_thread_count);
 
     while (!st.stop_requested()) {
 
@@ -50,9 +50,10 @@ Radio::Radio(const int _port) : port(_port) {
 
       // Submit(*worker_threads, [&] {
 	auto point_cloud = bob::sensors::synthesizedPointCloud();
+	if (point_cloud.size() == 0) continue;
 	constexpr auto compress = false;
 	auto bytes = point_cloud.serialize(compress);
-	zmq::message_t point_cloud_msg(point_cloud.serialize(compress));
+	zmq::message_t point_cloud_msg(bytes);
 	point_cloud_msg.set_group("a");
 	radio.send(point_cloud_msg, zmq::send_flags::none);
       // });
@@ -72,7 +73,7 @@ Radio::Radio(const int _port) : port(_port) {
       // spdlog::info("End");
     }
 
-    spdlog::info("Joined Radio worker thread");
+    spdlog::info("Ending broadcast");
   });
 }
 

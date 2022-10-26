@@ -1,8 +1,10 @@
+#include <algorithm>
 #include <chrono>
 #include <limits>
 #include <mutex>
 #include <random>
 #include <vector>
+#include <queue>
 #include <thread>
 #include <iostream>
 #include <fstream>
@@ -78,7 +80,7 @@ public:
   explicit PointCaster(const Arguments &args);
 
 protected:
-  pointer<Radio> radio;
+  std::unique_ptr<Radio> radio;
   ImGuiIntegration::Context imgui_context{NoCreate};
 
   pointer<Scene3D> scene;
@@ -114,6 +116,11 @@ protected:
   void drawControllersWindow();
   //void handleMidiLearn(const libremidi::message &message);
 
+  Timeline timeline;
+  std::vector<float> frame_durations;
+  bool show_stats = true;
+  void drawStats();
+
   void drawEvent() override;
   void viewportEvent(ViewportEvent &event) override;
   void keyPressEvent(KeyEvent &event) override;
@@ -138,9 +145,9 @@ PointCaster::PointCaster(const Arguments &args)
   const Vector2 dpi_scaling = this->dpiScaling({});
   Configuration conf;
   conf.setTitle("pointcaster");
-  //conf.setSize({1600, 1200});
+  conf.setSize({1600, 1200});
   //conf.setSize({1600, 960});
-  conf.setSize({960, 640});
+  // conf.setSize({960, 640});
   conf.setSize(conf.size(), dpi_scaling);
   conf.setWindowFlags(Configuration::WindowFlag::Resizable);
   GLConfiguration gl_conf;
@@ -188,8 +195,8 @@ PointCaster::PointCaster(const Arguments &args)
       .setViewport(viewport_size);
 
   // set default camera parameters
-  default_cam_position = Vector3(1.5f, 3.3f, 6.0f);
-  default_cam_target = Vector3(1.5f, 1.3f, 0.0f);
+  default_cam_position = Vector3(0.0f, 3.3f, 6.0f);
+  default_cam_target = Vector3(0.0f, 1.3f, 0.0f);
   object_camera->setTransformation(Matrix4::lookAt(
       default_cam_position, default_cam_target, Vector3(0, 1, 0)));
 
@@ -199,8 +206,8 @@ PointCaster::PointCaster(const Arguments &args)
 
   // Set up ground grid
   grid.reset(new WireframeGrid(scene.get(), drawable_group.get()));
-  grid->transform(Matrix4::scaling(Vector3(0.5f)) *
-		   Matrix4::translation(Vector3(3, 0, -5)));
+  grid->transform(Matrix4::scaling(Vector3(0.25f)) *
+		   Matrix4::translation(Vector3(0, 0, 0)));
 
   // Enable depth test, render particles as sprites
   GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
@@ -222,7 +229,7 @@ PointCaster::PointCaster(const Arguments &args)
 
   // Initialise our network radio for points
   const int broadcast_port = 9999;
-  radio.reset(new Radio(broadcast_port));
+  radio = std::make_unique<Radio>(broadcast_port);
 
   // Init our controllers
   //initControllers();
@@ -251,6 +258,8 @@ PointCaster::PointCaster(const Arguments &args)
   }
 
   spdlog::debug("{} k4a devices attached", bob::sensors::attached_devices.size());
+
+  timeline.start();
 }
 
 void PointCaster::quit() {
@@ -297,6 +306,44 @@ void PointCaster::drawSensorsWindow() {
       device->Device::drawImGuiControls();
     ImGui::Separator();
   }
+  ImGui::PopItemWidth();
+  ImGui::End();
+}
+
+void PointCaster::drawStats() {
+  ImGui::SetNextWindowPos({50.0f, 200.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize({200.0f, 100.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowBgAlpha(0.8f);
+  ImGui::Begin("Stats", nullptr);
+  ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
+
+  // calculate the mean, min and max frame times from our last 60 frames
+  const auto frame_duration = timeline.previousFrameDuration();
+  frame_durations.push_back(frame_duration);
+  if (frame_durations.size() < 61) {
+    ImGui::Text("Gathering data...");
+  } else {
+    frame_durations.erase(frame_durations.begin()); // pop_front
+    const float avg_duration =
+      std::reduce(frame_durations.begin(), frame_durations.end()) / frame_durations.size();
+    const auto minmax_duration =
+      std::minmax_element(frame_durations.begin(), frame_durations.end());
+
+    ImGui::CollapsingHeader("Rendering", true);
+
+    ImGui::Text("Frame Duration");
+    ImGui::BeginTable("duration", 2);
+    ImGui::TableNextColumn(); ImGui::Text("Average");
+    ImGui::TableNextColumn(); ImGui::Text("%fms", avg_duration * 1000);
+    ImGui::TableNextColumn(); ImGui::Text("Min");
+    ImGui::TableNextColumn(); ImGui::Text("%fms", *minmax_duration.first * 1000);
+    ImGui::TableNextColumn(); ImGui::Text("Max");
+    ImGui::TableNextColumn(); ImGui::Text("%fms", *minmax_duration.second * 1000);
+    ImGui::EndTable();
+    ImGui::Spacing();
+    ImGui::Text("%.0f FPS", 1000.0f / (avg_duration * 1000));
+  }
+
   ImGui::PopItemWidth();
   ImGui::End();
 }
@@ -410,14 +457,6 @@ void PointCaster::drawEvent() {
                                GL::FramebufferClear::Depth);
   imgui_context.newFrame();
 
-  // Enable text input, if needed/
-  if (ImGui::GetIO().WantTextInput && !isTextInputActive())
-    startTextInput();
-  else if (!ImGui::GetIO().WantTextInput && isTextInputActive())
-    stopTextInput();
-
-  drawMenuBar();
-
   auto points = bob::sensors::synthesizedPointCloud();
   if (!points.empty()) {
     point_cloud_renderer->points = std::move(points);
@@ -427,9 +466,17 @@ void PointCaster::drawEvent() {
 
   camera->draw(*drawable_group);
 
+  // Enable text input, if needed/
+  if (ImGui::GetIO().WantTextInput && !isTextInputActive())
+    startTextInput();
+  else if (!ImGui::GetIO().WantTextInput && isTextInputActive())
+    stopTextInput();
+
   // Draw gui windows
+  drawMenuBar();
   if (show_sensors_window) drawSensorsWindow();
   if (show_controllers_window) drawControllersWindow();
+  if (show_stats) drawStats();
 
   imgui_context.updateApplicationCursor(*this);
 
@@ -451,6 +498,7 @@ void PointCaster::drawEvent() {
 
   // Run the next frame immediately
   redraw();
+  timeline.nextFrame();
 }
 
 Float PointCaster::depthAt(const Vector2i &window_position) {

@@ -1,24 +1,20 @@
 #include "k4a_device.h"
-#include "../device.h"
-#include "k4a_driver.h"
 #include <fmt/format.h>
-#include <spdlog/spdlog.h>
 
 namespace bob::sensors {
-
-using namespace Magnum;
 
 namespace k4a {
   static int device_count = 0;
 }
 
 K4ADevice::K4ADevice() {
-  _driver.reset(new K4ADriver(k4a::device_count++));
+  _driver = std::make_unique<K4ADriver>(k4a::device_count++);
+  if (attached_devices.size() == 0) _driver->primary_aligner = true;
   name = fmt::format("k4a {}", _driver->device_index);
 }
 
 std::string K4ADevice::getBroadcastId() {
-  return _driver->getId();
+  return _driver->id();
 }
 
 } // namespace bob::sensors

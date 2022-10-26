@@ -57,7 +57,7 @@ namespace bob {
     explicit WireframeGrid(Scene3D* const scene, SceneGraph::DrawableGroup3D* const drawableGroup): WireframeObject{scene, drawableGroup} {
       using namespace Magnum::Math::Literals;
 
-      _mesh = MeshTools::compile(Primitives::grid3DWireframe({ 20, 20 }));
+      _mesh = MeshTools::compile(Primitives::grid3DWireframe({ 10, 10 }));
       _obj3D->scale(Vector3(10.0f));
       _obj3D->rotateX(90.0_degf);
     }
