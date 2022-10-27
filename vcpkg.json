@@ -57,7 +57,7 @@
 	},
 	{
 	    "name": "magnum-integration",
-	    "features": [ "imgui" ]
+	    "features": [ "imgui", "eigen" ]
 	}
     ]
 }

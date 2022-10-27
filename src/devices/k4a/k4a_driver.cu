@@ -189,51 +189,14 @@ void K4ADriver::runAligner(const k4a::capture &frame) {
   }
 }
 
-__global__
-void transform(int point_count, short3 translation, float3 rotation,
-	       short3 offset_position,
-	       short3 *positions_in, short3 *positions_out) {
-  using namespace Eigen;
-
-  int index = blockIdx.x * blockDim.x + threadIdx.x;
-  int stride = blockDim.x * gridDim.x;
-  // int index = 0; int stride = 1;
-  for (int i = index; i < point_count; i += stride) {
-
-    Vector3f pos;
-    pos.x() = positions_in[i].x;
-    pos.y() = positions_in[i].y;
-    pos.z() = positions_in[i].z;
-
-    pos.x() = pos.x();
-    pos.y() = -pos.y();
-    pos.z() = -pos.z();
-
-    Vector3f rot_center { translation.x, translation.y, translation.z };
-    AngleAxisf rot_z(rotation.z, Vector3f::UnitZ());
-    AngleAxisf rot_y(rotation.y, Vector3f::UnitY());
-    AngleAxisf rot_x(rotation.x, Vector3f::UnitX());
-    Quaternionf q = rot_z * rot_y * rot_x;
-    Affine3f rot_transform = Translation3f(-rot_center) * q * Translation3f(rot_center);
-    pos = rot_transform * pos;
-
-    pos.x() = pos.x() + translation.x + offset_position.x;
-    pos.y() = pos.y() + translation.y + offset_position.y;
-    pos.z() = pos.z() + translation.z + offset_position.z;
-
-    positions_out[i] = {
-      (short) __float2int_rd(pos.x()),
-      (short) __float2int_rd(pos.y()),
-      (short) __float2int_rd(pos.z())
-    };
-  }
-}
-
 __host__ __device__
 static inline float rad(float deg) {
   constexpr auto mult = 3.141592654f / 180.0f;
   return deg * mult;
 };
+
+// TODO these GPU kernels can probably be taken outside of the k4a classes and
+// used with any sensor type
 
 typedef thrust::tuple<short3, color> point_t;
 
@@ -288,7 +251,10 @@ struct point_transformer : public thrust::unary_function<point_t, point_t> {
       (short) __float2int_rd(pos_f.y()),
       (short) __float2int_rd(pos_f.z())
     };
+
     color col = thrust::get<1>(point);
+    // TODO apply color transformations here
+
     return thrust::make_tuple(pos, col);
   }
 };
@@ -378,24 +344,18 @@ K4ADriver::pointCloud(const DeviceConfiguration &config) {
   auto output_points_begin = thrust::make_zip_iterator(
       thrust::make_tuple(output_positions_ptr, output_colors_ptr));
 
-  // create some transform_iterator from our transformation function to use as
-  // the input & output of our later point_filter (stream compaction)
-  auto transformed_points_begin = thrust::make_transform_iterator(
-								  incoming_points_begin, point_transformer(config, alignment_center, aligned_position_offset));
-  auto transformed_points_end = thrust::make_transform_iterator(
-								incoming_points_end, point_transformer(config, alignment_center, aligned_position_offset));
-
-  // this allows us to 'fuse' two kernels together, so the point transform and
-  // the point filter (culling) occur in the same GPU process
-
-  // fuse + run the kernels
+  // run the kernels
   auto output_points_end =
-      thrust::copy_if(transformed_points_begin, transformed_points_end,
+      thrust::copy_if(incoming_points_begin, incoming_points_end,
 		      output_points_begin, point_filter{config});
+  thrust::transform(
+      output_points_begin, output_points_end, output_points_begin,
+      point_transformer(config, alignment_center, aligned_position_offset));
 
   // we can determine the output count using the resulting output iterator
   // from running the kernels
-  auto output_point_count = std::distance(output_points_begin, output_points_end);
+  auto output_point_count =
+      std::distance(output_points_begin, output_points_end);
 
   // wait for the GPU process to complete
   cudaDeviceSynchronize();

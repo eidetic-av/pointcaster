@@ -31,7 +31,7 @@ PointCloudRenderer::PointCloudRenderer(float particleRadius)
 }
 
 PointCloudRenderer &
-PointCloudRenderer::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
+PointCloudRenderer::draw(Magnum::SceneGraph::Camera3D& camera,
 		    const Vector2i &viewportSize) {
   if (points.empty()) return *this;
 
@@ -56,8 +56,8 @@ PointCloudRenderer::draw(Containers::Pointer<SceneGraph::Camera3D> &camera,
 	  static_cast<float>(viewportSize.y()) /
 	  Math::tan(22.5_degf)) /* tan(half field-of-view angle (45_deg)*/
       /* view/prj matrices and light */
-      .setViewMatrix(camera->cameraMatrix())
-      .setProjectionMatrix(camera->projectionMatrix())
+      .setViewMatrix(camera.cameraMatrix())
+      .setProjectionMatrix(camera.projectionMatrix())
       .draw(_meshParticles);
 
   return *this;

@@ -32,8 +32,8 @@ endif()
 find_package(Corrade CONFIG REQUIRED Main)
 find_package(Magnum CONFIG REQUIRED
   GL MeshTools Primitives SceneGraph
-  Shaders Sdl2Application)
-find_package(MagnumIntegration CONFIG REQUIRED ImGui)
+  Shaders Trade Sdl2Application)
+find_package(MagnumIntegration CONFIG REQUIRED ImGui Eigen)
 corrade_add_resource(RESOURCES resources.conf)
 
 find_package(libusb CONFIG REQUIRED)
@@ -82,10 +82,12 @@ endif()
 
 set(SOURCE_FILES
   src/pointcaster.cc
+  src/camera_controller.cc
   src/radio.cc
   src/devices/device.cc
   src/gui_helpers.cc
   src/point_cloud_renderer.cc
+  src/sphere_renderer.cc
   src/shaders/particle_sphere.cc
   src/devices/usb.cc
   ${OPTIONAL_SRC})
@@ -115,7 +117,9 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   Magnum::Primitives
   Magnum::SceneGraph
   Magnum::Shaders
+  Magnum::Trade
   MagnumIntegration::ImGui
+  MagnumIntegration::Eigen
   Eigen3::Eigen
   spdlog::spdlog EBML::ebml
   # ${BOB_POINTCLOUDS_LIB}

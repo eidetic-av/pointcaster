@@ -43,11 +43,14 @@
 //#include <libremidi/libremidi.hpp>
 #include <pointclouds.h>
 
+#include "camera_controller.h"
+
 #include "gui_helpers.h"
 #include "devices/device.h"
 // #include "devices/usb.h"
 #include "wireframe_objects.h"
 #include "point_cloud_renderer.h"
+#include "sphere_renderer.h"
 #include "radio.h"
 
 // TODO these need to be removed when initialisation loop is made generic
@@ -86,23 +89,15 @@ protected:
   pointer<Scene3D> scene;
   pointer<SceneGraph::DrawableGroup3D> drawable_group;
 
-  // camera helpers
-  Vector3 default_cam_position{0.0f, 1.5f, 8.0f};
-  Vector3 default_cam_target{0.0f, 1.0f, 0.0f};
-  Vector2i prev_mouse_position;
-  Vector3 rotation_point, translation_point;
-  Float last_depth;
-  pointer<Object3D> object_camera;
-  pointer<SceneGraph::Camera3D> camera;
 
-  pointer<PointCloudRenderer> point_cloud_renderer;
+  std::unique_ptr<CameraController> camera_controller;
+
+  std::unique_ptr<PointCloudRenderer> point_cloud_renderer;
+  std::unique_ptr<SphereRenderer> sphere_renderer;
 
   // Ground grid
   pointer<WireframeGrid> grid;
 
-  // helper functions for camera movement
-  Float depthAt(const Vector2i &window_position);
-  Vector3 unproject(const Vector2i &window_position, Float depth) const;
   bool mouse_pressed = false;
 
   void drawMenuBar();
@@ -184,25 +179,11 @@ PointCaster::PointCaster(const Arguments &args)
   scene.reset(new Scene3D{});
   drawable_group.reset(new SceneGraph::DrawableGroup3D{});
 
-  object_camera.reset(new Object3D({scene.get()}));
-  object_camera->setTransformation(
-      Matrix4::lookAt(Vector3(0, 1.5, 8), Vector3(0, 1, 0), Vector3(0, 1, 0)));
-
   const auto viewport_size = GL::defaultFramebuffer.viewport().size();
-  camera.reset(new SceneGraph::Camera3D(*object_camera));
-  camera->setProjectionMatrix(Matrix4::perspectiveProjection(
-	  45.0_degf, Vector2{viewport_size}.aspectRatio(), 0.01f, 1000.0f))
-      .setViewport(viewport_size);
 
-  // set default camera parameters
-  default_cam_position = Vector3(0.0f, 3.3f, 6.0f);
-  default_cam_target = Vector3(0.0f, 1.3f, 0.0f);
-  object_camera->setTransformation(Matrix4::lookAt(
-      default_cam_position, default_cam_target, Vector3(0, 1, 0)));
-
-  // initialise depth to the value at scene center
-  last_depth = ((camera->projectionMatrix() * camera->cameraMatrix())
-		     .transformPoint({}).z() + 1.0f) * 0.5f;
+  camera_controller = std::make_unique<CameraController>(*scene);
+  camera_controller->camera()
+      .setViewport(GL::defaultFramebuffer.viewport().size());
 
   // Set up ground grid
   grid.reset(new WireframeGrid(scene.get(), drawable_group.get()));
@@ -218,10 +199,11 @@ PointCaster::PointCaster(const Arguments &args)
 
   // TODO renderer class should be RAII
   // initialise our main pc renderer
-  point_cloud_renderer.reset(new PointCloudRenderer(0.005f));
+  point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.005f);
   point_cloud_renderer->points = PointCloud{};
   point_cloud_renderer->setDirty();
 
+  sphere_renderer = std::make_unique<SphereRenderer>();
 
   // Start the timer, loop at 144 Hz max
   setSwapInterval(1);
@@ -462,9 +444,11 @@ void PointCaster::drawEvent() {
     point_cloud_renderer->points = std::move(points);
     point_cloud_renderer->setDirty();
   }
-  point_cloud_renderer->draw(camera, framebufferSize());
+  point_cloud_renderer->draw(camera_controller->camera(), framebufferSize());
 
-  camera->draw(*drawable_group);
+  sphere_renderer->draw(camera_controller->camera());
+
+  camera_controller->camera().draw(*drawable_group);
 
   // Enable text input, if needed/
   if (ImGui::GetIO().WantTextInput && !isTextInputActive())
@@ -501,39 +485,6 @@ void PointCaster::drawEvent() {
   timeline.nextFrame();
 }
 
-Float PointCaster::depthAt(const Vector2i &window_position) {
-  /* First scale the position from being relative to window size to being
-     relative to framebuffer size as those two can be different on HiDPI
-     systems */
-  const Vector2i position =
-      window_position * Vector2(framebufferSize()) / Vector2(windowSize());
-  const Vector2i fbPosition(position.x(),
-			    GL::defaultFramebuffer.viewport().sizeY() -
-				position.y() - 1);
-
-  GL::defaultFramebuffer.mapForRead(
-      GL::DefaultFramebuffer::ReadAttachment::Front);
-  Image2D data = GL::defaultFramebuffer.read(
-      Range2Di::fromSize(fbPosition, Vector2i(1)).padded(Vector2i(2)),
-      {GL::PixelFormat::DepthComponent, GL::PixelType::Float});
-
-  return Math::min<Float>(Containers::arrayCast<const Float>(data.data()));
-}
-
-Vector3 PointCaster::unproject(const Vector2i &window_position,
-			       float depth) const {
-  /* We have to take window size, not framebuffer size, since the position is
-     in window coordinates and the two can be different on HiDPI systems */
-  const Vector2i viewSize = windowSize();
-  const Vector2i viewPosition =
-      Vector2i(window_position.x(), viewSize.y() - window_position.y() - 1);
-  const Vector3 in(2.0f * Vector2(viewPosition) / Vector2(viewSize) -
-		       Vector2(1.0f),
-		   depth * 2.0f - 1.0f);
-
-  return camera->projectionMatrix().inverted().transformPoint(in);
-}
-
 void PointCaster::viewportEvent(ViewportEvent &event) {
   // resize main framebuffer
   GL::defaultFramebuffer.setViewport({{}, event.framebufferSize()});
@@ -543,7 +494,7 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 			  event.windowSize(), event.framebufferSize());
 
   // recompute the camera's projection matrix
-  camera->setViewport(event.framebufferSize());
+  // camera->setViewport(event.framebufferSize());
 }
 
 void PointCaster::keyPressEvent(KeyEvent &event) {
@@ -579,20 +530,6 @@ void PointCaster::mousePressEvent(MouseEvent &event) {
     event.setAccepted(true);
     return;
   }
-
-  // Update camera
-  prev_mouse_position = event.position();
-  const Float currentDepth = depthAt(event.position());
-  const Float depth = currentDepth == 1.0f ? last_depth : currentDepth;
-  translation_point = unproject(event.position(), depth);
-
-  /* Update the rotation point only if we're not zooming against infinite
-     depth or if the original rotation point is not yet initialized */
-  if (currentDepth != 1.0f || rotation_point.isZero()) {
-    rotation_point = translation_point;
-    last_depth = depth;
-  }
-
   mouse_pressed = true;
 }
 
@@ -609,27 +546,12 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
     return;
   }
 
-  const Vector2 delta = 3.0f *
-			Vector2(event.position() - prev_mouse_position) /
-			Vector2(framebufferSize());
-  prev_mouse_position = event.position();
-
-  if (!event.buttons())
-    return;
-
-  /* Translate */
-  if (event.modifiers() & MouseMoveEvent::Modifier::Shift) {
-    const Vector3 p = unproject(event.position(), last_depth);
-    object_camera->translateLocal(translation_point - p); /* is Z always 0? */
-    translation_point = p;
-
-    /* Rotate around rotation point */
-  } else {
-    object_camera->transformLocal(Matrix4::translation(rotation_point) *
-				   Matrix4::rotationX(-0.51_radf * delta.y()) *
-				   Matrix4::rotationY(-0.51_radf * delta.x()) *
-				   Matrix4::translation(-rotation_point));
-  }
+  // rotate
+  if (event.buttons() == MouseMoveEvent::Button::Left)
+    camera_controller->rotate(event.relativePosition());
+  // translate
+  else if (event.buttons() == MouseMoveEvent::Button::Right)
+    camera_controller->move(event.relativePosition());
 
   event.setAccepted();
 }
@@ -639,24 +561,13 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
   if (Math::abs(delta) < 1.0e-2f)
     return;
 
+  camera_controller->zoom(delta);
+
   if (imgui_context.handleMouseScrollEvent(event)) {
     /* Prevent scrolling the page */
     event.setAccepted();
     return;
   }
-
-  const Float current_depth = depthAt(event.position());
-  const Float depth = current_depth == 1.0f ? last_depth : current_depth;
-  const Vector3 p = unproject(event.position(), depth);
-  /* Update the rotation point only if we're not zooming against infinite
-     depth or if the original rotation point is not yet initialized */
-  if (current_depth != 1.0f || rotation_point.isZero()) {
-    rotation_point = p;
-    last_depth = depth;
-  }
-
-  /* Move towards/backwards the rotation point in cam coords */
-  object_camera->translateLocal(rotation_point * delta * 0.1f);
 }
 
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <cstdint>
 #include <vector>
 #include <Corrade/Containers/Pointer.h>
@@ -20,7 +21,7 @@ namespace bob {
   public:
     PointCloudRenderer(float particleRadius);
 
-    PointCloudRenderer& draw(Containers::Pointer<SceneGraph::Camera3D>& camera, const Vector2i& viewportSize);
+    PointCloudRenderer& draw(Magnum::SceneGraph::Camera3D& camera, const Vector2i& viewportSize);
 
     bool isDirty() const { return _dirty; }
 
