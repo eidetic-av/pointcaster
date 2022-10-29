@@ -42,21 +42,18 @@ CameraController &CameraController::move(const Magnum::Vector2i &shift) {
 	  .toEuler().y();
   auto yaw_d = (float) Deg(yaw);
   auto sum = (_yawObject->transformationMatrix().rotation()).toVector().sum();
-  spdlog::debug("yaw: {}, sum: {}", (float) Deg(yaw), sum);
+  // spdlog::info("yaw: {}, sum: {}", (float) Deg(yaw), sum);
   auto sign_x = (sum > 1 ? -1 : 1);
   auto flip_x = (yaw_d < 0 && sum > 1) ? -1 : 1;
   auto flip_z = (yaw_d > -90 && yaw_d < 0 && sum > 1) ? -1 : 1;
-  auto z_scale_x = (yaw_d + 90) / 90 * sign_x * flip_x;
-  auto x_scale_x = 1 - (z_scale_x * sign_x * flip_x);
+  // spdlog::info("flip_x: {}, flip_z: {}", flip_x, flip_z);
+  auto z_scale_x = std::fmod(std::abs((yaw_d + 90) / 90 * sign_x * flip_x), 1.0f);
+  auto x_scale_x = std::fmod(std::abs(1 - (z_scale_x * sign_x * flip_x)), 1.0f);
+  // spdlog::info("z_scale_x: {}, x_scale_x: {}", z_scale_x, x_scale_x);
   auto xRot = (float)Deg(
       Quaternion::fromMatrix(_pitchObject->transformationMatrix().rotation())
-          .toEuler()
-          .z());
-  translate({
-      s.x() * x_scale_x,
-      s.y(),
-      s.x() * z_scale_x * flip_z
-    });
+          .toEuler().z());
+  translate({s.x() * x_scale_x, s.y(), s.x() * z_scale_x * flip_z});
   return *this;
 }
 

@@ -1,24 +1,21 @@
 #pragma once
 
+#include "../pointer.h"
 #include "driver.h"
+#include <Corrade/Containers/Pointer.h>
+#include <fmt/format.h>
 #include <imgui.h>
 #include "../gui_helpers.h"
-#include <thread>
-#include <fmt/format.h>
-#include <pointclouds.h>
-#include <Corrade/Containers/Pointer.h>
-#include <vector>
 #include <mutex>
-#include "../pointer.h"
+#include <pointclouds.h>
+#include <thread>
+#include <vector>
 
 namespace bob::sensors {
 
 using namespace bob::types;
 
-enum SensorType {
-  UnknownDevice,
-  K4A, K4W2, Rs2
-};
+enum SensorType { UnknownDevice, K4A, K4W2, Rs2 };
 
 class Device {
 public:
@@ -26,15 +23,27 @@ public:
   bool flip_x = false;
   bool flip_y = false;
   bool flip_z = false;
-  minMax<short> crop_x { -10000, 10000 };
-  minMax<short> crop_y { -10000, 10000 };
-  minMax<short> crop_z { -10000, 10000 };
-  short3 offset = { 0, 0, 0 };
+  minMax<short> crop_x{-10000, 10000};
+  minMax<short> crop_y{-10000, 10000};
+  minMax<short> crop_z{-10000, 10000};
+  short3 offset = {0, 0, 0};
   float3 rotation_deg = {0, 0, 0};
   float scale = 1.f;
 
-  uint parameter_index;
+  // TODO why is this public
+  std::unique_ptr<Driver> _driver;
 
+  virtual std::string getBroadcastId() = 0;
+
+  bool broadcastEnabled() { return _enable_broadcast; }
+
+  bob::types::PointCloud pointCloud() {
+    DeviceConfiguration config{flip_x, flip_y, flip_z, crop_x, crop_y,
+			       crop_z, offset, rotation_deg, scale};
+    return _driver->pointCloud(config);
+  };
+
+  uint parameter_index;
   template <typename T>
   void drawSlider(std::string_view label_text, T *value, T min,
 		     T max, T default_value = 0) {
@@ -128,31 +137,18 @@ public:
     ImGui::PopID();
   };
 
-  bool broadcastEnabled() { return _enable_broadcast; }
 
-  virtual std::string getBroadcastId() = 0;
-
-  bob::types::PointCloud pointCloud() {
-    DeviceConfiguration config {
-      flip_x, flip_y, flip_z,
-      crop_x, crop_y, crop_z,
-      offset, rotation_deg, scale
-    };
-    return _driver->pointCloud(config);
-  };
-
-  std::unique_ptr<Driver> _driver;
 
 protected:
   bool _enable_broadcast = true;
 
   // implement this to add device-specific options with imgui
-  virtual void drawDeviceSpecificControls() { }
+  virtual void drawDeviceSpecificControls() {}
 
   const std::string label(std::string label_text, int index = 0) {
-      ImGui::Text("%s", label_text.c_str());
-      ImGui::SameLine();
-      return fmt::format("##{}_{}_{}_{}", name, _driver->id(), label_text, index);
+    ImGui::Text("%s", label_text.c_str());
+    ImGui::SameLine();
+    return fmt::format("##{}_{}_{}_{}", name, _driver->id(), label_text, index);
   }
 };
 

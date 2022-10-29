@@ -111,6 +111,8 @@ protected:
   void drawControllersWindow();
   //void handleMidiLearn(const libremidi::message &message);
 
+  bool show_radio_window = true;
+
   Timeline timeline;
   std::vector<float> frame_durations;
   bool show_stats = true;
@@ -210,8 +212,7 @@ PointCaster::PointCaster(const Arguments &args)
   setMinimalLoopPeriod(7);
 
   // Initialise our network radio for points
-  const int broadcast_port = 9999;
-  radio = std::make_unique<Radio>(broadcast_port);
+  radio = std::make_unique<Radio>();
 
   // Init our controllers
   //initControllers();
@@ -260,8 +261,7 @@ void PointCaster::drawMenuBar() {
       ImGui::Checkbox("##Window_Sensors", &show_sensors_window);
       ImGui::EndDisabled();
       ImGui::SameLine();
-      if (ImGui::MenuItem("Sensors", "s"))
-	show_sensors_window = !show_sensors_window;
+      if (ImGui::MenuItem("Sensors", "s")) show_sensors_window = !show_sensors_window;
 
       ImGui::BeginDisabled();
       ImGui::Checkbox("##Window_Controllers", &show_controllers_window);
@@ -271,6 +271,12 @@ void PointCaster::drawMenuBar() {
 	show_controllers_window = !show_controllers_window;
 	if (!show_controllers_window) gui::midi_learn_mode = false;
       }
+
+      ImGui::BeginDisabled();
+      ImGui::Checkbox("##Render_Stats", &show_stats);
+      ImGui::EndDisabled();
+      ImGui::SameLine();
+      if (ImGui::MenuItem("Render Stats", "f")) show_stats = !show_stats;
 
       ImGui::EndMenu();
     }
@@ -293,10 +299,11 @@ void PointCaster::drawSensorsWindow() {
 }
 
 void PointCaster::drawStats() {
+  ImGui::PushID("FrameStats");
   ImGui::SetNextWindowPos({50.0f, 200.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize({200.0f, 100.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
-  ImGui::Begin("Stats", nullptr);
+  ImGui::Begin("Frame Stats", nullptr);
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
 
   // calculate the mean, min and max frame times from our last 60 frames
@@ -328,6 +335,7 @@ void PointCaster::drawStats() {
 
   ImGui::PopItemWidth();
   ImGui::End();
+  ImGui::PopID();
 }
 //
 //void PointCaster::initControllers() {
@@ -461,6 +469,7 @@ void PointCaster::drawEvent() {
   if (show_sensors_window) drawSensorsWindow();
   if (show_controllers_window) drawControllersWindow();
   if (show_stats) drawStats();
+  if (show_radio_window) radio->drawImGuiWindow();
 
   imgui_context.updateApplicationCursor(*this);
 
@@ -508,6 +517,12 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   case KeyEvent::Key::C:
     show_controllers_window = !show_controllers_window;
     if (!show_controllers_window) gui::midi_learn_mode = false;
+    break;
+  case KeyEvent::Key::F:
+    show_stats = !show_stats;
+    break;
+  case KeyEvent::Key::R:
+    show_radio_window = !show_radio_window;
     break;
   default:
     if (imgui_context.handleKeyPressEvent(event))

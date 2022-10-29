@@ -123,7 +123,7 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   Eigen3::Eigen
   spdlog::spdlog EBML::ebml
   # ${BOB_POINTCLOUDS_LIB}
-  pointclouds
+  pointclouds draco
   ${LIBUSB_LIBRARIES} ${ZMQ_LIB}
   ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
 
