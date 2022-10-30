@@ -29,6 +29,7 @@ public:
   short3 offset = {0, 0, 0};
   float3 rotation_deg = {0, 0, 0};
   float scale = 1.f;
+  int sample = 1;
 
   // TODO why is this public
   std::unique_ptr<Driver> _driver;
@@ -39,7 +40,7 @@ public:
 
   bob::types::PointCloud pointCloud() {
     DeviceConfiguration config{flip_x, flip_y, flip_z, crop_x, crop_y,
-			       crop_z, offset, rotation_deg, scale};
+			       crop_z, offset, rotation_deg, scale, sample};
     return _driver->pointCloud(config);
   };
 
@@ -126,6 +127,9 @@ public:
 
         ImGui::TextDisabled("Scale Output");
 	drawSlider<float>("uniform", &scale, 0.0f, 4.0f);
+
+	ImGui::TextDisabled("Sample");
+	drawSlider<int>("s", &sample, 1, 10);
 
         ImGui::TreePop();
     }

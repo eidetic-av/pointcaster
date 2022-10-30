@@ -67,6 +67,7 @@ Radio::~Radio() {
            auto point_cloud = bob::sensors::synthesizedPointCloud();
            if (point_cloud.size() == 0)
              continue;
+
            auto bytes = point_cloud.serialize(config.compress_frames);
            zmq::message_t point_cloud_msg(bytes);
            point_cloud_msg.set_group("a");
@@ -79,8 +80,8 @@ Radio::~Radio() {
              std::lock_guard lock(stats_access);
              send_durations.push_back(delta_ms);
              frame_sizes.push_back(bytes.size() / (float)1024);
-             if (send_durations.size() > 1000) send_durations.clear();
-             if (frame_sizes.size() > 1000) frame_sizes.clear();
+             if (send_durations.size() > 120) send_durations.clear();
+             if (frame_sizes.size() > 120) frame_sizes.clear();
            }
          }
 
@@ -118,7 +119,7 @@ void Radio::drawImGuiWindow() {
   ImGui::Spacing();
   if (frame_config.capture_stats) {
     stats_frame_counter++;
-    if (stats_frame_counter == 120) {
+    if (stats_frame_counter == 30) {
       stats_frame_counter = 0;
       std::lock_guard lock(stats_access);
       if (send_durations.size() > 0) {
@@ -144,7 +145,7 @@ void Radio::drawImGuiWindow() {
       ImGui::TableNextColumn();
       ImGui::Text("Average");
       ImGui::TableNextColumn();
-      ImGui::Text("%fms", avg_duration);
+      ImGui::Text("%ims", (int)avg_duration);
       ImGui::TableNextColumn();
       ImGui::Text("Min");
       ImGui::TableNextColumn();

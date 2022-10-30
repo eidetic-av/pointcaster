@@ -1,4 +1,5 @@
 #pragma once
+
 #include <pointclouds.h>
 
 namespace bob::types {
@@ -16,6 +17,10 @@ template <typename T> struct minMax {
       return false;
     return true;
   }
+};
+
+struct short3 {
+  short x, y, z = 0;
 };
 
 struct float3 {
@@ -38,6 +43,7 @@ struct DeviceConfiguration {
   short3 offset;
   float3 rotation_deg{0, 0, 0};
   float scale;
+  int sample = 1;
 };
 
 } // namespace bob::types

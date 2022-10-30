@@ -22,9 +22,10 @@ PointCloudRenderer::PointCloudRenderer(float particleRadius)
     : _particleRadius(particleRadius),
       _meshParticles(GL::MeshPrimitive::Points) {
 
-  _meshParticles.addVertexBuffer(_positions_buffer, 0,
-      Generic3D::Position{Generic3D::Position::Components::Three,
-			  Generic3D::Position::DataType::Short});
+  _meshParticles.addVertexBuffer(
+      _positions_buffer, 0,
+      Generic3D::Position{Generic3D::Position::Components::Two,
+			  Generic3D::Position::DataType::Int});
 
   _meshParticles.addVertexBuffer(_color_buffer, 0, GL::Attribute<2, float>());
   _particleShader.reset(new ParticleSphereShader);
@@ -36,8 +37,8 @@ PointCloudRenderer::draw(Magnum::SceneGraph::Camera3D& camera,
   if (points.empty()) return *this;
 
   if (_dirty) {
-    Containers::ArrayView<const short> position_data(
-	reinterpret_cast<const short *>(&points.positions[0]), points.size() * 3);
+    Containers::ArrayView<const int64_t> position_data(
+	reinterpret_cast<const int64_t *>(&points.positions[0]), points.size());
     _positions_buffer.setData(position_data);
 
     Containers::ArrayView<const float> color_data(

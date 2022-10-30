@@ -58,8 +58,8 @@ private:
   uint alignment_frame_count = total_alignment_frames;
   std::vector<k4abt_skeleton_t> alignment_skeleton_frames;
   bool aligned = false;
-  short3 alignment_center {0, 0, 0};
-  short3 aligned_position_offset;
+  position alignment_center {0, 0, 0};
+  position aligned_position_offset;
   Eigen::Quaternion<float> aligned_orientation_offset;
 
   void runAligner(const k4a::capture &frame);
