@@ -20,6 +20,8 @@ enum SensorType { UnknownDevice, K4A, K4W2, Rs2 };
 class Device {
 public:
   std::string name = "";
+  bool pause = false;
+
   bool flip_x = false;
   bool flip_y = false;
   bool flip_z = false;
@@ -67,6 +69,10 @@ public:
     parameter_index = 0;
 
     ImGui::Checkbox("Enable Broadcast", &_enable_broadcast);
+
+    const bool was_paused = pause;
+    ImGui::Checkbox("Pause Sensor", &pause);
+    if (pause != was_paused) _driver->setPaused(pause);
 
     if (ImGui::TreeNode("Alignment")) {
       const bool isAligning = _driver->isAligning();

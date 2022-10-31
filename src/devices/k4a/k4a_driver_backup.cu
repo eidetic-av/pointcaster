@@ -9,8 +9,6 @@
 #include <k4a/k4atypes.h>
 #include <spdlog/spdlog.h>
 #include <thrust/copy.h>
-#include <thrust/device_ptr.h>
-#include <thrust/iterator/transform_iterator.h>
 
 namespace bob::sensors {
 
@@ -54,12 +52,6 @@ K4ADriver::K4ADriver(int device_index_) {
   // start a thread that captures new frames and dumps them into raw buffers
   _capture_loop = std::thread([&]() {
     while (!stop_requested) {
-
-      if (pause_sensor) {
-	std::this_thread::sleep_for(100ms);
-	continue;
-      }
-      
       k4a::capture capture;
       bool result = device.get_capture(&capture, 1000ms);
       if (!result) continue;
@@ -100,10 +92,6 @@ bool K4ADriver::isOpen() const { return _open; }
 
 std::string K4ADriver::id() const { return serial_number; }
 
-void K4ADriver::setPaused(bool paused) {
-  pause_sensor = paused;
-}
-
 void K4ADriver::startAlignment() {
   spdlog::info("Beginning alignment for k4a {} ({})", device_index, id());
   alignment_frame_count = 0;
@@ -142,9 +130,9 @@ void K4ADriver::runAligner(const k4a::capture &frame) {
       const auto hip_y = (left_hip_pos.y + right_hip_pos.y) / 2.0f;
       const auto hip_z = (left_hip_pos.z + right_hip_pos.z) / 2.0f;
 
-      alignment_center.x = -std::round(hip_x);
-      alignment_center.y = std::round(hip_y);
-      alignment_center.z = std::round(hip_z);
+      rotation_center.x = -std::round(hip_x);
+      rotation_center.y = std::round(hip_y);
+      rotation_center.z = std::round(hip_z);
 
       // then set the y offset to the position of the feet
       const auto left_foot_pos =
@@ -199,149 +187,99 @@ void K4ADriver::runAligner(const k4a::capture &frame) {
   }
 }
 
-__host__ __device__
-static inline float rad(float deg) {
-  constexpr auto mult = 3.141592654f / 180.0f;
-  return deg * mult;
-};
+__global__
+void transform(int point_count, short3 translation, float3 rotation,
+	       short3 offset_position,
+	       short3 *positions_in, short3 *positions_out) {
+  using namespace Eigen;
 
-// TODO these GPU kernels can probably be taken outside of the k4a classes and
-// used with any sensor type
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  int stride = blockDim.x * gridDim.x;
+  // int index = 0; int stride = 1;
+  for (int i = index; i < point_count; i += stride) {
 
-typedef thrust::tuple<short3, color, int> point_in_t;
-typedef thrust::tuple<position, color> point_out_t;
+    Vector3f pos;
+    pos.x() = positions_in[i].x;
+    pos.y() = positions_in[i].y;
+    pos.z() = positions_in[i].z;
 
-struct point_transformer : public thrust::unary_function<point_in_t, point_out_t> {
+    pos.x() = pos.x();
+    pos.y() = -pos.y();
+    pos.z() = -pos.z();
 
-  DeviceConfiguration config;
-  Eigen::Vector3f alignment_center;
-  Eigen::Vector3f aligned_position_offset;
-
-  point_transformer(const DeviceConfiguration &device_config,
-		    const position &aligned_center, const position &position_offset) {
-    config = device_config;
-    alignment_center =
-	Eigen::Vector3f(aligned_center.x, aligned_center.y, aligned_center.z);
-    aligned_position_offset = Eigen::Vector3f(
-	position_offset.x, position_offset.y, position_offset.z);
-  }
-
-  __device__
-  point_out_t operator()(point_in_t point) const {
-
-    // we reinterpret our point in Eigen containers so we have easy maths
-    using namespace Eigen;
-
-    short3 pos = thrust::get<0>(point);
-
-    // we put our position into a float vector because it allows us to
-    // transform it by other float types (e.g. matrices, quaternions)
-    // -- also flip the y and z values to move kinect coords into the right
-    // orientation for our scene
-    Vector3f pos_f(pos.x, -pos.y, -pos.z);
-
-    // create the rotation around our center
-    AngleAxisf rot_z(rad(config.rotation_deg.z), Vector3f::UnitZ());
-    AngleAxisf rot_y(rad(config.rotation_deg.y), Vector3f::UnitY());
-    AngleAxisf rot_x(rad(config.rotation_deg.x), Vector3f::UnitX());
+    Vector3f rot_center { translation.x, translation.y, translation.z };
+    AngleAxisf rot_z(rotation.z, Vector3f::UnitZ());
+    AngleAxisf rot_y(rotation.y, Vector3f::UnitY());
+    AngleAxisf rot_x(rotation.x, Vector3f::UnitX());
     Quaternionf q = rot_z * rot_y * rot_x;
-    Affine3f rot_transform =
-	Translation3f(-alignment_center) * q * Translation3f(alignment_center);
+    Affine3f rot_transform = Translation3f(-rot_center) * q * Translation3f(rot_center);
+    pos = rot_transform * pos;
 
-    // perform our initial transform
-    pos_f = (rot_transform * pos_f) + alignment_center + aligned_position_offset;
+    pos.x() = pos.x() + translation.x + offset_position.x;
+    pos.y() = pos.y() + translation.y + offset_position.y;
+    pos.z() = pos.z() + translation.z + offset_position.z;
 
-    // perform our manual translation
-    pos_f += Vector3f(config.offset.x, config.offset.y, config.offset.z);
-
-    // specified axis flips
-    if (config.flip_x) pos_f.x() = -pos_f.x();
-    if (config.flip_y) pos_f.y() = -pos_f.y();
-    if (config.flip_z) pos_f.z() = -pos_f.z();
-
-    // and scaling
-    pos_f *= config.scale;
-
-    position pos_out = {
-      (short) __float2int_rd(pos_f.x()),
-      (short) __float2int_rd(pos_f.y()),
-      (short) __float2int_rd(pos_f.z()), 0
+    positions_out[i] = {
+      (short) __float2int_rd(pos.x()),
+      (short) __float2int_rd(pos.y()),
+      (short) __float2int_rd(pos.z())
     };
-
-    color col = thrust::get<1>(point);
-    // TODO apply color transformations here
-
-    return thrust::make_tuple(pos_out, col);
   }
-};
+}
 
-struct point_filter {
-  DeviceConfiguration config;
+struct within_bounds {
+  minMax<short> crop_x;
+  minMax<short> crop_y;
+  minMax<short> crop_z;
 
-  __device__
-  bool check_color(color value) const {
-    // remove totally black values
-    if (value.r == 0 && value.g == 0 && value.b == 0)
-      return false;
+  __host__ __device__
+  bool contains(minMax<short> crop, short value) const {
+    if (value < crop.min) return false;
+    if (value > crop.max) return false;
     return true;
   }
 
-  __device__
-  bool check_bounds(short3 value) const {
-    if (value.x < config.crop_x.min) return false;
-    if (value.x > config.crop_x.max) return false;
-    if (value.y < config.crop_y.min) return false;
-    if (value.y > config.crop_y.max) return false;
-    if (value.z < config.crop_z.min) return false;
-    if (value.z > config.crop_z.max) return false;
-    return true;
-  }
-
-  __device__
-  bool sample(int index) const {
-    return index % config.sample == 0;
-  }
-
-  __device__
-  bool operator()(point_in_t point) const {
-    auto index = thrust::get<2>(point);
-    if (!sample(index)) return false;
-    auto color = thrust::get<1>(point);
-    if (!check_color(color)) return false;
-    auto position = thrust::get<0>(point);
-    if (!check_bounds(position)) return false;
-    return true;
+  __host__ __device__
+  bool operator()(short3 pos) const {
+    return contains(crop_x, pos.x) && contains(crop_y, pos.y) &&
+	   contains(crop_z, pos.z);
   }
 };
 
 PointCloud
 K4ADriver::pointCloud(const DeviceConfiguration &config) {
   if (!_buffers_updated) return _point_cloud;
-
   std::lock_guard<std::mutex> lock(_buffer_mutex);
 
-  const uint positions_in_size = sizeof(short3) * incoming_point_count;
-  const uint positions_out_size = sizeof(position) * incoming_point_count;
+  // convert to radians
+  const auto rad = [](float deg) -> float {
+    constexpr auto mult = 3.141592654f / 180.0f;
+    return deg * mult;
+  };
+  const float3 rotation_rad = {rad(config.rotation_deg.x),
+			       rad(config.rotation_deg.y),
+			       rad(config.rotation_deg.z)};
+  const short3 position_offset = {config.offset.x + aligned_position_offset.x,
+				  config.offset.y + aligned_position_offset.y,
+				  config.offset.z + aligned_position_offset.z};
+
+  const uint positions_size = sizeof(short3) * incoming_point_count;
   const uint colors_size = sizeof(color) * incoming_point_count;
 
   // initialize our GPU memory
   short3* incoming_positions;
   color* incoming_colors;
-  short3* filtered_positions;
-  color* filtered_colors;
-  position* output_positions;
+  short3* output_positions;
   color* output_colors;
 
-  cudaMallocManaged(&incoming_positions, positions_in_size);
+  cudaMallocManaged(&incoming_positions, positions_size);
   cudaMallocManaged(&incoming_colors, colors_size);
-  cudaMallocManaged(&filtered_positions, positions_in_size);
-  cudaMallocManaged(&filtered_colors, colors_size);
-  cudaMallocManaged(&output_positions, positions_out_size);
+  cudaMallocManaged(&output_positions, positions_size);
   cudaMallocManaged(&output_colors, colors_size);
 
-  // fill the GPU memory with our CPU buffers from the kinect
+  // fill the GPU memory with our buffers from the kinect on the CPU
   cudaMemcpy(incoming_positions, positions_buffer.data(),
-	     positions_in_size, cudaMemcpyHostToDevice);
+	     positions_size, cudaMemcpyHostToDevice);
   cudaMemcpy(incoming_colors, colors_buffer.data(),
 	     colors_size, cudaMemcpyHostToDevice);
 
@@ -351,67 +289,57 @@ K4ADriver::pointCloud(const DeviceConfiguration &config) {
     thrust::device_pointer_cast(incoming_positions);
   thrust::device_ptr<color> incoming_colors_ptr =
     thrust::device_pointer_cast(incoming_colors);
-  thrust::device_ptr<short3> filtered_positions_ptr =
-    thrust::device_pointer_cast(filtered_positions);
-  thrust::device_ptr<color> filtered_colors_ptr =
-    thrust::device_pointer_cast(filtered_colors);
-  thrust::device_ptr<position> output_positions_ptr =
+  thrust::device_ptr<short3> output_positions_ptr =
     thrust::device_pointer_cast(output_positions);
   thrust::device_ptr<color> output_colors_ptr =
     thrust::device_pointer_cast(output_colors);
 
-  // we create some sequence of point indices to zip so our GPU kernels have
-  // access to them
-  int* indices;
-  cudaMallocManaged(&indices, positions_in_size);
-  thrust::device_ptr<int> point_indices = thrust::device_pointer_cast(indices);
-  thrust::sequence(point_indices, point_indices + incoming_point_count);
-
   // zip position and color buffers together so we can run our algorithms on
-  // the dataset as a single point-cloud 
-  auto incoming_points_begin = thrust::make_zip_iterator(
-      thrust::make_tuple(incoming_positions_ptr, incoming_colors_ptr, point_indices));
-  auto incoming_points_end = thrust::make_zip_iterator(
+  // both datasets as a single point-cloud
+  auto point_cloud_begin = thrust::make_zip_iterator(
+      thrust::make_tuple(incoming_positions_ptr, incoming_colors_pointer));
+  auto point_cloud_end = thrust::make_zip_iterator(
       thrust::make_tuple(incoming_positions_ptr + incoming_point_count,
-			 incoming_colors_ptr + incoming_point_count,
-			 point_indices + incoming_point_count));
-  auto filtered_points_begin = thrust::make_zip_iterator(thrust::make_tuple(
-      filtered_positions_ptr, filtered_colors_ptr, point_indices));
-  auto output_points_begin = thrust::make_zip_iterator(
-      thrust::make_tuple(output_positions_ptr, output_colors_ptr));
+			 incoming_colors_pointer + incoming_point_count));
 
-  // run the kernels
-  auto filtered_points_end =
-      thrust::copy_if(incoming_points_begin, incoming_points_end,
-		      filtered_points_begin, point_filter{config});
-  thrust::transform(
-      filtered_points_begin, filtered_points_end, output_points_begin,
-      point_transformer(config, alignment_center, aligned_position_offset));
+  // int rsize =
+  //     thrust::copy_if(thrust::make_transform_iterator(
+  //                         thrust::make_zip_iterator(thrust::make_tuple(
+  //                             thrust::counting_iterator<int>(0), d_x.begin())),
+  //                         add_random()),
+  //                     thrust::make_transform_iterator(
+  //                         thrust::make_zip_iterator(thrust::make_tuple(
+  //                             thrust::counting_iterator<int>(5), d_x.end())),
+  //                         add_random()),
+  //                     d_r.begin(), is_greater()) -
+  //     d_r.begin();
 
-  // we can determine the output count using the resulting output iterator
-  // from running the kernels
-  auto output_point_count =
-      std::distance(filtered_points_begin, filtered_points_end);
+  // auto filtered_positions_end =
+  //   thrust::copy_if(transformed_positions,
+  // 		    transformed_positions + incoming_point_count,
+  // 		    filtered_positions,
+  // 		    within_bounds{ config.crop_x, config.crop_y, config.crop_z});
 
-  // wait for the GPU process to complete
+  // auto output_point_count = std::distance(filtered_positions, filtered_positions_end);
+  // auto output_positions_size = sizeof(short3) * output_point_count;
+
   cudaDeviceSynchronize();
 
-  // copy back to our output point-cloud on the CPU
-  const uint output_positions_size = sizeof(position) * output_point_count;
-  const uint output_colors_size = sizeof(color) * output_point_count;
-  _point_cloud.positions.resize(output_point_count);
-  _point_cloud.colors.resize(output_point_count);
-  cudaMemcpy(_point_cloud.positions.data(), output_positions,
-	     output_positions_size, cudaMemcpyDeviceToHost);
-  cudaMemcpy(_point_cloud.colors.data(), output_colors,
-	     output_colors_size, cudaMemcpyDeviceToHost);
+  // const uint output_positions_size = sizeof(short3) * output_point_count;
+  // const uint output_colors_size = sizeof(color) * output_point_count;
+
+  // // copy back to our output point-cloud on the CPU
+  // _point_cloud.positions.resize(output_point_count);
+  // cudaMemcpy(_point_cloud.positions.data(), output_positions,
+  // 	     output_positions_size, cudaMemcpyDeviceToHost);
+  // _point_cloud.colors.resize(output_point_count);
+  // cudaMemcpy(_point_cloud.colors.data(), output_colors,
+  // 	     output_colors_size, cudaMemcpyDeviceToHost);
+
 
   // clean up
-  cudaFree(indices);
   cudaFree(incoming_positions);
   cudaFree(incoming_colors);
-  cudaFree(filtered_positions);
-  cudaFree(filtered_colors);
   cudaFree(output_positions);
   cudaFree(output_colors);
 

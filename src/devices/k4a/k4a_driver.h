@@ -23,6 +23,8 @@ public:
   std::string id() const override;
   bool isOpen() const override;
 
+  void setPaused(bool paused) override;
+
   void startAlignment() override;
   bool isAligning() override;
   bool isAligned() override;
@@ -38,6 +40,8 @@ private:
       incoming_point_count * sizeof(short3);
 
   std::string serial_number;
+
+  std::atomic<bool> pause_sensor = false;
 
   bool stop_requested = false;
   std::thread _capture_loop;

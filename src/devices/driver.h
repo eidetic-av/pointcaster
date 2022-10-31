@@ -19,6 +19,8 @@ public:
   virtual bob::types::PointCloud pointCloud(const bob::types::DeviceConfiguration& config) = 0;
   virtual std::string id() const = 0;
 
+  virtual void setPaused(bool pause) = 0;
+
   bool primary_aligner = false;
 
   virtual void startAlignment() = 0;
