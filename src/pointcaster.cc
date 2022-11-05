@@ -251,36 +251,32 @@ void PointCaster::quit() {
 }
 
 void PointCaster::drawMenuBar() {
-  if (ImGui::BeginMainMenuBar()) {
-    if (ImGui::BeginMenu("File")) {
-      if (ImGui::MenuItem("Quit", "q")) quit();
-      ImGui::EndMenu();
+  using namespace ImGui;
+
+  if (BeginMainMenuBar()) {
+    if (BeginMenu("File")) {
+      if (MenuItem("Quit", "q")) quit();
+      EndMenu();
     }
-    if (ImGui::BeginMenu("Window")) {
-      ImGui::BeginDisabled();
-      ImGui::Checkbox("##Window_Sensors", &show_sensors_window);
-      ImGui::EndDisabled();
-      ImGui::SameLine();
-      if (ImGui::MenuItem("Sensors", "s")) show_sensors_window = !show_sensors_window;
+    if (BeginMenu("Window")) {
 
-      ImGui::BeginDisabled();
-      ImGui::Checkbox("##Window_Controllers", &show_controllers_window);
-      ImGui::EndDisabled();
-      ImGui::SameLine();
-      if (ImGui::MenuItem("Controllers", "c")) {
-	show_controllers_window = !show_controllers_window;
-	if (!show_controllers_window) gui::midi_learn_mode = false;
-      }
+      constexpr auto window_item = [](const char * item_name,
+				      const char * shortcut_key,
+				      bool & window_toggle) {
+	using namespace fmt;
+	BeginDisabled();
+        Checkbox(format("##Toggle_Window_{}", item_name).c_str(), &window_toggle);
+        EndDisabled();
+	SameLine();
+	if (MenuItem(item_name, shortcut_key)) window_toggle = !window_toggle;
+      };
 
-      ImGui::BeginDisabled();
-      ImGui::Checkbox("##Render_Stats", &show_stats);
-      ImGui::EndDisabled();
-      ImGui::SameLine();
-      if (ImGui::MenuItem("Render Stats", "f")) show_stats = !show_stats;
-
-      ImGui::EndMenu();
+      window_item("Sensors", "s", show_sensors_window);
+      window_item("Controllers", "c", show_controllers_window);
+      window_item("RenderStats", "f", show_stats);
+      EndMenu();
     }
-    ImGui::EndMainMenuBar();
+    EndMainMenuBar();
   }
 }
 
