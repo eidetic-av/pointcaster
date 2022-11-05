@@ -4,6 +4,7 @@
 #include <mutex>
 #include <random>
 #include <vector>
+#include <set>
 #include <queue>
 #include <thread>
 #include <iostream>
@@ -52,6 +53,7 @@
 #include "point_cloud_renderer.h"
 #include "sphere_renderer.h"
 #include "radio.h"
+#include "snapshots.h"
 
 // TODO these need to be removed when initialisation loop is made generic
 #include <k4a/k4a.h>
@@ -68,6 +70,7 @@ namespace bob {
 // literals... should probs replace thes with using aliases
 using namespace bob;
 using namespace bob::pointcaster;
+using namespace bob::pointcaster::snapshots;
 using namespace bob::types;
 using namespace bob::sensors;
 using namespace Magnum;
@@ -83,12 +86,9 @@ public:
   explicit PointCaster(const Arguments &args);
 
 protected:
-  std::unique_ptr<Radio> radio;
-  ImGuiIntegration::Context imgui_context{NoCreate};
 
   pointer<Scene3D> scene;
   pointer<SceneGraph::DrawableGroup3D> drawable_group;
-
 
   std::unique_ptr<CameraController> camera_controller;
 
@@ -97,6 +97,10 @@ protected:
 
   // Ground grid
   pointer<WireframeGrid> grid;
+
+  std::unique_ptr<Radio> radio;
+  std::unique_ptr<Snapshots> snapshots_context;
+  ImGuiIntegration::Context imgui_context{NoCreate};
 
   bool mouse_pressed = false;
 
@@ -112,6 +116,7 @@ protected:
   //void handleMidiLearn(const libremidi::message &message);
 
   bool show_radio_window = true;
+  bool show_snapshots_window = true;
 
   Timeline timeline;
   std::vector<float> frame_durations;
@@ -142,8 +147,8 @@ PointCaster::PointCaster(const Arguments &args)
   const Vector2 dpi_scaling = this->dpiScaling({});
   Configuration conf;
   conf.setTitle("pointcaster");
-  conf.setSize({1600, 1200});
-  //conf.setSize({1600, 960});
+  // conf.setSize({1600, 1200});
+  conf.setSize({1600, 1080});
   // conf.setSize({960, 640});
   conf.setSize(conf.size(), dpi_scaling);
   conf.setWindowFlags(Configuration::WindowFlag::Resizable);
@@ -214,6 +219,9 @@ PointCaster::PointCaster(const Arguments &args)
   // Initialise our network radio for points
   radio = std::make_unique<Radio>();
 
+  // 
+  snapshots_context = std::make_unique<Snapshots>();
+
   // Init our controllers
   //initControllers();
 
@@ -274,6 +282,7 @@ void PointCaster::drawMenuBar() {
       window_item("Sensors", "s", show_sensors_window);
       window_item("Controllers", "c", show_controllers_window);
       window_item("RenderStats", "f", show_stats);
+
       EndMenu();
     }
     EndMainMenuBar();
@@ -286,8 +295,13 @@ void PointCaster::drawSensorsWindow() {
   ImGui::Begin("Sensors", nullptr);
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
   for (auto& device : bob::sensors::attached_devices) {
+    if (!device->is_sensor) return;
     if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
       device->Device::drawImGuiControls();
+    ImGui::Spacing();
+    ImGui::Text(device->name.c_str());
+    device->Device::drawImGuiControls();
+    ImGui::Spacing();
     ImGui::Separator();
   }
   ImGui::PopItemWidth();
@@ -444,6 +458,8 @@ void PointCaster::drawEvent() {
   imgui_context.newFrame();
 
   auto points = bob::sensors::synthesizedPointCloud();
+  points += snapshots::pointCloud();
+
   if (!points.empty()) {
     point_cloud_renderer->points = std::move(points);
     point_cloud_renderer->setDirty();
@@ -466,6 +482,7 @@ void PointCaster::drawEvent() {
   if (show_controllers_window) drawControllersWindow();
   if (show_stats) drawStats();
   if (show_radio_window) radio->drawImGuiWindow();
+  if (show_snapshots_window) snapshots_context->drawImGuiWindow();
 
   imgui_context.updateApplicationCursor(*this);
 

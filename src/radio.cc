@@ -7,6 +7,7 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 #include "./devices/device.h"
+#include "snapshots.h"
 #include <imgui.h>
 
 namespace bob::pointcaster {
@@ -54,6 +55,8 @@ Radio::~Radio() {
 	 using delta_time = duration<uint, milliseconds>;
 	 uint delta_ms = 0;
 
+	 uint broadcast_snapshot_frame_count = 0;
+
          while (!st.stop_requested()) {
 
            // TODO broadcast_rate needs to by dynamic based on when we have a
@@ -63,15 +66,34 @@ Radio::~Radio() {
 	     std::this_thread::sleep_for(sleep_time);
 
            start_send_time = system_clock::now();
+	 std::size_t packet_bytes = 0;
 
-           auto point_cloud = bob::sensors::synthesizedPointCloud();
-           if (point_cloud.size() == 0)
-             continue;
+           if (snapshots::frames.size() != broadcast_snapshot_frame_count) {
+             for (auto frame : snapshots::frames) {
+	       spdlog::info("Broadcast snapshot frame");
+               auto bytes = frame.serialize(config.compress_frames);
+               zmq::message_t snapshot_frame_msg(bytes);
+               snapshot_frame_msg.set_group("snapshots");
+               radio.send(snapshot_frame_msg, zmq::send_flags::none);
+	       packet_bytes += snapshot_frame_msg.size();
+             }
+             if (snapshots::frames.size() == 0) {
+               zmq::message_t snapshot_frame_msg(std::string_view("clear"));
+               snapshot_frame_msg.set_group("snapshots");
+               radio.send(snapshot_frame_msg, zmq::send_flags::none);
+	       packet_bytes += snapshot_frame_msg.size();
+             }
+             broadcast_snapshot_frame_count = snapshots::frames.size();
+           }
 
-           auto bytes = point_cloud.serialize(config.compress_frames);
-           zmq::message_t point_cloud_msg(bytes);
-           point_cloud_msg.set_group("a");
-           radio.send(point_cloud_msg, zmq::send_flags::none);
+           auto live_point_cloud = bob::sensors::synthesizedPointCloud();
+           if (live_point_cloud.size() > 0) {
+             auto bytes = live_point_cloud.serialize(config.compress_frames);
+             zmq::message_t point_cloud_msg(bytes);
+             point_cloud_msg.set_group("live");
+             radio.send(point_cloud_msg, zmq::send_flags::none);
+	     packet_bytes += point_cloud_msg.size();
+           }
 
            end_send_time = system_clock::now();
 	   delta_ms = duration_cast<milliseconds>(end_send_time - start_send_time).count();
@@ -79,9 +101,9 @@ Radio::~Radio() {
            if (config.capture_stats) {
              std::lock_guard lock(stats_access);
              send_durations.push_back(delta_ms);
-             frame_sizes.push_back(bytes.size() / (float)1024);
-             if (send_durations.size() > 120) send_durations.clear();
-             if (frame_sizes.size() > 120) frame_sizes.clear();
+             frame_sizes.push_back(packet_bytes / (float)1024);
+             if (send_durations.size() > 300) send_durations.clear();
+             if (frame_sizes.size() > 300) frame_sizes.clear();
            }
          }
 

@@ -20,18 +20,36 @@ enum SensorType { UnknownDevice, K4A, K4W2, Rs2 };
 class Device {
 public:
   std::string name = "";
+  bool is_sensor = true;
+
   bool pause = false;
 
-  bool flip_x = false;
+  // default values
+  // bool flip_x = false;
   bool flip_y = false;
-  bool flip_z = false;
+  // bool flip_z = false;
   minMax<short> crop_x{-10000, 10000};
   minMax<short> crop_y{-10000, 10000};
-  minMax<short> crop_z{-10000, 10000};
-  short3 offset = {0, 0, 0};
+  // minMax<short> crop_z{-10000, 10000};
+  // short3 offset = {0, 0, 0};
   float3 rotation_deg = {0, 0, 0};
-  float scale = 1.f;
+  // float scale = 1.f;
   int sample = 1;
+
+  // solo freeze
+  // bool flip_x = true;
+  // bool flip_z = true;
+  // minMax<short> crop_z{-10000, 6000};
+  // short3 offset = {0, -930, 3000};
+  // float scale = 1.2f;
+
+  // looking glass
+  bool flip_x = true;
+  bool flip_z = true;
+  minMax<short> crop_z{-10000, 10000};
+  short3 offset = {0, -930, 1520};
+  float scale = 1.2f;
+  
 
   // TODO why is this public
   std::unique_ptr<Driver> _driver;
@@ -68,10 +86,16 @@ public:
     ImGui::PushID(_driver->id().c_str());
     parameter_index = 0;
 
-    ImGui::Checkbox("Enable Broadcast", &_enable_broadcast);
+    // ImGui::Checkbox("Enable Broadcast", &_enable_broadcast);
 
     const bool was_paused = pause;
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::Spacing();
     ImGui::Checkbox("Pause Sensor", &pause);
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::Spacing();
     if (pause != was_paused) _driver->setPaused(pause);
 
     if (ImGui::TreeNode("Alignment")) {

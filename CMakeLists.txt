@@ -3,6 +3,9 @@ project(bob-pointcaster LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+  # add_compile_options(-fsanitize=address)
+  # add_link_options(-fsanitize=address)
+
 # add vcpkg ports from this repo
 set(VCPKG_OVERLAY_PORTS "${VCPKG_OVERLAY_PORTS};${CMAKE_CURRENT_LIST_DIR}/ports")
 
@@ -84,6 +87,7 @@ set(SOURCE_FILES
   src/pointcaster.cc
   src/camera_controller.cc
   src/radio.cc
+  src/snapshots.cc
   src/devices/device.cc
   src/gui_helpers.cc
   src/point_cloud_renderer.cc
