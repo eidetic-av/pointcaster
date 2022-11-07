@@ -10,10 +10,15 @@
 #include <pointclouds.h>
 #include <thread>
 #include <vector>
+#include <memory>
+#include <fstream>
+#include <filesystem>
+
+#include <spdlog/spdlog.h>
 
 namespace bob::sensors {
 
-using namespace bob::types;
+// using namespace bob::types;
 
 enum SensorType { UnknownDevice, K4A, K4W2, Rs2 };
 
@@ -26,15 +31,15 @@ public:
 
   // default values
   // bool flip_x = false;
-  bool flip_y = false;
+  // bool flip_y = false;
   // bool flip_z = false;
-  minMax<short> crop_x{-10000, 10000};
-  minMax<short> crop_y{-10000, 10000};
+  // minMax<short> crop_x{-10000, 10000};
+  // minMax<short> crop_y{-10000, 10000};
   // minMax<short> crop_z{-10000, 10000};
   // short3 offset = {0, 0, 0};
-  float3 rotation_deg = {0, 0, 0};
+  // float3 rotation_deg = {-5, 0, 0};
   // float scale = 1.f;
-  int sample = 1;
+  // int sample = 1;
 
   // solo freeze
   // bool flip_x = true;
@@ -44,12 +49,22 @@ public:
   // float scale = 1.2f;
 
   // looking glass
-  bool flip_x = true;
-  bool flip_z = true;
-  minMax<short> crop_z{-10000, 10000};
-  short3 offset = {0, -930, 1520};
-  float scale = 1.2f;
-  
+  // bool flip_x = true;
+  // bool flip_z = true;
+  // minMax<short> crop_z{-10000, 10000};
+  // short3 offset = {0, -930, 1520};
+  // float scale = 1.2f;
+
+  bob::types::DeviceConfiguration config{.flip_x = true,
+			     .flip_y = false,
+			     .flip_z = true,
+			     .crop_x = {-10000, 10000},
+			     .crop_y = {-10000, 10000},
+			     .crop_z = {-10000, 10000},
+			     .offset = {0, -930, 1520},
+			     .rotation_deg = {-5, 0, 0},
+			     .scale = 1.2f,
+			     .sample = 1};
 
   // TODO why is this public
   std::unique_ptr<Driver> _driver;
@@ -58,9 +73,7 @@ public:
 
   bool broadcastEnabled() { return _enable_broadcast; }
 
-  bob::types::PointCloud pointCloud() {
-    DeviceConfiguration config{flip_x, flip_y, flip_z, crop_x, crop_y,
-			       crop_z, offset, rotation_deg, scale, sample};
+  auto pointCloud() {
     return _driver->pointCloud(config);
   };
 
@@ -88,15 +101,62 @@ public:
 
     // ImGui::Checkbox("Enable Broadcast", &_enable_broadcast);
 
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::Spacing();
     const bool was_paused = pause;
-    ImGui::Spacing();
-    ImGui::Spacing();
-    ImGui::Spacing();
     ImGui::Checkbox("Pause Sensor", &pause);
-    ImGui::Spacing();
-    ImGui::Spacing();
-    ImGui::Spacing();
     if (pause != was_paused) _driver->setPaused(pause);
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+
+    constexpr auto output_directory = "data";
+
+    bool serialize = false;
+    ImGui::Checkbox("Serialize", &serialize);
+    if (serialize) {
+      if (!std::filesystem::exists(output_directory))
+	std::filesystem::create_directory(output_directory);
+      auto [name, data] = serializeConfig();
+      auto filename = fmt::format("{}/{}.pcc", output_directory, name);
+      spdlog::info("Saving to '{}'", filename);
+      std::ofstream output_file(filename.c_str(), std::ios::out | std::ios::binary);
+      output_file.write((const char*)&data[0], data.size());
+    }
+
+    bool deserialize = false;
+    ImGui::Checkbox("Deserialize", &deserialize);
+    if (deserialize) {
+      auto filename = fmt::format("{}/{}.pcc", output_directory, _driver->id());
+      spdlog::info("Loading from '{}'", filename);
+      if (std::filesystem::exists(filename)) {
+
+	std::ifstream file(filename, std::ios::binary);
+
+	std::streampos file_size;
+	file.seekg(0, std::ios::end);
+	file_size = file.tellg();
+	file.seekg(0, std::ios::beg);
+
+	std::vector<uint8_t> buffer;
+	buffer.reserve(file_size);
+
+	buffer.insert(buffer.begin(),
+		      std::istream_iterator<uint8_t>(file),
+		      std::istream_iterator<uint8_t>());
+
+        deserializeConfig(buffer);
+        spdlog::info("Loaded configuration");
+
+      } else spdlog::info("Configuration doesn't exist");
+    }
+
+    if (pause != was_paused) _driver->setPaused(pause);
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::Spacing();
 
     if (ImGui::TreeNode("Alignment")) {
       const bool isAligning = _driver->isAligning();
@@ -118,48 +178,48 @@ public:
 
     if (ImGui::TreeNode("Manual Transform")) {
         ImGui::TextDisabled("Flip Input");
-        ImGui::Checkbox(label("x", 0).c_str(), &flip_x);
+        ImGui::Checkbox(label("x", 0).c_str(), &config.flip_x);
         ImGui::SameLine();
-        ImGui::Checkbox(label("y", 0).c_str(), &flip_y);
+        ImGui::Checkbox(label("y", 0).c_str(), &config.flip_y);
         ImGui::SameLine();
-        ImGui::Checkbox(label("z", 0).c_str(), &flip_z);
+        ImGui::Checkbox(label("z", 0).c_str(), &config.flip_z);
 
         ImGui::TextDisabled("Crop Input");
 	// ImGui can't handle shorts, so we need to use int's then convert
 	// back TODO there's probably a better way to do it by defining
 	// implicit conversions??
-        minMax<int> crop_x_in{crop_x.min, crop_x.max};
-        minMax<int> crop_y_in{crop_y.min, crop_y.max};
-        minMax<int> crop_z_in{crop_z.min, crop_z.max};
+	bob::types::minMax<int> crop_x_in{config.crop_x.min, config.crop_x.max};
+	bob::types::minMax<int> crop_y_in{config.crop_y.min, config.crop_y.max};
+	bob::types::minMax<int> crop_z_in{config.crop_z.min, config.crop_z.max};
         ImGui::SliderInt2(label("x", 1).c_str(), crop_x_in.arr(), -10000, 10000);
         ImGui::SliderInt2(label("y", 1).c_str(), crop_y_in.arr(), -10000, 10000);
         ImGui::SliderInt2(label("z", 1).c_str(), crop_z_in.arr(), -10000, 10000);
-	crop_x.min = crop_x_in.min;
-	crop_x.max = crop_x_in.max;
-	crop_y.min = crop_y_in.min;
-	crop_y.max = crop_y_in.max;
-	crop_z.min = crop_z_in.min;
-	crop_z.max = crop_z_in.max;
+	config.crop_x.min = crop_x_in.min;
+	config.crop_x.max = crop_x_in.max;
+	config.crop_y.min = crop_y_in.min;
+	config.crop_y.max = crop_y_in.max;
+	config.crop_z.min = crop_z_in.min;
+	config.crop_z.max = crop_z_in.max;
 
-        int3 offset_in{offset.x, offset.y, offset.z};
+	bob::types::int3 offset_in{config.offset.x, config.offset.y, config.offset.z};
         ImGui::TextDisabled("Offset Output");
 	drawSlider<int>("x", &offset_in.x, -10000, 10000);
 	drawSlider<int>("y", &offset_in.y, -10000, 10000);
 	drawSlider<int>("z", &offset_in.z, -10000, 10000);
-	offset.x = offset_in.x;
-	offset.y = offset_in.y;
-	offset.z = offset_in.z;
+	config.offset.x = offset_in.x;
+	config.offset.y = offset_in.y;
+	config.offset.z = offset_in.z;
 
         ImGui::TextDisabled("Rotate Output");
-	drawSlider<float>("x", &rotation_deg.x, -180, 180);
-	drawSlider<float>("y", &rotation_deg.y, -180, 180);
-	drawSlider<float>("z", &rotation_deg.z, -180, 180);
+	drawSlider<float>("x", &config.rotation_deg.x, -180, 180);
+	drawSlider<float>("y", &config.rotation_deg.y, -180, 180);
+	drawSlider<float>("z", &config.rotation_deg.z, -180, 180);
 
         ImGui::TextDisabled("Scale Output");
-	drawSlider<float>("uniform", &scale, 0.0f, 4.0f);
+	drawSlider<float>("uniform", &config.scale, 0.0f, 4.0f);
 
 	ImGui::TextDisabled("Sample");
-	drawSlider<int>("s", &sample, 1, 10);
+	drawSlider<int>("s", &config.sample, 1, 10);
 
         ImGui::TreePop();
     }
@@ -171,7 +231,8 @@ public:
     ImGui::PopID();
   };
 
-
+  std::pair<std::string, std::vector<uint8_t>> serializeConfig() const;
+  void deserializeConfig(std::vector<uint8_t> data);
 
 protected:
   bool _enable_broadcast = true;
@@ -190,6 +251,6 @@ protected:
 // into some class?
 extern std::vector<pointer<Device>> attached_devices;
 extern std::mutex devices_access;
-extern PointCloud synthesizedPointCloud();
+  extern bob::types::PointCloud synthesizedPointCloud();
 
 } // namespace bob::sensors

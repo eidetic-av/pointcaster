@@ -23,6 +23,8 @@ find_package(ZLIB REQUIRED)
 find_package(ZeroMQ CONFIG REQUIRED)
 set(ZMQ_LIB libzmq-static)
 
+find_package(toml11 CONFIG REQUIRED)
+
 find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
 
@@ -126,6 +128,7 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   MagnumIntegration::Eigen
   Eigen3::Eigen
   spdlog::spdlog EBML::ebml
+  toml11::toml11
   # ${BOB_POINTCLOUDS_LIB}
   pointclouds draco
   ${LIBUSB_LIBRARIES} ${ZMQ_LIB}

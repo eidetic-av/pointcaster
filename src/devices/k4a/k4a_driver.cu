@@ -7,6 +7,7 @@
 #include <numbers>
 #include <k4a/k4a.h>
 #include <k4a/k4atypes.h>
+#include <system_error>
 #include <spdlog/spdlog.h>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
@@ -418,6 +419,71 @@ K4ADriver::pointCloud(const DeviceConfiguration &config) {
   _buffers_updated = false;
 
   return _point_cloud;
+}
+
+void K4ADriver::setExposure(const int new_exposure) {
+  device.set_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
+			   K4A_COLOR_CONTROL_MODE_MANUAL, new_exposure);
+}
+
+const int K4ADriver::getExposure() const {
+  int result_value = -1;
+  k4a_color_control_mode_t result_mode;
+  device.get_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
+			   &result_mode, &result_value);
+  return result_value;
+}
+
+void K4ADriver::setBrightness(const int new_brightness) {
+  device.set_color_control(K4A_COLOR_CONTROL_BRIGHTNESS,
+			   K4A_COLOR_CONTROL_MODE_MANUAL, new_brightness);
+}
+
+const int K4ADriver::getBrightness() const {
+  int result_value = -1;
+  k4a_color_control_mode_t result_mode;
+  device.get_color_control(K4A_COLOR_CONTROL_BRIGHTNESS,
+			   &result_mode, &result_value);
+  return result_value;
+}
+
+void K4ADriver::setContrast(const int new_contrast) {
+  device.set_color_control(K4A_COLOR_CONTROL_CONTRAST,
+			   K4A_COLOR_CONTROL_MODE_MANUAL, new_contrast);
+}
+
+const int K4ADriver::getContrast() const {
+  int result_value = -1;
+  k4a_color_control_mode_t result_mode;
+  device.get_color_control(K4A_COLOR_CONTROL_CONTRAST,
+			   &result_mode, &result_value);
+  return result_value;
+}
+
+void K4ADriver::setSaturation(const int new_saturation) {
+  device.set_color_control(K4A_COLOR_CONTROL_SATURATION,
+			   K4A_COLOR_CONTROL_MODE_MANUAL, new_saturation);
+}
+
+const int K4ADriver::getSaturation() const {
+  int result_value = -1;
+  k4a_color_control_mode_t result_mode;
+  device.get_color_control(K4A_COLOR_CONTROL_SATURATION,
+			   &result_mode, &result_value);
+  return result_value;
+}
+
+void K4ADriver::setGain(const int new_gain) {
+  device.set_color_control(K4A_COLOR_CONTROL_GAIN,
+			   K4A_COLOR_CONTROL_MODE_MANUAL, new_gain);
+}
+
+const int K4ADriver::getGain() const {
+  int result_value = -1;
+  k4a_color_control_mode_t result_mode;
+  device.get_color_control(K4A_COLOR_CONTROL_GAIN,
+			   &result_mode, &result_value);
+  return result_value;
 }
 
 } // namespace bob::sensors
