@@ -3,5 +3,6 @@ bin/
 vcpkg_installed/
 .cache/
 .vs/
+.ccls-cache/
 compile_commands.json
 imgui.ini
