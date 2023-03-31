@@ -95,8 +95,7 @@ protected:
   std::unique_ptr<PointCloudRenderer> point_cloud_renderer;
   std::unique_ptr<SphereRenderer> sphere_renderer;
 
-  // Ground grid
-  pointer<WireframeGrid> grid;
+  std::unique_ptr<WireframeGrid> ground_grid;
 
   std::unique_ptr<Radio> radio;
   std::unique_ptr<Snapshots> snapshots_context;
@@ -117,6 +116,7 @@ protected:
 
   bool show_radio_window = true;
   bool show_snapshots_window = true;
+  bool show_global_transform_window = true;
 
   Timeline timeline;
   std::vector<float> frame_durations;
@@ -192,13 +192,12 @@ PointCaster::PointCaster(const Arguments &args)
   camera_controller->camera()
       .setViewport(GL::defaultFramebuffer.viewport().size());
 
-  // Set up ground grid
-  grid.reset(new WireframeGrid(scene.get(), drawable_group.get()));
-  grid->transform(Matrix4::scaling(Vector3(0.25f)) *
-		   Matrix4::translation(Vector3(0, 0, 0)));
+  ground_grid = std::make_unique<WireframeGrid>(scene.get(), drawable_group.get());
+  ground_grid->transform(Matrix4::scaling(Vector3(0.25f)) *
+			 Matrix4::translation(Vector3(0, 0, 0)));
 
-  // Enable depth test, render particles as sprites
   GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+  // render particles as sprites
   GL::Renderer::enable(GL::Renderer::Feature::ProgramPointSize);
 
   // set background color
@@ -279,6 +278,7 @@ void PointCaster::drawMenuBar() {
 	if (MenuItem(item_name, shortcut_key)) window_toggle = !window_toggle;
       };
 
+      window_item("Transform", "t", show_global_transform_window);
       window_item("Sensors", "s", show_sensors_window);
       window_item("Controllers", "c", show_controllers_window);
       window_item("RenderStats", "f", show_stats);
@@ -483,6 +483,7 @@ void PointCaster::drawEvent() {
   if (show_stats) drawStats();
   if (show_radio_window) radio->drawImGuiWindow();
   if (show_snapshots_window) snapshots_context->drawImGuiWindow();
+  if (show_global_transform_window) bob::sensors::drawGlobalControls();
 
   imgui_context.updateApplicationCursor(*this);
 
@@ -536,6 +537,9 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     break;
   case KeyEvent::Key::R:
     show_radio_window = !show_radio_window;
+    break;
+  case KeyEvent::Key::T:
+    show_global_transform_window = !show_global_transform_window;
     break;
   default:
     if (imgui_context.handleKeyPressEvent(event))

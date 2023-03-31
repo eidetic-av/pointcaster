@@ -1,5 +1,6 @@
 #include "device.h"
 #include <spdlog/spdlog.h>
+#include <imgui.h>
 
 #ifndef __CUDACC__
 #include <zpp_bits.h>
@@ -32,6 +33,18 @@ void
 Device::deserializeConfig(std::vector<uint8_t> buffer) {
   auto in = zpp::bits::in(buffer);
   auto success = in(this->config);
+}
+
+bob::types::position global_translate;
+void drawGlobalControls() {
+  ImGui::SetNextWindowPos({150.0f, 50.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowBgAlpha(0.8f);
+  ImGui::PushID("GlobalTransform");
+  ImGui::Begin("Global Transform", nullptr);
+  ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
+  ImGui::PopItemWidth();
+  ImGui::End();
+  ImGui::PopID();
 }
 
 } // namespace bob::sensors

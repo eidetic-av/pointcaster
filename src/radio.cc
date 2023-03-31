@@ -68,23 +68,27 @@ Radio::~Radio() {
            start_send_time = system_clock::now();
 	 std::size_t packet_bytes = 0;
 
-           if (snapshots::frames.size() != broadcast_snapshot_frame_count) {
-             for (auto frame : snapshots::frames) {
-	       spdlog::info("Broadcast snapshot frame");
-               auto bytes = frame.serialize(config.compress_frames);
-               zmq::message_t snapshot_frame_msg(bytes);
-               snapshot_frame_msg.set_group("snapshots");
-               radio.send(snapshot_frame_msg, zmq::send_flags::none);
-	       packet_bytes += snapshot_frame_msg.size();
-             }
-             if (snapshots::frames.size() == 0) {
-               zmq::message_t snapshot_frame_msg(std::string_view("clear"));
-               snapshot_frame_msg.set_group("snapshots");
-               radio.send(snapshot_frame_msg, zmq::send_flags::none);
-	       packet_bytes += snapshot_frame_msg.size();
-             }
-             broadcast_snapshot_frame_count = snapshots::frames.size();
+	 if (snapshots::frames.size() != broadcast_snapshot_frame_count) {
+
+	   if (snapshots::frames.size() == 0) {
+	     zmq::message_t snapshot_frame_msg(std::string_view("clear"));
+	     snapshot_frame_msg.set_group("snapshots");
+	     radio.send(snapshot_frame_msg, zmq::send_flags::none);
+	     packet_bytes += snapshot_frame_msg.size();
+	   } else {
+	     auto synthesized_snapshot_frame = std::reduce(
+		 snapshots::frames.begin(), snapshots::frames.end(),
+		 types::PointCloud{},
+		 [](auto a, auto b) -> types::PointCloud { return a + b; });
+	     auto bytes =
+		 synthesized_snapshot_frame.serialize(config.compress_frames);
+	     zmq::message_t snapshot_frames_msg(bytes);
+	     snapshot_frames_msg.set_group("snapshots");
+	     radio.send(snapshot_frames_msg, zmq::send_flags::none);
+	     packet_bytes += snapshot_frames_msg.size();
            }
+           broadcast_snapshot_frame_count = snapshots::frames.size();
+         }
 
            auto live_point_cloud = bob::sensors::synthesizedPointCloud();
            if (live_point_cloud.size() > 0) {

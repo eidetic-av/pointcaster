@@ -251,6 +251,9 @@ protected:
 // into some class?
 extern std::vector<pointer<Device>> attached_devices;
 extern std::mutex devices_access;
-  extern bob::types::PointCloud synthesizedPointCloud();
+extern bob::types::PointCloud synthesizedPointCloud();
+
+extern bob::types::position global_translate;
+extern void drawGlobalControls();
 
 } // namespace bob::sensors
