@@ -32,15 +32,15 @@ public:
   bob::types::PointCloud pointCloud(const bob::types::DeviceConfiguration& config) override;
 
   void setExposure(const int new_exposure);
-  const int getExposure() const;
+  int getExposure() const;
   void setBrightness(const int new_brightness);
-  const int getBrightness() const;
+  int getBrightness() const;
   void setContrast(const int new_contrast);
-  const int getContrast() const;
+  int getContrast() const;
   void setSaturation(const int new_saturation);
-  const int getSaturation() const;
+  int getSaturation() const;
   void setGain(const int new_gain);
-  const int getGain() const;
+  int getGain() const;
 
 private:
   static constexpr uint incoming_point_count =

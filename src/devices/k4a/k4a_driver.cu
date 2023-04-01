@@ -437,7 +437,7 @@ void K4ADriver::setExposure(const int new_exposure) {
 			   K4A_COLOR_CONTROL_MODE_MANUAL, new_exposure);
 }
 
-const int K4ADriver::getExposure() const {
+int K4ADriver::getExposure() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
   device.get_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
@@ -450,7 +450,7 @@ void K4ADriver::setBrightness(const int new_brightness) {
 			   K4A_COLOR_CONTROL_MODE_MANUAL, new_brightness);
 }
 
-const int K4ADriver::getBrightness() const {
+int K4ADriver::getBrightness() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
   device.get_color_control(K4A_COLOR_CONTROL_BRIGHTNESS,
@@ -463,7 +463,7 @@ void K4ADriver::setContrast(const int new_contrast) {
 			   K4A_COLOR_CONTROL_MODE_MANUAL, new_contrast);
 }
 
-const int K4ADriver::getContrast() const {
+int K4ADriver::getContrast() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
   device.get_color_control(K4A_COLOR_CONTROL_CONTRAST,
@@ -476,7 +476,7 @@ void K4ADriver::setSaturation(const int new_saturation) {
 			   K4A_COLOR_CONTROL_MODE_MANUAL, new_saturation);
 }
 
-const int K4ADriver::getSaturation() const {
+int K4ADriver::getSaturation() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
   device.get_color_control(K4A_COLOR_CONTROL_SATURATION,
@@ -489,7 +489,7 @@ void K4ADriver::setGain(const int new_gain) {
 			   K4A_COLOR_CONTROL_MODE_MANUAL, new_gain);
 }
 
-const int K4ADriver::getGain() const {
+int K4ADriver::getGain() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
   device.get_color_control(K4A_COLOR_CONTROL_GAIN,
