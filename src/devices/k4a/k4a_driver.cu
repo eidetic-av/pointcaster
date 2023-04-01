@@ -8,10 +8,11 @@
 #include <k4a/k4a.h>
 #include <k4a/k4atypes.h>
 #include <system_error>
-#include <spdlog/spdlog.h>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
+#include <thrust/sequence.h>
 #include <thrust/iterator/transform_iterator.h>
+#include "../../log.h"
 
 namespace bob::sensors {
 
@@ -22,12 +23,18 @@ using namespace Magnum;
 using namespace Magnum::Math;
 
 K4ADriver::K4ADriver(int device_index_) {
+
   device_index = device_index_;
 
-  spdlog::info("Opening k4a device at index {}", device_index);
-  device = k4a::device::open(device_index);
-  serial_number = device.get_serialnum();
-  spdlog::info(" --> Open");
+  g_log.info("Opening k4a device %d", device_index);
+  try {
+    device = k4a::device::open(device_index);
+    serial_number = device.get_serialnum();
+    g_log.info("Open");
+  } catch (std::exception e) {
+    g_log.info("Failed to open device");
+    return;
+  }
 
   // TODO make config dynamic
   _config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
@@ -40,9 +47,15 @@ K4ADriver::K4ADriver(int device_index_) {
   // _config.camera_fps = K4A_FRAMES_PER_SECOND_15;
   _config.synchronized_images_only = true;
 
-  spdlog::info("Attempting to start camera");
-  device.start_cameras(&_config);
-  spdlog::info("Started camera");
+  g_log.info("Attempting to start camera");
+  try {
+    device.start_cameras(&_config);
+    g_log.info("Started camera");
+  } catch (std::exception e) {
+    g_log.error("Failed to start camera");
+    g_log.error(" --> %s", e.what());
+    return;
+  }
 
   // need to store the calibration and transformation data, as they are used
   // later to transform colour camera to point cloud space
@@ -106,7 +119,7 @@ void K4ADriver::setPaused(bool paused) {
 }
 
 void K4ADriver::startAlignment() {
-  spdlog::info("Beginning alignment for k4a {} ({})", device_index, id());
+  g_log.info("Beginning alignment for k4a %d (%s)", device_index, id());
   alignment_frame_count = 0;
 }
 
@@ -189,8 +202,6 @@ void K4ADriver::runAligner(const k4a::capture &frame) {
 	const auto rot_x = deg(euler.x()) - 90;
 	const auto rot_y = deg(euler.y()) - 90;
 	const auto rot_z = deg(euler.z());
-
-	spdlog::debug("0:{}, 1:{}, 2:{}", rot_x, rot_y, rot_z);
       }
 
       alignment_skeleton_frames.clear();

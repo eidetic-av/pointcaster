@@ -1,5 +1,5 @@
 #include "k4a_device.h"
-#include <fmt/format.h>
+#include <spdlog/spdlog.h>
 #include <imgui.h>
 #include <functional>
 
@@ -12,7 +12,7 @@ namespace k4a {
 K4ADevice::K4ADevice() {
   _driver = std::make_unique<K4ADriver>(k4a::device_count++);
   if (attached_devices.size() == 0) _driver->primary_aligner = true;
-  name = fmt::format("k4a {}", _driver->device_index);
+  name = "k4a " + std::to_string(_driver->device_index);
   // get any device specific controls needed from the driver
   auto driver = dynamic_cast<K4ADriver*>(_driver.get());
   try {

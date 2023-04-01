@@ -30,6 +30,9 @@ add_library(ImGui::ImGui ALIAS imgui::imgui)
 
 find_package(Eigen3 CONFIG REQUIRED)
 
+add_subdirectory(reckless)
+include_directories(reckless/reckless/include)
+
 # Corrade won't build on windows without the following flag
 if (WIN32)
     set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
@@ -115,6 +118,7 @@ target_include_directories(pointcaster PRIVATE
 
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui #libremidi 
+  reckless
   Corrade::Main
   Magnum::Application
   Magnum::GL
@@ -130,7 +134,7 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   spdlog::spdlog EBML::ebml
   toml11::toml11
   # ${BOB_POINTCLOUDS_LIB}
-  pointclouds draco
+  pointclouds 
   ${LIBUSB_LIBRARIES} ${ZMQ_LIB}
   ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
 

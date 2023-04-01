@@ -5,7 +5,6 @@
 #include <k4a/k4a.h>
 #include <k4a/k4a.hpp>
 #include <k4abt.hpp>
-#include <spdlog/spdlog.h>
 #include <thread>
 #include <array>
 #include <exception>
