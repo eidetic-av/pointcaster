@@ -17,7 +17,7 @@ public:
   static constexpr bob::types::uint2 color_resolution { 1280, 720 };
   static constexpr bob::types::uint2 depth_resolution { 512, 512 };
 
-  K4ADriver(int device_index_ = 0);
+  K4ADriver();
   ~K4ADriver();
 
   std::string id() const override;

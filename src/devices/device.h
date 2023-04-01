@@ -1,9 +1,9 @@
 #pragma once
 
 #include "../pointer.h"
+#include "../log.h"
 #include "driver.h"
 #include <Corrade/Containers/Pointer.h>
-#include <fmt/format.h>
 #include <imgui.h>
 #include "../gui_helpers.h"
 #include <mutex>
@@ -13,8 +13,7 @@
 #include <memory>
 #include <fstream>
 #include <filesystem>
-
-#include <spdlog/spdlog.h>
+#include <iterator>
 
 namespace bob::sensors {
 
@@ -84,10 +83,17 @@ public:
     ImGui::PushID(parameter_index++);
     ImGui::Text("%s", label_text.data());
     ImGui::SameLine();
+
+    constexpr auto parameter = [](auto text) constexpr {
+      return "##" + std::string(text);
+    };
+
     if constexpr (std::is_integral<T>())
-      ImGui::SliderInt(fmt::format("##{}", label_text.data()).c_str(), value, min, max);
+      ImGui::SliderInt(parameter(label_text).c_str(), value, min, max);
+
     else if constexpr (std::is_floating_point<T>())
-      ImGui::SliderFloat(fmt::format("##{}", label_text.data()).c_str(), value, min, max);
+      ImGui::SliderFloat(parameter(label_text).c_str(), value, min, max);
+
     ImGui::SameLine();
     if (ImGui::Button("0")) *value = default_value;
     gui::enableParameterLearn(value, gui::ParameterType::Float, min, max);
@@ -120,17 +126,22 @@ public:
       if (!std::filesystem::exists(output_directory))
 	std::filesystem::create_directory(output_directory);
       auto [name, data] = serializeConfig();
-      auto filename = fmt::format("{}/{}.pcc", output_directory, name);
-      spdlog::info("Saving to '{}'", filename);
+      std::string filename = "data/" + name + ".pcc";
+
+      g_log.info("Saving to %s", filename);
+
       std::ofstream output_file(filename.c_str(), std::ios::out | std::ios::binary);
       output_file.write((const char*)&data[0], data.size());
     }
 
     bool deserialize = false;
     ImGui::Checkbox("Deserialize", &deserialize);
+
     if (deserialize) {
-      auto filename = fmt::format("{}/{}.pcc", output_directory, _driver->id());
-      spdlog::info("Loading from '{}'", filename);
+      std::string filename = "data/" + _driver->id() + ".pcc";
+
+      g_log.info("Loading from %s", filename);
+
       if (std::filesystem::exists(filename)) {
 
 	std::ifstream file(filename, std::ios::binary);
@@ -148,9 +159,9 @@ public:
 		      std::istream_iterator<uint8_t>());
 
         deserializeConfig(buffer);
-        spdlog::info("Loaded configuration");
+	g_log.info("Loaded config");
 
-      } else spdlog::info("Configuration doesn't exist");
+      } else g_log.info("Config doesn't exist");
     }
 
     if (pause != was_paused) _driver->setPaused(pause);
@@ -243,7 +254,8 @@ protected:
   const std::string label(std::string label_text, int index = 0) {
     ImGui::Text("%s", label_text.c_str());
     ImGui::SameLine();
-    return fmt::format("##{}_{}_{}_{}", name, _driver->id(), label_text, index);
+    return "##" + name + "_" + _driver->id() + "_" + label_text + "_" +
+	   std::to_string(index);
   }
 };
 

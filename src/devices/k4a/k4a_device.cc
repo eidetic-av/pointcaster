@@ -1,16 +1,13 @@
 #include "k4a_device.h"
-#include <spdlog/spdlog.h>
+#include "../../log.h"
 #include <imgui.h>
 #include <functional>
 
 namespace bob::sensors {
 
-namespace k4a {
-  static int device_count = 0;
-}
-
 K4ADevice::K4ADevice() {
-  _driver = std::make_unique<K4ADriver>(k4a::device_count++);
+  g_log.info("Initialising K4ADevice");
+  _driver = std::make_unique<K4ADriver>();
   if (attached_devices.size() == 0) _driver->primary_aligner = true;
   name = "k4a " + std::to_string(_driver->device_index);
   // get any device specific controls needed from the driver
@@ -21,8 +18,12 @@ K4ADevice::K4ADevice() {
     _contrast = driver->getContrast();
     _gain = driver->getGain();
   } catch (::k4a::error e) {
-    spdlog::error(e.what());
+    g_log.error(e.what());
   }
+}
+
+K4ADevice::~K4ADevice() {
+  g_log.info("Closing %s", name);
 }
 
 std::string K4ADevice::getBroadcastId() {
@@ -36,7 +37,7 @@ void K4ADevice::updateDeviceControl(int *target, int value,
       set_func(value);
       *target = value;
     } catch (::k4a::error e) {
-      spdlog::error("Failed to set device control: {}", e.what());
+      g_log.error(e.what());
     }
   }
 }

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <reckless/severity_log.hpp>
 #include <reckless/stdout_writer.hpp>
 
@@ -8,6 +10,5 @@ using log_t = reckless::severity_log<
   reckless::timestamp_field  // Then timestamp field
   >;
 
-reckless::stdout_writer __stdout_writer;
-log_t g_log(&__stdout_writer);
-
+inline reckless::stdout_writer __stdout_writer;
+inline log_t g_log(&__stdout_writer);

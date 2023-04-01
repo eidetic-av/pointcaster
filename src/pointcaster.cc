@@ -148,8 +148,8 @@ PointCaster::PointCaster(const Arguments &args)
   Configuration conf;
   conf.setTitle("pointcaster");
   // conf.setSize({1600, 1200});
-  conf.setSize({1600, 1080});
-  // conf.setSize({960, 640});
+  // conf.setSize({1600, 1080});
+  conf.setSize({960, 640});
   conf.setSize(conf.size(), dpi_scaling);
   conf.setWindowFlags(Configuration::WindowFlag::Resizable);
   GLConfiguration gl_conf;
@@ -293,6 +293,18 @@ void PointCaster::drawSensorsWindow() {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Sensors", nullptr);
+
+  if (ImGui::Button("Open")) {
+    for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
+      pointer<bob::sensors::Device> p;
+      p.reset(new bob::sensors::K4ADevice());
+      bob::sensors::attached_devices.push_back(std::move(p));
+    }
+  }
+  if (ImGui::Button("Close")) {
+    bob::sensors::attached_devices.clear();
+  }
+
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
   for (auto& device : bob::sensors::attached_devices) {
     if (!device->is_sensor) return;

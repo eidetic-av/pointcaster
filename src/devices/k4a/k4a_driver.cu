@@ -22,11 +22,14 @@ using namespace std::chrono_literals;
 using namespace Magnum;
 using namespace Magnum::Math;
 
-K4ADriver::K4ADriver(int device_index_) {
+static int device_count = 0;
 
-  device_index = device_index_;
+K4ADriver::K4ADriver() {
 
-  g_log.info("Opening k4a device %d", device_index);
+  device_index = device_count;
+
+  g_log.info("Opening driver for k4a %d (%s)", device_index, id());
+
   try {
     device = k4a::device::open(device_index);
     serial_number = device.get_serialnum();
@@ -100,14 +103,20 @@ K4ADriver::K4ADriver(int device_index_) {
   });
 
   _open = true;
+
+  device_count++;
 }
 
 K4ADriver::~K4ADriver() {
+  g_log.info("Closing driver for k4a %d (%s)", device_index, id());
+  _open = false;
   stop_requested = true;
   _capture_loop.join();
   tracker.destroy();
-  _open = false;
+  device.stop_cameras();
   device.close();
+  g_log.info("Closed");
+  device_count--;
 }
 
 bool K4ADriver::isOpen() const { return _open; }
