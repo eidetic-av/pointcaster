@@ -131,7 +131,7 @@ public:
       auto [name, data] = serializeConfig();
       std::string filename = concat("data/", name, ".pcc");
 
-      g_log.info("Saving to %s", filename);
+      bob::log.info("Saving to %s", filename);
 
       std::ofstream output_file(filename.c_str(), std::ios::out | std::ios::binary);
       output_file.write((const char*)&data[0], data.size());
@@ -143,7 +143,7 @@ public:
     if (deserialize) {
       std::string filename = concat("data/", _driver->id(), ".pcc");
 
-      g_log.info("Loading from %s", filename);
+      bob::log.info("Loading from %s", filename);
 
       if (std::filesystem::exists(filename)) {
 
@@ -162,9 +162,9 @@ public:
 		      std::istream_iterator<uint8_t>());
 
         deserializeConfig(buffer);
-	g_log.info("Loaded config");
+	bob::log.info("Loaded config");
 
-      } else g_log.info("Config doesn't exist");
+      } else bob::log.info("Config doesn't exist");
     }
 
     if (pause != was_paused) _driver->setPaused(pause);

@@ -28,14 +28,14 @@ K4ADriver::K4ADriver() {
 
   device_index = device_count;
 
-  g_log.info("Opening driver for k4a %d (%s)", device_index, id());
+  bob::log.info("Opening driver for k4a %d (%s)", device_index, id());
 
   try {
     device = k4a::device::open(device_index);
     serial_number = device.get_serialnum();
-    g_log.info("Open");
+    bob::log.info("Open");
   } catch (std::exception e) {
-    g_log.info("Failed to open device");
+    bob::log.info("Failed to open device");
     return;
   }
 
@@ -50,13 +50,13 @@ K4ADriver::K4ADriver() {
   // _config.camera_fps = K4A_FRAMES_PER_SECOND_15;
   _config.synchronized_images_only = true;
 
-  g_log.info("Attempting to start camera");
+  bob::log.info("Attempting to start camera");
   try {
     device.start_cameras(&_config);
-    g_log.info("Started camera");
+    bob::log.info("Started camera");
   } catch (std::exception e) {
-    g_log.error("Failed to start camera");
-    g_log.error(" --> %s", e.what());
+    bob::log.error("Failed to start camera");
+    bob::log.error(" --> %s", e.what());
     return;
   }
 
@@ -108,14 +108,14 @@ K4ADriver::K4ADriver() {
 }
 
 K4ADriver::~K4ADriver() {
-  g_log.info("Closing driver for k4a %d (%s)", device_index, id());
+  bob::log.info("Closing driver for k4a %d (%s)", device_index, id());
   _open = false;
   stop_requested = true;
   _capture_loop.join();
   tracker.destroy();
   device.stop_cameras();
   device.close();
-  g_log.info("Closed");
+  bob::log.info("Closed");
   device_count--;
 }
 
@@ -128,7 +128,7 @@ void K4ADriver::setPaused(bool paused) {
 }
 
 void K4ADriver::startAlignment() {
-  g_log.info("Beginning alignment for k4a %d (%s)", device_index, id());
+  bob::log.info("Beginning alignment for k4a %d (%s)", device_index, id());
   alignment_frame_count = 0;
 }
 

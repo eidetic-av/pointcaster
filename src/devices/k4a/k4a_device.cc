@@ -9,7 +9,8 @@ namespace bob::sensors {
 using bob::strings::concat;
 
 K4ADevice::K4ADevice() {
-  g_log.info("Initialising K4ADevice");
+  bob::log.info("Initialising K4ADevice");
+
   _driver = std::make_unique<K4ADriver>();
   if (attached_devices.size() == 0) _driver->primary_aligner = true;
   name = concat("k4a ", std::to_string(_driver->device_index));
@@ -20,13 +21,13 @@ K4ADevice::K4ADevice() {
     _brightness = driver->getBrightness();
     _contrast = driver->getContrast();
     _gain = driver->getGain();
-  } catch (::k4a::error e) {
-    g_log.error(e.what());
+  } catch (::k4a::error& e) {
+    bob::log.error(e.what());
   }
 }
 
 K4ADevice::~K4ADevice() {
-  g_log.info("Closing %s", name);
+  bob::log.info("Closing %s", name);
 }
 
 std::string K4ADevice::getBroadcastId() {
@@ -40,7 +41,7 @@ void K4ADevice::updateDeviceControl(int *target, int value,
       set_func(value);
       *target = value;
     } catch (::k4a::error e) {
-      g_log.error(e.what());
+      bob::log.error(e.what());
     }
   }
 }

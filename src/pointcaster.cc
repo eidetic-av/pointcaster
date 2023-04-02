@@ -18,10 +18,10 @@
 #else
 #include <unistd.h>
 #endif
-#include <spdlog/spdlog.h>
 #define ZMQ_BUILD_DRAFT_API
 #include <zmq.hpp>
 
+#include "log.h"
 #include "pointer.h"
 #include "string_utils.h"
 
@@ -140,7 +140,7 @@ protected:
 
 PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
-  spdlog::info("This is Box of Birds PointCaster");
+  bob::log.info("This is pointcaster");
 
 #if WITH_SKYBRIDGE
   /* skybridge::initConnection(); */
@@ -250,7 +250,7 @@ PointCaster::PointCaster(const Arguments &args)
     bob::sensors::attached_devices.push_back(std::move(p));
   }
 
-  spdlog::debug("{} k4a devices attached", bob::sensors::attached_devices.size());
+  bob::log.debug("%d k4a devices attached", bob::sensors::attached_devices.size());
 
   timeline.start();
 }
@@ -367,7 +367,7 @@ void PointCaster::drawStats() {
 //  std::thread midi_startup([&]() {
 //    midi_in midi;
 //    auto port_count = midi.get_port_count();
-//    spdlog::info("Detected {} MIDI ports", port_count);
+//    bob::log.info("Detected %d MIDI ports", port_count);
 //    midi.open_port(0);
 //    midi.set_callback([&](const message &message) {
 //      if (gui::midi_learn_mode) {
