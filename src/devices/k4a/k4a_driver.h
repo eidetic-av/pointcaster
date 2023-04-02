@@ -1,86 +1,95 @@
 #pragma once
 
-#include "../driver.h"
 #include "../device.h"
+#include "../driver.h"
+#include <Eigen/Geometry>
+#include <array>
+#include <exception>
 #include <k4a/k4a.h>
 #include <k4a/k4a.hpp>
 #include <k4abt.hpp>
 #include <thread>
-#include <array>
-#include <exception>
-#include <Eigen/Geometry>
 
 namespace bob::sensors {
 
+using bob::types::PointCloud;
+using bob::types::position;
+using bob::types::color;
+using bob::types::short3;
+using bob::types::uint2;
+
 class K4ADriver : public Driver {
+
 public:
-  static constexpr bob::types::uint2 color_resolution { 1280, 720 };
-  static constexpr bob::types::uint2 depth_resolution { 512, 512 };
+
+  static constexpr uint2 color_resolution{1280, 720};
+  static constexpr uint2 depth_resolution{512, 512};
+
+  static uint device_count;
 
   K4ADriver();
   ~K4ADriver();
 
   std::string id() const override;
-  bool isOpen() const override;
+  bool is_open() const override;
 
-  void setPaused(bool paused) override;
+  void set_paused(bool paused) override;
 
-  void startAlignment() override;
-  bool isAligning() override;
-  bool isAligned() override;
+  void start_alignment() override;
+  bool is_aligning() override;
+  bool is_aligned() override;
 
-  bob::types::PointCloud pointCloud(const bob::types::DeviceConfiguration& config) override;
+  PointCloud
+  point_cloud(const bob::types::DeviceConfiguration &config) override;
 
-  void setExposure(const int new_exposure);
-  int getExposure() const;
-  void setBrightness(const int new_brightness);
-  int getBrightness() const;
-  void setContrast(const int new_contrast);
-  int getContrast() const;
-  void setSaturation(const int new_saturation);
-  int getSaturation() const;
-  void setGain(const int new_gain);
-  int getGain() const;
+  void set_exposure(const int new_exposure);
+  int get_exposure() const;
+  void set_brightness(const int new_brightness);
+  int get_brightness() const;
+  void set_contrast(const int new_contrast);
+  int get_contrast() const;
+  void set_saturation(const int new_saturation);
+  int get_saturation() const;
+  void set_gain(const int new_gain);
+  int get_gain() const;
 
 private:
   static constexpr uint incoming_point_count =
       depth_resolution.x * depth_resolution.y;
   static constexpr uint color_buffer_size =
-      incoming_point_count * sizeof(bob::types::color);
+    incoming_point_count * sizeof(color);
   static constexpr uint positions_buffer_size =
-      incoming_point_count * sizeof(bob::types::short3);
+      incoming_point_count * sizeof(short3);
 
-  std::string serial_number;
+  std::string _serial_number;
 
-  std::atomic<bool> pause_sensor = false;
-
-  bool stop_requested = false;
+  std::atomic<bool> _pause_sensor = false;
+  bool _stop_requested = false;
   std::thread _capture_loop;
-  k4a::device device;
+  k4a::device _device;
   k4a_device_configuration_t _config;
   k4a::calibration _calibration;
   k4a::transformation _transformation;
-  std::string _serial_number;
 
   std::mutex _buffer_mutex;
   std::atomic<bool> _buffers_updated;
 
-  std::array<bob::types::short3, positions_buffer_size> positions_buffer;
-  std::array<bob::types::color, color_buffer_size> colors_buffer;
+  std::array<short3, positions_buffer_size> _positions_buffer;
+  std::array<color, color_buffer_size> _colors_buffer;
 
-  k4abt::tracker tracker;
-  static constexpr uint total_alignment_frames = 10;
-  uint alignment_frame_count = total_alignment_frames;
-  std::vector<k4abt_skeleton_t> alignment_skeleton_frames;
-  bool aligned = false;
-  bob::types::position alignment_center {0, 0, 0};
-  bob::types::position aligned_position_offset;
-  Eigen::Quaternion<float> aligned_orientation_offset;
+  k4abt::tracker _tracker;
+  static constexpr uint _total_alignment_frames = 10;
+  uint _alignment_frame_count = _total_alignment_frames;
+  std::vector<k4abt_skeleton_t> _alignment_skeleton_frames;
+  bool _aligned = false;
+  position _alignment_center{0, 0, 0};
+  position _aligned_position_offset;
+  Eigen::Quaternion<float> _aligned_orientation_offset;
 
-  void runAligner(const k4a::capture &frame);
+  void run_aligner(const k4a::capture &frame);
 
-  bob::types::PointCloud _point_cloud;
+  PointCloud _point_cloud;
 
   bool _open = false;
-  };
+};
 } // namespace bob::sensors

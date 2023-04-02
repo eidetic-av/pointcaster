@@ -57,7 +57,7 @@ void Snapshots::drawImGuiWindow() {
 
 void Snapshots::capture() {
   spdlog::info("Capturing frame");
-  frames.push_back({bob::sensors::synthesizedPointCloud()});
+  frames.push_back({bob::sensors::synthesized_point_cloud()});
 }
 
 } // namespace bob::pointcaster

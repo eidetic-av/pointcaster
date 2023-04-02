@@ -10,10 +10,10 @@ public:
   K4ADevice();
   ~K4ADevice();
 
-  std::string getBroadcastId() override;
+  std::string get_broadcast_id() override;
 
-  void drawDeviceSpecificControls() override;
-  void updateDeviceControl(int *target, int value,
+  void draw_device_controls() override;
+  void update_device_control(int *target, int value,
 			   std::function<void(int)> set_func);
 
 private:

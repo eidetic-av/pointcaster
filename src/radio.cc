@@ -1,11 +1,11 @@
 #include "radio.h"
+#include "log.h"
 #include <chrono>
 #include <map>
 #include <numeric>
 #define ZMQ_BUILD_DRAFT_API
 #include <zmq.hpp>
 #include <fmt/format.h>
-#include <spdlog/spdlog.h>
 #include "./devices/device.h"
 #include "snapshots.h"
 #include <imgui.h>
@@ -15,6 +15,7 @@ namespace bob::pointcaster {
 static std::mutex stats_access;
 static std::vector<uint> send_durations;
 static std::vector<float> frame_sizes;
+
 uint stats_frame_counter = 0;
 float avg_duration = 0;
 std::pair<uint, uint> minmax_duration;
@@ -22,15 +23,11 @@ float avg_size = 0;
 std::pair<float, float> minmax_size;
 
 Radio::Radio() {
-  radio_thread = makeThread(current_config);
+  _radio_thread = make_thread(_current_config);
 }
 
-Radio::~Radio() {
-  if (radio_thread != nullptr) radio_thread->request_stop();
- }
-
  std::unique_ptr<std::jthread>
- Radio::makeThread(const RadioConfiguration config) {
+ Radio::make_thread(const RadioConfiguration config) {
    return std::make_unique<std::jthread>([config](std::stop_token st) {
 	 using namespace std::chrono;
          using namespace std::chrono_literals;
@@ -47,7 +44,7 @@ Radio::~Radio() {
          auto destination = fmt::format("tcp://*:{}", config.port);
          // auto destination = fmt::format("tcp://192.168.1.10:{}", port);
          radio.bind(destination);
-         spdlog::info("Radio broadcasting on port {}", config.port);
+	 bob::log.info("Radio broadcasting on port %d", config.port);
 
          time_point<system_clock> start_send_time;
          time_point<system_clock> end_send_time;
@@ -90,7 +87,7 @@ Radio::~Radio() {
            broadcast_snapshot_frame_count = snapshots::frames.size();
          }
 
-           auto live_point_cloud = bob::sensors::synthesizedPointCloud();
+           auto live_point_cloud = bob::sensors::synthesized_point_cloud();
            if (live_point_cloud.size() > 0) {
              auto bytes = live_point_cloud.serialize(config.compress_frames);
              zmq::message_t point_cloud_msg(bytes);
@@ -111,20 +108,20 @@ Radio::~Radio() {
            }
          }
 
-         spdlog::info("Ending broadcast");
+	 bob::log.info("Ending radio broadcast");
        });
  }
 
-void Radio::setConfig(const RadioConfiguration config) {
-  if (radio_thread != nullptr) {
-    radio_thread->request_stop();
-    radio_thread->join();
+void Radio::set_config(const RadioConfiguration config) {
+  if (_radio_thread != nullptr) {
+    _radio_thread->request_stop();
+    _radio_thread->join();
   }
-  radio_thread = makeThread(config);
-  current_config = config;
+  _radio_thread = make_thread(config);
+  _current_config = config;
 }
 
-void Radio::drawImGuiWindow() {
+void Radio::draw_imgui_window() {
   ImGui::PushID("RadioBroadcast");
   ImGui::SetNextWindowPos({350.0f, 200.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize({200.0f, 100.0f}, ImGuiCond_FirstUseEver);
@@ -133,7 +130,7 @@ void Radio::drawImGuiWindow() {
   ImGui::Begin("Radio Broadcast", nullptr);
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
 
-  auto frame_config = current_config;
+  auto frame_config = _current_config;
 
   ImGui::Checkbox("Enable compression", &frame_config.compress_frames);
 
@@ -205,7 +202,7 @@ void Radio::drawImGuiWindow() {
     }
   }
 
-  if (frame_config != current_config) setConfig(frame_config);
+  if (frame_config != _current_config) set_config(frame_config);
 
   ImGui::PopItemWidth();
   ImGui::End();

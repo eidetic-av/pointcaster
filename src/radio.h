@@ -24,18 +24,16 @@ public:
   Radio();
   Radio(const RadioConfiguration config);
 
-  ~Radio();
-
-  void drawImGuiWindow();
+  void draw_imgui_window();
 
 private:
   // default config
-  RadioConfiguration current_config{
+  RadioConfiguration _current_config{
       .port = 9999, .compress_frames = true, .capture_stats = false};
 
-  std::unique_ptr<std::jthread> radio_thread;
+  std::unique_ptr<std::jthread> _radio_thread;
 
-  std::unique_ptr<std::jthread> makeThread(const RadioConfiguration config);
-  void setConfig(const RadioConfiguration config);
+  std::unique_ptr<std::jthread> make_thread(const RadioConfiguration config);
+  void set_config(const RadioConfiguration config);
 };
 } // namespace bob::pointcaster

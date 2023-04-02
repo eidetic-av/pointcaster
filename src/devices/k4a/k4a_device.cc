@@ -17,10 +17,10 @@ K4ADevice::K4ADevice() {
   // get any device specific controls needed from the driver
   auto driver = dynamic_cast<K4ADriver*>(_driver.get());
   try {
-    _exposure = driver->getExposure();
-    _brightness = driver->getBrightness();
-    _contrast = driver->getContrast();
-    _gain = driver->getGain();
+    _exposure = driver->get_exposure();
+    _brightness = driver->get_brightness();
+    _contrast = driver->get_contrast();
+    _gain = driver->get_gain();
   } catch (::k4a::error& e) {
     bob::log.error(e.what());
   }
@@ -30,11 +30,11 @@ K4ADevice::~K4ADevice() {
   bob::log.info("Closing %s", name);
 }
 
-std::string K4ADevice::getBroadcastId() {
+std::string K4ADevice::get_broadcast_id() {
   return _driver->id();
 }
 
-void K4ADevice::updateDeviceControl(int *target, int value,
+void K4ADevice::update_device_control(int *target, int value,
                       std::function<void(int)> set_func){
   if (*target != value) {
     try {
@@ -46,37 +46,37 @@ void K4ADevice::updateDeviceControl(int *target, int value,
   }
 }
 
-void K4ADevice::drawDeviceSpecificControls() {
+void K4ADevice::draw_device_controls() {
   auto driver = dynamic_cast<K4ADriver *>(_driver.get());
 
   int exposure = _exposure;
-  drawSlider<int>("Exposure (us)", &exposure, 488, 1000000);
-  updateDeviceControl(&_exposure, exposure, [&](auto exposure) {
-    driver->setExposure(exposure);
+  draw_slider<int>("Exposure (us)", &exposure, 488, 1000000);
+  update_device_control(&_exposure, exposure, [&](auto exposure) {
+    driver->set_exposure(exposure);
   });
 
   int brightness = _brightness;
-  drawSlider<int>("Brightness", &brightness, 0, 255);
-  updateDeviceControl(&_brightness, brightness, [&](auto brightness) {
-    driver->setBrightness(brightness);
+  draw_slider<int>("Brightness", &brightness, 0, 255);
+  update_device_control(&_brightness, brightness, [&](auto brightness) {
+    driver->set_brightness(brightness);
   });
 
   int contrast = _contrast;
-  drawSlider<int>("Contrast", &contrast, 0, 10);
-  updateDeviceControl(&_contrast, contrast, [&](auto contrast) {
-    driver->setContrast(contrast);
+  draw_slider<int>("Contrast", &contrast, 0, 10);
+  update_device_control(&_contrast, contrast, [&](auto contrast) {
+    driver->set_contrast(contrast);
   });
 
   int saturation = _saturation;
-  drawSlider<int>("Saturation", &saturation, 0, 63);
-  updateDeviceControl(&_saturation, saturation, [&](auto saturation) {
-    driver->setSaturation(saturation);
+  draw_slider<int>("Saturation", &saturation, 0, 63);
+  update_device_control(&_saturation, saturation, [&](auto saturation) {
+    driver->set_saturation(saturation);
   });
 
   int gain = _gain;
-  drawSlider<int>("Gain", &gain, 0, 255);
-  updateDeviceControl(&_gain, gain, [&](auto gain) {
-    driver->setGain(gain);
+  draw_slider<int>("Gain", &gain, 0, 255);
+  update_device_control(&_gain, gain, [&](auto gain) {
+    driver->set_gain(gain);
   });
 }
 

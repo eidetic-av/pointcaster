@@ -22,7 +22,7 @@ using namespace std::chrono_literals;
 using namespace Magnum;
 using namespace Magnum::Math;
 
-static int device_count = 0;
+uint K4ADriver::device_count = 0;
 
 K4ADriver::K4ADriver() {
 
@@ -31,11 +31,11 @@ K4ADriver::K4ADriver() {
   bob::log.info("Opening driver for k4a %d (%s)", device_index, id());
 
   try {
-    device = k4a::device::open(device_index);
-    serial_number = device.get_serialnum();
-    bob::log.info("Open");
+    _device = k4a::device::open(device_index);
+    _serial_number = _device.get_serialnum();
+    bob::log.info("k4a %d Open", device_index);
   } catch (std::exception e) {
-    bob::log.info("Failed to open device");
+    bob::log.error("Failed to open device");
     return;
   }
 
@@ -50,38 +50,38 @@ K4ADriver::K4ADriver() {
   // _config.camera_fps = K4A_FRAMES_PER_SECOND_15;
   _config.synchronized_images_only = true;
 
-  bob::log.info("Attempting to start camera");
+  bob::log.info("k4a %d attempting to start camera", device_index);
   try {
-    device.start_cameras(&_config);
-    bob::log.info("Started camera");
+    _device.start_cameras(&_config);
+    bob::log.info("k4a %d started camera", device_index);
   } catch (std::exception e) {
-    bob::log.error("Failed to start camera");
-    bob::log.error(" --> %s", e.what());
+    bob::log.error("k4a %d failed to start camera", device_index);
+    bob::log.error(e.what());
     return;
   }
 
   // need to store the calibration and transformation data, as they are used
   // later to transform colour camera to point cloud space
   _calibration =
-      device.get_calibration(_config.depth_mode, _config.color_resolution);
+      _device.get_calibration(_config.depth_mode, _config.color_resolution);
   _transformation = k4a::transformation(_calibration);
 
-  tracker = k4abt::tracker::create(_calibration);
+  _tracker = k4abt::tracker::create(_calibration);
 
   // start a thread that captures new frames and dumps them into raw buffers
   _capture_loop = std::thread([&]() {
-    while (!stop_requested) {
+    while (!_stop_requested) {
 
-      if (pause_sensor) {
+      if (_pause_sensor) {
 	std::this_thread::sleep_for(100ms);
 	continue;
       }
       
       k4a::capture capture;
-      bool result = device.get_capture(&capture, 1000ms);
+      bool result = _device.get_capture(&capture, 1000ms);
       if (!result) continue;
 
-      if (isAligning()) runAligner(capture);
+      if (is_aligning()) run_aligner(capture);
 
       auto depth_image = capture.get_depth_image();
       auto color_image = capture.get_color_image();
@@ -93,9 +93,9 @@ K4ADriver::K4ADriver() {
 
       std::lock_guard<std::mutex> lock(_buffer_mutex);
 
-      std::memcpy(colors_buffer.data(), transformed_color_image.get_buffer(),
+      std::memcpy(_colors_buffer.data(), transformed_color_image.get_buffer(),
 		  color_buffer_size);
-      std::memcpy(positions_buffer.data(), point_cloud_image.get_buffer(),
+      std::memcpy(_positions_buffer.data(), point_cloud_image.get_buffer(),
 		  positions_buffer_size);
 
       _buffers_updated = true;
@@ -110,51 +110,53 @@ K4ADriver::K4ADriver() {
 K4ADriver::~K4ADriver() {
   bob::log.info("Closing driver for k4a %d (%s)", device_index, id());
   _open = false;
-  stop_requested = true;
+  _stop_requested = true;
   _capture_loop.join();
-  tracker.destroy();
-  device.stop_cameras();
-  device.close();
-  bob::log.info("Closed");
+  _tracker.destroy();
+  _device.stop_cameras();
+  _device.close();
+  bob::log.info("k4a %d driver closed", device_index);
   device_count--;
 }
 
-bool K4ADriver::isOpen() const { return _open; }
-
-std::string K4ADriver::id() const { return serial_number; }
-
-void K4ADriver::setPaused(bool paused) {
-  pause_sensor = paused;
+bool K4ADriver::is_open() const {
+  return _open;
 }
 
-void K4ADriver::startAlignment() {
+std::string K4ADriver::id() const { return _serial_number; }
+
+void K4ADriver::set_paused(bool paused) {
+  _pause_sensor = paused;
+}
+
+void K4ADriver::start_alignment() {
   bob::log.info("Beginning alignment for k4a %d (%s)", device_index, id());
-  alignment_frame_count = 0;
+  _alignment_frame_count = 0;
 }
 
-bool K4ADriver::isAligning() {
-  return alignment_frame_count < total_alignment_frames;
+bool K4ADriver::is_aligning() {
+  return _alignment_frame_count < _total_alignment_frames;
 }
 
-bool K4ADriver::isAligned() {
-  return aligned;
+bool K4ADriver::is_aligned() {
+  return _aligned;
 }
 
-void K4ADriver::runAligner(const k4a::capture &frame) {
-  tracker.enqueue_capture(frame);
-  k4abt::frame body_frame = tracker.pop_result();
+void K4ADriver::run_aligner(const k4a::capture &frame) {
+  _tracker.enqueue_capture(frame);
+  k4abt::frame body_frame = _tracker.pop_result();
   const auto body_count = body_frame.get_num_bodies();
 
   if (body_count > 0) {
     const k4abt_skeleton_t skeleton = body_frame.get_body(0).skeleton;
-    alignment_skeleton_frames.push_back(skeleton);
+    _alignment_skeleton_frames.push_back(skeleton);
 
-    if (++alignment_frame_count == total_alignment_frames) {
+    if (++_alignment_frame_count == _total_alignment_frames) {
       // alignment frames have finished capturing
       
       // first average the joint positions over the captured frames
       const auto avg_joint_positions =
-	calculateAverageJointPositions(alignment_skeleton_frames);
+	calculateAverageJointPositions(_alignment_skeleton_frames);
 
       // set the rotational centerto the position of the hips
       const auto left_hip_pos =
@@ -165,9 +167,9 @@ void K4ADriver::runAligner(const k4a::capture &frame) {
       const auto hip_y = (left_hip_pos.y + right_hip_pos.y) / 2.0f;
       const auto hip_z = (left_hip_pos.z + right_hip_pos.z) / 2.0f;
 
-      alignment_center.x = -std::round(hip_x);
-      alignment_center.y = std::round(hip_y);
-      alignment_center.z = std::round(hip_z);
+      _alignment_center.x = -std::round(hip_x);
+      _alignment_center.y = std::round(hip_y);
+      _alignment_center.z = std::round(hip_z);
 
       // then set the y offset to the position of the feet
       const auto left_foot_pos =
@@ -179,7 +181,7 @@ void K4ADriver::runAligner(const k4a::capture &frame) {
       // floor and center of the skeleton, but our rotational center is the
       // hips because that's easier to reason about when making manual
       // adjustments)
-      aligned_position_offset.y = std::round(-hip_y + feet_y);
+      _aligned_position_offset.y = std::round(-hip_y + feet_y);
       
       if (primary_aligner) {
 	// if this is the 'primary' alignment device, we set the orientation
@@ -187,19 +189,19 @@ void K4ADriver::runAligner(const k4a::capture &frame) {
 
         // average the joint orientations over the captured frames
         const auto avg_joint_orientations =
-            calculateAverageJointOrientations(alignment_skeleton_frames);
+            calculateAverageJointOrientations(_alignment_skeleton_frames);
         // assuming the pelvis is the source of truth for orientation
 	const auto pelvis_orientation =
 	    avg_joint_orientations[k4abt_joint_id_t::K4ABT_JOINT_PELVIS];
 
 	// move it into an Eigen object for easy maths
-	aligned_orientation_offset = Eigen::Quaternion<float>(
+	_aligned_orientation_offset = Eigen::Quaternion<float>(
 	    pelvis_orientation.w, pelvis_orientation.x,
 	    pelvis_orientation.y, pelvis_orientation.z);
 
 	// get the euler angles
 	const auto euler =
-	    aligned_orientation_offset.toRotationMatrix().eulerAngles(0, 1, 2);
+	    _aligned_orientation_offset.toRotationMatrix().eulerAngles(0, 1, 2);
 
 	// convert to degrees
 	constexpr auto deg = [](float rad) -> float {
@@ -213,8 +215,8 @@ void K4ADriver::runAligner(const k4a::capture &frame) {
 	const auto rot_z = deg(euler.z());
       }
 
-      alignment_skeleton_frames.clear();
-      aligned = true;
+      _alignment_skeleton_frames.clear();
+      _aligned = true;
     }
 
   }
@@ -336,8 +338,8 @@ struct point_filter {
 };
 
 PointCloud
-K4ADriver::pointCloud(const DeviceConfiguration &config) {
-  if (!_buffers_updated) return _point_cloud;
+K4ADriver::point_cloud(const DeviceConfiguration &config) {
+  if (!_buffers_updated || !is_open()) return _point_cloud;
 
   std::lock_guard<std::mutex> lock(_buffer_mutex);
 
@@ -361,9 +363,9 @@ K4ADriver::pointCloud(const DeviceConfiguration &config) {
   cudaMallocManaged(&output_colors, colors_size);
 
   // fill the GPU memory with our CPU buffers from the kinect
-  cudaMemcpy(incoming_positions, positions_buffer.data(),
+  cudaMemcpy(incoming_positions, _positions_buffer.data(),
 	     positions_in_size, cudaMemcpyHostToDevice);
-  cudaMemcpy(incoming_colors, colors_buffer.data(),
+  cudaMemcpy(incoming_colors, _colors_buffer.data(),
 	     colors_size, cudaMemcpyHostToDevice);
 
   // make some thrust::device_ptr from the raw pointers so they work
@@ -407,7 +409,7 @@ K4ADriver::pointCloud(const DeviceConfiguration &config) {
 		      filtered_points_begin, point_filter{config});
   thrust::transform(
       filtered_points_begin, filtered_points_end, output_points_begin,
-      point_transformer(config, alignment_center, aligned_position_offset));
+      point_transformer(config, _alignment_center, _aligned_position_offset));
 
   // we can determine the output count using the resulting output iterator
   // from running the kernels
@@ -441,67 +443,67 @@ K4ADriver::pointCloud(const DeviceConfiguration &config) {
   return _point_cloud;
 }
 
-void K4ADriver::setExposure(const int new_exposure) {
-  device.set_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
+void K4ADriver::set_exposure(const int new_exposure) {
+  _device.set_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
 			   K4A_COLOR_CONTROL_MODE_MANUAL, new_exposure);
 }
 
-int K4ADriver::getExposure() const {
+int K4ADriver::get_exposure() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
-  device.get_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
+  _device.get_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
 			   &result_mode, &result_value);
   return result_value;
 }
 
-void K4ADriver::setBrightness(const int new_brightness) {
-  device.set_color_control(K4A_COLOR_CONTROL_BRIGHTNESS,
+void K4ADriver::set_brightness(const int new_brightness) {
+  _device.set_color_control(K4A_COLOR_CONTROL_BRIGHTNESS,
 			   K4A_COLOR_CONTROL_MODE_MANUAL, new_brightness);
 }
 
-int K4ADriver::getBrightness() const {
+int K4ADriver::get_brightness() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
-  device.get_color_control(K4A_COLOR_CONTROL_BRIGHTNESS,
+  _device.get_color_control(K4A_COLOR_CONTROL_BRIGHTNESS,
 			   &result_mode, &result_value);
   return result_value;
 }
 
-void K4ADriver::setContrast(const int new_contrast) {
-  device.set_color_control(K4A_COLOR_CONTROL_CONTRAST,
+void K4ADriver::set_contrast(const int new_contrast) {
+  _device.set_color_control(K4A_COLOR_CONTROL_CONTRAST,
 			   K4A_COLOR_CONTROL_MODE_MANUAL, new_contrast);
 }
 
-int K4ADriver::getContrast() const {
+int K4ADriver::get_contrast() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
-  device.get_color_control(K4A_COLOR_CONTROL_CONTRAST,
+  _device.get_color_control(K4A_COLOR_CONTROL_CONTRAST,
 			   &result_mode, &result_value);
   return result_value;
 }
 
-void K4ADriver::setSaturation(const int new_saturation) {
-  device.set_color_control(K4A_COLOR_CONTROL_SATURATION,
+void K4ADriver::set_saturation(const int new_saturation) {
+  _device.set_color_control(K4A_COLOR_CONTROL_SATURATION,
 			   K4A_COLOR_CONTROL_MODE_MANUAL, new_saturation);
 }
 
-int K4ADriver::getSaturation() const {
+int K4ADriver::get_saturation() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
-  device.get_color_control(K4A_COLOR_CONTROL_SATURATION,
+  _device.get_color_control(K4A_COLOR_CONTROL_SATURATION,
 			   &result_mode, &result_value);
   return result_value;
 }
 
-void K4ADriver::setGain(const int new_gain) {
-  device.set_color_control(K4A_COLOR_CONTROL_GAIN,
+void K4ADriver::set_gain(const int new_gain) {
+  _device.set_color_control(K4A_COLOR_CONTROL_GAIN,
 			   K4A_COLOR_CONTROL_MODE_MANUAL, new_gain);
 }
 
-int K4ADriver::getGain() const {
+int K4ADriver::get_gain() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
-  device.get_color_control(K4A_COLOR_CONTROL_GAIN,
+  _device.get_color_control(K4A_COLOR_CONTROL_GAIN,
 			   &result_mode, &result_value);
   return result_value;
 }

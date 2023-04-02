@@ -1,6 +1,6 @@
 #include "device.h"
-#include <spdlog/spdlog.h>
 #include <imgui.h>
+#include "../log.h"
 
 #ifndef __CUDACC__
 #include <zpp_bits.h>
@@ -8,35 +8,207 @@
 
 namespace bob::sensors {
 
-std::vector<pointer<Device>> attached_devices;
-std::mutex devices_access;
+std::mutex Device::devices_access;
+std::vector<std::shared_ptr<Device>> Device::attached_devices;
 
-bob::types::PointCloud synthesizedPointCloud() {
+bob::types::PointCloud synthesized_point_cloud() {
   auto result = bob::types::PointCloud{};
-  if (attached_devices.size() == 0)
+  if (Device::attached_devices.size() == 0)
     return result;
   // std::lock_guard<std::mutex> lock(devices_access);
-  for (auto &device : attached_devices)
-    result += device->pointCloud();
+  for (auto &device : Device::attached_devices)
+    result += device->point_cloud();
   return result;
 }
 
-  std::pair<std::string, std::vector<uint8_t>> Device::serializeConfig() const {
-  spdlog::debug("Serializing device configuration for '{}'", this->name);
+std::pair<std::string, std::vector<uint8_t>> Device::serialize_config() const {
+  bob::log.info("Serializing device configuration for '%s'", this->name);
   std::vector<uint8_t> data;
   auto out = zpp::bits::out(data);
   auto success = out(config);
   return {this->_driver->id(), data};
 };
 
-void
-Device::deserializeConfig(std::vector<uint8_t> buffer) {
+void Device::deserialize_config(std::vector<uint8_t> buffer) {
   auto in = zpp::bits::in(buffer);
   auto success = in(this->config);
 }
 
+template <typename T>
+void Device::draw_slider(std::string_view label_text, T *value, T min, T max,
+			T default_value) {
+  ImGui::PushID(_parameter_index++);
+  ImGui::Text("%s", label_text.data());
+  ImGui::SameLine();
+
+  constexpr auto parameter = [](auto text) constexpr {
+    return concat("##", text);
+  };
+
+  if constexpr (std::is_integral<T>())
+    ImGui::SliderInt(parameter(label_text).c_str(), value, min, max);
+
+  else if constexpr (std::is_floating_point<T>())
+    ImGui::SliderFloat(parameter(label_text).c_str(), value, min, max);
+
+  ImGui::SameLine();
+  if (ImGui::Button("0"))
+    *value = default_value;
+  gui::enableParameterLearn(value, gui::ParameterType::Float, min, max);
+  ImGui::PopID();
+}
+
+void Device::draw_imgui_controls() {
+
+  ImGui::PushID(_driver->id().c_str());
+  _parameter_index = 0;
+
+  // ImGui::Checkbox("Enable Broadcast", &_enable_broadcast);
+
+  ImGui::Spacing();
+  ImGui::Spacing();
+  ImGui::Spacing();
+  const bool was_paused = paused;
+  ImGui::Checkbox("Pause Sensor", &paused);
+  if (paused != was_paused)
+    _driver->set_paused(paused);
+  ImGui::Spacing();
+  ImGui::Spacing();
+  ImGui::Spacing();
+
+  constexpr auto output_directory = "data";
+
+  bool serialize = false;
+  ImGui::Checkbox("Serialize", &serialize);
+  if (serialize) {
+    if (!std::filesystem::exists(output_directory))
+      std::filesystem::create_directory(output_directory);
+    auto [name, data] = serialize_config();
+    std::string filename = concat("data/", name, ".pcc");
+
+    bob::log.info("Saving to %s", filename);
+
+    std::ofstream output_file(filename.c_str(),
+			      std::ios::out | std::ios::binary);
+    output_file.write((const char *)&data[0], data.size());
+  }
+
+  bool deserialize = false;
+  ImGui::Checkbox("Deserialize", &deserialize);
+
+  if (deserialize) {
+    std::string filename = concat("data/", _driver->id(), ".pcc");
+
+    bob::log.info("Loading from %s", filename);
+
+    if (std::filesystem::exists(filename)) {
+
+      std::ifstream file(filename, std::ios::binary);
+
+      std::streampos file_size;
+      file.seekg(0, std::ios::end);
+      file_size = file.tellg();
+      file.seekg(0, std::ios::beg);
+
+      std::vector<uint8_t> buffer;
+      buffer.reserve(file_size);
+
+      buffer.insert(buffer.begin(), std::istream_iterator<uint8_t>(file),
+		    std::istream_iterator<uint8_t>());
+
+      deserialize_config(buffer);
+      bob::log.info("Loaded config");
+
+    } else
+      bob::log.info("Config doesn't exist");
+  }
+
+  if (paused != was_paused)
+    _driver->set_paused(paused);
+  ImGui::Spacing();
+  ImGui::Spacing();
+  ImGui::Spacing();
+
+  if (ImGui::TreeNode("Alignment")) {
+    const bool is_aligning = _driver->is_aligning();
+    if (is_aligning)
+      ImGui::BeginDisabled();
+    if (ImGui::Button(is_aligning ? "Aligning..." : "Start Alignment"))
+      _driver->start_alignment();
+    if (is_aligning)
+      ImGui::EndDisabled();
+    bool primary = _driver->primary_aligner;
+    if (primary)
+      ImGui::BeginDisabled();
+    ImGui::Checkbox("Primary", &_driver->primary_aligner);
+    if (primary)
+      ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled();
+    bool aligned = _driver->is_aligned();
+    ImGui::Checkbox("Aligned", &aligned);
+    ImGui::EndDisabled();
+    ImGui::TreePop();
+  }
+
+  if (ImGui::TreeNode("Manual Transform")) {
+    ImGui::TextDisabled("Flip Input");
+    ImGui::Checkbox(label("x", 0).c_str(), &config.flip_x);
+    ImGui::SameLine();
+    ImGui::Checkbox(label("y", 0).c_str(), &config.flip_y);
+    ImGui::SameLine();
+    ImGui::Checkbox(label("z", 0).c_str(), &config.flip_z);
+
+    ImGui::TextDisabled("Crop Input");
+    // ImGui can't handle shorts, so we need to use int's then convert
+    // back TODO there's probably a better way to do it by defining
+    // implicit conversions??
+    bob::types::minMax<int> crop_x_in{config.crop_x.min, config.crop_x.max};
+    bob::types::minMax<int> crop_y_in{config.crop_y.min, config.crop_y.max};
+    bob::types::minMax<int> crop_z_in{config.crop_z.min, config.crop_z.max};
+    ImGui::SliderInt2(label("x", 1).c_str(), crop_x_in.arr(), -10000, 10000);
+    ImGui::SliderInt2(label("y", 1).c_str(), crop_y_in.arr(), -10000, 10000);
+    ImGui::SliderInt2(label("z", 1).c_str(), crop_z_in.arr(), -10000, 10000);
+    config.crop_x.min = crop_x_in.min;
+    config.crop_x.max = crop_x_in.max;
+    config.crop_y.min = crop_y_in.min;
+    config.crop_y.max = crop_y_in.max;
+    config.crop_z.min = crop_z_in.min;
+    config.crop_z.max = crop_z_in.max;
+
+    bob::types::int3 offset_in{config.offset.x, config.offset.y,
+			       config.offset.z};
+    ImGui::TextDisabled("Offset Output");
+    draw_slider<int>("x", &offset_in.x, -10000, 10000);
+    draw_slider<int>("y", &offset_in.y, -10000, 10000);
+    draw_slider<int>("z", &offset_in.z, -10000, 10000);
+    config.offset.x = offset_in.x;
+    config.offset.y = offset_in.y;
+    config.offset.z = offset_in.z;
+
+    ImGui::TextDisabled("Rotate Output");
+    draw_slider<float>("x", &config.rotation_deg.x, -180, 180);
+    draw_slider<float>("y", &config.rotation_deg.y, -180, 180);
+    draw_slider<float>("z", &config.rotation_deg.z, -180, 180);
+
+    ImGui::TextDisabled("Scale Output");
+    draw_slider<float>("uniform", &config.scale, 0.0f, 4.0f);
+
+    ImGui::TextDisabled("Sample");
+    draw_slider<int>("s", &config.sample, 1, 10);
+
+    ImGui::TreePop();
+  }
+  if (ImGui::TreeNode("Device options")) {
+    draw_device_controls();
+    ImGui::TreePop();
+  }
+
+  ImGui::PopID();
+};
+
 bob::types::position global_translate;
-void drawGlobalControls() {
+void draw_global_controls() {
   ImGui::SetNextWindowPos({150.0f, 50.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::PushID("GlobalTransform");

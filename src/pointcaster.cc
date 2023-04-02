@@ -46,10 +46,9 @@
 #include <pointclouds.h>
 
 #include "camera_controller.h"
-
 #include "gui_helpers.h"
 #include "devices/device.h"
-// #include "devices/usb.h"
+#include "devices/usb.h"
 #include "wireframe_objects.h"
 #include "point_cloud_renderer.h"
 #include "sphere_renderer.h"
@@ -78,24 +77,44 @@ using namespace Magnum;
 using namespace Math::Literals;
 
 using bob::strings::concat;
+using bob::sensors::Device;
+using bob::sensors::K4ADevice;
 
 using uint = unsigned int;
 
 using Object3D = SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
 using Scene3D = SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 
+struct PointCasterAppState {
+  bool show_sensors_window = true;
+  bool show_controllers_window = false;
+  bool show_radio_window = true;
+  bool show_snapshots_window = true;
+  bool show_global_transform_window = true;
+  bool show_stats = true;
+
+  bool auto_connect_sensors = false;
+};
+
 class PointCaster : public Platform::Application {
 public:
   explicit PointCaster(const Arguments &args);
 
+  template<class Function, class... Args>
+  void run_async(Function&& f, Args&&... args) {
+    _async_tasks.emplace_back(f, args...);
+  }
+
 protected:
+  PointCasterAppState _state;
+  std::vector<std::jthread> _async_tasks;
 
-  pointer<Scene3D> scene;
-  pointer<SceneGraph::DrawableGroup3D> drawable_group;
+  std::unique_ptr<Scene3D> _scene;
+  std::unique_ptr<SceneGraph::DrawableGroup3D> _drawable_group;
 
-  std::unique_ptr<CameraController> camera_controller;
+  std::unique_ptr<CameraController> _camera_controller;
 
-  std::unique_ptr<PointCloudRenderer> point_cloud_renderer;
+  std::unique_ptr<PointCloudRenderer> _point_cloud_renderer;
   std::unique_ptr<SphereRenderer> sphere_renderer;
 
   std::unique_ptr<WireframeGrid> ground_grid;
@@ -104,26 +123,21 @@ protected:
   std::unique_ptr<Snapshots> snapshots_context;
   ImGuiIntegration::Context imgui_context{NoCreate};
 
+  std::unique_ptr<UsbMonitor> usb_monitor;
+
   bool mouse_pressed = false;
 
   void drawMenuBar();
   void quit();
 
-  bool show_sensors_window = true;
   void drawSensorsWindow();
-
-  bool show_controllers_window = false;
   //void initControllers();
   void drawControllersWindow();
   //void handleMidiLearn(const libremidi::message &message);
 
-  bool show_radio_window = true;
-  bool show_snapshots_window = true;
-  bool show_global_transform_window = true;
 
   Timeline timeline;
   std::vector<float> frame_durations;
-  bool show_stats = true;
   void drawStats();
 
   void drawEvent() override;
@@ -135,7 +149,6 @@ protected:
   void mouseReleaseEvent(MouseEvent &event) override;
   void mouseMoveEvent(MouseMoveEvent &event) override;
   void mouseScrollEvent(MouseScrollEvent &event) override;
-
 };
 
 PointCaster::PointCaster(const Arguments &args)
@@ -186,16 +199,16 @@ PointCaster::PointCaster(const Arguments &args)
       Magnum::GL::Renderer::BlendFunction::OneMinusSourceAlpha);
 
   // Set up scene and camera
-  scene.reset(new Scene3D{});
-  drawable_group.reset(new SceneGraph::DrawableGroup3D{});
+  _scene = std::make_unique<Scene3D>();
+  _drawable_group = std::make_unique<SceneGraph::DrawableGroup3D>();
 
   const auto viewport_size = GL::defaultFramebuffer.viewport().size();
 
-  camera_controller = std::make_unique<CameraController>(*scene);
-  camera_controller->camera()
+  _camera_controller = std::make_unique<CameraController>(*_scene);
+  _camera_controller->camera()
       .setViewport(GL::defaultFramebuffer.viewport().size());
 
-  ground_grid = std::make_unique<WireframeGrid>(scene.get(), drawable_group.get());
+  ground_grid = std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
   ground_grid->transform(Matrix4::scaling(Vector3(0.25f)) *
 			 Matrix4::translation(Vector3(0, 0, 0)));
 
@@ -208,9 +221,9 @@ PointCaster::PointCaster(const Arguments &args)
 
   // TODO renderer class should be RAII
   // initialise our main pc renderer
-  point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.005f);
-  point_cloud_renderer->points = PointCloud{};
-  point_cloud_renderer->setDirty();
+  _point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.005f);
+  _point_cloud_renderer->points = PointCloud{};
+  _point_cloud_renderer->setDirty();
 
   sphere_renderer = std::make_unique<SphereRenderer>();
 
@@ -232,62 +245,72 @@ PointCaster::PointCaster(const Arguments &args)
   // source file
   // std::lock_guard<std::mutex> lock(bob::sensors::devices_access);
   // bob::sensors::attached_devices.reset(new std::vector<pointer<Device>>);
-  // // create a callback for the USB handler thread
-  // // that will add new devices to our main sensor list
-  // registerUsbAttachCallback([&](Device* attached_device) {
-  //   devices->push_back(attached_device);
-  // });
-  // registerUsbDetachCallback([&](Device* detached_device) {
-  //   std::erase(*devices, detached_device);
-  // });
+  // create a callback for the USB handler thread
+  // that will add new devices to our main sensor list
+  registerUsbAttachCallback([&](auto attached_device) {
+    bob::log.debug("attached usb callback");
+    if (!_state.auto_connect_sensors) return;
+
+    // freeUsb();
+    // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    // for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
+    //   pointer<bob::sensors::Device> p;
+    //   p.reset(new bob::sensors::K4ADevice());
+    //   bob::sensors::attached_devices.push_back(std::move(p));
+    // }
+    // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    // initUsb();
+    // devices->push_back(attached_device);
+  });
+  registerUsbDetachCallback([&](auto detached_device) {
+    // std::erase(*devices, detached_device);
+    bob::log.debug("detached usb callback");
+  });
   // init libusb and any attached devices
-  // initUsb();
+  usb_monitor = std::make_unique<UsbMonitor>();
 
   // TODO replace the k4a routine with something generic in usb.cc
-  for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
-    pointer<bob::sensors::Device> p;
-    p.reset(new bob::sensors::K4ADevice());
-    bob::sensors::attached_devices.push_back(std::move(p));
-  }
 
-  bob::log.debug("%d k4a devices attached", bob::sensors::attached_devices.size());
+  // for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
+  //   pointer<bob::sensors::Device> p;
+  //   p.reset(new bob::sensors::K4ADevice());
+  //   bob::sensors::attached_devices.push_back(std::move(p));
+  // }
 
   timeline.start();
 }
 
 void PointCaster::quit() {
-  // freeUsb();
+  Device::attached_devices.clear(); 
   exit(0);
 }
 
 void PointCaster::drawMenuBar() {
-  using namespace ImGui;
-
-  if (BeginMainMenuBar()) {
-    if (BeginMenu("File")) {
-      if (MenuItem("Quit", "q")) quit();
-      EndMenu();
+  if (ImGui::BeginMainMenuBar()) {
+    if (ImGui::BeginMenu("File")) {
+      if (ImGui::MenuItem("Quit", "q")) quit();
+      ImGui::EndMenu();
     }
-    if (BeginMenu("Window")) {
+    if (ImGui::BeginMenu("Window")) {
 
       constexpr auto window_item = [](const char * item_name,
 				      const char * shortcut_key,
 				      bool & window_toggle) {
-	BeginDisabled();
-        Checkbox(concat("##Toggle_Window_", item_name).data(), &window_toggle);
-        EndDisabled();
-	SameLine();
-	if (MenuItem(item_name, shortcut_key)) window_toggle = !window_toggle;
+	ImGui::BeginDisabled();
+	ImGui::Checkbox(concat("##Toggle_Window_", item_name).data(), &window_toggle);
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+	if (ImGui::MenuItem(item_name, shortcut_key)) window_toggle = !window_toggle;
       };
 
-      window_item("Transform", "t", show_global_transform_window);
-      window_item("Sensors", "s", show_sensors_window);
-      window_item("Controllers", "c", show_controllers_window);
-      window_item("RenderStats", "f", show_stats);
+      window_item("Transform", "t", _state.show_global_transform_window);
+      window_item("Sensors", "s", _state.show_sensors_window);
+      window_item("Controllers", "c", _state.show_controllers_window);
+      window_item("RenderStats", "f", _state.show_stats);
 
-      EndMenu();
+      ImGui::EndMenu();
     }
-    EndMainMenuBar();
+    ImGui::EndMainMenuBar();
   }
 }
 
@@ -296,25 +319,32 @@ void PointCaster::drawSensorsWindow() {
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Sensors", nullptr);
 
+  ImGui::Checkbox("USB auto-connect", &_state.auto_connect_sensors);
+
   if (ImGui::Button("Open")) {
-    for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
-      pointer<bob::sensors::Device> p;
-      p.reset(new bob::sensors::K4ADevice());
-      bob::sensors::attached_devices.push_back(std::move(p));
-    }
+    run_async([&]() {
+      for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
+	auto p = std::make_shared<K4ADevice>();
+	Device::attached_devices.push_back(std::move(p));
+      }
+    });
   }
+
   if (ImGui::Button("Close")) {
-    bob::sensors::attached_devices.clear();
+    run_async([]() {
+      Device::attached_devices.clear();
+    });
   }
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
-  for (auto& device : bob::sensors::attached_devices) {
+
+  for (auto& device : Device::attached_devices) {
     if (!device->is_sensor) return;
     if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
-      device->Device::drawImGuiControls();
+      device->Device::draw_imgui_controls();
     ImGui::Spacing();
     ImGui::Text(device->name.c_str());
-    device->Device::drawImGuiControls();
+    device->Device::draw_imgui_controls();
     ImGui::Spacing();
     ImGui::Separator();
   }
@@ -333,7 +363,8 @@ void PointCaster::drawStats() {
   // calculate the mean, min and max frame times from our last 60 frames
   const auto frame_duration = timeline.previousFrameDuration();
   frame_durations.push_back(frame_duration);
-  if (frame_durations.size() < 61) {
+  constexpr auto frames_to_average = 60 * 2; // 2 seconds
+  if (frame_durations.size() < frames_to_average) {
     ImGui::Text("Gathering data...");
   } else {
     frame_durations.erase(frame_durations.begin()); // pop_front
@@ -342,19 +373,25 @@ void PointCaster::drawStats() {
     const auto minmax_duration =
       std::minmax_element(frame_durations.begin(), frame_durations.end());
 
-    ImGui::CollapsingHeader("Rendering", true);
-
-    ImGui::Text("Frame Duration");
-    ImGui::BeginTable("duration", 2);
-    ImGui::TableNextColumn(); ImGui::Text("Average");
-    ImGui::TableNextColumn(); ImGui::Text("%fms", avg_duration * 1000);
-    ImGui::TableNextColumn(); ImGui::Text("Min");
-    ImGui::TableNextColumn(); ImGui::Text("%fms", *minmax_duration.first * 1000);
-    ImGui::TableNextColumn(); ImGui::Text("Max");
-    ImGui::TableNextColumn(); ImGui::Text("%fms", *minmax_duration.second * 1000);
-    ImGui::EndTable();
-    ImGui::Spacing();
-    ImGui::Text("%.0f FPS", 1000.0f / (avg_duration * 1000));
+    if (ImGui::CollapsingHeader("Rendering", true)) {
+      ImGui::Text("Frame Duration");
+      ImGui::BeginTable("duration", 2);
+      ImGui::TableNextColumn();
+      ImGui::Text("Average");
+      ImGui::TableNextColumn();
+      ImGui::Text("%.2fms", avg_duration * 1000);
+      ImGui::TableNextColumn();
+      ImGui::Text("Min");
+      ImGui::TableNextColumn();
+      ImGui::Text("%.2fms", *minmax_duration.first * 1000);
+      ImGui::TableNextColumn();
+      ImGui::Text("Max");
+      ImGui::TableNextColumn();
+      ImGui::Text("%.2fms", *minmax_duration.second * 1000);
+      ImGui::EndTable();
+      ImGui::Spacing();
+      ImGui::Text("%.0f FPS", 1000.0f / (avg_duration * 1000));
+    }
   }
 
   ImGui::PopItemWidth();
@@ -471,18 +508,18 @@ void PointCaster::drawEvent() {
                                GL::FramebufferClear::Depth);
   imgui_context.newFrame();
 
-  auto points = bob::sensors::synthesizedPointCloud();
+  auto points = bob::sensors::synthesized_point_cloud();
   points += snapshots::pointCloud();
 
   if (!points.empty()) {
-    point_cloud_renderer->points = std::move(points);
-    point_cloud_renderer->setDirty();
+    _point_cloud_renderer->points = std::move(points);
+    _point_cloud_renderer->setDirty();
   }
-  point_cloud_renderer->draw(camera_controller->camera(), framebufferSize());
+  _point_cloud_renderer->draw(_camera_controller->camera(), framebufferSize());
 
-  sphere_renderer->draw(camera_controller->camera());
+  sphere_renderer->draw(_camera_controller->camera());
 
-  camera_controller->camera().draw(*drawable_group);
+  _camera_controller->camera().draw(*_drawable_group);
 
   // Enable text input, if needed/
   if (ImGui::GetIO().WantTextInput && !isTextInputActive())
@@ -492,12 +529,12 @@ void PointCaster::drawEvent() {
 
   // Draw gui windows
   drawMenuBar();
-  if (show_sensors_window) drawSensorsWindow();
-  if (show_controllers_window) drawControllersWindow();
-  if (show_stats) drawStats();
-  if (show_radio_window) radio->drawImGuiWindow();
-  if (show_snapshots_window) snapshots_context->drawImGuiWindow();
-  if (show_global_transform_window) bob::sensors::drawGlobalControls();
+  if (_state.show_sensors_window) drawSensorsWindow();
+  if (_state.show_controllers_window) drawControllersWindow();
+  if (_state.show_stats) drawStats();
+  if (_state.show_radio_window) radio->draw_imgui_window();
+  if (_state.show_snapshots_window) snapshots_context->drawImGuiWindow();
+  if (_state.show_global_transform_window) bob::sensors::draw_global_controls();
 
   imgui_context.updateApplicationCursor(*this);
 
@@ -540,20 +577,20 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     quit();
     break;
   case KeyEvent::Key::S:
-    show_sensors_window = !show_sensors_window;
+    _state.show_sensors_window = !_state.show_sensors_window;
     break;
   case KeyEvent::Key::C:
-    show_controllers_window = !show_controllers_window;
-    if (!show_controllers_window) gui::midi_learn_mode = false;
+    _state.show_controllers_window = !_state.show_controllers_window;
+    if (!_state.show_controllers_window) gui::midi_learn_mode = false;
     break;
   case KeyEvent::Key::F:
-    show_stats = !show_stats;
+    _state.show_stats = !_state.show_stats;
     break;
   case KeyEvent::Key::R:
-    show_radio_window = !show_radio_window;
+    _state.show_radio_window = !_state.show_radio_window;
     break;
   case KeyEvent::Key::T:
-    show_global_transform_window = !show_global_transform_window;
+    _state.show_global_transform_window = !_state.show_global_transform_window;
     break;
   default:
     if (imgui_context.handleKeyPressEvent(event))
@@ -594,10 +631,10 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
 
   // rotate
   if (event.buttons() == MouseMoveEvent::Button::Left)
-    camera_controller->rotate(event.relativePosition());
+    _camera_controller->rotate(event.relativePosition());
   // translate
   else if (event.buttons() == MouseMoveEvent::Button::Right)
-    camera_controller->move(event.relativePosition());
+    _camera_controller->move(event.relativePosition());
 
   event.setAccepted();
 }
@@ -607,7 +644,7 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
   if (Math::abs(delta) < 1.0e-2f)
     return;
 
-  camera_controller->zoom(delta);
+  _camera_controller->zoom(delta);
 
   if (imgui_context.handleMouseScrollEvent(event)) {
     /* Prevent scrolling the page */
