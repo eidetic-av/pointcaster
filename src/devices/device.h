@@ -2,6 +2,7 @@
 
 #include "../pointer.h"
 #include "../log.h"
+#include "../string_utils.h"
 #include "driver.h"
 #include <Corrade/Containers/Pointer.h>
 #include <imgui.h>
@@ -18,6 +19,8 @@
 namespace bob::sensors {
 
 // using namespace bob::types;
+
+using bob::strings::concat;
 
 enum SensorType { UnknownDevice, K4A, K4W2, Rs2 };
 
@@ -85,7 +88,7 @@ public:
     ImGui::SameLine();
 
     constexpr auto parameter = [](auto text) constexpr {
-      return "##" + std::string(text);
+      return concat("##", text);
     };
 
     if constexpr (std::is_integral<T>())
@@ -126,7 +129,7 @@ public:
       if (!std::filesystem::exists(output_directory))
 	std::filesystem::create_directory(output_directory);
       auto [name, data] = serializeConfig();
-      std::string filename = "data/" + name + ".pcc";
+      std::string filename = concat("data/", name, ".pcc");
 
       g_log.info("Saving to %s", filename);
 
@@ -138,7 +141,7 @@ public:
     ImGui::Checkbox("Deserialize", &deserialize);
 
     if (deserialize) {
-      std::string filename = "data/" + _driver->id() + ".pcc";
+      std::string filename = concat("data/", _driver->id(), ".pcc");
 
       g_log.info("Loading from %s", filename);
 
@@ -232,7 +235,9 @@ public:
 	ImGui::TextDisabled("Sample");
 	drawSlider<int>("s", &config.sample, 1, 10);
 
-        ImGui::TreePop();
+        ImGui::TreePop()	BeginDisabled();
+        Checkbox(concat("##Toggle_Window_", item_name).data(), &window_toggle);
+        EndDisabled();;
     }
     if (ImGui::TreeNode("Device options")) {
         drawDeviceSpecificControls();

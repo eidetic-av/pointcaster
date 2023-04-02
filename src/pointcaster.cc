@@ -23,6 +23,7 @@
 #include <zmq.hpp>
 
 #include "pointer.h"
+#include "string_utils.h"
 
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/Image.h>
@@ -75,6 +76,8 @@ using namespace bob::types;
 using namespace bob::sensors;
 using namespace Magnum;
 using namespace Math::Literals;
+
+using bob::strings::concat;
 
 using uint = unsigned int;
 
@@ -270,9 +273,8 @@ void PointCaster::drawMenuBar() {
       constexpr auto window_item = [](const char * item_name,
 				      const char * shortcut_key,
 				      bool & window_toggle) {
-	using namespace fmt;
 	BeginDisabled();
-        Checkbox(format("##Toggle_Window_{}", item_name).c_str(), &window_toggle);
+        Checkbox(concat("##Toggle_Window_", item_name).data(), &window_toggle);
         EndDisabled();
 	SameLine();
 	if (MenuItem(item_name, shortcut_key)) window_toggle = !window_toggle;

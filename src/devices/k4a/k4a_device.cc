@@ -1,15 +1,18 @@
 #include "k4a_device.h"
 #include "../../log.h"
+#include "../../string_utils.h"
 #include <imgui.h>
 #include <functional>
 
 namespace bob::sensors {
 
+using bob::strings::concat;
+
 K4ADevice::K4ADevice() {
   g_log.info("Initialising K4ADevice");
   _driver = std::make_unique<K4ADriver>();
   if (attached_devices.size() == 0) _driver->primary_aligner = true;
-  name = "k4a " + std::to_string(_driver->device_index);
+  name = concat("k4a ", std::to_string(_driver->device_index));
   // get any device specific controls needed from the driver
   auto driver = dynamic_cast<K4ADriver*>(_driver.get());
   try {
