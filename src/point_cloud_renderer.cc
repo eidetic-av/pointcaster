@@ -21,14 +21,14 @@ using namespace Math::Literals;
 PointCloudRenderer::PointCloudRenderer(float particleRadius)
     : _particleRadius(particleRadius),
       _meshParticles(GL::MeshPrimitive::Points) {
-
+  points = bob::types::PointCloud{};
   _meshParticles.addVertexBuffer(
       _positions_buffer, 0,
       Generic3D::Position{Generic3D::Position::Components::Two,
 			  Generic3D::Position::DataType::Int});
-
   _meshParticles.addVertexBuffer(_color_buffer, 0, GL::Attribute<2, float>());
   _particleShader.reset(new ParticleSphereShader);
+  setDirty();
 }
 
 PointCloudRenderer &

@@ -219,13 +219,8 @@ PointCaster::PointCaster(const Arguments &args)
   // set background color
   GL::Renderer::setClearColor(0x0d1117_rgbf);
 
-  // TODO renderer class should be RAII
-  // initialise our main pc renderer
   _point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.005f);
-  _point_cloud_renderer->points = PointCloud{};
-  _point_cloud_renderer->setDirty();
-
-  sphere_renderer = std::make_unique<SphereRenderer>();
+  _sphere_renderer = std::make_unique<SphereRenderer>();
 
   // Start the timer, loop at 144 Hz max
   setSwapInterval(1);
