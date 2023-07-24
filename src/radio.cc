@@ -3,7 +3,6 @@
 #include <chrono>
 #include <map>
 #include <numeric>
-#define ZMQ_BUILD_DRAFT_API
 #include <zmq.hpp>
 #include <fmt/format.h>
 #include "./devices/device.h"

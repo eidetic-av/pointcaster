@@ -12,6 +12,7 @@
 #include <thrust/device_ptr.h>
 #include <thrust/sequence.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include "../../log.h"
 
 namespace bob::sensors {
@@ -34,8 +35,9 @@ K4ADriver::K4ADriver() {
     _device = k4a::device::open(device_index);
     _serial_number = _device.get_serialnum();
     bob::log.info("k4a %d Open", device_index);
-  } catch (std::exception e) {
-    bob::log.error("Failed to open device");
+  } catch (const std::system_error& e) {
+    bob::log.error("Failed to open k4a::device due to %s", e.code());
+    bob::log.error("%s", e.what());
     return;
   }
 
@@ -259,7 +261,7 @@ struct point_transformer : public thrust::unary_function<point_in_t, point_out_t
 
     // we put our position into a float vector because it allows us to
     // transform it by other float types (e.g. matrices, quaternions)
-    // -- also flip the y and z values to move kinect coords into the right
+    // -- also flip the y value to move kinect coords into the right
     // orientation for our scene
     Vector3f pos_f(pos.x, -pos.y, -pos.z);
 
@@ -336,6 +338,46 @@ struct point_filter {
     return true;
   }
 };
+
+using thrust_point_t = thrust::tuple<position, color>;
+
+struct Translate {
+  float x;
+  float y;
+  float z;
+
+  __device__
+   thrust_point_t operator()(thrust_point_t point) const {
+    auto position = thrust::get<0>(point);
+    position.x += x;
+    position.y += y;
+    position.z += z;
+    return thrust::make_tuple(position, thrust::get<1>(point));
+  }
+};
+
+struct Scale {
+  float x;
+  float y;
+  float z;
+
+  __device__
+   thrust_point_t operator()(thrust_point_t point) const {
+    auto position = thrust::get<0>(point);
+    position.x *= x;
+    position.y *= y;
+    position.z *= z;
+    return thrust::make_tuple(position, thrust::get<1>(point));
+  }
+};
+
+template <typename Iterator, typename... Transformations>
+auto make_transform_pipeline(Iterator begin, size_t count, Transformations&&... transformations) {
+  auto it = thrust::make_transform_iterator(begin, std::forward<Transformations>(transformations)...);
+  auto it_end = thrust::make_transform_iterator(begin + count, std::forward<Transformations>(transformations)...);
+  return std::make_pair<Iterator, Iterator>(it, it_end);
+  // thrust::transform(it, it_end, begin, std::forward<Transformations>(transformations)...);
+}
 
 PointCloud
 K4ADriver::point_cloud(const DeviceConfiguration &config) {
@@ -415,6 +457,18 @@ K4ADriver::point_cloud(const DeviceConfiguration &config) {
   // from running the kernels
   auto output_point_count =
       std::distance(filtered_points_begin, filtered_points_end);
+
+  // auto [it, it_end] = make_transform_pipeline(output_points_begin, output_point_count,
+  //                    Translate{1000, 1000, 1000});
+
+  // TRANSLATE
+  // auto [transform_start, transform_end] = make_transform_pipeline(
+  //     output_points_begin, output_points_begin + output_point_count,
+  //     Translate{5000, 5000, 5000});
+
+  // thrust::transform(translate_start,
+  // 		    translate_end,
+  // 		    output_points_begin, Translate{-5000, -5000, -5000});
 
   // wait for the GPU process to complete
   cudaDeviceSynchronize();

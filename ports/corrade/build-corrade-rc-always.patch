@@ -1,0 +1,20 @@
+diff --git a/src/Corrade/Utility/CMakeLists.txt b/src/Corrade/Utility/CMakeLists.txt
+index 269fdb0d..cb8e2236 100644
+--- a/src/Corrade/Utility/CMakeLists.txt
++++ b/src/Corrade/Utility/CMakeLists.txt
+@@ -258,7 +258,6 @@ endif()
+ # However, it seems like this feature never materialized, as doing this will
+ # result in corrade-rc that's looking for vcruntime140_app.dll in order to be
+ # run. Last checked: Nov 2019.
+-if(NOT CMAKE_CROSSCOMPILING)
+     # Sources for standalone corrade-rc
+     set(CorradeUtilityRc_SRCS
+         Arguments.cpp
+@@ -319,6 +318,7 @@ if(NOT CMAKE_CROSSCOMPILING)
+     endif()
+     install(TARGETS corrade-rc DESTINATION ${CORRADE_BINARY_INSTALL_DIR})
+ 
++if(NOT CMAKE_CROSSCOMPILING)
+     # Corrade::rc target alias for superprojects
+     add_executable(Corrade::rc ALIAS corrade-rc)
+ endif()

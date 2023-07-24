@@ -56,8 +56,10 @@ public:
 
   void draw_imgui_controls();
 
-  std::pair<std::string, std::vector<uint8_t>> serialize_config() const;
+  void serialize_config() const;
   void deserialize_config(std::vector<uint8_t> data);
+  void deserialize_config_from_device_id(const std::string& device_id);
+  void deserialize_config_from_this_device();
 
 protected:
   std::unique_ptr<Driver> _driver;

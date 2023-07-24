@@ -17,10 +17,9 @@ ParticleSphereShader::ParticleSphereShader() {
 
   GL::Shader vertShader{GL::Version::GL330, GL::Shader::Type::Vertex};
   GL::Shader fragShader{GL::Version::GL330, GL::Shader::Type::Fragment};
-  vertShader.addSource(rs.get("particle_sphere.vert"));
-  fragShader.addSource(rs.get("particle_sphere.frag"));
+  vertShader.addSource(rs.getString("particle_sphere.vert")).submitCompile();
+  fragShader.addSource(rs.getString("particle_sphere.frag")).submitCompile();
 
-  CORRADE_INTERNAL_ASSERT(GL::Shader::compile({vertShader, fragShader}));
   attachShaders({vertShader, fragShader});
   CORRADE_INTERNAL_ASSERT(link());
 

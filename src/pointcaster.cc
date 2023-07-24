@@ -18,9 +18,10 @@
 #else
 #include <unistd.h>
 #endif
-#define ZMQ_BUILD_DRAFT_API
+
 #include <zmq.hpp>
 
+#include "path.h"
 #include "log.h"
 #include "pointer.h"
 #include "string_utils.h"
@@ -40,6 +41,8 @@
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
 #include <Magnum/ImGuiIntegration/Context.hpp>
+#include <Magnum/ImGuiIntegration/Widgets.h>
+
 #include <imgui.h>
 
 //#include <libremidi/libremidi.hpp>
@@ -89,10 +92,9 @@ struct PointCasterAppState {
   bool show_sensors_window = true;
   bool show_controllers_window = false;
   bool show_radio_window = true;
-  bool show_snapshots_window = true;
+  bool show_snapshots_window = false;
   bool show_global_transform_window = true;
   bool show_stats = true;
-
   bool auto_connect_sensors = false;
 };
 
@@ -107,38 +109,47 @@ public:
 
 protected:
   PointCasterAppState _state;
+
+  void serialize_app_state(std::filesystem::path file_path);
+  void deserialize_app_state(std::filesystem::path file_path);
+  
   std::vector<std::jthread> _async_tasks;
 
   std::unique_ptr<Scene3D> _scene;
   std::unique_ptr<SceneGraph::DrawableGroup3D> _drawable_group;
 
-  std::unique_ptr<CameraController> _camera_controller;
+  std::vector<std::unique_ptr<CameraController>> _cameras;
+  int _hovering_camera_index = -1;
 
   std::unique_ptr<PointCloudRenderer> _point_cloud_renderer;
-  std::unique_ptr<SphereRenderer> sphere_renderer;
+  std::unique_ptr<SphereRenderer> _sphere_renderer;
 
-  std::unique_ptr<WireframeGrid> ground_grid;
+  std::unique_ptr<WireframeGrid> _ground_grid;
 
-  std::unique_ptr<Radio> radio;
-  std::unique_ptr<Snapshots> snapshots_context;
-  ImGuiIntegration::Context imgui_context{NoCreate};
+  std::unique_ptr<Radio> _radio;
+  std::unique_ptr<Snapshots> _snapshots_context;
 
-  std::unique_ptr<UsbMonitor> usb_monitor;
+  std::unique_ptr<UsbMonitor> _usb_monitor;
 
-  bool mouse_pressed = false;
+  ImGuiIntegration::Context _imgui_context{NoCreate};
 
-  void drawMenuBar();
+  void open_kinect_sensors();
+
+  void fill_point_renderer();
+
+  void draw_menu_bar();
+  void draw_camera_windows();
+  void draw_sensors_window();
+  void draw_controllers_window();
+
   void quit();
 
-  void drawSensorsWindow();
   //void initControllers();
-  void drawControllersWindow();
   //void handleMidiLearn(const libremidi::message &message);
-
 
   Timeline timeline;
   std::vector<float> frame_durations;
-  void drawStats();
+  void draw_stats();
 
   void drawEvent() override;
   void viewportEvent(ViewportEvent &event) override;
@@ -163,17 +174,24 @@ PointCaster::PointCaster(const Arguments &args)
   const Vector2 dpi_scaling = this->dpiScaling({});
   Configuration conf;
   conf.setTitle("pointcaster");
-  // conf.setSize({1600, 1200});
+  conf.setSize({1900, 1200});
   // conf.setSize({1600, 1080});
-  conf.setSize({960, 640});
+  // conf.setSize({960, 640});
   conf.setSize(conf.size(), dpi_scaling);
   conf.setWindowFlags(Configuration::WindowFlag::Resizable);
+
+  // Try 8x MSAA, fall back to zero if not possible.
+  // Enable only 2x MSAA if we have enough DPI.
   GLConfiguration gl_conf;
   gl_conf.setSampleCount(dpi_scaling.max() < 2.0f ? 8 : 2);
   if (!tryCreate(conf, gl_conf)) create(conf, gl_conf.setSampleCount(0));
 
   // Set up ImGui
   ImGui::CreateContext();
+  // Make sure the imgui.ini saves in the data directory
+  ImGui::GetIO().IniFilename = nullptr;
+  ImGui::LoadIniSettingsFromDisk((path::data_directory() / "imgui.ini").c_str());
+  
   ImGui::StyleColorsDark();
 
   // load SpaceGrotesk font for imgui
@@ -186,7 +204,18 @@ PointCaster::PointCaster(const Arguments &args)
       const_cast<char *>(font.data()), Int(font.size()),
       14.0f * framebufferSize().x() / size.x(), &font_config);
 
-  imgui_context = ImGuiIntegration::Context(
+  // enable window docking
+  ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  // ImGui::GetIO().ConfigFlags |= ImGuiDockNodeFlags_PassthruCentralNode;
+  // ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
+  // for editing parameters with the keyboard
+  auto backspace = ImGui::GetIO().KeyMap[ImGuiKey_Backspace];
+  ImGui::GetIO().AddInputCharacter(backspace);
+  ImGui::GetIO().AddKeyEvent(ImGuiKey_Backspace, true);
+  ImGui::GetIO().AddKeyEvent(ImGuiKey_Backspace, false);
+
+  _imgui_context = ImGuiIntegration::Context(
       *ImGui::GetCurrentContext(), Vector2(windowSize()) / dpiScaling(),
       windowSize(), framebufferSize());
 
@@ -198,19 +227,31 @@ PointCaster::PointCaster(const Arguments &args)
       Magnum::GL::Renderer::BlendFunction::SourceAlpha,
       Magnum::GL::Renderer::BlendFunction::OneMinusSourceAlpha);
 
-  // Set up scene and camera
+  // Deserialize application state
+  auto data_dir = path::data_directory();
+  auto state_file = data_dir / "state.bin";
+  if (std::filesystem::exists(state_file)) {
+    deserialize_app_state(state_file);
+  }
+
+  // Set up scene
+  // TODO should drawable groups go inside each camera controller?
   _scene = std::make_unique<Scene3D>();
   _drawable_group = std::make_unique<SceneGraph::DrawableGroup3D>();
+  _ground_grid = std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
+  _ground_grid->transform(Matrix4::scaling(Vector3(0.25f)) *
+			 Matrix4::translation(Vector3(0, 0, 0)));
+
+  // If there are no cameras in the scene, initialise at least one
+  if (_cameras.empty()) {
+    auto _default_camera_controller = std::make_unique<CameraController>(this, *_scene);
+    // TODO viewport size needs to be dynamic
+    _default_camera_controller->camera().setViewport(
+	GL::defaultFramebuffer.viewport().size());
+    _cameras.push_back(std::move(_default_camera_controller));
+  }
 
   const auto viewport_size = GL::defaultFramebuffer.viewport().size();
-
-  _camera_controller = std::make_unique<CameraController>(*_scene);
-  _camera_controller->camera()
-      .setViewport(GL::defaultFramebuffer.viewport().size());
-
-  ground_grid = std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
-  ground_grid->transform(Matrix4::scaling(Vector3(0.25f)) *
-			 Matrix4::translation(Vector3(0, 0, 0)));
 
   GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
   // render particles as sprites
@@ -227,10 +268,12 @@ PointCaster::PointCaster(const Arguments &args)
   setMinimalLoopPeriod(7);
 
   // Initialise our network radio for points
-  radio = std::make_unique<Radio>();
+  _radio = std::make_unique<Radio>();
 
   // 
-  snapshots_context = std::make_unique<Snapshots>();
+  _snapshots_context = std::make_unique<Snapshots>();
+
+  if (_state.auto_connect_sensors) open_kinect_sensors();
 
   // Init our controllers
   //initControllers();
@@ -262,10 +305,10 @@ PointCaster::PointCaster(const Arguments &args)
     bob::log.debug("detached usb callback");
   });
   // init libusb and any attached devices
-  usb_monitor = std::make_unique<UsbMonitor>();
+  _usb_monitor = std::make_unique<UsbMonitor>();
 
   // TODO replace the k4a routine with something generic in usb.cc
-
+  // open each k4a on startup:
   // for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
   //   pointer<bob::sensors::Device> p;
   //   p.reset(new bob::sensors::K4ADevice());
@@ -277,10 +320,33 @@ PointCaster::PointCaster(const Arguments &args)
 
 void PointCaster::quit() {
   Device::attached_devices.clear(); 
+
+  auto data_dir = path::get_or_create_data_directory();
+  auto file_path = data_dir / "state.bin";
+  serialize_app_state(file_path);
+
+  ImGui::SaveIniSettingsToDisk((path::data_directory() / "imgui.ini").c_str());
+
   exit(0);
 }
 
-void PointCaster::drawMenuBar() {
+void PointCaster::deserialize_app_state(std::filesystem::path file_path) {
+  bob::log.info("Loading state from %s", file_path.string());
+  auto buffer = path::load_file(file_path);
+  auto in = zpp::bits::in(buffer);
+  auto success = in(this->_state);
+  bob::log.info("Loaded previous application state");
+}
+
+void PointCaster::serialize_app_state(std::filesystem::path file_path) {
+  bob::log.info("Saving state to %s", file_path.string());
+  std::vector<uint8_t> data;
+  auto out = zpp::bits::out(data);
+  auto success = out(_state);
+  path::save_file(file_path, data);
+}
+
+void PointCaster::draw_menu_bar() {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
       if (ImGui::MenuItem("Quit", "q")) quit();
@@ -309,26 +375,101 @@ void PointCaster::drawMenuBar() {
   }
 }
 
-void PointCaster::drawSensorsWindow() {
-  ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowBgAlpha(0.8f);
-  ImGui::Begin("Sensors", nullptr);
+void PointCaster::fill_point_renderer() {
+  auto points = bob::sensors::synthesized_point_cloud();
+  points += snapshots::pointCloud();
 
-  ImGui::Checkbox("USB auto-connect", &_state.auto_connect_sensors);
+  if (!points.empty()) {
+    _point_cloud_renderer->points = std::move(points);
+    _point_cloud_renderer->setDirty();
+  }
+}
 
-  if (ImGui::Button("Open")) {
+void PointCaster::draw_camera_windows() {
+
+  _hovering_camera_index = -1;
+
+  ImGui::Begin("CamerasRoot");
+
+  constexpr auto camera_tab_bar_flags =
+      ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_NoTooltip;
+
+  if (ImGui::BeginTabBar("Cameras"), camera_tab_bar_flags) {
+
+    // button for creating a new camera
+    auto new_camera_index = -1;
+    if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing)) {
+      auto new_camera = std::make_unique<CameraController>(this, *_scene);
+      _cameras.push_back(std::move(new_camera));
+      new_camera_index = _cameras.size() - 1;
+      bob::log.info("new camera: %i", new_camera_index);
+    }
+
+    for (int i = 0; i < _cameras.size(); i++) {
+      const auto &camera = _cameras.at(i);
+
+      ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
+      if (new_camera_index == i)
+	tab_item_flags |= ImGuiTabItemFlags_SetSelected;
+
+      if (ImGui::BeginTabItem(camera->name.c_str(), nullptr, tab_item_flags)) {
+	ImGui::BeginChild("Frame");
+
+        const auto window_size = ImGui::GetWindowSize();
+        const auto frame_size =
+            Vector2i{(int)window_size.x, (int)window_size.y};
+
+        camera->setupFramebuffer(frame_size);
+
+        camera->_framebuffer
+            ->clear(GL::FramebufferClear::Color | GL::FramebufferClear::Depth)
+            .bind();
+
+        _point_cloud_renderer->draw(camera->camera(), frame_size);
+        _sphere_renderer->draw(camera->camera());
+
+        camera->camera().draw(*_drawable_group);
+
+        ImGuiIntegration::image(*camera->_color,
+                                {(float)frame_size.x(), (float)frame_size.y()});
+
+        if (ImGui::IsItemHovered())
+          _hovering_camera_index = i;
+
+        ImGui::EndChild();
+        ImGui::EndTabItem();
+      }
+    }
+    ImGui::EndTabBar();
+  }
+
+  ImGui::End();
+
+  GL::defaultFramebuffer.bind();
+
+  //
+}
+
+void PointCaster::open_kinect_sensors() {
     run_async([&]() {
       for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
 	auto p = std::make_shared<K4ADevice>();
 	Device::attached_devices.push_back(std::move(p));
       }
     });
-  }
+}
+
+void PointCaster::draw_sensors_window() {
+  ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowBgAlpha(0.8f);
+  ImGui::Begin("Sensors", nullptr);
+
+  ImGui::Checkbox("USB auto-connect", &_state.auto_connect_sensors);
+
+  if (ImGui::Button("Open")) open_kinect_sensors();
 
   if (ImGui::Button("Close")) {
-    run_async([]() {
-      Device::attached_devices.clear();
-    });
+    run_async([]() { Device::attached_devices.clear(); });
   }
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
@@ -347,7 +488,7 @@ void PointCaster::drawSensorsWindow() {
   ImGui::End();
 }
 
-void PointCaster::drawStats() {
+void PointCaster::draw_stats() {
   ImGui::PushID("FrameStats");
   ImGui::SetNextWindowPos({50.0f, 200.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize({200.0f, 100.0f}, ImGuiCond_FirstUseEver);
@@ -447,7 +588,7 @@ void PointCaster::drawStats() {
 // midi_startup.detach();
 //}
 
-void PointCaster::drawControllersWindow() {
+void PointCaster::draw_controllers_window() {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Controllers", nullptr);
@@ -499,23 +640,12 @@ void PointCaster::drawControllersWindow() {
 auto output_count = 0;
 
 void PointCaster::drawEvent() {
+
+  fill_point_renderer();
+  
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
                                GL::FramebufferClear::Depth);
-  imgui_context.newFrame();
-
-  auto points = bob::sensors::synthesized_point_cloud();
-  points += snapshots::pointCloud();
-
-  if (!points.empty()) {
-    _point_cloud_renderer->points = std::move(points);
-    _point_cloud_renderer->setDirty();
-  }
-  _point_cloud_renderer->draw(_camera_controller->camera(), framebufferSize());
-
-  sphere_renderer->draw(_camera_controller->camera());
-
-  _camera_controller->camera().draw(*_drawable_group);
-
+  _imgui_context.newFrame();
   // Enable text input, if needed/
   if (ImGui::GetIO().WantTextInput && !isTextInputActive())
     startTextInput();
@@ -523,15 +653,17 @@ void PointCaster::drawEvent() {
     stopTextInput();
 
   // Draw gui windows
-  drawMenuBar();
-  if (_state.show_sensors_window) drawSensorsWindow();
-  if (_state.show_controllers_window) drawControllersWindow();
-  if (_state.show_stats) drawStats();
-  if (_state.show_radio_window) radio->draw_imgui_window();
-  if (_state.show_snapshots_window) snapshots_context->drawImGuiWindow();
+  ImGui::DockSpaceOverViewport();
+  draw_menu_bar();
+  draw_camera_windows();
+  if (_state.show_sensors_window) draw_sensors_window();
+  if (_state.show_controllers_window) draw_controllers_window();
+  if (_state.show_stats) draw_stats();
+  if (_state.show_radio_window) _radio->draw_imgui_window();
+  if (_state.show_snapshots_window) _snapshots_context->draw_imgui_window();
   if (_state.show_global_transform_window) bob::sensors::draw_global_controls();
 
-  imgui_context.updateApplicationCursor(*this);
+  _imgui_context.updateApplicationCursor(*this);
 
   // Render ImGui window
   GL::Renderer::enable(GL::Renderer::Feature::Blending);
@@ -539,19 +671,28 @@ void PointCaster::drawEvent() {
   GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
   GL::Renderer::enable(GL::Renderer::Feature::ScissorTest);
 
-  imgui_context.drawFrame();
+  _imgui_context.drawFrame();
+
+  if (ImGuiConfigFlags_ViewportsEnable) {
+    ImGui::UpdatePlatformWindows();
+    ImGui::RenderPlatformWindowsDefault();
+  }
 
   GL::Renderer::disable(GL::Renderer::Feature::ScissorTest);
   GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
   GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
   GL::Renderer::disable(GL::Renderer::Feature::Blending);
 
+  // TODO the timeline should not be linked to GUI drawing
+  // so this needs to be run elsewhere, but still needs to
+  // be locked to the same FPS
+  timeline.nextFrame();
+
   // The context is double-buffered, swap buffers
   swapBuffers();
 
   // Run the next frame immediately
   redraw();
-  timeline.nextFrame();
 }
 
 void PointCaster::viewportEvent(ViewportEvent &event) {
@@ -559,7 +700,7 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
   GL::defaultFramebuffer.setViewport({{}, event.framebufferSize()});
 
   // relayout imgui
-  imgui_context.relayout(Vector2{event.windowSize()} / event.dpiScaling(),
+  _imgui_context.relayout(Vector2{event.windowSize()} / event.dpiScaling(),
 			  event.windowSize(), event.framebufferSize());
 
   // recompute the camera's projection matrix
@@ -588,63 +729,70 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     _state.show_global_transform_window = !_state.show_global_transform_window;
     break;
   default:
-    if (imgui_context.handleKeyPressEvent(event))
+    if (_imgui_context.handleKeyPressEvent(event))
       event.setAccepted(true);
   }
 }
 
 void PointCaster::keyReleaseEvent(KeyEvent &event) {
-  if (imgui_context.handleKeyReleaseEvent(event))
+  if (_imgui_context.handleKeyReleaseEvent(event))
     event.setAccepted(true);
 }
 
 void PointCaster::textInputEvent(TextInputEvent &event) {
-  if (imgui_context.handleTextInputEvent(event))
+  if (_imgui_context.handleTextInputEvent(event))
     event.setAccepted(true);
 }
 
 void PointCaster::mousePressEvent(MouseEvent &event) {
-  if (imgui_context.handleMousePressEvent(event)) {
+  if (_imgui_context.handleMousePressEvent(event)) {
     event.setAccepted(true);
     return;
   }
-  mouse_pressed = true;
 }
 
 void PointCaster::mouseReleaseEvent(MouseEvent &event) {
-  mouse_pressed = false;
-  if (imgui_context.handleMouseReleaseEvent(event)) {
+  if (_imgui_context.handleMouseReleaseEvent(event)) {
     event.setAccepted(true);
   }
 }
 
+// TODO
+// all camera related mouse events need to happen on top of the selected camera
+// window
+
 void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
-  if (imgui_context.handleMouseMoveEvent(event)) {
+  if (_imgui_context.handleMouseMoveEvent(event) && _hovering_camera_index == -1) {
     event.setAccepted(true);
     return;
   }
 
   // rotate
   if (event.buttons() == MouseMoveEvent::Button::Left)
-    _camera_controller->rotate(event.relativePosition());
+    _cameras.at(_hovering_camera_index)->rotate(event.relativePosition());
   // translate
   else if (event.buttons() == MouseMoveEvent::Button::Right)
-    _camera_controller->move(event.relativePosition());
+    _cameras.at(_hovering_camera_index)->move(event);
 
   event.setAccepted();
 }
 
 void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
-  const Float delta = event.offset().y();
-  if (Math::abs(delta) < 1.0e-2f)
-    return;
-
-  _camera_controller->zoom(delta);
-
-  if (imgui_context.handleMouseScrollEvent(event)) {
+  if (_imgui_context.handleMouseScrollEvent(event) && _hovering_camera_index == -1) {
     /* Prevent scrolling the page */
-    event.setAccepted();
+    event.setAccepted(true);
     return;
+  }
+
+  const Float delta = event.offset().y();
+  if (Math::abs(delta) < 1.0e-2f) return;
+
+  if (event.modifiers() ==
+      Magnum::Platform::Sdl2Application::InputEvent::Modifier::Alt) {
+    _cameras.at(_hovering_camera_index)->zoomPerspective(event);
+
+  } else {
+    _cameras.at(_hovering_camera_index)->dolly(event);
   }
 }
 

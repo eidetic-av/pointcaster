@@ -21,7 +21,7 @@ namespace bob {
   public:
     explicit WireframeObject(Scene3D* const scene, SceneGraph::DrawableGroup3D* const drawableGroup) {
       _obj3D.reset(new Object3D{scene});
-      _flatShader = Shaders::Flat3D{};
+      _flatShader = Shaders::FlatGL3D{};
       _drawableObj.reset(new FlatShadeObject{*_obj3D, _flatShader, Color3{0.75f}, _mesh, drawableGroup});
     }
 
@@ -40,7 +40,7 @@ namespace bob {
 
   protected:
     GL::Mesh _mesh{NoCreate};
-    Shaders::Flat3D _flatShader{NoCreate};
+    Shaders::FlatGL3D _flatShader{NoCreate};
     Containers::Pointer<Object3D> _obj3D;
     Containers::Pointer<FlatShadeObject> _drawableObj;
   };

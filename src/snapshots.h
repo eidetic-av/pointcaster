@@ -16,7 +16,7 @@ class Snapshots {
 public:
   Snapshots(){};
   Snapshots(SnapshotsConfiguration config) : _config{config} {}
-  void drawImGuiWindow();
+  void draw_imgui_window();
 private:
   SnapshotsConfiguration _config{};
   void capture();

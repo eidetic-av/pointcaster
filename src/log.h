@@ -53,6 +53,17 @@ public:
     write("[\033[31merror\033[0m]", fmt, std::forward<Args>(args)...);
   }
 
+  std::string format_error_code(std::error_code ec) {
+    // You can choose how you want to format the error code
+    return ec.message();
+  }
+    
+  template <typename... Args>
+  void write(std::string_view severity, char const *fmt, std::error_code ec) {
+    std::string formatted_error = format_error_code(ec);
+    write(severity, fmt, formatted_error);
+  }
+
 private:
   template <typename... Args>
   void write(std::string_view severity, char const *fmt, Args &&...args) {

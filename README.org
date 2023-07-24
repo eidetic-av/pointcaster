@@ -1,5 +1,18 @@
-#+title: Box of Birds PointCaster
+#+title: PointCaster
 #+author: Matt Hughes
+* Building
+Set CMake toolchain environment variable to vcpkg.cmake.
+#+begin_src fish
+cmake -B build -DCMAKE_BUILD_TYPE=Debug -DVCPKG_OVERLAY_PORTS=(pwd)/ports
+#+end_src
+#+begin_src fish
+cmake --build build
+#+end_src
+If you are on Windows, make sure to set the Visual Studio configuration when
+building:
+#+begin_src fish
+cmake --build build -- /p:configuration=Debug
+#+end_src
 * Pipeline
 ** Sensor Drivers
 *** Notes
@@ -12,22 +25,3 @@ usbcore.usbfs_memory_mb=1024
 ** OpenCV
 ** ZeroMQ
 ** Magnum
-* Building
-To configure the project and build all dependencies, find the location of
-vcpkg's CMake toolchain file (e.g. mine is located at
-`/opt/vcpkg/scripts/buildsystems/vcpkg.cmake`) and run the following command
-from the root of this repository:
-#+begin_src fish
-cmake -B build -S . --toolchain /opt/vcpkg/scripts/buildsystems/vcpkg.cmake
-#+end_src
-Now that you are configured, the following command will compile the project
-into the `build` directory:
-#+begin_src fish
-cmake --build build
-#+end_src
-If you are on Windows, make sure to set the Visual Studio configuration when
-building:
-#+begin_src fish
-cmake --build build -- /p:configuration=Release
-#+end_src
-

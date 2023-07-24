@@ -1,6 +1,7 @@
 #include "device.h"
-#include <imgui.h>
+#include "../path.h"
 #include "../log.h"
+#include <imgui.h>
 
 #ifndef __CUDACC__
 #include <zpp_bits.h>
@@ -21,12 +22,17 @@ bob::types::PointCloud synthesized_point_cloud() {
   return result;
 }
 
-std::pair<std::string, std::vector<uint8_t>> Device::serialize_config() const {
+void Device::serialize_config() const {
+  // TODO error handling
   bob::log.info("Serializing device configuration for '%s'", this->name);
+  auto id = this->_driver->id();
   std::vector<uint8_t> data;
   auto out = zpp::bits::out(data);
   auto success = out(config);
-  return {this->_driver->id(), data};
+  auto data_dir = path::get_or_create_data_directory();
+  auto file_path = data_dir / (id + ".pcc");
+  bob::log.info("Saving to %s", file_path.string());
+  path::save_file(file_path, data);
 };
 
 void Device::deserialize_config(std::vector<uint8_t> buffer) {
@@ -34,9 +40,27 @@ void Device::deserialize_config(std::vector<uint8_t> buffer) {
   auto success = in(this->config);
 }
 
+void Device::deserialize_config_from_device_id(const std::string &device_id) {
+  auto data_dir = path::data_directory();
+  auto file_path = data_dir / (device_id + ".pcc");
+  bob::log.info("Loading from %s", file_path.string());
+
+  if (!std::filesystem::exists(file_path)) {
+    bob::log.warn("Config doesn't exist");
+    return;
+  }
+
+  deserialize_config(path::load_file(file_path));
+  bob::log.info("Loaded");
+}
+
+void Device::deserialize_config_from_this_device() {
+  deserialize_config_from_device_id(_driver->id());
+}
+
 template <typename T>
 void Device::draw_slider(std::string_view label_text, T *value, T min, T max,
-			T default_value) {
+                         T default_value) {
   ImGui::PushID(_parameter_index++);
   ImGui::Text("%s", label_text.data());
   ImGui::SameLine();
@@ -76,52 +100,8 @@ void Device::draw_imgui_controls() {
   ImGui::Spacing();
   ImGui::Spacing();
 
-  constexpr auto output_directory = "data";
-
-  bool serialize = false;
-  ImGui::Checkbox("Serialize", &serialize);
-  if (serialize) {
-    if (!std::filesystem::exists(output_directory))
-      std::filesystem::create_directory(output_directory);
-    auto [name, data] = serialize_config();
-    std::string filename = concat("data/", name, ".pcc");
-
-    bob::log.info("Saving to %s", filename);
-
-    std::ofstream output_file(filename.c_str(),
-			      std::ios::out | std::ios::binary);
-    output_file.write((const char *)&data[0], data.size());
-  }
-
-  bool deserialize = false;
-  ImGui::Checkbox("Deserialize", &deserialize);
-
-  if (deserialize) {
-    std::string filename = concat("data/", _driver->id(), ".pcc");
-
-    bob::log.info("Loading from %s", filename);
-
-    if (std::filesystem::exists(filename)) {
-
-      std::ifstream file(filename, std::ios::binary);
-
-      std::streampos file_size;
-      file.seekg(0, std::ios::end);
-      file_size = file.tellg();
-      file.seekg(0, std::ios::beg);
-
-      std::vector<uint8_t> buffer;
-      buffer.reserve(file_size);
-
-      buffer.insert(buffer.begin(), std::istream_iterator<uint8_t>(file),
-		    std::istream_iterator<uint8_t>());
-
-      deserialize_config(buffer);
-      bob::log.info("Loaded config");
-
-    } else
-      bob::log.info("Config doesn't exist");
-  }
+  if (ImGui::Button("Serialize")) serialize_config();
+  if (ImGui::Button("Deserialize")) deserialize_config_from_this_device();
 
   if (paused != was_paused)
     _driver->set_paused(paused);
@@ -177,7 +157,7 @@ void Device::draw_imgui_controls() {
     config.crop_z.max = crop_z_in.max;
 
     bob::types::int3 offset_in{config.offset.x, config.offset.y,
-			       config.offset.z};
+                               config.offset.z};
     ImGui::TextDisabled("Offset Output");
     draw_slider<int>("x", &offset_in.x, -10000, 10000);
     draw_slider<int>("y", &offset_in.y, -10000, 10000);

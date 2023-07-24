@@ -13,7 +13,7 @@ namespace bob {
 
   class FlatShadeObject: public SceneGraph::Drawable3D {
   public:
-    explicit FlatShadeObject(Object3D& object, Shaders::Flat3D& shader, const Color3& color, GL::Mesh& mesh, SceneGraph::DrawableGroup3D* const drawables): SceneGraph::Drawable3D{object, drawables}, _shader(shader), _color(color), _mesh(mesh) {}
+    explicit FlatShadeObject(Object3D& object, Shaders::FlatGL3D& shader, const Color3& color, GL::Mesh& mesh, SceneGraph::DrawableGroup3D* const drawables): SceneGraph::Drawable3D{object, drawables}, _shader(shader), _color(color), _mesh(mesh) {}
 
     void draw(const Matrix4& transformation, SceneGraph::Camera3D& camera) override {
       _shader
@@ -25,7 +25,7 @@ namespace bob {
     FlatShadeObject& setColor(const Color3& color) { _color = color; return *this; }
 
   private:
-    Shaders::Flat3D& _shader;
+    Shaders::FlatGL3D& _shader;
     Color3 _color;
     GL::Mesh& _mesh;
   };

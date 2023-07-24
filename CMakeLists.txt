@@ -3,20 +3,17 @@ project(bob-pointcaster LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-  # add_compile_options(-fsanitize=address)
-  # add_link_options(-fsanitize=address)
-
-# add vcpkg ports from this repo
-set(VCPKG_OVERLAY_PORTS "${VCPKG_OVERLAY_PORTS};${CMAKE_CURRENT_LIST_DIR}/ports")
+# add_compile_options(-fsanitize=address)
+# add_link_options(-fsanitize=address)
 
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
 
 option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_RS2 "Enable Realsense device support" OFF)
 option(WITH_SKYBRIDGE "Enable global sessions using the BoB Skybridge server" OFF)
-option(WITH_PLY_PLAYBACK "Enable .ply file pointcloud loading and playback" ON)
+option(WITH_PLY_PLAYBACK "Enable .ply file pointcloud loading and playback" OFF)
 
-find_package(spdlog CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 find_package(EBML CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 
@@ -30,12 +27,11 @@ add_library(ImGui::ImGui ALIAS imgui::imgui)
 
 find_package(Eigen3 CONFIG REQUIRED)
 
-add_subdirectory(reckless)
-include_directories(reckless/reckless/include)
+find_package(reckless CONFIG REQUIRED)
 
 # Corrade won't build on windows without the following flag
 if (WIN32)
-    set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
+  set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
 endif()
 find_package(Corrade CONFIG REQUIRED Main)
 find_package(Magnum CONFIG REQUIRED
@@ -48,14 +44,15 @@ find_package(libusb CONFIG REQUIRED)
 
 find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
 # find_package(bob-pointclouds CONFIG REQUIRED)
+
 include_directories(~/bob/bob-pointclouds/include)
 link_directories(~/bob/bob-pointclouds/build)
 
 if (WITH_K4A)
   find_package(k4a CONFIG REQUIRED)
   set(OPTIONAL_SRC ${OPTIONAL_SRC}
-      src/devices/k4a/k4a_driver.cu
-      src/devices/k4a/k4a_device.cc)
+    src/devices/k4a/k4a_driver.cu
+    src/devices/k4a/k4a_device.cc)
   set (OPTIONAL_LIBS ${OPTIONAL_LIBS} k4a::k4a)
 
   # TODO create a port for using k4abt
@@ -68,17 +65,17 @@ endif()
 if (WITH_RS2)
   find_package(realsense2 CONFIG REQUIRED)
   set(OPTIONAL_SRC ${OPTIONAL_SRC}
-      src/devices/rs2/rs2_driver.cc 
-      src/devices/rs2/rs2_device.cc)
+    src/devices/rs2/rs2_driver.cc 
+    src/devices/rs2/rs2_device.cc)
   set (OPTIONAL_LIBS ${OPTIONAL_LIBS} realsense2::realsense2)
   add_compile_definitions(WITH_RS2)
 endif()
 
 if (WITH_PLY_PLAYBACK)
-    find_path(HAPPLY_INCLUDE_DIRS "happly.h")
-    set(OPTIONAL_INCLUDE_DIRS ${OPTIONAL_INCLUDE_DIRS} ${HAPPY_INCLUDE_DIRS})
-    find_package(unofficial-nativefiledialog CONFIG REQUIRED)
-    set(OPTIONAL_LIBS ${OPTIONAL_LIBS} unofficial::nativefiledialog::nfd)
+  find_path(HAPPLY_INCLUDE_DIRS "happly.h")
+  set(OPTIONAL_INCLUDE_DIRS ${OPTIONAL_INCLUDE_DIRS} ${HAPPY_INCLUDE_DIRS})
+  find_package(unofficial-nativefiledialog CONFIG REQUIRED)
+  set(OPTIONAL_LIBS ${OPTIONAL_LIBS} unofficial::nativefiledialog::nfd)
 endif()
 
 if (WITH_SKYBRIDGE)
@@ -99,6 +96,7 @@ set(SOURCE_FILES
   src/sphere_renderer.cc
   src/shaders/particle_sphere.cc
   src/devices/usb.cc
+  src/path.cc
   ${OPTIONAL_SRC})
 
 if (WIN32)
@@ -111,14 +109,18 @@ endif()
 add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
 
 set_target_properties(pointcaster PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+# target_compile_options(pointcaster PRIVATE
+#  "$<$<COMPILE_LANGUAGE:CUDA>:SHELL:--compiler-options -diag-suppress 20012,-diag-suppress 550>")
 
 target_include_directories(pointcaster PRIVATE
   ${LIBUSB_INCLUDE_DIRS} ${ZPP_BITS_INCLUDE_DIRS}
+  ${RECKLESS_INCLUDE_DIRS}
   ${OPTIONAL_INCLUDE_DIRS})
 
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui #libremidi 
-  reckless
+  fmt::fmt
+  reckless::reckless
   Corrade::Main
   Magnum::Application
   Magnum::GL
@@ -131,7 +133,7 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   MagnumIntegration::ImGui
   MagnumIntegration::Eigen
   Eigen3::Eigen
-  spdlog::spdlog EBML::ebml
+  EBML::ebml
   toml11::toml11
   # ${BOB_POINTCLOUDS_LIB}
   pointclouds 
@@ -146,3 +148,10 @@ if (NOT WIN32)
     ${CMAKE_BINARY_DIR}/compile_commands.json
     ${CMAKE_CURRENT_LIST_DIR})
 endif()
+
+# run target
+add_custom_target(run-pointcaster
+  command ./pointcaster
+  depends pointcaster
+  working_directory ${CMAKE_CURRENT_BINARY_DIR}
+  comment "Running pointcaster")

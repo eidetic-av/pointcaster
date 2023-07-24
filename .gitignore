@@ -6,3 +6,5 @@ vcpkg_installed/
 .ccls-cache/
 compile_commands.json
 imgui.ini
+\#*
+.\#*

@@ -22,7 +22,7 @@ PointCloud pointCloud(){
 };
 
 
-void Snapshots::drawImGuiWindow() {
+void Snapshots::draw_imgui_window() {
   using namespace ImGui;
   PushID("Snapshots");
   SetNextWindowPos({350.0f, 500.0f}, ImGuiCond_FirstUseEver);

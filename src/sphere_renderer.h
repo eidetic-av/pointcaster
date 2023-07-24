@@ -16,7 +16,7 @@ namespace bob {
     float radius = 3.0f;
 
     Magnum::GL::Mesh mesh;
-    Magnum::Shaders::Phong shader;
+    Magnum::Shaders::PhongGL shader;
     Magnum::Color3 color;
     Magnum::Matrix4 transform;
 

@@ -24,6 +24,9 @@ K4ADevice::K4ADevice() {
   } catch (::k4a::error& e) {
     bob::log.error(e.what());
   }
+
+  // load last saved configuration on startup
+  deserialize_config_from_this_device();
 }
 
 K4ADevice::~K4ADevice() {
