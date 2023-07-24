@@ -43,10 +43,9 @@ corrade_add_resource(RESOURCES resources.conf)
 find_package(libusb CONFIG REQUIRED)
 
 find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
-# find_package(bob-pointclouds CONFIG REQUIRED)
 
-include_directories(~/bob/bob-pointclouds/include)
-link_directories(~/bob/bob-pointclouds/build)
+find_package(bob-pointclouds CONFIG REQUIRED)
+find_package(draco CONFIG REQUIRED)
 
 if (WITH_K4A)
   find_package(k4a CONFIG REQUIRED)
@@ -135,8 +134,8 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   Eigen3::Eigen
   EBML::ebml
   toml11::toml11
-  # ${BOB_POINTCLOUDS_LIB}
-  pointclouds 
+  draco::draco
+  bob::pointclouds 
   ${LIBUSB_LIBRARIES} ${ZMQ_LIB}
   ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
 

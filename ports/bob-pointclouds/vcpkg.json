@@ -1,0 +1,17 @@
+{
+  "name": "bob-pointclouds",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/eidetic-av/pointclouds",
+  "dependencies": [
+    "draco", "zpp-bits",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}
