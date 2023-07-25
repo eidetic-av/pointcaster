@@ -6,7 +6,7 @@
 
 using uint = unsigned int;
 
-namespace bob::gui {
+namespace pc::gui {
 
   enum ParameterType {
     Float, Int

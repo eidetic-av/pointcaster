@@ -1,15 +1,16 @@
 #pragma once
 
-namespace bob::playback {
+#include <string>
 
-  class PlySequencePlayer {
-  public: 
-    PlySequencePlayer();
+namespace pc::playback {
 
-    void addSequence(const std::string& directory);
+class PlySequencePlayer {
+public:
+  PlySequencePlayer();
 
-    void drawImGuiControls();
+  void addSequence(const std::string &directory);
 
-  }
+  void drawImGuiControls();
+};
 
-}
+} // namespace pc::playback

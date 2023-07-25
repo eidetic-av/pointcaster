@@ -5,7 +5,7 @@
 #include <spdlog/spdlog.h>
 #include <thread>
 
-namespace bob::sensors {
+namespace pc::sensors {
 
 class K4W2Driver : public Driver {
 public:
@@ -17,7 +17,7 @@ public:
 
   bool isOpen() override { return _open; };
 
-  bob::types::PointCloud getPointCloud(const DeviceConfiguration& config) override;
+  pc::types::PointCloud getPointCloud(const DeviceConfiguration& config) override;
 
   std::string getId() override {
     if (_serial_number.empty())
@@ -37,8 +37,8 @@ private:
   std::vector<uint8_t> _colors_buffer;
   size_t _point_count;
 
-  bob::types::PointCloud _point_cloud;
+  pc::types::PointCloud _point_cloud;
 
   bool _open = false;
 };
-} // namespace bob::sensors
+} // namespace pc::sensors

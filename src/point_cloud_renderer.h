@@ -12,10 +12,10 @@
 #include "structs.h"
 #include "shaders/particle_sphere.h"
 
-namespace bob {
+namespace pc {
 
   using namespace Magnum;
-  using namespace bob::shaders;
+  using namespace pc::shaders;
 
   class PointCloudRenderer {
   public:
@@ -37,7 +37,7 @@ namespace bob {
       return *this;
     }
 
-    bob::types::PointCloud points;
+    pc::types::PointCloud points;
 
   private:
     bool _dirty = false;

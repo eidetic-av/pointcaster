@@ -5,7 +5,7 @@
 #include <ixwebsocket/IXUserAgent.h>
 #include <thread>
 
-namespace bob::skybridge {
+namespace pc::skybridge {
 
 	using namespace ix;
 

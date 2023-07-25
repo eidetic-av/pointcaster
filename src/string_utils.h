@@ -4,7 +4,7 @@
 #include <string>
 #include <string_view>
 
-namespace bob::strings {
+namespace pc::strings {
 
 constexpr std::string to_string(const std::string &str) noexcept { return str; }
 
@@ -37,4 +37,4 @@ constexpr std::string concat(const Args &...args) noexcept {
   return result;
 }
 
-} // namespace bob::strings
+} // namespace pc::strings

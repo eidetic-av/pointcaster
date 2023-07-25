@@ -1,10 +1,10 @@
 #pragma once
 
-#include <string_view>
 #include <reckless/policy_log.hpp>
 #include <reckless/stdout_writer.hpp>
+#include <string_view>
 
-namespace bob {
+namespace pc {
 
 namespace __log {
 
@@ -13,9 +13,9 @@ public:
   severity_field(std::string_view severity) : severity_(severity) {}
 
   void format(reckless::output_buffer *poutput_buffer) const {
-    const char* p = severity_.c_str();
+    const char *p = severity_.c_str();
     size_t n = severity_.length();
-    char* buffer = poutput_buffer->reserve(n);
+    char *buffer = poutput_buffer->reserve(n);
     std::memcpy(buffer, p, n);
     poutput_buffer->commit(n);
   }
@@ -25,12 +25,14 @@ private:
 };
 
 namespace detail {
-  template <class HeaderField> HeaderField construct_header_field(std::string_view) {
+template <class HeaderField>
+HeaderField construct_header_field(std::string_view) {
   return HeaderField();
 }
 
 template <>
-inline severity_field construct_header_field<severity_field>(std::string_view severity) {
+inline severity_field
+construct_header_field<severity_field>(std::string_view severity) {
   return severity_field(severity);
 }
 } // namespace detail
@@ -57,7 +59,7 @@ public:
     // You can choose how you want to format the error code
     return ec.message();
   }
-    
+
   template <typename... Args>
   void write(std::string_view severity, char const *fmt, std::error_code ec) {
     std::string formatted_error = format_error_code(ec);
@@ -68,14 +70,14 @@ private:
   template <typename... Args>
   void write(std::string_view severity, char const *fmt, Args &&...args) {
     basic_log::write<reckless::policy_formatter<IndentPolicy, FieldSeparator,
-						HeaderFields...>>(
-	detail::construct_header_field<HeaderFields>(severity)...,
-	IndentPolicy(), fmt, std::forward<Args>(args)...);
+                                                HeaderFields...>>(
+        detail::construct_header_field<HeaderFields>(severity)...,
+        IndentPolicy(), fmt, std::forward<Args>(args)...);
   }
 };
 
 using log_t = severity_log<reckless::indent<4>, ' ', severity_field,
-			   reckless::timestamp_field>;
+                           reckless::timestamp_field>;
 
 inline reckless::stdout_writer stdout_writer;
 
@@ -83,4 +85,4 @@ inline reckless::stdout_writer stdout_writer;
 
 inline __log::log_t log(&__log::stdout_writer);
 
-} // namespace bob
+} // namespace pc

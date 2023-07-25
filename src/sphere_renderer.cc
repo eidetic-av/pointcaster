@@ -8,13 +8,13 @@
 using namespace Magnum;
 using namespace Magnum::Math::Literals;
 
-bob::SphereRenderer::SphereRenderer() {
+pc::SphereRenderer::SphereRenderer() {
   mesh = MeshTools::compile(Primitives::icosphereSolid(5));
   color = Color3::fromHsv({35.0_degf, 1.0f, 1.0f});
   transform = Matrix4::scaling({1.0f, 1.0f, 1.0f}) * Matrix4::translation({0, 0, 0});
 }
 
-void bob::SphereRenderer::draw(SceneGraph::Camera3D &camera) {
+void pc::SphereRenderer::draw(SceneGraph::Camera3D &camera) {
   shader.setDiffuseColor(color)
       .setLightPositions({{0, 0, 5.0f, 0.0f}})
       .setTransformationMatrix(transform)

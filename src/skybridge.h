@@ -1,4 +1,4 @@
-namespace bob::skybridge {
+namespace pc::skybridge {
 
 	void initConnection();
 

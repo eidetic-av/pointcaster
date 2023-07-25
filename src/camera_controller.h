@@ -39,8 +39,7 @@ public:
 
   // 0 is regular perspective, 1 is orthographic
   CameraController &setPerspective(const Magnum::Float &value);
-  CameraController &
-  zoomPerspective(Magnum::Platform::Sdl2Application::MouseScrollEvent &event);
+  CameraController &zoomPerspective(Magnum::Platform::Sdl2Application::MouseScrollEvent &event);
 
   CameraController &setSpeed(const Magnum::Vector2 &speed);
 

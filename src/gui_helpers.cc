@@ -1,7 +1,7 @@
 #include "gui_helpers.h"
 #include <spdlog/spdlog.h>
 
-namespace bob::gui {
+namespace pc::gui {
 
   // std::atomic<bool> midi_learn_mode = false;
   bool midi_learn_mode = false;

@@ -8,11 +8,11 @@
 #include <Magnum/SceneGraph/Camera.h>
 #include <Magnum/Math/Color.h>
 
-namespace bob {
+namespace pc {
 
   class SphereRenderer {
   public:
-    bob::types::float3 position {0, 0, 0};
+    pc::types::float3 position {0, 0, 0};
     float radius = 3.0f;
 
     Magnum::GL::Mesh mesh;

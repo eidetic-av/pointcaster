@@ -1,13 +1,13 @@
 #pragma once
 
-#include "../driver.h"
 #include "../device.h"
+#include "../driver.h"
 #include <spdlog/spdlog.h>
 #include <thread>
 
 #include <librealsense2/rs.hpp>
 
-namespace bob::sensors {
+namespace pc::sensors {
 
 class Rs2Driver : public Driver {
 public:
@@ -19,7 +19,7 @@ public:
 
   bool isOpen() override { return _open; };
 
-  bob::types::PointCloud getPointCloud(const DeviceConfiguration& config) override;
+  pc::types::PointCloud getPointCloud(const DeviceConfiguration &config) override;
 
   std::string getId() override {
     if (_serial_number.empty())
@@ -30,11 +30,11 @@ public:
   rs2::device getDevice() { return _device; }
 
   rs2::depth_sensor getDepthSensor() {
-      return _device.first<rs2::depth_sensor>();
+    return _device.first<rs2::depth_sensor>();
   }
 
   rs2::color_sensor getColorSensor() {
-      return _device.first<rs2::color_sensor>();
+    return _device.first<rs2::color_sensor>();
   }
 
 private:
@@ -57,8 +57,8 @@ private:
   size_t _texture_pixel_size;
   size_t _texture_stride;
 
-  bob::types::PointCloud _point_cloud;
+  pc::types::PointCloud _point_cloud;
 
   bool _open = false;
 };
-} // namespace bob::sensors
+} // namespace pc::sensors

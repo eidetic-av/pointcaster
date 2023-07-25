@@ -8,7 +8,7 @@
 #include <Magnum/Math/Matrix4.h>
 #include <Magnum/Shaders/Generic.h>
 
-namespace bob::shaders {
+namespace pc::shaders {
 
 using namespace Magnum;
 
@@ -51,4 +51,4 @@ ParticleSphereShader::setProjectionMatrix(const Matrix4 &matrix) {
   return *this;
 }
 
-} // namespace bob::shaders
+} // namespace pc::shaders

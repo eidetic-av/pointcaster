@@ -9,7 +9,7 @@
 #include "snapshots.h"
 #include <imgui.h>
 
-namespace bob::pointcaster {
+namespace pc::radio {
 
 static std::mutex stats_access;
 static std::vector<uint> send_durations;
@@ -43,7 +43,7 @@ Radio::Radio() {
          auto destination = fmt::format("tcp://*:{}", config.port);
          // auto destination = fmt::format("tcp://192.168.1.10:{}", port);
          radio.bind(destination);
-	 bob::log.info("Radio broadcasting on port %d", config.port);
+	 pc::log.info("Radio broadcasting on port %d", config.port);
 
          time_point<system_clock> start_send_time;
          time_point<system_clock> end_send_time;
@@ -86,7 +86,7 @@ Radio::Radio() {
            broadcast_snapshot_frame_count = snapshots::frames.size();
          }
 
-           auto live_point_cloud = bob::sensors::synthesized_point_cloud();
+           auto live_point_cloud = pc::sensors::synthesized_point_cloud();
            if (live_point_cloud.size() > 0) {
              auto bytes = live_point_cloud.serialize(config.compress_frames);
              zmq::message_t point_cloud_msg(bytes);
@@ -107,7 +107,7 @@ Radio::Radio() {
            }
          }
 
-	 bob::log.info("Ending radio broadcast");
+	 pc::log.info("Ending radio broadcast");
        });
  }
 
@@ -208,4 +208,4 @@ void Radio::draw_imgui_window() {
   ImGui::PopID();
 }
 
-} // namespace bob::pointcaster
+} // namespace pc::pointcaster

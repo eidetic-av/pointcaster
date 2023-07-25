@@ -3,11 +3,12 @@
 #include <thread>
 #include <vector>
 #include <pointclouds.h>
+#include "structs.h"
 
-namespace bob::pointcaster::snapshots {
+namespace pc::snapshots {
 
-extern std::vector<bob::types::PointCloud> frames;
-extern bob::types::PointCloud pointCloud();
+extern std::vector<pc::types::PointCloud> frames;
+extern pc::types::PointCloud pointCloud();
 
 struct SnapshotsConfiguration {
 };
@@ -21,4 +22,4 @@ private:
   SnapshotsConfiguration _config{};
   void capture();
 };
-} // namespace bob::pointcaster
+} // namespace pc::snapshots

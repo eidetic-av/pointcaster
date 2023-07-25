@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <vector>
 
-namespace path {
+namespace pc::path {
 
 /**
  * @brief Get the system path of the pointcaster executable.

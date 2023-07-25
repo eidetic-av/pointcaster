@@ -3,7 +3,7 @@
 #include <vector>
 #include <utility>
 
-namespace bob::pointcaster {
+namespace pc::radio {
 
 struct RadioConfiguration {
   int port;
@@ -36,4 +36,4 @@ private:
   std::unique_ptr<std::jthread> make_thread(const RadioConfiguration config);
   void set_config(const RadioConfiguration config);
 };
-} // namespace bob::pointcaster
+} // namespace pc::radio

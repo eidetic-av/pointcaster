@@ -3,7 +3,7 @@
 #include "../device.h"
 #include "k4w2_driver.h"
 
-namespace bob::sensors {
+namespace pc::sensors {
 
 class K4W2Device : public Device {
 public:
@@ -12,4 +12,4 @@ public:
 
   std::string getBroadcastId() override;
 };
-} // namespace bob::sensors
+} // namespace pc::sensors

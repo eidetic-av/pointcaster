@@ -9,9 +9,9 @@
 // sensors namespace
 #include "devices/device.h"
 
-namespace bob::pointcaster::snapshots {
+namespace pc::snapshots {
 
-using namespace bob::types;
+using namespace pc::types;
 
 std::vector<PointCloud> frames;
 
@@ -57,7 +57,7 @@ void Snapshots::draw_imgui_window() {
 
 void Snapshots::capture() {
   spdlog::info("Capturing frame");
-  frames.push_back({bob::sensors::synthesized_point_cloud()});
+  frames.push_back({pc::sensors::synthesized_point_cloud()});
 }
 
-} // namespace bob::pointcaster
+} // namespace pc::snapshots

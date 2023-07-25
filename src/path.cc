@@ -7,7 +7,7 @@
 #include <wchar.h>
 #endif
 
-namespace path {
+namespace pc::path {
 
 std::filesystem::path exe_path() {
 #ifdef _WIN32

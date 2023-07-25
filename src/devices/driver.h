@@ -1,12 +1,13 @@
 #pragma once
 
 #include "../structs.h"
+#include "device_config.h"
 #include <Magnum/Magnum.h>
 #include <Magnum/Math/Vector3.h>
-#include <vector>
 #include <string>
+#include <vector>
 
-namespace bob::sensors {
+namespace pc::sensors {
 
 class Driver {
 public:
@@ -17,7 +18,7 @@ public:
 
   virtual bool is_open() const = 0;
 
-  virtual bob::types::PointCloud point_cloud(const bob::types::DeviceConfiguration& config) = 0;
+  virtual pc::types::PointCloud point_cloud(const DeviceConfiguration &config) = 0;
   virtual std::string id() const = 0;
 
   virtual void set_paused(bool pause) = 0;
@@ -27,4 +28,4 @@ public:
   virtual bool is_aligned() = 0;
 };
 
-} // namespace bob::sensors
+} // namespace pc::sensors

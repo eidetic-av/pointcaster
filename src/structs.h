@@ -2,7 +2,7 @@
 
 #include <pointclouds.h>
 
-namespace bob::types {
+namespace pc::types {
 
 template <typename T> struct minMax {
   T min;
@@ -35,15 +35,10 @@ struct int3 {
   int x, y, z = 0;
 };
 
-struct DeviceConfiguration {
-  bool flip_x, flip_y, flip_z;
-  minMax<short> crop_x{-10000, 10000};
-  minMax<short> crop_y{-10000, 10000};
-  minMax<short> crop_z{-10000, 10000};
-  short3 offset;
-  float3 rotation_deg{0, 0, 0};
-  float scale;
-  int sample = 1;
-};
+// just alias these for now before refactoring bob-pointclouds library
+using PointCloud = bob::types::PointCloud;
+using position = bob::types::position;
+using color = bob::types::color;
+using uint2 = bob::types::uint2;
 
-} // namespace bob::types
+} // namespace pc::types

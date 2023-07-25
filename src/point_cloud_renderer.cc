@@ -12,7 +12,7 @@
 
 #include <spdlog/spdlog.h>
 
-namespace bob {
+namespace pc {
 
 using namespace Magnum;
 using namespace Shaders;
@@ -21,7 +21,7 @@ using namespace Math::Literals;
 PointCloudRenderer::PointCloudRenderer(float particleRadius)
     : _particleRadius(particleRadius),
       _meshParticles(GL::MeshPrimitive::Points) {
-  points = bob::types::PointCloud{};
+  points = pc::types::PointCloud{};
   _meshParticles.addVertexBuffer(
       _positions_buffer, 0,
       Generic3D::Position{Generic3D::Position::Components::Two,
@@ -64,4 +64,4 @@ PointCloudRenderer::draw(Magnum::SceneGraph::Camera3D& camera,
   return *this;
 }
 
-} // namespace bob
+} // namespace pc

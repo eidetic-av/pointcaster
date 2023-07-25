@@ -10,18 +10,17 @@
 #include <k4abt.hpp>
 #include <thread>
 
-namespace bob::sensors {
+namespace pc::sensors {
 
-using bob::types::PointCloud;
-using bob::types::position;
-using bob::types::color;
-using bob::types::short3;
-using bob::types::uint2;
+using pc::types::color;
+using pc::types::PointCloud;
+using pc::types::position;
+using pc::types::short3;
+using pc::types::uint2;
 
 class K4ADriver : public Driver {
 
 public:
-
   static constexpr uint2 color_resolution{1280, 720};
   static constexpr uint2 depth_resolution{512, 512};
 
@@ -39,8 +38,7 @@ public:
   bool is_aligning() override;
   bool is_aligned() override;
 
-  PointCloud
-  point_cloud(const bob::types::DeviceConfiguration &config) override;
+  PointCloud point_cloud(const DeviceConfiguration &config) override;
 
   void set_exposure(const int new_exposure);
   int get_exposure() const;
@@ -57,7 +55,7 @@ private:
   static constexpr uint incoming_point_count =
       depth_resolution.x * depth_resolution.y;
   static constexpr uint color_buffer_size =
-    incoming_point_count * sizeof(color);
+      incoming_point_count * sizeof(color);
   static constexpr uint positions_buffer_size =
       incoming_point_count * sizeof(short3);
 
@@ -92,4 +90,4 @@ private:
 
   bool _open = false;
 };
-} // namespace bob::sensors
+} // namespace pc::sensors

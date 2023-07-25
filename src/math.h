@@ -4,7 +4,7 @@
 #include <concepts>
 #include <limits>
 
-namespace math {
+namespace pc::math {
 
 template <typename T>
 concept number = std::is_arithmetic_v<T>;

@@ -7,13 +7,13 @@
 #include <zpp_bits.h>
 #endif
 
-namespace bob::sensors {
+namespace pc::sensors {
 
 std::mutex Device::devices_access;
 std::vector<std::shared_ptr<Device>> Device::attached_devices;
 
-bob::types::PointCloud synthesized_point_cloud() {
-  auto result = bob::types::PointCloud{};
+pc::types::PointCloud synthesized_point_cloud() {
+  auto result = pc::types::PointCloud{};
   if (Device::attached_devices.size() == 0)
     return result;
   // std::lock_guard<std::mutex> lock(devices_access);
@@ -24,14 +24,14 @@ bob::types::PointCloud synthesized_point_cloud() {
 
 void Device::serialize_config() const {
   // TODO error handling
-  bob::log.info("Serializing device configuration for '%s'", this->name);
+  pc::log.info("Serializing device configuration for '%s'", this->name);
   auto id = this->_driver->id();
   std::vector<uint8_t> data;
   auto out = zpp::bits::out(data);
   auto success = out(config);
   auto data_dir = path::get_or_create_data_directory();
   auto file_path = data_dir / (id + ".pcc");
-  bob::log.info("Saving to %s", file_path.string());
+  pc::log.info("Saving to %s", file_path.string());
   path::save_file(file_path, data);
 };
 
@@ -43,15 +43,15 @@ void Device::deserialize_config(std::vector<uint8_t> buffer) {
 void Device::deserialize_config_from_device_id(const std::string &device_id) {
   auto data_dir = path::data_directory();
   auto file_path = data_dir / (device_id + ".pcc");
-  bob::log.info("Loading from %s", file_path.string());
+  pc::log.info("Loading from %s", file_path.string());
 
   if (!std::filesystem::exists(file_path)) {
-    bob::log.warn("Config doesn't exist");
+    pc::log.warn("Config doesn't exist");
     return;
   }
 
   deserialize_config(path::load_file(file_path));
-  bob::log.info("Loaded");
+  pc::log.info("Loaded");
 }
 
 void Device::deserialize_config_from_this_device() {
@@ -143,9 +143,9 @@ void Device::draw_imgui_controls() {
     // ImGui can't handle shorts, so we need to use int's then convert
     // back TODO there's probably a better way to do it by defining
     // implicit conversions??
-    bob::types::minMax<int> crop_x_in{config.crop_x.min, config.crop_x.max};
-    bob::types::minMax<int> crop_y_in{config.crop_y.min, config.crop_y.max};
-    bob::types::minMax<int> crop_z_in{config.crop_z.min, config.crop_z.max};
+    pc::types::minMax<int> crop_x_in{config.crop_x.min, config.crop_x.max};
+    pc::types::minMax<int> crop_y_in{config.crop_y.min, config.crop_y.max};
+    pc::types::minMax<int> crop_z_in{config.crop_z.min, config.crop_z.max};
     ImGui::SliderInt2(label("x", 1).c_str(), crop_x_in.arr(), -10000, 10000);
     ImGui::SliderInt2(label("y", 1).c_str(), crop_y_in.arr(), -10000, 10000);
     ImGui::SliderInt2(label("z", 1).c_str(), crop_z_in.arr(), -10000, 10000);
@@ -156,7 +156,7 @@ void Device::draw_imgui_controls() {
     config.crop_z.min = crop_z_in.min;
     config.crop_z.max = crop_z_in.max;
 
-    bob::types::int3 offset_in{config.offset.x, config.offset.y,
+    pc::types::int3 offset_in{config.offset.x, config.offset.y,
                                config.offset.z};
     ImGui::TextDisabled("Offset Output");
     draw_slider<int>("x", &offset_in.x, -10000, 10000);
@@ -187,7 +187,7 @@ void Device::draw_imgui_controls() {
   ImGui::PopID();
 };
 
-bob::types::position global_translate;
+pc::types::position global_translate;
 void draw_global_controls() {
   ImGui::SetNextWindowPos({150.0f, 50.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
@@ -199,4 +199,4 @@ void draw_global_controls() {
   ImGui::PopID();
 }
 
-} // namespace bob::sensors
+} // namespace pc::sensors

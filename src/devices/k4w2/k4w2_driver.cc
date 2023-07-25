@@ -1,8 +1,8 @@
 #include "k4w2_driver.h"
 
-namespace bob::sensors {
+namespace pc::sensors {
 
-using namespace bob::types;
+using namespace pc::types;
 using namespace Magnum; 
 
 //libfreenect2::Freenect2 K4W2Driver::_freenect2;
@@ -115,4 +115,4 @@ PointCloud K4W2Driver::getPointCloud(const DeviceConfiguration& config) {
   return _point_cloud;
 }
 
-} // namespace bob::sensors
+} // namespace pc::sensors

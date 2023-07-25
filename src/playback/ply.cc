@@ -1,23 +1,26 @@
 #include "ply.h"
-#include <spdlog/spdlog.h>
+#include <exception>
 #include <imgui.h>
 #include <nfd.h>
+#include <spdlog/spdlog.h>
 
-bob::playback::PlySequencePlayer() {
+namespace pc::playback {
 
-}
+PlySequencePlayer::PlySequencePlayer() {}
 
-bob::playback::addSequence(const std::string &directory) try {
+void PlySequencePlayer::addSequence(const std::string &directory) try {
   spdlog::info("Loading ply sequence from: {}", directory);
 } catch (std::exception e) {
   spdlog::error("Exception thrown attempting to load sequence.\n{}", e.what());
 }
 
-bob::playback::drawImGuiControls() {
+void PlySequencePlayer::drawImGuiControls() {
   if (ImGui::Button("Add Sequence")) {
     nfdchar_t *outPath = NULL;
-    nfdresult_t result = NFD_OpenDialog( NULL, NULL, &outPath );
+    nfdresult_t result = NFD_OpenDialog(NULL, NULL, &outPath);
     addSequence(outPath);
     free(outPath);
   }
 }
+
+} // namespace pc::playback

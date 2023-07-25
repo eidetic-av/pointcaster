@@ -3,7 +3,7 @@
 #include "../device.h"
 #include "k4a_driver.h"
 
-namespace bob::sensors {
+namespace pc::sensors {
 
 class K4ADevice : public Device {
 public:
@@ -14,7 +14,7 @@ public:
 
   void draw_device_controls() override;
   void update_device_control(int *target, int value,
-			   std::function<void(int)> set_func);
+                             std::function<void(int)> set_func);
 
 private:
   int _exposure = 33330;
@@ -22,6 +22,5 @@ private:
   int _contrast = 5;
   int _saturation = 32;
   int _gain = 128;
-
 };
-} // namespace bob::sensors
+} // namespace pc::sensors

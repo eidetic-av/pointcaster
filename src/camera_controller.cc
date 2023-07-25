@@ -77,7 +77,7 @@ Matrix4 CameraController::make_projection_matrix() {
 
   const auto focal_point = unproject(_frame_size / 2, depth_at(_frame_size / 2));
   auto camera_location = _cameraObject->transformation().translation();
-  bob::log.info("camera_location: %f, %f, %f", camera_location.x(), camera_location.y(), camera_location.z());
+  pc::log.info("camera_location: %f, %f, %f", camera_location.x(), camera_location.y(), camera_location.z());
   const auto target_distance = (camera_location - focal_point).length();
 
   if (!_is_dz_started) {
@@ -86,7 +86,7 @@ Matrix4 CameraController::make_projection_matrix() {
   }
 
   auto fov =
-      math::remap(0.0f, 1.0f, 0.01f, 90.0f - 0.01f, _perspective_value, true);
+    pc::math::remap(0.0f, 1.0f, 0.01f, 90.0f - 0.01f, _perspective_value, true);
 
   auto height = frustum_height_at_distance(target_distance, fov);
   auto new_fov = fov_for_height_and_distance(height, target_distance);

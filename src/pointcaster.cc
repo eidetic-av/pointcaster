@@ -67,21 +67,19 @@
 #include "skybridge.h"
 #endif
 
-namespace bob {
+namespace pc {
 
-// I guess we probably shouldn't be using namespace like this except for the
-// literals... should probs replace thes with using aliases
-using namespace bob;
-using namespace bob::pointcaster;
-using namespace bob::pointcaster::snapshots;
-using namespace bob::types;
-using namespace bob::sensors;
+using namespace pc;
+using namespace pc::types;
+using namespace pc::sensors;
+using namespace pc::radio;
+using namespace pc::snapshots;
 using namespace Magnum;
 using namespace Math::Literals;
 
-using bob::strings::concat;
-using bob::sensors::Device;
-using bob::sensors::K4ADevice;
+using pc::strings::concat;
+using pc::sensors::Device;
+using pc::sensors::K4ADevice;
 
 using uint = unsigned int;
 
@@ -164,7 +162,7 @@ protected:
 
 PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
-  bob::log.info("This is pointcaster");
+  pc::log.info("This is pointcaster");
 
 #if WITH_SKYBRIDGE
   /* skybridge::initConnection(); */
@@ -279,22 +277,22 @@ PointCaster::PointCaster(const Arguments &args)
   //initControllers();
 
   // Init our sensors
-  // TODO the following should be moved into bob::sensors ns and outside this
+  // TODO the following should be moved into pc::sensors ns and outside this
   // source file
-  // std::lock_guard<std::mutex> lock(bob::sensors::devices_access);
-  // bob::sensors::attached_devices.reset(new std::vector<pointer<Device>>);
+  // std::lock_guard<std::mutex> lock(pc::sensors::devices_access);
+  // pc::sensors::attached_devices.reset(new std::vector<pointer<Device>>);
   // create a callback for the USB handler thread
   // that will add new devices to our main sensor list
   registerUsbAttachCallback([&](auto attached_device) {
-    bob::log.debug("attached usb callback");
+    pc::log.debug("attached usb callback");
     if (!_state.auto_connect_sensors) return;
 
     // freeUsb();
     // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     // for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
-    //   pointer<bob::sensors::Device> p;
-    //   p.reset(new bob::sensors::K4ADevice());
-    //   bob::sensors::attached_devices.push_back(std::move(p));
+    //   pointer<pc::sensors::Device> p;
+    //   p.reset(new pc::sensors::K4ADevice());
+    //   pc::sensors::attached_devices.push_back(std::move(p));
     // }
     // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     // initUsb();
@@ -302,7 +300,7 @@ PointCaster::PointCaster(const Arguments &args)
   });
   registerUsbDetachCallback([&](auto detached_device) {
     // std::erase(*devices, detached_device);
-    bob::log.debug("detached usb callback");
+    pc::log.debug("detached usb callback");
   });
   // init libusb and any attached devices
   _usb_monitor = std::make_unique<UsbMonitor>();
@@ -310,9 +308,9 @@ PointCaster::PointCaster(const Arguments &args)
   // TODO replace the k4a routine with something generic in usb.cc
   // open each k4a on startup:
   // for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
-  //   pointer<bob::sensors::Device> p;
-  //   p.reset(new bob::sensors::K4ADevice());
-  //   bob::sensors::attached_devices.push_back(std::move(p));
+  //   pointer<pc::sensors::Device> p;
+  //   p.reset(new pc::sensors::K4ADevice());
+  //   pc::sensors::attached_devices.push_back(std::move(p));
   // }
 
   timeline.start();
@@ -331,15 +329,15 @@ void PointCaster::quit() {
 }
 
 void PointCaster::deserialize_app_state(std::filesystem::path file_path) {
-  bob::log.info("Loading state from %s", file_path.string());
+  pc::log.info("Loading state from %s", file_path.string());
   auto buffer = path::load_file(file_path);
   auto in = zpp::bits::in(buffer);
   auto success = in(this->_state);
-  bob::log.info("Loaded previous application state");
+  pc::log.info("Loaded previous application state");
 }
 
 void PointCaster::serialize_app_state(std::filesystem::path file_path) {
-  bob::log.info("Saving state to %s", file_path.string());
+  pc::log.info("Saving state to %s", file_path.string());
   std::vector<uint8_t> data;
   auto out = zpp::bits::out(data);
   auto success = out(_state);
@@ -376,7 +374,7 @@ void PointCaster::draw_menu_bar() {
 }
 
 void PointCaster::fill_point_renderer() {
-  auto points = bob::sensors::synthesized_point_cloud();
+  auto points = pc::sensors::synthesized_point_cloud();
   points += snapshots::pointCloud();
 
   if (!points.empty()) {
@@ -402,7 +400,7 @@ void PointCaster::draw_camera_windows() {
       auto new_camera = std::make_unique<CameraController>(this, *_scene);
       _cameras.push_back(std::move(new_camera));
       new_camera_index = _cameras.size() - 1;
-      bob::log.info("new camera: %i", new_camera_index);
+      pc::log.info("new camera: %i", new_camera_index);
     }
 
     for (int i = 0; i < _cameras.size(); i++) {
@@ -540,7 +538,7 @@ void PointCaster::draw_stats() {
 //  std::thread midi_startup([&]() {
 //    midi_in midi;
 //    auto port_count = midi.get_port_count();
-//    bob::log.info("Detected %d MIDI ports", port_count);
+//    pc::log.info("Detected %d MIDI ports", port_count);
 //    midi.open_port(0);
 //    midi.set_callback([&](const message &message) {
 //      if (gui::midi_learn_mode) {
@@ -661,7 +659,7 @@ void PointCaster::drawEvent() {
   if (_state.show_stats) draw_stats();
   if (_state.show_radio_window) _radio->draw_imgui_window();
   if (_state.show_snapshots_window) _snapshots_context->draw_imgui_window();
-  if (_state.show_global_transform_window) bob::sensors::draw_global_controls();
+  if (_state.show_global_transform_window) pc::sensors::draw_global_controls();
 
   _imgui_context.updateApplicationCursor(*this);
 
@@ -797,6 +795,6 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
 }
 
 
-} // namespace bob
+} // namespace pc
 
-MAGNUM_APPLICATION_MAIN(bob::PointCaster);
+MAGNUM_APPLICATION_MAIN(pc::PointCaster);
