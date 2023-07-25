@@ -1,6 +1,6 @@
 #include "camera_controller.h"
-#include "math.h"
-#include "log.h"
+#include "../math.h"
+#include "../log.h"
 #include <numbers>
 #include <algorithm>
 
@@ -11,6 +11,8 @@
 #include <Magnum/GL/PixelFormat.h>
 #include <Magnum/Math/FunctionsBatch.h>
 #include <Magnum/Math/Vector3.h>
+
+namespace pc::camera {
 
 using namespace Magnum;
 
@@ -193,3 +195,5 @@ Float CameraController::depth_at(const Vector2i& windowPosition) {
        batch functions in Math can handle 2D views */
     return Math::min<Float>(data.pixels<Float>().asContiguous());
 }
+
+} // namespace pc::camera

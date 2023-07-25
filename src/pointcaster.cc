@@ -48,8 +48,8 @@
 //#include <libremidi/libremidi.hpp>
 #include <pointclouds.h>
 
-#include "camera_controller.h"
 #include "gui_helpers.h"
+#include "camera/camera_controller.h"
 #include "devices/device.h"
 #include "devices/usb.h"
 #include "wireframe_objects.h"
@@ -72,6 +72,7 @@ namespace pc {
 using namespace pc;
 using namespace pc::types;
 using namespace pc::sensors;
+using namespace pc::camera;
 using namespace pc::radio;
 using namespace pc::snapshots;
 using namespace Magnum;

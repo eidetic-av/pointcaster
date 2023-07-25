@@ -86,9 +86,9 @@ endif()
 
 set(SOURCE_FILES
   src/pointcaster.cc
-  src/camera_controller.cc
   src/radio.cc
   src/snapshots.cc
+  src/camera/camera_controller.cc
   src/devices/device.cc
   src/gui_helpers.cc
   src/point_cloud_renderer.cc

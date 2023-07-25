@@ -13,6 +13,8 @@
 #include <atomic>
 #include <memory>
 
+namespace pc::camera {
+
 typedef Magnum::SceneGraph::Object<Magnum::SceneGraph::MatrixTransformation3D>
     Object3D;
 typedef Magnum::SceneGraph::Scene<Magnum::SceneGraph::MatrixTransformation3D>
@@ -72,3 +74,5 @@ private:
                             Magnum::Float depth) const;
   Magnum::Float depth_at(const Magnum::Vector2i &window_position);
 };
+
+} // namespace pc::camera
