@@ -40,6 +40,7 @@ vcpkg_cmake_configure(
         "${corrade_rc_param}"
         -DUTILITY_USE_ANSI_COLORS=ON
         -DBUILD_STATIC=${BUILD_STATIC}
+        -DCORRADE_CPU_USE_IFUNC=OFF
     MAYBE_UNUSED_VARIABLES
         CORRADE_RC_EXECUTABLE
 )
