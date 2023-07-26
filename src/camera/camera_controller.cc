@@ -1,6 +1,7 @@
 #include "camera_controller.h"
 #include "../log.h"
 #include "../math.h"
+#include "../uuid.h"
 #include "camera_config.h"
 #include <algorithm>
 #include <numbers>
@@ -24,8 +25,12 @@ using Magnum::Math::Deg;
 std::atomic<uint> CameraController::count = 0;
 
 CameraController::CameraController(Magnum::Platform::Application *app,
-                                   Object3D &object)
-    : _app(app), Object3D{&object} {
+				   Object3D &object)
+    : CameraController(app, object, CameraConfiguration{}){};
+
+CameraController::CameraController(Magnum::Platform::Application *app,
+				   Object3D &object, CameraConfiguration config)
+    : _app(app), _config(config), Object3D{&object} {
 
   // rotations are manipulated by individual parent objects...
   // this makes rotations easier to reason about and serialize,
@@ -38,23 +43,33 @@ CameraController::CameraController(Magnum::Platform::Application *app,
   _roll_parent = std::make_unique<Object3D>(_camera_parent.get());
   _camera = std::make_unique<SceneGraph::Camera3D>(*_roll_parent);
 
-  _camera_parent->setTransformation(
-      Matrix4::lookAt({defaults::translation.z(), defaults::translation.y(),
-		       defaults::translation.x()},
-		      Vector3{}, Vector3::yAxis(1)));
+  _camera_parent->setTransformation(Matrix4::lookAt(
+      {defaults::magnum::translation.z(), defaults::magnum::translation.y(),
+       defaults::magnum::translation.x()},
+      {}, Vector3::yAxis()));
 
   _camera->setAspectRatioPolicy(SceneGraph::AspectRatioPolicy::Extend);
 
-  setRotation(_config.rotation);
-  setTranslation(_config.translation);
+  // deserialize our camera configuration into Magnum types
+  auto rotation = Euler{Deg_f(_config.rotation[0]), Deg_f(_config.rotation[1]),
+			Deg_f(_config.rotation[2])};
+  auto translation = Position{_config.translation[0], _config.translation[1],
+		      _config.translation[2]};
+  auto fov = Deg_f(_config.fov);
+
+  setRotation(rotation);
+  setTranslation(translation);
 
   _camera->setProjectionMatrix(
-      Matrix4::perspectiveProjection(_config.fov, 4.0f / 3.0f, 0.001f, 200.0f));
+      Matrix4::perspectiveProjection(fov, 4.0f / 3.0f, 0.001f, 200.0f));
 
   if (_config.id.empty()) {
-    _config.id = "";
+    _config.id = pc::uuid::word();
   }
   _config.name = "camera_" + std::to_string(++CameraController::count);
+
+  pc::log.info("Initialised Camera Controller '%s' with id '%s'", _config.name,
+               _config.id);
 }
 
 CameraController::~CameraController() { CameraController::count--; }
@@ -137,24 +152,26 @@ Matrix4 CameraController::make_projection_matrix() {
 
 void CameraController::setRotation(
     const Magnum::Math::Vector3<Magnum::Math::Rad<float>> &rotation) {
-  _config.rotation = rotation;
+
+  _config.rotation = {float(Deg_f(rotation.x())), float(Deg_f(rotation.y())),
+		      float(Deg_f(rotation.z()))};
 
   _yaw_parent->resetTransformation();
-  auto y_rotation = rotation.y() - defaults::rotation.y();
+  auto y_rotation = rotation.y() - defaults::magnum::rotation.y();
   _yaw_parent->rotate(y_rotation, Vector3::yAxis());
 
   _pitch_parent->resetTransformation();
-  auto x_rotation = rotation.x() - defaults::rotation.x();
+  auto x_rotation = rotation.x() - defaults::magnum::rotation.x();
   _pitch_parent->rotate(x_rotation, Vector3::zAxis());
 
   _roll_parent->resetTransformation();
-  auto z_rotation = rotation.z() - defaults::rotation.z();
+  auto z_rotation = rotation.z() - defaults::magnum::rotation.z();
   _roll_parent->rotate(z_rotation, Vector3::zAxis());
 }
 
 void CameraController::setTranslation(
     const Magnum::Math::Vector3<float> &translation) {
-  _config.translation = translation;
+  _config.translation = {translation.x(), translation.y(), translation.z()};
   auto transform = _camera_parent->transformationMatrix();
   transform.translation() = {translation.z(), translation.y(), translation.x()};
   _camera_parent->setTransformation(transform);
@@ -180,10 +197,12 @@ void CameraController::mouseRotate(
       Magnum::Platform::Sdl2Application::InputEvent::Modifier::Ctrl) {
     rotation_amount.z() = Rad(delta.y());
   } else {
-    rotation_amount.x() = Rad(delta.y());
+    rotation_amount.x() = Rad(-delta.y());
     rotation_amount.y() = Rad(delta.x());
   }
-  setRotation(_config.rotation + rotation_amount);
+  auto rotation = Euler{Deg_f(_config.rotation[0]), Deg_f(_config.rotation[1]),
+			Deg_f(_config.rotation[2])};
+  setRotation(rotation + rotation_amount);
 }
 
 void CameraController::mouseTranslate(
@@ -192,9 +211,11 @@ void CameraController::mouseTranslate(
   const auto centre_depth = depth_at(frame_centre);
   const Vector3 p = unproject(event.position(), centre_depth);
   const auto delta =
-      Vector3{(float)-event.relativePosition().x() * _move_speed.x(),
-              (float)event.relativePosition().y() * _move_speed.y(), 0};
-  setTranslation(_config.translation + delta);
+      Vector3{(float)event.relativePosition().x() * _move_speed.x(),
+	      (float)event.relativePosition().y() * _move_speed.y(), 0};
+  auto translation = Position{_config.translation[0], _config.translation[1],
+		      _config.translation[2]};
+  setTranslation(translation + delta);
 }
 
 CameraController &

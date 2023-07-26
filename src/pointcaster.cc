@@ -1,14 +1,15 @@
 #include <algorithm>
 #include <chrono>
+#include <fstream>
+#include <iostream>
 #include <limits>
 #include <mutex>
-#include <random>
-#include <vector>
-#include <set>
 #include <queue>
+#include <random>
+#include <set>
+#include <span>
 #include <thread>
-#include <iostream>
-#include <fstream>
+#include <vector>
 
 #include <zpp_bits.h>
 
@@ -44,7 +45,8 @@
 #include <Magnum/ImGuiIntegration/Widgets.h>
 
 #include <imgui.h>
-#include <ImGuizmo.h>
+#include <imgui_internal.h>
+#include "fonts/IconsFontAwesome6.h"
 
 //#include <libremidi/libremidi.hpp>
 #include <pointclouds.h>
@@ -58,6 +60,7 @@
 #include "sphere_renderer.h"
 #include "radio.h"
 #include "snapshots.h"
+#include "uuid.h"
 
 // TODO these need to be removed when initialisation loop is made generic
 #include <k4a/k4a.h>
@@ -88,7 +91,11 @@ using uint = unsigned int;
 using Object3D = SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
 using Scene3D = SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 
-struct PointCasterAppState {
+struct PointCasterSession {
+  std::string id;
+
+  // GUI
+  std::vector<char> imgui_layout;
   bool show_sensors_window = true;
   bool show_controllers_window = false;
   bool show_radio_window = true;
@@ -96,6 +103,9 @@ struct PointCasterAppState {
   bool show_global_transform_window = true;
   bool show_stats = true;
   bool auto_connect_sensors = false;
+
+  std::vector<CameraConfiguration> cameras;
+
 };
 
 class PointCaster : public Platform::Application {
@@ -108,10 +118,10 @@ public:
   }
 
 protected:
-  PointCasterAppState _state;
+  PointCasterSession _session;
 
-  void serialize_app_state(std::filesystem::path file_path);
-  void deserialize_app_state(std::filesystem::path file_path);
+  void serialize_session(std::filesystem::path file_path);
+  void deserialize_session(std::filesystem::path file_path);
   
   std::vector<std::jthread> _async_tasks;
 
@@ -138,7 +148,8 @@ protected:
   void fill_point_renderer();
 
   void draw_menu_bar();
-  void draw_camera_windows();
+  void draw_control_bar();
+  void draw_camera_window();
   void draw_sensors_window();
   void draw_controllers_window();
 
@@ -166,10 +177,6 @@ PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
   pc::log.info("This is pointcaster");
 
-#if WITH_SKYBRIDGE
-  /* skybridge::initConnection(); */
-#endif
-
   // Set up the window
   const Vector2 dpi_scaling = this->dpiScaling({});
   Configuration conf;
@@ -188,22 +195,40 @@ PointCaster::PointCaster(const Arguments &args)
 
   // Set up ImGui
   ImGui::CreateContext();
-      // Make sure the imgui.ini saves in the data directory
-      ImGui::GetIO()
-          .IniFilename = nullptr;
-  ImGui::LoadIniSettingsFromDisk((path::data_directory() / "imgui.ini").c_str());
-  
+  // Don't save imgui layout to a file, handle it manually
+  ImGui::GetIO().IniFilename = nullptr;
+
   ImGui::StyleColorsDark();
 
-  // load SpaceGrotesk font for imgui
+
+#if WITH_SKYBRIDGE
+  /* skybridge::initConnection(); */
+#endif
+
+  const auto size = Vector2(windowSize()) / dpiScaling();
+
+  // load fonts from resources
   ImFontConfig font_config;
   font_config.FontDataOwnedByAtlas = false;
-  const auto size = Vector2(windowSize()) / dpiScaling();
   Utility::Resource rs("data");
+
   auto font = rs.getRaw("SpaceGrotesk");
+  const auto font_size = 14.0f;
   ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(font.data()), Int(font.size()),
       14.0f * framebufferSize().x() / size.x(), &font_config);
+
+  auto font_icons = rs.getRaw("FontAwesomeRegular");
+  static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_16_FA, 0 };
+  ImFontConfig icons_config;
+  icons_config.MergeMode = true;
+  icons_config.PixelSnapH = true;
+  const auto icon_font_size = font_size * 2.0f / 3.0f;
+  icons_config.GlyphMinAdvanceX = icon_font_size;
+  const auto icon_font_size_pixels = font_size * framebufferSize().x() / size.x();
+  ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+      const_cast<char *>(font_icons.data()), int(icon_font_size),
+      icon_font_size_pixels, &icons_config, icons_ranges);
 
   // enable window docking
   ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
@@ -228,13 +253,6 @@ PointCaster::PointCaster(const Arguments &args)
       Magnum::GL::Renderer::BlendFunction::SourceAlpha,
       Magnum::GL::Renderer::BlendFunction::OneMinusSourceAlpha);
 
-  // Deserialize application state
-  auto data_dir = path::data_directory();
-  auto state_file = data_dir / "state.bin";
-  if (std::filesystem::exists(state_file)) {
-    deserialize_app_state(state_file);
-  }
-
   // Set up scene
   // TODO should drawable groups go inside each camera controller?
   _scene = std::make_unique<Scene3D>();
@@ -242,6 +260,32 @@ PointCaster::PointCaster(const Arguments &args)
   _ground_grid = std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
   _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
 			 Matrix4::translation(Vector3(0, 0, 0)));
+
+  // Deserialize last session
+  auto data_dir = path::get_or_create_data_directory();
+  std::filesystem::path last_modified_session_file;
+  std::filesystem::file_time_type last_write_time;
+
+  for (const auto &entry : std::filesystem::directory_iterator(data_dir)) {
+    if (!entry.is_regular_file() || entry.path().extension() != ".pcs")
+      continue;
+
+    auto write_time = std::filesystem::last_write_time(entry);
+    if (last_modified_session_file.empty() || write_time > last_write_time) {
+      last_modified_session_file = entry.path();
+      last_write_time = write_time;
+    }
+  }
+
+  if (last_modified_session_file.empty()) {
+    pc::log.info("No previous session file found. Creating new session.");
+    _session = {.id = pc::uuid::word()};
+    auto file_path = data_dir / (_session.id + ".pcs");
+    serialize_session(file_path);
+  } else {
+    pc::log.info("Found previous session file");
+    deserialize_session(last_modified_session_file);
+  }
 
   // If there are no cameras in the scene, initialise at least one
   if (_cameras.empty()) {
@@ -274,7 +318,7 @@ PointCaster::PointCaster(const Arguments &args)
   // 
   _snapshots_context = std::make_unique<Snapshots>();
 
-  if (_state.auto_connect_sensors) open_kinect_sensors();
+  if (_session.auto_connect_sensors) open_kinect_sensors();
 
   // Init our controllers
   //initControllers();
@@ -288,7 +332,7 @@ PointCaster::PointCaster(const Arguments &args)
   // that will add new devices to our main sensor list
   registerUsbAttachCallback([&](auto attached_device) {
     pc::log.debug("attached usb callback");
-    if (!_state.auto_connect_sensors) return;
+    if (!_session.auto_connect_sensors) return;
 
     // freeUsb();
     // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
@@ -320,31 +364,67 @@ PointCaster::PointCaster(const Arguments &args)
 }
 
 void PointCaster::quit() {
-  Device::attached_devices.clear(); 
 
   auto data_dir = path::get_or_create_data_directory();
-  auto file_path = data_dir / "state.bin";
-  serialize_app_state(file_path);
+  auto file_path = data_dir / (_session.id + ".pcs");
+  serialize_session(file_path);
 
-  ImGui::SaveIniSettingsToDisk((path::data_directory() / "imgui.ini").c_str());
+  Device::attached_devices.clear(); 
 
   exit(0);
 }
 
-void PointCaster::deserialize_app_state(std::filesystem::path file_path) {
+void PointCaster::serialize_session(std::filesystem::path file_path) {
+  pc::log.info("Saving session to %s", file_path.string());
+
+  // save imgui layout
+  std::size_t imgui_layout_size;
+  auto imgui_layout_data = ImGui::SaveIniSettingsToMemory(&imgui_layout_size);
+  _session.imgui_layout = std::vector<char>(
+      imgui_layout_data, imgui_layout_data + imgui_layout_size);
+
+  // save camera configurations
+  _session.cameras.clear();
+  for (auto &camera : _cameras) {
+    _session.cameras.push_back(camera->config());
+  }
+
+  std::vector<uint8_t> data;
+  auto out = zpp::bits::out(data);
+  auto success = out(_session);
+  path::save_file(file_path, data);
+}
+
+void PointCaster::deserialize_session(std::filesystem::path file_path) {
   pc::log.info("Loading state from %s", file_path.string());
   auto buffer = path::load_file(file_path);
   auto in = zpp::bits::in(buffer);
-  auto success = in(this->_state);
-  pc::log.info("Loaded previous application state");
+  auto success = in(_session);
+  pc::log.info("%s", std::to_string(_session.imgui_layout.size()));
+
+  ImGui::LoadIniSettingsFromMemory(_session.imgui_layout.data(),
+				   _session.imgui_layout.size());
+
+  // get saved camera configurations to populate the cams list
+  for (auto &saved_camera_config : _session.cameras) {
+    auto saved_camera =
+	std::make_unique<CameraController>(this, *_scene, saved_camera_config);
+    saved_camera->camera().setViewport(
+	GL::defaultFramebuffer.viewport().size());
+    _cameras.push_back(std::move(saved_camera));
+  }
+
+  pc::log.info("Loaded session '%s'", file_path.filename().string());
 }
 
-void PointCaster::serialize_app_state(std::filesystem::path file_path) {
-  pc::log.info("Saving state to %s", file_path.string());
-  std::vector<uint8_t> data;
-  auto out = zpp::bits::out(data);
-  auto success = out(_state);
-  path::save_file(file_path, data);
+void PointCaster::fill_point_renderer() {
+  auto points = pc::sensors::synthesized_point_cloud();
+  points += snapshots::pointCloud();
+
+  if (!points.empty()) {
+    _point_cloud_renderer->points = std::move(points);
+    _point_cloud_renderer->setDirty();
+  }
 }
 
 void PointCaster::draw_menu_bar() {
@@ -365,10 +445,10 @@ void PointCaster::draw_menu_bar() {
 	if (ImGui::MenuItem(item_name, shortcut_key)) window_toggle = !window_toggle;
       };
 
-      window_item("Transform", "t", _state.show_global_transform_window);
-      window_item("Sensors", "s", _state.show_sensors_window);
-      window_item("Controllers", "c", _state.show_controllers_window);
-      window_item("RenderStats", "f", _state.show_stats);
+      window_item("Transform", "t", _session.show_global_transform_window);
+      window_item("Sensors", "s", _session.show_sensors_window);
+      window_item("Controllers", "c", _session.show_controllers_window);
+      window_item("RenderStats", "f", _session.show_stats);
 
       ImGui::EndMenu();
     }
@@ -376,22 +456,68 @@ void PointCaster::draw_menu_bar() {
   }
 }
 
-void PointCaster::fill_point_renderer() {
-  auto points = pc::sensors::synthesized_point_cloud();
-  points += snapshots::pointCloud();
+void PointCaster::draw_control_bar() {
 
-  if (!points.empty()) {
-    _point_cloud_renderer->points = std::move(points);
-    _point_cloud_renderer->setDirty();
+  constexpr auto control_bar_flags =
+      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_MenuBar;
+
+  if (ImGui::BeginViewportSideBar("##ControlBar", ImGui::GetMainViewport(),
+				  ImGuiDir_Up, ImGui::GetFrameHeight(),
+				  control_bar_flags)) {
+    if (ImGui::BeginMenuBar()) {
+      if (ImGui::Button(ICON_FA_FLOPPY_DISK)) {
+      }
+
+      if (ImGui::Button(ICON_FA_FOLDER_OPEN)) {
+      }
+      ImGui::EndMenuBar();
+    }
+
+    ImGui::End();
   }
+
+  // ImGui::SetNextWindowPos({0, 20});
+
+  // // Extend width to viewport width
+  // ImGui::SetNextWindowSize({100, 100});
+
+  // constexpr ImGuiWindowFlags control_bar_flags =
+  //     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+  //     ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoScrollbar |
+  //     ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoDecoration;
+
+  // if (ImGui::Begin("ControlBar", nullptr, control_bar_flags)) {
+  //   ImGui::Text("eyo");
+  //   ImGui::SameLine();
+  //   ImGui::Button("oh");
+  //   ImGui::SameLine();
+  //   ImGui::Button("woh");
+  //   ImGui::End();
+  // }
 }
 
-void PointCaster::draw_camera_windows() {
+void PointCaster::draw_camera_window() {
 
   _hovering_camera_index = -1;
 
-  ImGui::SetNextWindowSize({1000, 1000});
+  ImGuiWindowClass docking_viewport_class = {};
+
+  ImGuiID id =
+      ImGui::DockSpaceOverViewport(nullptr,
+                                   ImGuiDockNodeFlags_NoDockingInCentralNode |
+                                       ImGuiDockNodeFlags_PassthruCentralNode,
+                                   nullptr);
+  ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
+
+  ImGuiWindowClass central_always = {};
+  central_always.DockNodeFlagsOverrideSet |=
+      ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_NoDockingOverMe;
+  ImGui::SetNextWindowClass(&central_always);
+  ImGui::SetNextWindowDockID(node->ID, ImGuiCond_Always);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
   ImGui::Begin("CamerasRoot");
+  ImGui::PopStyleVar();
 
   constexpr auto camera_tab_bar_flags =
       ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_NoTooltip;
@@ -463,7 +589,7 @@ void PointCaster::draw_sensors_window() {
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Sensors", nullptr);
 
-  ImGui::Checkbox("USB auto-connect", &_state.auto_connect_sensors);
+  ImGui::Checkbox("USB auto-connect", &_session.auto_connect_sensors);
 
   if (ImGui::Button("Open")) open_kinect_sensors();
 
@@ -645,7 +771,6 @@ void PointCaster::drawEvent() {
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
                                GL::FramebufferClear::Depth);
   _imgui_context.newFrame();
-  ImGuizmo::BeginFrame();
 
   // Enable text input, if needed/
   if (ImGui::GetIO().WantTextInput && !isTextInputActive())
@@ -654,15 +779,20 @@ void PointCaster::drawEvent() {
     stopTextInput();
 
   // Draw gui windows
-  ImGui::DockSpaceOverViewport();
+
+  // ImGui::DockSpaceOverViewport();
+
   draw_menu_bar();
-  draw_camera_windows();
-  if (_state.show_sensors_window) draw_sensors_window();
-  if (_state.show_controllers_window) draw_controllers_window();
-  if (_state.show_stats) draw_stats();
-  if (_state.show_radio_window) _radio->draw_imgui_window();
-  if (_state.show_snapshots_window) _snapshots_context->draw_imgui_window();
-  if (_state.show_global_transform_window) pc::sensors::draw_global_controls();
+  draw_control_bar();
+
+  draw_camera_window();
+
+  if (_session.show_sensors_window) draw_sensors_window();
+  if (_session.show_controllers_window) draw_controllers_window();
+  if (_session.show_stats) draw_stats();
+  if (_session.show_radio_window) _radio->draw_imgui_window();
+  if (_session.show_snapshots_window) _snapshots_context->draw_imgui_window();
+  if (_session.show_global_transform_window) pc::sensors::draw_global_controls();
 
   _imgui_context.updateApplicationCursor(*this);
 
@@ -714,20 +844,20 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     quit();
     break;
   case KeyEvent::Key::S:
-    _state.show_sensors_window = !_state.show_sensors_window;
+    _session.show_sensors_window = !_session.show_sensors_window;
     break;
   case KeyEvent::Key::C:
-    _state.show_controllers_window = !_state.show_controllers_window;
-    if (!_state.show_controllers_window) gui::midi_learn_mode = false;
+    _session.show_controllers_window = !_session.show_controllers_window;
+    if (!_session.show_controllers_window) gui::midi_learn_mode = false;
     break;
   case KeyEvent::Key::F:
-    _state.show_stats = !_state.show_stats;
+    _session.show_stats = !_session.show_stats;
     break;
   case KeyEvent::Key::R:
-    _state.show_radio_window = !_state.show_radio_window;
+    _session.show_radio_window = !_session.show_radio_window;
     break;
   case KeyEvent::Key::T:
-    _state.show_global_transform_window = !_state.show_global_transform_window;
+    _session.show_global_transform_window = !_session.show_global_transform_window;
     break;
   default:
     if (_imgui_context.handleKeyPressEvent(event))

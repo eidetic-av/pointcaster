@@ -76,6 +76,6 @@
 	    ]
 	},
 	"imgui",
-	"imguizmo"
+	"libuuid"
     ]
 }

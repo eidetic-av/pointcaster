@@ -28,11 +28,13 @@ class CameraController : public Object3D {
 public:
   static std::atomic<uint> count;
 
-  explicit CameraController(Magnum::Platform::Application *app,
-                            Object3D &object);
+  CameraController(Magnum::Platform::Application *app, Object3D &object);
+  CameraController(Magnum::Platform::Application *app,
+                            Object3D &object, CameraConfiguration config);
 
   ~CameraController();
 
+  const CameraConfiguration &config() const { return _config; };
   const std::string name() const { return _config.name; };
   Magnum::SceneGraph::Camera3D &camera() const { return *_camera; }
 
