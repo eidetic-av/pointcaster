@@ -1,8 +1,11 @@
 #pragma once
 
+#include <Magnum/Math/Angle.h>
+#include <Magnum/Math/Vector3.h>
 #include <algorithm>
 #include <concepts>
 #include <limits>
+#include <numbers>
 
 namespace pc::math {
 
@@ -33,8 +36,41 @@ constexpr auto remap(number auto old_min, number auto old_max,
       (old_max - old_min), std::numeric_limits<decltype(new_min)>::epsilon());
   const auto mapped_result =
       (value - old_min) / denominator * (new_max - new_min) + new_min;
-  if (!clamp) return mapped_result;
+  if (!clamp)
+    return mapped_result;
   return std::min(std::max(mapped_result, new_min), new_max);
 };
 
-} // namespace math
+constexpr auto degToRad(std::floating_point auto degrees) {
+  return degrees * (std::numbers::pi_v<decltype(degrees)> /
+                    static_cast<decltype(degrees)>(180));
+}
+
+constexpr Magnum::Math::Rad<float> degToRad(Magnum::Math::Deg<float> degrees) {
+  return Magnum::Math::Rad<float>{degrees};
+}
+
+Magnum::Math::Vector3<Magnum::Math::Rad<float>>
+degToRad(Magnum::Math::Vector3<Magnum::Math::Deg<float>> degrees) {
+  return {Magnum::Math::Rad<float>{degrees.x()},
+	  Magnum::Math::Rad<float>{degrees.y()},
+	  Magnum::Math::Rad<float>{degrees.z()}};
+}
+
+constexpr auto radToDeg(std::floating_point auto radians) {
+  return radians * (static_cast<decltype(radians)>(180) /
+                    std::numbers::pi_v<decltype(radians)>);
+}
+
+constexpr Magnum::Math::Deg<float> radToDeg(Magnum::Math::Rad<float> radians) {
+  return Magnum::Math::Deg<float>{radians};
+}
+
+Magnum::Math::Vector3<Magnum::Math::Deg<float>>
+radToDeg(Magnum::Math::Vector3<Magnum::Math::Rad<float>> radians) {
+  return {Magnum::Math::Deg<float>{radians.x()},
+	  Magnum::Math::Deg<float>{radians.y()},
+	  Magnum::Math::Deg<float>{radians.z()}};
+}
+
+} // namespace pc::math

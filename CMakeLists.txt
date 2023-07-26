@@ -25,6 +25,8 @@ find_package(toml11 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
 
+find_package(imguizmo CONFIG REQUIRED)
+
 find_package(Eigen3 CONFIG REQUIRED)
 
 find_package(reckless CONFIG REQUIRED)
@@ -118,6 +120,7 @@ target_include_directories(pointcaster PRIVATE
 
 target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui #libremidi 
+  imguizmo::imguizmo
   fmt::fmt
   reckless::reckless
   Corrade::Main

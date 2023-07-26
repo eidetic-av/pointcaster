@@ -44,6 +44,7 @@
 #include <Magnum/ImGuiIntegration/Widgets.h>
 
 #include <imgui.h>
+#include <ImGuizmo.h>
 
 //#include <libremidi/libremidi.hpp>
 #include <pointclouds.h>
@@ -187,8 +188,9 @@ PointCaster::PointCaster(const Arguments &args)
 
   // Set up ImGui
   ImGui::CreateContext();
-  // Make sure the imgui.ini saves in the data directory
-  ImGui::GetIO().IniFilename = nullptr;
+      // Make sure the imgui.ini saves in the data directory
+      ImGui::GetIO()
+          .IniFilename = nullptr;
   ImGui::LoadIniSettingsFromDisk((path::data_directory() / "imgui.ini").c_str());
   
   ImGui::StyleColorsDark();
@@ -238,7 +240,7 @@ PointCaster::PointCaster(const Arguments &args)
   _scene = std::make_unique<Scene3D>();
   _drawable_group = std::make_unique<SceneGraph::DrawableGroup3D>();
   _ground_grid = std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
-  _ground_grid->transform(Matrix4::scaling(Vector3(0.25f)) *
+  _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
 			 Matrix4::translation(Vector3(0, 0, 0)));
 
   // If there are no cameras in the scene, initialise at least one
@@ -388,6 +390,7 @@ void PointCaster::draw_camera_windows() {
 
   _hovering_camera_index = -1;
 
+  ImGui::SetNextWindowSize({1000, 1000});
   ImGui::Begin("CamerasRoot");
 
   constexpr auto camera_tab_bar_flags =
@@ -411,26 +414,23 @@ void PointCaster::draw_camera_windows() {
       if (new_camera_index == i)
 	tab_item_flags |= ImGuiTabItemFlags_SetSelected;
 
-      if (ImGui::BeginTabItem(camera->name.c_str(), nullptr, tab_item_flags)) {
+      if (ImGui::BeginTabItem(camera->name().c_str(), nullptr, tab_item_flags)) {
 	ImGui::BeginChild("Frame");
 
-        const auto window_size = ImGui::GetWindowSize();
-        const auto frame_size =
-            Vector2i{(int)window_size.x, (int)window_size.y};
+	const auto window_size = ImGui::GetWindowSize();
+	const auto frame_size =
+	    Vector2i{(int)window_size.x, (int)window_size.y};
 
         camera->setupFramebuffer(frame_size);
-
-        camera->_framebuffer
-            ->clear(GL::FramebufferClear::Color | GL::FramebufferClear::Depth)
-            .bind();
+	camera->bindFramebuffer();
 
         _point_cloud_renderer->draw(camera->camera(), frame_size);
         _sphere_renderer->draw(camera->camera());
 
         camera->camera().draw(*_drawable_group);
 
-        ImGuiIntegration::image(*camera->_color,
-                                {(float)frame_size.x(), (float)frame_size.y()});
+	ImGuiIntegration::image(camera->outputFrame(),
+				{(float)frame_size.x(), (float)frame_size.y()});
 
         if (ImGui::IsItemHovered())
           _hovering_camera_index = i;
@@ -645,6 +645,8 @@ void PointCaster::drawEvent() {
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
                                GL::FramebufferClear::Depth);
   _imgui_context.newFrame();
+  ImGuizmo::BeginFrame();
+
   // Enable text input, if needed/
   if (ImGui::GetIO().WantTextInput && !isTextInputActive())
     startTextInput();
@@ -768,10 +770,10 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
 
   // rotate
   if (event.buttons() == MouseMoveEvent::Button::Left)
-    _cameras.at(_hovering_camera_index)->rotate(event.relativePosition());
+    _cameras.at(_hovering_camera_index)->mouseRotate(event);
   // translate
   else if (event.buttons() == MouseMoveEvent::Button::Right)
-    _cameras.at(_hovering_camera_index)->move(event);
+    _cameras.at(_hovering_camera_index)->mouseTranslate(event);
 
   event.setAccepted();
 }

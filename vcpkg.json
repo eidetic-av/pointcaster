@@ -2,7 +2,7 @@
     "name": "bob-pointcaster",
     "version-string": "0.0.1",
     "dependencies": [
-      "bob-pointclouds",
+	"bob-pointclouds",
 	"zpp-bits",
 	"azure-kinect-sensor-sdk",
 	"corrade",
@@ -67,6 +67,8 @@
 	{
 	    "name": "magnum-integration",
 	    "features": [ "imgui", "eigen" ]
-	}
+	},
+	"imgui",
+	"imguizmo"
     ]
 }
