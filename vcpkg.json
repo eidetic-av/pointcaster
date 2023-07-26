@@ -16,7 +16,7 @@
 	"range-v3",
 	{
 	    "name": "imgui",
-	    "features": [ 
+	    "features": [
 		"docking-experimental"
 	    ]
 	},
@@ -26,13 +26,17 @@
 	{
 	    "name": "sdl2",
 	    "default-features": false,
-	    "features": [ "x11" ],
+	    "features": [
+		"x11"
+	    ],
 	    "platform": "linux"
 	},
 	{
 	    "name": "zeromq",
 	    "default-features": false,
-	    "features": [ "draft" ]
+	    "features": [
+		"draft"
+	    ]
 	},
 	{
 	    "name": "magnum",
@@ -66,7 +70,10 @@
 	},
 	{
 	    "name": "magnum-integration",
-	    "features": [ "imgui", "eigen" ]
+	    "features": [
+		"imgui",
+		"eigen"
+	    ]
 	},
 	"imgui",
 	"imguizmo"
