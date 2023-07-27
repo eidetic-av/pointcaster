@@ -21,22 +21,21 @@ namespace pc::camera {
 
 typedef Magnum::SceneGraph::Object<Magnum::SceneGraph::MatrixTransformation3D>
     Object3D;
-typedef Magnum::SceneGraph::Scene<Magnum::SceneGraph::MatrixTransformation3D>
-    Scene3D;
+using Scene3D = Magnum::SceneGraph::Scene<Magnum::SceneGraph::MatrixTransformation3D>;
+using Camera3D = Magnum::SceneGraph::Camera3D;
 
-class CameraController : public Object3D {
+class CameraController {
 public:
   static std::atomic<uint> count;
 
-  CameraController(Magnum::Platform::Application *app, Object3D &object);
-  CameraController(Magnum::Platform::Application *app,
-                            Object3D &object, CameraConfiguration config);
+  CameraController(Scene3D *scene);
+  CameraController(Scene3D *scene, CameraConfiguration config);
 
   ~CameraController();
 
   const CameraConfiguration &config() const { return _config; };
   const std::string name() const { return _config.name; };
-  Magnum::SceneGraph::Camera3D &camera() const { return *_camera; }
+  Camera3D &camera() const { return *_camera; }
 
   void setRotation(const Magnum::Math::Vector3<Magnum::Math::Rad<float>>& rotation);
   void setTranslation(const Magnum::Math::Vector3<float>& translation);
@@ -56,12 +55,9 @@ public:
 
 private:
   CameraConfiguration _config;
-
-  Magnum::Platform::Application *_app;
+  std::unique_ptr<Camera3D> _camera;
 
   std::unique_ptr<Object3D> _camera_parent;
-  std::unique_ptr<Magnum::SceneGraph::Camera3D> _camera;
-
   std::unique_ptr<Object3D> _yaw_parent;
   std::unique_ptr<Object3D> _pitch_parent;
   std::unique_ptr<Object3D> _roll_parent;

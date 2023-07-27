@@ -24,24 +24,22 @@ using Magnum::Math::Deg;
 
 std::atomic<uint> CameraController::count = 0;
 
-CameraController::CameraController(Magnum::Platform::Application *app,
-				   Object3D &object)
-    : CameraController(app, object, CameraConfiguration{}){};
+CameraController::CameraController(Scene3D *scene)
+    : CameraController(scene, CameraConfiguration{}){};
 
-CameraController::CameraController(Magnum::Platform::Application *app,
-				   Object3D &object, CameraConfiguration config)
-    : _app(app), _config(config), Object3D{&object} {
+CameraController::CameraController(Scene3D *scene, CameraConfiguration config)
+    : _config(config) {
 
   // rotations are manipulated by individual parent objects...
   // this makes rotations easier to reason about and serialize,
   // as we don't need quaternion multiplications or conversions to and from
   // matrices to serialize as three independent euler values
 
-  _yaw_parent = std::make_unique<Object3D>(this);
+  _yaw_parent = std::make_unique<Object3D>(scene);
   _pitch_parent = std::make_unique<Object3D>(_yaw_parent.get());
   _camera_parent = std::make_unique<Object3D>(_pitch_parent.get());
   _roll_parent = std::make_unique<Object3D>(_camera_parent.get());
-  _camera = std::make_unique<SceneGraph::Camera3D>(*_roll_parent);
+  _camera = std::make_unique<Camera3D>(*_roll_parent);
 
   _camera_parent->setTransformation(Matrix4::lookAt(
       {defaults::magnum::translation.z(), defaults::magnum::translation.y(),
@@ -253,8 +251,7 @@ Float CameraController::depth_at(const Vector2i &windowPosition) {
   /* First scale the position from being relative to window size to being
      relative to framebuffer size as those two can be different on HiDPI
      systems */
-  const Vector2i position = windowPosition * Vector2{_app->framebufferSize()} /
-                            Vector2{_app->windowSize()};
+  const Vector2i position = windowPosition * _frame_size;
   const Vector2i fbPosition{position.x(),
                             GL::defaultFramebuffer.viewport().sizeY() -
                                 position.y() - 1};

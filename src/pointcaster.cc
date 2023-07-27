@@ -41,11 +41,11 @@
 #include <Magnum/SceneGraph/Drawable.h>
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
-#include <Magnum/ImGuiIntegration/Context.hpp>
-#include <Magnum/ImGuiIntegration/Widgets.h>
 
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <Magnum/ImGuiIntegration/Context.hpp>
+#include <Magnum/ImGuiIntegration/Widgets.h>
 #include "fonts/IconsFontAwesome6.h"
 
 //#include <libremidi/libremidi.hpp>
@@ -120,6 +120,7 @@ public:
 protected:
   PointCasterSession _session;
 
+  void serialize_session();
   void serialize_session(std::filesystem::path file_path);
   void deserialize_session(std::filesystem::path file_path);
   
@@ -153,7 +154,7 @@ protected:
   void draw_sensors_window();
   void draw_controllers_window();
 
-  void quit();
+  void saveAndQuit();
 
   //void initControllers();
   //void handleMidiLearn(const libremidi::message &message);
@@ -208,14 +209,14 @@ PointCaster::PointCaster(const Arguments &args)
   const auto size = Vector2(windowSize()) / dpiScaling();
 
   // load fonts from resources
-  ImFontConfig font_config;
-  font_config.FontDataOwnedByAtlas = false;
   Utility::Resource rs("data");
 
   auto font = rs.getRaw("SpaceGrotesk");
+  ImFontConfig font_config;
+  font_config.FontDataOwnedByAtlas = false;
   const auto font_size = 14.0f;
   ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-      const_cast<char *>(font.data()), Int(font.size()),
+      const_cast<char *>(font.data()), font.size(),
       14.0f * framebufferSize().x() / size.x(), &font_config);
 
   auto font_icons = rs.getRaw("FontAwesomeRegular");
@@ -223,11 +224,13 @@ PointCaster::PointCaster(const Arguments &args)
   ImFontConfig icons_config;
   icons_config.MergeMode = true;
   icons_config.PixelSnapH = true;
+  icons_config.FontDataOwnedByAtlas = false;
   const auto icon_font_size = font_size * 2.0f / 3.0f;
   icons_config.GlyphMinAdvanceX = icon_font_size;
   const auto icon_font_size_pixels = font_size * framebufferSize().x() / size.x();
+
   ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-      const_cast<char *>(font_icons.data()), int(icon_font_size),
+      const_cast<char *>(font_icons.data()), font_icons.size(),
       icon_font_size_pixels, &icons_config, icons_ranges);
 
   // enable window docking
@@ -289,7 +292,7 @@ PointCaster::PointCaster(const Arguments &args)
 
   // If there are no cameras in the scene, initialise at least one
   if (_cameras.empty()) {
-    auto _default_camera_controller = std::make_unique<CameraController>(this, *_scene);
+    auto _default_camera_controller = std::make_unique<CameraController>(_scene.get());
     // TODO viewport size needs to be dynamic
     _default_camera_controller->camera().setViewport(
 	GL::defaultFramebuffer.viewport().size());
@@ -363,15 +366,15 @@ PointCaster::PointCaster(const Arguments &args)
   timeline.start();
 }
 
-void PointCaster::quit() {
+void PointCaster::saveAndQuit() {
+  serialize_session();
+  exit(0);
+}
 
+void PointCaster::serialize_session() {
   auto data_dir = path::get_or_create_data_directory();
   auto file_path = data_dir / (_session.id + ".pcs");
   serialize_session(file_path);
-
-  Device::attached_devices.clear(); 
-
-  exit(0);
 }
 
 void PointCaster::serialize_session(std::filesystem::path file_path) {
@@ -408,9 +411,9 @@ void PointCaster::deserialize_session(std::filesystem::path file_path) {
   // get saved camera configurations to populate the cams list
   for (auto &saved_camera_config : _session.cameras) {
     auto saved_camera =
-	std::make_unique<CameraController>(this, *_scene, saved_camera_config);
+	std::make_unique<CameraController>(_scene.get(), saved_camera_config);
     saved_camera->camera().setViewport(
-	GL::defaultFramebuffer.viewport().size());
+        GL::defaultFramebuffer.viewport().size());
     _cameras.push_back(std::move(saved_camera));
   }
 
@@ -430,7 +433,7 @@ void PointCaster::fill_point_renderer() {
 void PointCaster::draw_menu_bar() {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
-      if (ImGui::MenuItem("Quit", "q")) quit();
+      if (ImGui::MenuItem("Quit", "q")) saveAndQuit();
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Window")) {
@@ -467,6 +470,7 @@ void PointCaster::draw_control_bar() {
 				  control_bar_flags)) {
     if (ImGui::BeginMenuBar()) {
       if (ImGui::Button(ICON_FA_FLOPPY_DISK)) {
+	serialize_session();
       }
 
       if (ImGui::Button(ICON_FA_FOLDER_OPEN)) {
@@ -516,63 +520,64 @@ void PointCaster::draw_camera_window() {
   ImGui::SetNextWindowClass(&central_always);
   ImGui::SetNextWindowDockID(node->ID, ImGuiCond_Always);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-  ImGui::Begin("CamerasRoot");
-  ImGui::PopStyleVar();
 
-  constexpr auto camera_tab_bar_flags =
-      ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_NoTooltip;
+  if (ImGui::Begin("CamerasRoot")) {
+    ImGui::PopStyleVar();
 
-  if (ImGui::BeginTabBar("Cameras"), camera_tab_bar_flags) {
+    constexpr auto camera_tab_bar_flags =
+        ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_NoTooltip;
 
-    // button for creating a new camera
-    auto new_camera_index = -1;
-    if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing)) {
-      auto new_camera = std::make_unique<CameraController>(this, *_scene);
-      _cameras.push_back(std::move(new_camera));
-      new_camera_index = _cameras.size() - 1;
-      pc::log.info("new camera: %i", new_camera_index);
-    }
+    if (ImGui::BeginTabBar("Cameras"), camera_tab_bar_flags) {
 
-    for (int i = 0; i < _cameras.size(); i++) {
-      const auto &camera = _cameras.at(i);
-
-      ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
-      if (new_camera_index == i)
-	tab_item_flags |= ImGuiTabItemFlags_SetSelected;
-
-      if (ImGui::BeginTabItem(camera->name().c_str(), nullptr, tab_item_flags)) {
-	ImGui::BeginChild("Frame");
-
-	const auto window_size = ImGui::GetWindowSize();
-	const auto frame_size =
-	    Vector2i{(int)window_size.x, (int)window_size.y};
-
-        camera->setupFramebuffer(frame_size);
-	camera->bindFramebuffer();
-
-        _point_cloud_renderer->draw(camera->camera(), frame_size);
-        _sphere_renderer->draw(camera->camera());
-
-        camera->camera().draw(*_drawable_group);
-
-	ImGuiIntegration::image(camera->outputFrame(),
-				{(float)frame_size.x(), (float)frame_size.y()});
-
-        if (ImGui::IsItemHovered())
-          _hovering_camera_index = i;
-
-        ImGui::EndChild();
-        ImGui::EndTabItem();
+      // button for creating a new camera
+      auto new_camera_index = -1;
+      if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing)) {
+        auto new_camera = std::make_unique<CameraController>(_scene.get());
+        _cameras.push_back(std::move(new_camera));
+        new_camera_index = _cameras.size() - 1;
+        pc::log.info("new camera: %i", new_camera_index);
       }
+
+      for (int i = 0; i < _cameras.size(); i++) {
+        const auto &camera = _cameras.at(i);
+
+        ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
+        if (new_camera_index == i)
+          tab_item_flags |= ImGuiTabItemFlags_SetSelected;
+
+        if (ImGui::BeginTabItem(camera->name().c_str(), nullptr,
+                                tab_item_flags)) {
+          ImGui::BeginChild("Frame");
+
+          const auto window_size = ImGui::GetWindowSize();
+          const auto frame_size =
+              Vector2i{(int)window_size.x, (int)window_size.y};
+
+          camera->setupFramebuffer(frame_size);
+          camera->bindFramebuffer();
+
+          _point_cloud_renderer->draw(camera->camera(), frame_size);
+          _sphere_renderer->draw(camera->camera());
+
+          camera->camera().draw(*_drawable_group);
+
+          ImGuiIntegration::image(
+              camera->outputFrame(),
+              {(float)frame_size.x(), (float)frame_size.y()});
+
+          if (ImGui::IsItemHovered())
+            _hovering_camera_index = i;
+
+          ImGui::EndChild();
+          ImGui::EndTabItem();
+        }
+      }
+      ImGui::EndTabBar();
     }
-    ImGui::EndTabBar();
+
+    ImGui::End();
+    GL::defaultFramebuffer.bind();
   }
-
-  ImGui::End();
-
-  GL::defaultFramebuffer.bind();
-
-  //
 }
 
 void PointCaster::open_kinect_sensors() {
@@ -841,7 +846,7 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
   case KeyEvent::Key::Q:
-    quit();
+    saveAndQuit();
     break;
   case KeyEvent::Key::S:
     _session.show_sensors_window = !_session.show_sensors_window;
