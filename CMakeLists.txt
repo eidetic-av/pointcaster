@@ -89,7 +89,7 @@ find_package(fmt CONFIG REQUIRED)
 list(APPEND LINK_LIBS fmt::fmt)
 
 find_package(spdlog CONFIG REQUIRED)
-list(APPEND LINK_LIBS spdlog::spdlog)
+list(APPEND LINK_LIBS spdlog::spdlog_header_only)
 
 find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
 list(APPEND INCLUDE_DIRS ${ZPP_BITS_INCLUDE_DIRS})

@@ -1,4 +1,3 @@
-#include <spdlog/spdlog.h>
 #include "k4a_driver.h"
 #include "k4a_utils.h"
 #include <algorithm>
@@ -16,6 +15,37 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sequence.h>
 
+// TODO fix spdlog for linux nvcc
+#ifdef _WIN32
+
+#include <spdlog/spdlog.h>
+
+template <typename... Args>
+inline void log_info(const std::string &fmt_string, Args &&...args) {
+  spdlog::info(fmt_string, std::forward<Args>(args)...);
+}
+template <typename... Args>
+inline void log_error(const std::string &fmt_string, Args &&...args) {
+  spdlog::error(fmt_string, std::forward<Args>(args)...);
+}
+
+#else
+
+#include <fmt/format.h>
+
+template <typename... Args>
+inline void log_info(const std::string &fmt_string, Args &&...args) {
+  std::cout << "[info] " << fmt::format(fmt_string, std::forward<Args>(args)...)
+	    << "\n";
+}
+template <typename... Args>
+inline void log_error(const std::string &fmt_string, Args &&...args) {
+  std::cout << "[error] " << fmt::format(fmt_string, std::forward<Args>(args)...)
+	    << "\n";
+}
+
+#endif
+
 namespace pc::sensors {
 
 using namespace pc::types;
@@ -30,15 +60,15 @@ K4ADriver::K4ADriver() {
 
   device_index = device_count;
 
-  spdlog::info("Opening driver for k4a {} ({})", device_index, id());
+  log_info("Opening driver for k4a {} ({})\n", device_index, id());
 
   try {
     _device = k4a::device::open(device_index);
     _serial_number = _device.get_serialnum();
-    spdlog::info("k4a {} Open", device_index);
+    log_info("k4a {} Open", device_index);
   } catch (const std::system_error &e) {
-    spdlog::error("Failed to open k4a::device");
-    spdlog::error("{}", e.what());
+    log_error("Failed to open k4a::device");
+    log_error("{}", e.what());
     return;
   }
 
@@ -53,13 +83,13 @@ K4ADriver::K4ADriver() {
   // _config.camera_fps = K4A_FRAMES_PER_SECOND_15;
   _config.synchronized_images_only = true;
 
-  spdlog::info("k4a {} attempting to start camera", device_index);
+  log_info("k4a {} attempting to start camera", device_index);
   try {
     _device.start_cameras(&_config);
-    spdlog::info("k4a {} started camera", device_index);
+    log_info("k4a {} started camera", device_index);
   } catch (std::exception e) {
-    spdlog::error("k4a {} failed to start camera", device_index);
-    spdlog::error(e.what());
+    log_error("k4a {} failed to start camera", device_index);
+    log_error(e.what());
     return;
   }
 
@@ -116,14 +146,14 @@ K4ADriver::K4ADriver() {
 }
 
 K4ADriver::~K4ADriver() {
-  spdlog::info("Closing driver for k4a {} ({})", device_index, id());
+  log_info("Closing driver for k4a {} ({})", device_index, id());
   _open = false;
   _stop_requested = true;
   _capture_loop.join();
   _tracker.destroy();
   _device.stop_cameras();
   _device.close();
-  spdlog::info("k4a {} driver closed", device_index);
+  log_info("k4a {} driver closed", device_index);
   device_count--;
 }
 
@@ -134,7 +164,7 @@ std::string K4ADriver::id() const { return _serial_number; }
 void K4ADriver::set_paused(bool paused) { _pause_sensor = paused; }
 
 void K4ADriver::start_alignment() {
-  spdlog::info("Beginning alignment for k4a {} ({})", device_index, id());
+  log_info("Beginning alignment for k4a {} ({})", device_index, id());
   _alignment_frame_count = 0;
 }
 
