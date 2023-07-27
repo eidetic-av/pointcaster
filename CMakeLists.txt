@@ -83,6 +83,11 @@ if (WITH_K4A)
 
 endif()
 
+# ----- OpenCV -----
+
+find_package(OpenCV CONFIG REQUIRED)
+list(APPEND LINK_LIBS ${OpenCV_LIBS})
+
 # ----- Utility libs -----
 
 find_package(fmt CONFIG REQUIRED)

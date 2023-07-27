@@ -1,66 +1,67 @@
 {
-    "name": "bob-pointcaster",
-    "version-string": "0.0.1",
-    "dependencies": [
-	"bob-pointclouds",
-	"zpp-bits",
-	"azure-kinect-sensor-sdk",
-	"corrade",
-	"eigen3",
-	"fmt",
-	"sdl2",
-	"spdlog",
-	"cppzmq",
-	"libusb",
-	{
-	    "name": "imgui",
-	    "features": [
-		"docking-experimental"
-	    ]
-	},
-	"nativefiledialog",
-	{
-	    "name": "sdl2",
-	    "default-features": false,
-	    "features": [
-		"x11"
-	    ],
-	    "platform": "linux"
-	},
-	{
-	    "name": "zeromq",
-	    "default-features": false,
-	    "features": [
-		"draft"
-	    ]
-	},
-	{
-	    "name": "magnum",
-	    "features": [
-		"debugtools",
-		"gl",
-		"sdl2application",
-		"glxcontext",
-		"magnumfont",
-		"meshtools",
-		"objimporter",
-		"primitives",
-		"scenegraph",
-		"shaders",
-		"text",
-		"texturetools",
-		"trade",
-		"tgaimporter",
-		"windowlessglxapplication"
-	    ]
-	},
-	{
-	    "name": "magnum-integration",
-	    "features": [
-		"imgui",
-		"eigen"
-	    ]
-	},
-	"imgui"
-    ]
+  "name": "bob-pointcaster",
+  "version-string": "0.0.1",
+  "dependencies": [
+    "bob-pointclouds",
+    "zpp-bits",
+    "opencv",
+    "azure-kinect-sensor-sdk",
+    "corrade",
+    "eigen3",
+    "fmt",
+    "sdl2",
+    "spdlog",
+    "cppzmq",
+    "libusb",
+    {
+      "name": "imgui",
+      "features": [
+        "docking-experimental"
+      ]
+    },
+    "nativefiledialog",
+    {
+      "name": "sdl2",
+      "default-features": false,
+      "features": [
+        "x11"
+      ],
+      "platform": "linux"
+    },
+    {
+      "name": "zeromq",
+      "default-features": false,
+      "features": [
+        "draft"
+      ]
+    },
+    {
+      "name": "magnum",
+      "features": [
+        "debugtools",
+        "gl",
+        "sdl2application",
+        "glxcontext",
+        "magnumfont",
+        "meshtools",
+        "objimporter",
+        "primitives",
+        "scenegraph",
+        "shaders",
+        "text",
+        "texturetools",
+        "trade",
+        "tgaimporter",
+        "windowlessglxapplication"
+      ]
+    },
+    {
+      "name": "magnum-integration",
+      "features": [
+        "imgui",
+        "eigen"
+      ]
+    },
+    "imgui"
+  ]
 }
