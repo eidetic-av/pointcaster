@@ -75,7 +75,6 @@
 		"eigen"
 	    ]
 	},
-	"imgui",
-	"libuuid"
+	"imgui"
     ]
 }

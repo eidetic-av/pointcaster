@@ -31,8 +31,6 @@ find_package(Eigen3 CONFIG REQUIRED)
 
 find_package(reckless CONFIG REQUIRED)
 
-find_package(unofficial-libuuid CONFIG REQUIRED)
-
 # Corrade won't build on windows without the following flag
 if (WIN32)
   set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
@@ -126,7 +124,6 @@ target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
   imgui::imgui #libremidi 
   fmt::fmt
   reckless::reckless
-  unofficial::UUID::uuid
   Corrade::Main
   Magnum::Application
   Magnum::GL
