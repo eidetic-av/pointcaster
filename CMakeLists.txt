@@ -6,7 +6,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # add_compile_options(-fsanitize=address)
 # add_link_options(-fsanitize=address)
 
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+endif()
 
 option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_RS2 "Enable Realsense device support" OFF)
