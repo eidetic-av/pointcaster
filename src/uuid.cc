@@ -1,4 +1,5 @@
 #include "uuid.h"
+#include <string>
 
 namespace pc::uuid {
 

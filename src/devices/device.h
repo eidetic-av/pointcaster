@@ -1,9 +1,7 @@
 #pragma once
 
 #include "../gui_helpers.h"
-#include "../log.h"
 #include "../pointer.h"
-#include "../string_utils.h"
 #include "driver.h"
 #include "device_config.h"
 #include <Corrade/Containers/Pointer.h>
@@ -20,8 +18,6 @@
 
 namespace pc::sensors {
 
-using pc::strings::concat;
-
 enum DeviceType { UnknownDevice, K4A, K4W2, Rs2 };
 
 class Device {
@@ -33,16 +29,17 @@ public:
   bool is_sensor = true;
   bool paused = false;
 
-  DeviceConfiguration config{.flip_x = true,
-                                        .flip_y = false,
-                                        .flip_z = true,
-                                        .crop_x = {-10000, 10000},
-                                        .crop_y = {-10000, 10000},
-                                        .crop_z = {-10000, 10000},
-                                        .offset = {0, -930, 1520},
-                                        .rotation_deg = {-5, 0, 0},
-                                        .scale = 1.2f,
-                                        .sample = 1};
+  DeviceConfiguration config {true, // flip_x
+                              false, // flip_y
+                              true, // flip_z
+                              {-10000, 10000}, // crop_x
+                              {-10000, 10000}, // crop_y
+                              {-10000, 10000}, // crop_z
+                                        {0, -930, 1520}, // offset
+                                        {-5, 0, 0}, // rotation_deg
+                                        1.2f, // scale
+                                        1 // sample
+  }; // 
 
   virtual std::string get_broadcast_id() = 0;
 

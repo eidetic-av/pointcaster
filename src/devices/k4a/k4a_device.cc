@@ -1,20 +1,17 @@
 #include "k4a_device.h"
-#include "../../log.h"
-#include "../../string_utils.h"
+#include <spdlog/spdlog.h>
 #include <functional>
 #include <imgui.h>
 
 namespace pc::sensors {
 
-using pc::strings::concat;
-
 K4ADevice::K4ADevice() {
-  pc::log.info("Initialising K4ADevice");
+  spdlog::info("Initialising K4ADevice");
 
   _driver = std::make_unique<K4ADriver>();
   if (attached_devices.size() == 0)
     _driver->primary_aligner = true;
-  name = concat("k4a ", std::to_string(_driver->device_index));
+  name = "k4a " + std::to_string(_driver->device_index);
   // get any device specific controls needed from the driver
   auto driver = dynamic_cast<K4ADriver *>(_driver.get());
   try {
@@ -23,14 +20,14 @@ K4ADevice::K4ADevice() {
     _contrast = driver->get_contrast();
     _gain = driver->get_gain();
   } catch (::k4a::error &e) {
-    pc::log.error(e.what());
+    spdlog::error(e.what());
   }
 
   // load last saved configuration on startup
   deserialize_config_from_this_device();
 }
 
-K4ADevice::~K4ADevice() { pc::log.info("Closing %s", name); }
+K4ADevice::~K4ADevice() { spdlog::info("Closing {}", name); }
 
 std::string K4ADevice::get_broadcast_id() { return _driver->id(); }
 
@@ -41,7 +38,7 @@ void K4ADevice::update_device_control(int *target, int value,
       set_func(value);
       *target = value;
     } catch (::k4a::error e) {
-      pc::log.error(e.what());
+      spdlog::error(e.what());
     }
   }
 }

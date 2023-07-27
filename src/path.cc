@@ -12,7 +12,7 @@ namespace pc::path {
 std::filesystem::path exe_path() {
 #ifdef _WIN32
   wchar_t buffer[MAX_PATH];
-  GetModuleFileName(NULL, buffer, sizeof(buffer));
+  GetModuleFileNameW(NULL, buffer, sizeof(buffer));
   return std::filesystem::path(buffer);
 #else
   return std::filesystem::read_symlink("/proc/self/exe");

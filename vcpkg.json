@@ -9,19 +9,15 @@
 	"eigen3",
 	"fmt",
 	"sdl2",
-	"reckless",
+	"spdlog",
 	"cppzmq",
 	"libusb",
-	"zlib",
-	"range-v3",
 	{
 	    "name": "imgui",
 	    "features": [
 		"docking-experimental"
 	    ]
 	},
-	"happly",
-	"toml11",
 	"nativefiledialog",
 	{
 	    "name": "sdl2",
@@ -41,26 +37,16 @@
 	{
 	    "name": "magnum",
 	    "features": [
-		"anyimageconverter",
-		"anyimageimporter",
-		"anysceneconverter",
-		"anysceneimporter",
-		"anyshaderconverter",
 		"debugtools",
-		"distancefieldconverter",
 		"gl",
 		"sdl2application",
 		"glxcontext",
-		"imageconverter",
 		"magnumfont",
-		"magnumfontconverter",
 		"meshtools",
 		"objimporter",
 		"primitives",
 		"scenegraph",
-		"shaderconverter",
 		"shaders",
-		"shadertools",
 		"text",
 		"texturetools",
 		"trade",

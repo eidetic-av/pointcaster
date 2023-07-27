@@ -1,5 +1,5 @@
 diff --git a/src/Magnum/Platform/Sdl2Application.cpp b/src/Magnum/Platform/Sdl2Application.cpp
-index 7407a8b2d..aed1565fb 100644
+index 276c7ee55..90c52f3cb 100644
 --- a/src/Magnum/Platform/Sdl2Application.cpp
 +++ b/src/Magnum/Platform/Sdl2Application.cpp
 @@ -34,7 +34,7 @@
@@ -12,10 +12,10 @@ index 7407a8b2d..aed1565fb 100644
  #pragma clang diagnostic pop
  #endif
 diff --git a/src/Magnum/Platform/Sdl2Application.h b/src/Magnum/Platform/Sdl2Application.h
-index 68835eef8..e2d8a7c63 100644
+index b2426d513..176729fdb 100644
 --- a/src/Magnum/Platform/Sdl2Application.h
 +++ b/src/Magnum/Platform/Sdl2Application.h
-@@ -56,11 +56,11 @@
+@@ -57,11 +57,11 @@
  #pragma clang diagnostic ignored "-Wpragma-pack"
  #endif
  /* SDL.h includes the world, adding 50k LOC. We don't want that either. */
@@ -29,17 +29,12 @@ index 68835eef8..e2d8a7c63 100644
 +#include <SDL2/SDL_version.h> /* huh, why is this not pulled in implicitly?! */
 +#include <SDL2/SDL_video.h>
 +#include <SDL2/SDL_scancode.h>
- 
+
  #ifdef CORRADE_TARGET_IOS
  /* Including SDL_main.h unconditionally would mean it'd override Corrade::Main
-@@ -69,11 +69,11 @@
-    output). Right now (SDL 2.0.11) it's only needed for WinRT (which is done
-    below), Android (which we don't support for SDL) and iOS, so whitelist it
-    only for iOS. */
--#include <SDL_main.h>
-+#include <SDL2/SDL_main.h>
+@@ -74,7 +74,7 @@
  #endif
- 
+
  #ifdef CORRADE_TARGET_WINDOWS_RT
 -#include <SDL_main.h> /* For SDL_WinRTRunApp */
 +#include <SDL2/SDL_main.h> /* For SDL_WinRTRunApp */

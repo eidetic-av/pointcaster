@@ -1,10 +1,10 @@
 #include "camera_controller.h"
-#include "../log.h"
 #include "../math.h"
 #include "../uuid.h"
 #include "camera_config.h"
 #include <algorithm>
 #include <numbers>
+#include <spdlog/spdlog.h>
 
 #include <Magnum/GL/Buffer.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
@@ -66,8 +66,8 @@ CameraController::CameraController(Scene3D *scene, CameraConfiguration config)
   }
   _config.name = "camera_" + std::to_string(++CameraController::count);
 
-  pc::log.info("Initialised Camera Controller '%s' with id '%s'", _config.name,
-               _config.id);
+  spdlog::info("Initialised Camera Controller {} with id {}", _config.name,
+	  _config.id);
 }
 
 CameraController::~CameraController() { CameraController::count--; }
@@ -114,8 +114,8 @@ Matrix4 CameraController::make_projection_matrix() {
   const auto focal_point =
       unproject(_frame_size / 2, depth_at(_frame_size / 2));
   auto camera_location = _camera_parent->transformation().translation();
-  pc::log.info("camera_location: %f, %f, %f", camera_location.x(),
-               camera_location.y(), camera_location.z());
+  spdlog::info("camera_location: {}, {}, {}", camera_location.x(),
+	  camera_location.y(), camera_location.z());
   const auto target_distance = (camera_location - focal_point).length();
 
   if (!_is_dz_started) {
@@ -175,8 +175,7 @@ void CameraController::setTranslation(
   _camera_parent->setTransformation(transform);
 }
 
-void CameraController::dolly(
-    Magnum::Platform::Sdl2Application::MouseScrollEvent &event) {
+void CameraController::dolly(Magnum::Platform::Sdl2Application::MouseScrollEvent &event) {
   const auto delta = event.offset().y();
   const auto frame_centre = _frame_size / 2;
   const auto centre_depth = depth_at(frame_centre);
@@ -247,14 +246,21 @@ CameraController::unproject(const Magnum::Vector2i &window_position,
   return _camera->projectionMatrix().inverted().transformPoint(in);
 }
 
-Float CameraController::depth_at(const Vector2i &windowPosition) {
+Float CameraController::depth_at(const Vector2i& window_position) {
+
   /* First scale the position from being relative to window size to being
      relative to framebuffer size as those two can be different on HiDPI
      systems */
-  const Vector2i position = windowPosition * _frame_size;
+  const Vector2i position = window_position * _frame_size;
   const Vector2i fbPosition{position.x(),
                             GL::defaultFramebuffer.viewport().sizeY() -
                                 position.y() - 1};
+
+  //const Vector2i position = windowPosition * Vector2{ _app->framebufferSize() } /
+  //    Vector2{_app->windowSize()};
+  //const Vector2i fbPosition{ position.x(),
+  //                          GL::defaultFramebuffer.viewport().sizeY() -
+  //                              position.y() - 1 };
 
   GL::defaultFramebuffer.mapForRead(
       GL::DefaultFramebuffer::ReadAttachment::Front);

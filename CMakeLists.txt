@@ -1,160 +1,143 @@
 cmake_minimum_required(VERSION 3.22.0)
 project(bob-pointcaster LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# add_compile_options(-fsanitize=address)
-# add_link_options(-fsanitize=address)
-
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-endif()
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 option(WITH_K4A "Enable Azure Kinect support" ON)
-option(WITH_RS2 "Enable Realsense device support" OFF)
-option(WITH_SKYBRIDGE "Enable global sessions using the BoB Skybridge server" OFF)
-option(WITH_PLY_PLAYBACK "Enable .ply file pointcloud loading and playback" OFF)
 
-find_package(fmt CONFIG REQUIRED)
-find_package(EBML CONFIG REQUIRED)
-find_package(ZLIB REQUIRED)
-
-find_package(ZeroMQ CONFIG REQUIRED)
-set(ZMQ_LIB libzmq-static)
-
-find_package(toml11 CONFIG REQUIRED)
+# ----- imgui lib -----
 
 find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
+list(APPEND LINK_LIBS imgui::imgui)
+
+# ----- Eigen lib for geometry -----
 
 find_package(Eigen3 CONFIG REQUIRED)
+list(APPEND LINK_LIBS Eigen3::Eigen)
 
-find_package(reckless CONFIG REQUIRED)
+# ----- Point cloud streaming libs -----
 
-# Corrade won't build on windows without the following flag
+find_package(bob-pointclouds CONFIG REQUIRED)
+list(APPEND LINK_LIBS bob::pointclouds)
+
+find_package(draco CONFIG REQUIRED)
+list(APPEND LINK_LIBS draco::draco)
+
+find_package(ZeroMQ CONFIG REQUIRED)
+# zmq needs to be a shared lib on windows
 if (WIN32)
-  set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
+  list(APPEND LINK_LIBS libzmq)
+  # and it needs to include the system bcrypt
+  set(PLATFORM_LIBS ${PLATFORM_LIBS} bcrypt)
+else()
+  list(APPEND LINK_LIBS libzmq-static)
 endif()
+
+# ----- Magnum 3D engine -----
+
 find_package(Corrade CONFIG REQUIRED Main)
+list(APPEND LINK_LIBS Corrade::Main)
+
 find_package(Magnum CONFIG REQUIRED
   GL MeshTools Primitives SceneGraph
   Shaders Trade Sdl2Application)
-find_package(MagnumIntegration CONFIG REQUIRED ImGui Eigen)
-corrade_add_resource(RESOURCES resources.conf)
+list(APPEND LINK_LIBS
+  Magnum::Application Magnum::GL
+  Magnum::Magnum Magnum::MeshTools
+  Magnum::Primitives Magnum::SceneGraph
+  Magnum::Shaders Magnum::Trade)
+
+find_package(MagnumIntegration CONFIG REQUIRED
+  ImGui Eigen)
+list(APPEND LINK_LIBS
+  MagnumIntegration::ImGui MagnumIntegration::Eigen)
+
+# ----- Sensor driver libraries -----
 
 find_package(libusb CONFIG REQUIRED)
+list(APPEND LINK_LIBS ${LIBUSB_LIBRARIES})
+list(APPEND INCLUDE_DIRS ${LIBUSB_INCLUDE_DIRS})
 
-find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
-
-find_package(bob-pointclouds CONFIG REQUIRED)
-find_package(draco CONFIG REQUIRED)
-
+# Azure Kinect
 if (WITH_K4A)
+
   find_package(k4a CONFIG REQUIRED)
-  set(OPTIONAL_SRC ${OPTIONAL_SRC}
+  list(APPEND OPTIONAL_LIBS k4a::k4a)
+
+  list(APPEND OPTIONAL_SRC
     src/devices/k4a/k4a_driver.cu
     src/devices/k4a/k4a_device.cc)
-  set (OPTIONAL_LIBS ${OPTIONAL_LIBS} k4a::k4a)
 
-  # TODO create a port for using k4abt
-  find_package(k4abt CONFIG REQUIRED)
-  set(OPTIONAL_LIBS ${OPTIONAL_LIBS} k4abt)
+  find_package(k4abt REQUIRED)
+  list(APPEND OPTIONAL_LIBS k4a::k4abt)
   
   add_compile_definitions(WITH_K4A)
+
+  if (WIN32)
+    add_compile_definitions(NOMINMAX)
+  endif()
+
 endif()
 
-if (WITH_RS2)
-  find_package(realsense2 CONFIG REQUIRED)
-  set(OPTIONAL_SRC ${OPTIONAL_SRC}
-    src/devices/rs2/rs2_driver.cc 
-    src/devices/rs2/rs2_device.cc)
-  set (OPTIONAL_LIBS ${OPTIONAL_LIBS} realsense2::realsense2)
-  add_compile_definitions(WITH_RS2)
-endif()
+# ----- Utility libs -----
 
-if (WITH_PLY_PLAYBACK)
-  find_path(HAPPLY_INCLUDE_DIRS "happly.h")
-  set(OPTIONAL_INCLUDE_DIRS ${OPTIONAL_INCLUDE_DIRS} ${HAPPY_INCLUDE_DIRS})
-  find_package(unofficial-nativefiledialog CONFIG REQUIRED)
-  set(OPTIONAL_LIBS ${OPTIONAL_LIBS} unofficial::nativefiledialog::nfd)
-endif()
+find_package(fmt CONFIG REQUIRED)
+list(APPEND LINK_LIBS fmt::fmt)
 
-if (WITH_SKYBRIDGE)
-  find_package(ixwebsocket CONFIG REQUIRED)
-  set(OPTIONAL_SRC ${OPTIONAL_SRC} src/skybridge.cc)
-  set(OPTIONAL_LIBS ${OPTIONAL_LIBS} ixwebsocket::ixwebsocket)
-  add_compile_definitions(WITH_SKYBRIDGE)
-endif()
+find_package(spdlog CONFIG REQUIRED)
+list(APPEND LINK_LIBS spdlog::spdlog)
+
+find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
+list(APPEND INCLUDE_DIRS ${ZPP_BITS_INCLUDE_DIRS})
+
+# ----- Application setup -----
 
 set(SOURCE_FILES
   src/pointcaster.cc
+  src/devices/device.cc
+  src/devices/usb.cc
+  src/camera/camera_controller.cc
   src/radio.cc
   src/snapshots.cc
-  src/camera/camera_controller.cc
-  src/devices/device.cc
-  src/gui_helpers.cc
   src/point_cloud_renderer.cc
   src/sphere_renderer.cc
   src/shaders/particle_sphere.cc
-  src/devices/usb.cc
+  src/gui_helpers.cc
   src/path.cc
   src/uuid.cc
   src/wtf/wtf.cc
   ${OPTIONAL_SRC})
 
-if (WIN32)
-  # have to link dynamically to zeromq on windows
-  set(ZMQ_LIB libzmq)
-  # include bcrypt from the Windows SDK
-  set(PLATFORM_LIBS ${PLATFORM_LIBS} bcrypt)
-endif()
+corrade_add_resource(RESOURCES resources.conf)
 
 add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
-
 set_target_properties(pointcaster PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-# target_compile_options(pointcaster PRIVATE
-#  "$<$<COMPILE_LANGUAGE:CUDA>:SHELL:--compiler-options -diag-suppress 20012,-diag-suppress 550>")
 
 target_include_directories(pointcaster PRIVATE
-  ${LIBUSB_INCLUDE_DIRS} ${ZPP_BITS_INCLUDE_DIRS}
-  ${RECKLESS_INCLUDE_DIRS}
-  ${OPTIONAL_INCLUDE_DIRS})
+    ${INCLUDE_DIRS} ${OPTIONAL_INCLUDE_DIRS} 
+    ${PLATFORM_INCLUDE_DIRS})
 
-target_link_libraries(pointcaster PRIVATE ${PLATFORM_LIBS}
-  imgui::imgui #libremidi 
-  fmt::fmt
-  reckless::reckless
-  Corrade::Main
-  Magnum::Application
-  Magnum::GL
-  Magnum::Magnum
-  Magnum::MeshTools
-  Magnum::Primitives
-  Magnum::SceneGraph
-  Magnum::Shaders
-  Magnum::Trade
-  MagnumIntegration::ImGui
-  MagnumIntegration::Eigen
-  Eigen3::Eigen
-  EBML::ebml
-  toml11::toml11
-  draco::draco
-  bob::pointclouds 
-  ${LIBUSB_LIBRARIES} ${ZMQ_LIB}
-  ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
+target_link_libraries(pointcaster PRIVATE 
+    ${LINK_LIBS} ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
 
-# copy compile_commands.json for lsp integration 
-# (assume we don't need this on Windows)
+# ----- Post-build actions -----
+
+if (WIN32 AND WITH_K4A)
+  # shared k4abt dll must be moved into executable directory manually
+  add_custom_command(TARGET pointcaster POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    ${K4ABT_ROOT}/sdk/windows-desktop/amd64/release/bin/k4abt.dll
+    $<TARGET_FILE_DIR:pointcaster>)
+endif()
+
 if (NOT WIN32)
+  # copy compile_commands.json for lsp integration on linux
   add_custom_target(copy-compile-commands ALL
     ${CMAKE_COMMAND} -E copy_if_different
     ${CMAKE_BINARY_DIR}/compile_commands.json
     ${CMAKE_CURRENT_LIST_DIR})
 endif()
-
-# run target
-add_custom_target(run-pointcaster
-  command ./pointcaster
-  depends pointcaster
-  working_directory ${CMAKE_CURRENT_BINARY_DIR}
-  comment "Running pointcaster")

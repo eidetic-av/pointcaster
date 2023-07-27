@@ -23,9 +23,9 @@
 #include <zmq.hpp>
 
 #include "path.h"
-#include "log.h"
+#include <spdlog/spdlog.h>
 #include "pointer.h"
-#include "string_utils.h"
+#include "structs.h"
 
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/Image.h>
@@ -82,14 +82,13 @@ using namespace pc::snapshots;
 using namespace Magnum;
 using namespace Math::Literals;
 
-using pc::strings::concat;
 using pc::sensors::Device;
 using pc::sensors::K4ADevice;
 
 using uint = unsigned int;
 
-using Object3D = SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
-using Scene3D = SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
+using Object3D = Magnum::SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
+using Scene3D = Magnum::SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 
 struct PointCasterSession {
   std::string id;
@@ -176,13 +175,13 @@ protected:
 
 PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
-  pc::log.info("This is pointcaster");
+  spdlog::info("This is pointcaster");
 
   // Set up the window
   const Vector2 dpi_scaling = this->dpiScaling({});
   Configuration conf;
   conf.setTitle("pointcaster");
-  conf.setSize({1900, 1200});
+  // conf.setSize({1900, 1200});
   // conf.setSize({1600, 1080});
   // conf.setSize({960, 640});
   conf.setSize(conf.size(), dpi_scaling);
@@ -281,12 +280,12 @@ PointCaster::PointCaster(const Arguments &args)
   }
 
   if (last_modified_session_file.empty()) {
-    pc::log.info("No previous session file found. Creating new session.");
+    spdlog::info("No previous session file found. Creating new session.");
     _session = {.id = pc::uuid::word()};
     auto file_path = data_dir / (_session.id + ".pcs");
     serialize_session(file_path);
   } else {
-    pc::log.info("Found previous session file");
+    spdlog::info("Found previous session file");
     deserialize_session(last_modified_session_file);
   }
 
@@ -334,7 +333,7 @@ PointCaster::PointCaster(const Arguments &args)
   // create a callback for the USB handler thread
   // that will add new devices to our main sensor list
   registerUsbAttachCallback([&](auto attached_device) {
-    pc::log.debug("attached usb callback");
+    spdlog::debug("attached usb callback");
     if (!_session.auto_connect_sensors) return;
 
     // freeUsb();
@@ -350,7 +349,7 @@ PointCaster::PointCaster(const Arguments &args)
   });
   registerUsbDetachCallback([&](auto detached_device) {
     // std::erase(*devices, detached_device);
-    pc::log.debug("detached usb callback");
+    spdlog::debug("detached usb callback");
   });
   // init libusb and any attached devices
   _usb_monitor = std::make_unique<UsbMonitor>();
@@ -378,7 +377,7 @@ void PointCaster::serialize_session() {
 }
 
 void PointCaster::serialize_session(std::filesystem::path file_path) {
-  pc::log.info("Saving session to %s", file_path.string());
+  spdlog::info("Saving session to {}", file_path.string());
 
   // save imgui layout
   std::size_t imgui_layout_size;
@@ -399,12 +398,10 @@ void PointCaster::serialize_session(std::filesystem::path file_path) {
 }
 
 void PointCaster::deserialize_session(std::filesystem::path file_path) {
-  pc::log.info("Loading state from %s", file_path.string());
+  spdlog::info("Loading state from {}", file_path.string());
   auto buffer = path::load_file(file_path);
   auto in = zpp::bits::in(buffer);
   auto success = in(_session);
-  pc::log.info("%s", std::to_string(_session.imgui_layout.size()));
-
   ImGui::LoadIniSettingsFromMemory(_session.imgui_layout.data(),
 				   _session.imgui_layout.size());
 
@@ -417,7 +414,7 @@ void PointCaster::deserialize_session(std::filesystem::path file_path) {
     _cameras.push_back(std::move(saved_camera));
   }
 
-  pc::log.info("Loaded session '%s'", file_path.filename().string());
+  spdlog::info("Loaded session '{}'", file_path.filename().string());
 }
 
 void PointCaster::fill_point_renderer() {
@@ -442,7 +439,7 @@ void PointCaster::draw_menu_bar() {
 				      const char * shortcut_key,
 				      bool & window_toggle) {
 	ImGui::BeginDisabled();
-	ImGui::Checkbox(concat("##Toggle_Window_", item_name).data(), &window_toggle);
+	ImGui::Checkbox((std::string("##Toggle_Window_") + item_name).data(), &window_toggle);
 	ImGui::EndDisabled();
 	ImGui::SameLine();
 	if (ImGui::MenuItem(item_name, shortcut_key)) window_toggle = !window_toggle;
@@ -535,7 +532,7 @@ void PointCaster::draw_camera_window() {
         auto new_camera = std::make_unique<CameraController>(_scene.get());
         _cameras.push_back(std::move(new_camera));
         new_camera_index = _cameras.size() - 1;
-        pc::log.info("new camera: %i", new_camera_index);
+        spdlog::info("new camera: {}", new_camera_index);
       }
 
       for (int i = 0; i < _cameras.size(); i++) {
@@ -670,7 +667,7 @@ void PointCaster::draw_stats() {
 //  std::thread midi_startup([&]() {
 //    midi_in midi;
 //    auto port_count = midi.get_port_count();
-//    pc::log.info("Detected %d MIDI ports", port_count);
+//    spdlog::info("Detected {} MIDI ports", port_count);
 //    midi.open_port(0);
 //    midi.set_callback([&](const message &message) {
 //      if (gui::midi_learn_mode) {

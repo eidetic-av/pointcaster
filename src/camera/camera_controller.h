@@ -24,6 +24,8 @@ typedef Magnum::SceneGraph::Object<Magnum::SceneGraph::MatrixTransformation3D>
 using Scene3D = Magnum::SceneGraph::Scene<Magnum::SceneGraph::MatrixTransformation3D>;
 using Camera3D = Magnum::SceneGraph::Camera3D;
 
+using uint = unsigned int;
+
 class CameraController {
 public:
   static std::atomic<uint> count;
@@ -39,7 +41,7 @@ public:
 
   void setRotation(const Magnum::Math::Vector3<Magnum::Math::Rad<float>>& rotation);
   void setTranslation(const Magnum::Math::Vector3<float>& translation);
-  void dolly(Magnum::Platform::Sdl2Application::MouseScrollEvent &event);
+  void dolly(Magnum::Platform::Sdl2Application::MouseScrollEvent& event);
 
   void mouseRotate(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);
   void mouseTranslate(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);
