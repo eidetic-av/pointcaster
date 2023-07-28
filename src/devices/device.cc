@@ -2,12 +2,15 @@
 #include "../path.h"
 #include <spdlog/spdlog.h>
 #include <imgui.h>
+#include "../gui_helpers.h"
 
 #ifndef __CUDACC__
 #include <zpp_bits.h>
 #endif
 
 namespace pc::sensors {
+
+using pc::gui::draw_slider;
 
 std::mutex Device::devices_access;
 std::vector<std::shared_ptr<Device>> Device::attached_devices;
@@ -58,34 +61,9 @@ void Device::deserialize_config_from_this_device() {
   deserialize_config_from_device_id(_driver->id());
 }
 
-template <typename T>
-void Device::draw_slider(std::string_view label_text, T *value, T min, T max,
-                         T default_value) {
-  ImGui::PushID(_parameter_index++);
-  ImGui::Text("%s", label_text.data());
-  ImGui::SameLine();
-
-  constexpr auto parameter = [](auto text) constexpr {
-    return std::string("##") + std::string(text);
-  };
-
-  if constexpr (std::is_integral<T>())
-    ImGui::SliderInt(parameter(label_text).c_str(), value, min, max);
-
-  else if constexpr (std::is_floating_point<T>())
-    ImGui::SliderFloat(parameter(label_text).c_str(), value, min, max);
-
-  ImGui::SameLine();
-  if (ImGui::Button("0"))
-    *value = default_value;
-  gui::enableParameterLearn(value, gui::ParameterType::Float, min, max);
-  ImGui::PopID();
-}
-
 void Device::draw_imgui_controls() {
 
   ImGui::PushID(_driver->id().c_str());
-  _parameter_index = 0;
 
   // ImGui::Checkbox("Enable Broadcast", &_enable_broadcast);
 

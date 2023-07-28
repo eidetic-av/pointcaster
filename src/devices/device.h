@@ -46,11 +46,6 @@ public:
   bool broadcast_enabled() { return _enable_broadcast; }
   auto point_cloud() { return _driver->point_cloud(config); };
 
-  uint _parameter_index;
-  template <typename T>
-  void draw_slider(std::string_view label_text, T *value, T min, T max,
-                   T default_value = 0);
-
   void draw_imgui_controls();
 
   void serialize_config() const;

@@ -44,6 +44,9 @@ void K4ADevice::update_device_control(int *target, int value,
 }
 
 void K4ADevice::draw_device_controls() {
+
+  using pc::gui::draw_slider;
+  
   auto driver = dynamic_cast<K4ADriver *>(_driver.get());
 
   int exposure = _exposure;

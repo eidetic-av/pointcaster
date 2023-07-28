@@ -16,4 +16,11 @@ namespace pc::gui {
 	  new GuiParameter{value_ptr, param_type, range_min, range_max});
     }
   }
+
+  unsigned int _parameter_index;
+
+  void begin_gui_helpers() {
+    _parameter_index = 0;
+  }
+
 }

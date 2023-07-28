@@ -14,6 +14,8 @@
 #include <Magnum/Math/Quaternion.h>
 #include <Magnum/Math/Vector3.h>
 
+#include "../gui_helpers.h"
+
 namespace pc::camera {
 
 using namespace Magnum;
@@ -24,11 +26,15 @@ using Magnum::Math::Deg;
 
 std::atomic<uint> CameraController::count = 0;
 
-CameraController::CameraController(Scene3D *scene)
-    : CameraController(scene, CameraConfiguration{}){};
+CameraController::CameraController(Magnum::Platform::Application *app,
+				   Scene3D *scene)
+    : CameraController(app, scene, CameraConfiguration{}){};
 
-CameraController::CameraController(Scene3D *scene, CameraConfiguration config)
+CameraController::CameraController(Magnum::Platform::Application *app,
+                                   Scene3D *scene, CameraConfiguration config)
     : _config(config) {
+
+  _app = app;
 
   // rotations are manipulated by individual parent objects...
   // this makes rotations easier to reason about and serialize,
@@ -55,8 +61,8 @@ CameraController::CameraController(Scene3D *scene, CameraConfiguration config)
 		      _config.translation[2]};
   auto fov = Deg_f(_config.fov);
 
-  setRotation(rotation);
-  setTranslation(translation);
+  setRotation(rotation, true);
+  setTranslation(translation, true);
 
   _camera->setProjectionMatrix(
       Matrix4::perspectiveProjection(fov, 4.0f / 3.0f, 0.001f, 200.0f));
@@ -149,7 +155,16 @@ Matrix4 CameraController::make_projection_matrix() {
 }
 
 void CameraController::setRotation(
-    const Magnum::Math::Vector3<Magnum::Math::Rad<float>> &rotation) {
+				   const Magnum::Math::Vector3<Magnum::Math::Rad<float>> &rotation, bool force) {
+
+  std::array<float, 3> input_deg = {float(Deg_f(rotation.x())),
+				    float(Deg_f(rotation.y())),
+				    float(Deg_f(rotation.z()))};
+  if (!force && _config.rotation[0] == input_deg[0] &&
+      _config.rotation[1] == input_deg[1] &&
+      _config.rotation[2] == input_deg[2]) {
+    return;
+  }
 
   _config.rotation = {float(Deg_f(rotation.x())), float(Deg_f(rotation.y())),
 		      float(Deg_f(rotation.z()))};
@@ -168,7 +183,12 @@ void CameraController::setRotation(
 }
 
 void CameraController::setTranslation(
-    const Magnum::Math::Vector3<float> &translation) {
+				      const Magnum::Math::Vector3<float> &translation, bool force) {
+  if (!force && _config.translation[0] == translation.x() &&
+      _config.translation[1] == translation.y() &&
+      _config.translation[2] == translation.z()) {
+    return;
+  }
   _config.translation = {translation.x(), translation.y(), translation.z()};
   auto transform = _camera_parent->transformationMatrix();
   transform.translation() = {translation.z(), translation.y(), translation.x()};
@@ -251,16 +271,12 @@ Float CameraController::depth_at(const Vector2i& window_position) {
   /* First scale the position from being relative to window size to being
      relative to framebuffer size as those two can be different on HiDPI
      systems */
-  const Vector2i position = window_position * _frame_size;
-  const Vector2i fbPosition{position.x(),
-                            GL::defaultFramebuffer.viewport().sizeY() -
-                                position.y() - 1};
 
-  //const Vector2i position = windowPosition * Vector2{ _app->framebufferSize() } /
-  //    Vector2{_app->windowSize()};
-  //const Vector2i fbPosition{ position.x(),
-  //                          GL::defaultFramebuffer.viewport().sizeY() -
-  //                              position.y() - 1 };
+  const Vector2i position = window_position * Vector2{ _app->framebufferSize() } /
+     Vector2{_app->windowSize()};
+  const Vector2i fbPosition{ position.x(),
+                           GL::defaultFramebuffer.viewport().sizeY() -
+                               position.y() - 1 };
 
   GL::defaultFramebuffer.mapForRead(
       GL::DefaultFramebuffer::ReadAttachment::Front);
@@ -271,6 +287,30 @@ Float CameraController::depth_at(const Vector2i& window_position) {
   /* TODO: change to just Math::min<Float>(data.pixels<Float>() when the
      batch functions in Math can handle 2D views */
   return Math::min<Float>(data.pixels<Float>().asContiguous());
+}
+
+void CameraController::draw_imgui_controls() {
+
+  using pc::gui::draw_slider;
+  
+  if (ImGui::TreeNode("Transform")) {
+
+    ImGui::TextDisabled("Translation");
+    auto translate = _config.translation;
+    draw_slider<float>("x", &translate[0], -10, 10);
+    draw_slider<float>("y", &translate[1], -10, 10);
+    draw_slider<float>("z", &translate[2], -10, 10);
+    setTranslation(Position{translate[0], translate[1], translate[2]});
+
+    ImGui::TextDisabled("Rotation");
+    auto rotate = _config.rotation;
+    draw_slider<float>("x", &rotate[0], -360, 360);
+    draw_slider<float>("y", &rotate[1], -360, 360);
+    draw_slider<float>("z", &rotate[2], -360, 360);
+    setRotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
+
+    ImGui::TreePop();
+  }
 }
 
 } // namespace pc::camera

@@ -30,8 +30,8 @@ class CameraController {
 public:
   static std::atomic<uint> count;
 
-  CameraController(Scene3D *scene);
-  CameraController(Scene3D *scene, CameraConfiguration config);
+  CameraController(Magnum::Platform::Application *app, Scene3D *scene);
+  CameraController(Magnum::Platform::Application *app, Scene3D *scene, CameraConfiguration config);
 
   ~CameraController();
 
@@ -39,8 +39,8 @@ public:
   const std::string name() const { return _config.name; };
   Camera3D &camera() const { return *_camera; }
 
-  void setRotation(const Magnum::Math::Vector3<Magnum::Math::Rad<float>>& rotation);
-  void setTranslation(const Magnum::Math::Vector3<float>& translation);
+  void setRotation(const Magnum::Math::Vector3<Magnum::Math::Rad<float>>& rotation, bool force = false);
+  void setTranslation(const Magnum::Math::Vector3<float>& translation, bool force = false);
   void dolly(Magnum::Platform::Sdl2Application::MouseScrollEvent& event);
 
   void mouseRotate(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);
@@ -55,7 +55,11 @@ public:
 
   Magnum::GL::Texture2D& outputFrame();
 
+  void draw_imgui_controls();
+
 private:
+  Magnum::Platform::Application* _app;
+  
   CameraConfiguration _config;
   std::unique_ptr<Camera3D> _camera;
 

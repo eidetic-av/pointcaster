@@ -188,7 +188,7 @@ PointCaster::PointCaster(const Arguments &args)
     spdlog::info("SDL2 returned OS resolution: {}x{}", dm.w, dm.h);
   }
   const Vector2 dpi_scaling = this->dpiScaling({});
-  spdlog::info("DPI scaling: {}x{}", dpi_scaling.x(), dpi_scaling.y());
+  spdlog::info("DPI scaling: {}", dpi_scaling.x());
 
   // Set up the window
 
@@ -313,7 +313,7 @@ PointCaster::PointCaster(const Arguments &args)
   // If there are no cameras in the scene, initialise at least one
   if (_camera_controllers.empty()) {
     auto _default_camera_controller =
-        std::make_unique<CameraController>(_scene.get());
+	std::make_unique<CameraController>(this, _scene.get());
     // TODO viewport size needs to be dynamic
     _default_camera_controller->camera().setViewport(
         GL::defaultFramebuffer.viewport().size());
@@ -432,7 +432,7 @@ void PointCaster::deserialize_session(std::filesystem::path file_path) {
   // get saved camera configurations to populate the cams list
   for (auto &saved_camera_config : _session.cameras) {
     auto saved_camera =
-        std::make_unique<CameraController>(_scene.get(), saved_camera_config);
+      std::make_unique<CameraController>(this, _scene.get(), saved_camera_config);
     saved_camera->camera().setViewport(
         GL::defaultFramebuffer.viewport().size());
     _camera_controllers.push_back(std::move(saved_camera));
@@ -565,7 +565,7 @@ void PointCaster::draw_main_viewport() {
       // button for creating a new camera
       auto new_camera_index = -1;
       if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing)) {
-        auto new_camera = std::make_unique<CameraController>(_scene.get());
+        auto new_camera = std::make_unique<CameraController>(this, _scene.get());
         _camera_controllers.push_back(std::move(new_camera));
         new_camera_index = _camera_controllers.size() - 1;
         spdlog::info("new camera: {}", new_camera_index);
@@ -670,6 +670,7 @@ void PointCaster::draw_camera_control_windows() {
   for (const auto &camera_controller : _camera_controllers) {
     if (!camera_controller->config().show_window) continue;
     ImGui::Begin(camera_controller->name().c_str());
+      camera_controller->draw_imgui_controls();
     ImGui::End();
   }
 }
@@ -694,10 +695,10 @@ void PointCaster::draw_sensors_window() {
     if (!device->is_sensor)
       return;
     if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
-      device->Device::draw_imgui_controls();
+      device->draw_imgui_controls();
     ImGui::Spacing();
     ImGui::Text(device->name.c_str());
-    device->Device::draw_imgui_controls();
+    device->draw_imgui_controls();
     ImGui::Spacing();
     ImGui::Separator();
   }
@@ -868,6 +869,7 @@ void PointCaster::drawEvent() {
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
                                GL::FramebufferClear::Depth);
   _imgui_context.newFrame();
+  pc::gui::begin_gui_helpers();
 
   // Enable text input, if needed/
   if (ImGui::GetIO().WantTextInput && !isTextInputActive())
