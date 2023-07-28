@@ -35,7 +35,7 @@ public:
 
   ~CameraController();
 
-  const CameraConfiguration &config() const { return _config; };
+  CameraConfiguration &config() { return _config; };
   const std::string name() const { return _config.name; };
   Camera3D &camera() const { return *_camera; }
 

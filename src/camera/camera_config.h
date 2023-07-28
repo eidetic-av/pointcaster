@@ -40,6 +40,7 @@ static constexpr Deg_f fov{defaults::fov};
 struct CameraConfiguration {
   std::string id;
   std::string name;
+  bool show_window;
 
   std::array<float, 3> rotation = defaults::rotation;
   std::array<float, 3> translation = defaults::translation;

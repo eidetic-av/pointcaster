@@ -10,6 +10,7 @@
 #include <span>
 #include <thread>
 #include <vector>
+#include <functional>
 
 #include <zpp_bits.h>
 
@@ -23,49 +24,48 @@
 #include <zmq.hpp>
 
 #include "path.h"
-#include <spdlog/spdlog.h>
 #include "pointer.h"
 #include "structs.h"
+#include <spdlog/spdlog.h>
 
 #include <Corrade/Utility/StlMath.h>
-#include <Magnum/Image.h>
-#include <Magnum/Math/Color.h>
-#include <Magnum/Math/FunctionsBatch.h>
-#include <Magnum/Platform/Sdl2Application.h>
 #include <Magnum/GL/Context.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
 #include <Magnum/GL/PixelFormat.h>
 #include <Magnum/GL/Renderer.h>
 #include <Magnum/GL/Version.h>
+#include <Magnum/Image.h>
+#include <Magnum/Math/Color.h>
+#include <Magnum/Math/FunctionsBatch.h>
+#include <Magnum/Platform/Sdl2Application.h>
 #include <Magnum/SceneGraph/Camera.h>
 #include <Magnum/SceneGraph/Drawable.h>
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
 
-#include <imgui.h>
-#include <imgui_internal.h>
+#include "fonts/IconsFontAwesome6.h"
 #include <Magnum/ImGuiIntegration/Context.hpp>
 #include <Magnum/ImGuiIntegration/Widgets.h>
-#include "fonts/IconsFontAwesome6.h"
+#include <imgui.h>
+#include <imgui_internal.h>
 
-//#include <libremidi/libremidi.hpp>
+// #include <libremidi/libremidi.hpp>
 #include <pointclouds.h>
 
-#include "gui_helpers.h"
 #include "camera/camera_controller.h"
 #include "devices/device.h"
 #include "devices/usb.h"
-#include "wireframe_objects.h"
+#include "gui_helpers.h"
 #include "point_cloud_renderer.h"
-#include "sphere_renderer.h"
 #include "radio.h"
 #include "snapshots.h"
+#include "sphere_renderer.h"
 #include "uuid.h"
+#include "wireframe_objects.h"
 
 // TODO these need to be removed when initialisation loop is made generic
-#include <k4a/k4a.h>
 #include "devices/k4a/k4a_device.h"
-
+#include <k4a/k4a.h>
 
 #if WITH_SKYBRIDGE
 #include "skybridge.h"
@@ -104,15 +104,14 @@ struct PointCasterSession {
   bool auto_connect_sensors = false;
 
   std::vector<CameraConfiguration> cameras;
-
 };
 
 class PointCaster : public Platform::Application {
 public:
   explicit PointCaster(const Arguments &args);
 
-  template<class Function, class... Args>
-  void run_async(Function&& f, Args&&... args) {
+  template <class Function, class... Args>
+  void run_async(Function &&f, Args &&...args) {
     _async_tasks.emplace_back(f, args...);
   }
 
@@ -122,13 +121,13 @@ protected:
   void serialize_session();
   void serialize_session(std::filesystem::path file_path);
   void deserialize_session(std::filesystem::path file_path);
-  
+
   std::vector<std::jthread> _async_tasks;
 
   std::unique_ptr<Scene3D> _scene;
   std::unique_ptr<SceneGraph::DrawableGroup3D> _drawable_group;
 
-  std::vector<std::unique_ptr<CameraController>> _cameras;
+  std::vector<std::unique_ptr<CameraController>> _camera_controllers;
   int _hovering_camera_index = -1;
 
   std::unique_ptr<PointCloudRenderer> _point_cloud_renderer;
@@ -149,14 +148,16 @@ protected:
 
   void draw_menu_bar();
   void draw_control_bar();
-  void draw_camera_window();
+  void draw_main_viewport();
+  void draw_viewport_controls(CameraController& selected_camera);
+  void draw_camera_control_windows();
   void draw_sensors_window();
   void draw_controllers_window();
 
   void saveAndQuit();
 
-  //void initControllers();
-  //void handleMidiLearn(const libremidi::message &message);
+  // void initControllers();
+  // void handleMidiLearn(const libremidi::message &message);
 
   Timeline timeline;
   std::vector<float> frame_durations;
@@ -191,7 +192,8 @@ PointCaster::PointCaster(const Arguments &args)
   // Enable only 2x MSAA if we have enough DPI.
   GLConfiguration gl_conf;
   gl_conf.setSampleCount(dpi_scaling.max() < 2.0f ? 8 : 2);
-  if (!tryCreate(conf, gl_conf)) create(conf, gl_conf.setSampleCount(0));
+  if (!tryCreate(conf, gl_conf))
+    create(conf, gl_conf.setSampleCount(0));
 
   // Set up ImGui
   ImGui::CreateContext();
@@ -199,7 +201,6 @@ PointCaster::PointCaster(const Arguments &args)
   ImGui::GetIO().IniFilename = nullptr;
 
   ImGui::StyleColorsDark();
-
 
 #if WITH_SKYBRIDGE
   /* skybridge::initConnection(); */
@@ -218,15 +219,16 @@ PointCaster::PointCaster(const Arguments &args)
       const_cast<char *>(font.data()), font.size(),
       14.0f * framebufferSize().x() / size.x(), &font_config);
 
-  auto font_icons = rs.getRaw("FontAwesomeRegular");
-  static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_16_FA, 0 };
+  auto font_icons = rs.getRaw("FontAwesomeSolid");
+  static const ImWchar icons_ranges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
   ImFontConfig icons_config;
   icons_config.MergeMode = true;
   icons_config.PixelSnapH = true;
   icons_config.FontDataOwnedByAtlas = false;
   const auto icon_font_size = font_size * 2.0f / 3.0f;
   icons_config.GlyphMinAdvanceX = icon_font_size;
-  const auto icon_font_size_pixels = font_size * framebufferSize().x() / size.x();
+  const auto icon_font_size_pixels =
+      font_size * framebufferSize().x() / size.x();
 
   ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(font_icons.data()), font_icons.size(),
@@ -259,9 +261,10 @@ PointCaster::PointCaster(const Arguments &args)
   // TODO should drawable groups go inside each camera controller?
   _scene = std::make_unique<Scene3D>();
   _drawable_group = std::make_unique<SceneGraph::DrawableGroup3D>();
-  _ground_grid = std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
+  _ground_grid =
+      std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
   _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
-			 Matrix4::translation(Vector3(0, 0, 0)));
+                          Matrix4::translation(Vector3(0, 0, 0)));
 
   // Deserialize last session
   auto data_dir = path::get_or_create_data_directory();
@@ -290,12 +293,13 @@ PointCaster::PointCaster(const Arguments &args)
   }
 
   // If there are no cameras in the scene, initialise at least one
-  if (_cameras.empty()) {
-    auto _default_camera_controller = std::make_unique<CameraController>(_scene.get());
+  if (_camera_controllers.empty()) {
+    auto _default_camera_controller =
+        std::make_unique<CameraController>(_scene.get());
     // TODO viewport size needs to be dynamic
     _default_camera_controller->camera().setViewport(
-	GL::defaultFramebuffer.viewport().size());
-    _cameras.push_back(std::move(_default_camera_controller));
+        GL::defaultFramebuffer.viewport().size());
+    _camera_controllers.push_back(std::move(_default_camera_controller));
   }
 
   const auto viewport_size = GL::defaultFramebuffer.viewport().size();
@@ -317,13 +321,14 @@ PointCaster::PointCaster(const Arguments &args)
   // Initialise our network radio for points
   _radio = std::make_unique<Radio>();
 
-  // 
+  //
   _snapshots_context = std::make_unique<Snapshots>();
 
-  if (_session.auto_connect_sensors) open_kinect_sensors();
+  if (_session.auto_connect_sensors)
+    open_kinect_sensors();
 
   // Init our controllers
-  //initControllers();
+  // initControllers();
 
   // Init our sensors
   // TODO the following should be moved into pc::sensors ns and outside this
@@ -334,7 +339,8 @@ PointCaster::PointCaster(const Arguments &args)
   // that will add new devices to our main sensor list
   registerUsbAttachCallback([&](auto attached_device) {
     spdlog::debug("attached usb callback");
-    if (!_session.auto_connect_sensors) return;
+    if (!_session.auto_connect_sensors)
+      return;
 
     // freeUsb();
     // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
@@ -387,7 +393,7 @@ void PointCaster::serialize_session(std::filesystem::path file_path) {
 
   // save camera configurations
   _session.cameras.clear();
-  for (auto &camera : _cameras) {
+  for (auto &camera : _camera_controllers) {
     _session.cameras.push_back(camera->config());
   }
 
@@ -403,15 +409,15 @@ void PointCaster::deserialize_session(std::filesystem::path file_path) {
   auto in = zpp::bits::in(buffer);
   auto success = in(_session);
   ImGui::LoadIniSettingsFromMemory(_session.imgui_layout.data(),
-				   _session.imgui_layout.size());
+                                   _session.imgui_layout.size());
 
   // get saved camera configurations to populate the cams list
   for (auto &saved_camera_config : _session.cameras) {
     auto saved_camera =
-	std::make_unique<CameraController>(_scene.get(), saved_camera_config);
+        std::make_unique<CameraController>(_scene.get(), saved_camera_config);
     saved_camera->camera().setViewport(
         GL::defaultFramebuffer.viewport().size());
-    _cameras.push_back(std::move(saved_camera));
+    _camera_controllers.push_back(std::move(saved_camera));
   }
 
   spdlog::info("Loaded session '{}'", file_path.filename().string());
@@ -427,22 +433,34 @@ void PointCaster::fill_point_renderer() {
   }
 }
 
+void PointCaster::open_kinect_sensors() {
+  run_async([&]() {
+    for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
+      auto p = std::make_shared<K4ADevice>();
+      Device::attached_devices.push_back(std::move(p));
+    }
+  });
+}
+
 void PointCaster::draw_menu_bar() {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
-      if (ImGui::MenuItem("Quit", "q")) saveAndQuit();
+      if (ImGui::MenuItem("Quit", "q"))
+        saveAndQuit();
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Window")) {
 
-      constexpr auto window_item = [](const char * item_name,
-				      const char * shortcut_key,
-				      bool & window_toggle) {
-	ImGui::BeginDisabled();
-	ImGui::Checkbox((std::string("##Toggle_Window_") + item_name).data(), &window_toggle);
-	ImGui::EndDisabled();
-	ImGui::SameLine();
-	if (ImGui::MenuItem(item_name, shortcut_key)) window_toggle = !window_toggle;
+      constexpr auto window_item = [](const char *item_name,
+                                      const char *shortcut_key,
+                                      bool &window_toggle) {
+        ImGui::BeginDisabled();
+        ImGui::Checkbox((std::string("##Toggle_Window_") + item_name).data(),
+                        &window_toggle);
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::MenuItem(item_name, shortcut_key))
+          window_toggle = !window_toggle;
       };
 
       window_item("Transform", "t", _session.show_global_transform_window);
@@ -458,16 +476,16 @@ void PointCaster::draw_menu_bar() {
 
 void PointCaster::draw_control_bar() {
 
-  constexpr auto control_bar_flags =
-      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings |
-      ImGuiWindowFlags_MenuBar;
+  constexpr auto control_bar_flags = ImGuiWindowFlags_NoScrollbar |
+                                     ImGuiWindowFlags_NoSavedSettings |
+                                     ImGuiWindowFlags_MenuBar;
 
   if (ImGui::BeginViewportSideBar("##ControlBar", ImGui::GetMainViewport(),
-				  ImGuiDir_Up, ImGui::GetFrameHeight(),
-				  control_bar_flags)) {
+                                  ImGuiDir_Up, ImGui::GetFrameHeight(),
+                                  control_bar_flags)) {
     if (ImGui::BeginMenuBar()) {
       if (ImGui::Button(ICON_FA_FLOPPY_DISK)) {
-	serialize_session();
+        serialize_session();
       }
 
       if (ImGui::Button(ICON_FA_FOLDER_OPEN)) {
@@ -498,7 +516,7 @@ void PointCaster::draw_control_bar() {
   // }
 }
 
-void PointCaster::draw_camera_window() {
+void PointCaster::draw_main_viewport() {
 
   _hovering_camera_index = -1;
 
@@ -509,7 +527,7 @@ void PointCaster::draw_camera_window() {
                                    ImGuiDockNodeFlags_NoDockingInCentralNode |
                                        ImGuiDockNodeFlags_PassthruCentralNode,
                                    nullptr);
-  ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
+  ImGuiDockNode *node = ImGui::DockBuilderGetCentralNode(id);
 
   ImGuiWindowClass central_always = {};
   central_always.DockNodeFlagsOverrideSet |=
@@ -530,19 +548,19 @@ void PointCaster::draw_camera_window() {
       auto new_camera_index = -1;
       if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing)) {
         auto new_camera = std::make_unique<CameraController>(_scene.get());
-        _cameras.push_back(std::move(new_camera));
-        new_camera_index = _cameras.size() - 1;
+        _camera_controllers.push_back(std::move(new_camera));
+        new_camera_index = _camera_controllers.size() - 1;
         spdlog::info("new camera: {}", new_camera_index);
       }
 
-      for (int i = 0; i < _cameras.size(); i++) {
-        const auto &camera = _cameras.at(i);
+      for (int i = 0; i < _camera_controllers.size(); i++) {
+        const auto &camera_controller = _camera_controllers.at(i);
 
         ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
         if (new_camera_index == i)
           tab_item_flags |= ImGuiTabItemFlags_SetSelected;
 
-        if (ImGui::BeginTabItem(camera->name().c_str(), nullptr,
+        if (ImGui::BeginTabItem(camera_controller->name().c_str(), nullptr,
                                 tab_item_flags)) {
           ImGui::BeginChild("Frame");
 
@@ -550,17 +568,19 @@ void PointCaster::draw_camera_window() {
           const auto frame_size =
               Vector2i{(int)window_size.x, (int)window_size.y};
 
-          camera->setupFramebuffer(frame_size);
-          camera->bindFramebuffer();
+          camera_controller->setupFramebuffer(frame_size);
+          camera_controller->bindFramebuffer();
 
-          _point_cloud_renderer->draw(camera->camera(), frame_size);
-          _sphere_renderer->draw(camera->camera());
+          _point_cloud_renderer->draw(camera_controller->camera(), frame_size);
+          _sphere_renderer->draw(camera_controller->camera());
 
-          camera->camera().draw(*_drawable_group);
+          camera_controller->camera().draw(*_drawable_group);
 
           ImGuiIntegration::image(
-              camera->outputFrame(),
+              camera_controller->outputFrame(),
               {(float)frame_size.x(), (float)frame_size.y()});
+
+	  draw_viewport_controls(*camera_controller);
 
           if (ImGui::IsItemHovered())
             _hovering_camera_index = i;
@@ -577,13 +597,63 @@ void PointCaster::draw_camera_window() {
   }
 }
 
-void PointCaster::open_kinect_sensors() {
-    run_async([&]() {
-      for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
-	auto p = std::make_shared<K4ADevice>();
-	Device::attached_devices.push_back(std::move(p));
-      }
-    });
+void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
+  auto& camera_config = selected_camera.config();
+  const auto viewport_window_size = ImGui::GetWindowSize();
+  const auto viewport_window_pos = ImGui::GetWindowPos();
+
+  constexpr auto button_size = ImVec2{28, 28};
+  constexpr auto control_inset = ImVec2{10, 5};
+
+  constexpr auto viewport_controls_flags =
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground;
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+  ImGui::SetNextWindowSize({0, 0}); // auto size
+  ImGui::Begin("ViewportControls", nullptr, viewport_controls_flags);
+
+  constexpr auto draw_button = [button_size](auto content,
+					     std::function<void()> action,
+					     bool toggled = false) {
+    ImGui::Spacing();
+    ImGui::SameLine();
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0, 9});
+
+    if (toggled) {
+      const auto toggled_color =
+	  ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
+      ImGui::PushStyleColor(ImGuiCol_Button, toggled_color);
+    }
+
+    if (ImGui::Button(content, button_size)) action();
+
+    if (toggled) ImGui::PopStyleColor();
+
+    ImGui::PopStyleVar();
+  };
+
+  draw_button(ICON_FA_SLIDERS, [&]() {
+    camera_config.show_window = !camera_config.show_window;
+   }, camera_config.show_window);
+
+  const auto controls_window_size = ImGui::GetWindowSize();
+
+  ImGui::SetWindowPos({viewport_window_pos.x + viewport_window_size.x -
+			   controls_window_size.x - control_inset.x,
+		       viewport_window_pos.y + control_inset.y});
+
+  ImGui::End();
+  ImGui::PopStyleVar();
+}
+
+void PointCaster::draw_camera_control_windows() {
+  for (const auto &camera_controller : _camera_controllers) {
+    if (!camera_controller->config().show_window) continue;
+    ImGui::Begin(camera_controller->name().c_str());
+    ImGui::End();
+  }
 }
 
 void PointCaster::draw_sensors_window() {
@@ -593,7 +663,8 @@ void PointCaster::draw_sensors_window() {
 
   ImGui::Checkbox("USB auto-connect", &_session.auto_connect_sensors);
 
-  if (ImGui::Button("Open")) open_kinect_sensors();
+  if (ImGui::Button("Open"))
+    open_kinect_sensors();
 
   if (ImGui::Button("Close")) {
     run_async([]() { Device::attached_devices.clear(); });
@@ -601,8 +672,9 @@ void PointCaster::draw_sensors_window() {
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
 
-  for (auto& device : Device::attached_devices) {
-    if (!device->is_sensor) return;
+  for (auto &device : Device::attached_devices) {
+    if (!device->is_sensor)
+      return;
     if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
       device->Device::draw_imgui_controls();
     ImGui::Spacing();
@@ -632,9 +704,10 @@ void PointCaster::draw_stats() {
   } else {
     frame_durations.erase(frame_durations.begin()); // pop_front
     const float avg_duration =
-      std::reduce(frame_durations.begin(), frame_durations.end()) / frame_durations.size();
+        std::reduce(frame_durations.begin(), frame_durations.end()) /
+        frame_durations.size();
     const auto minmax_duration =
-      std::minmax_element(frame_durations.begin(), frame_durations.end());
+        std::minmax_element(frame_durations.begin(), frame_durations.end());
 
     if (ImGui::CollapsingHeader("Rendering", true)) {
       ImGui::Text("Frame Duration");
@@ -662,7 +735,7 @@ void PointCaster::draw_stats() {
   ImGui::PopID();
 }
 //
-//void PointCaster::initControllers() {
+// void PointCaster::initControllers() {
 //  using namespace libremidi;
 //  std::thread midi_startup([&]() {
 //    midi_in midi;
@@ -706,9 +779,11 @@ void PointCaster::draw_stats() {
 //      auto max = learned_parameter.parameter.range_max;
 //      auto output = min + value * (max - min);
 //      // TODO this is only implemented for float parameters
-//      if (learned_parameter.parameter.param_type == gui::ParameterType::Float) {
-//	auto value_ptr = reinterpret_cast<float*>(learned_parameter.parameter.value);
-//	*value_ptr = output;
+//      if (learned_parameter.parameter.param_type == gui::ParameterType::Float)
+//      {
+//	auto value_ptr =
+//reinterpret_cast<float*>(learned_parameter.parameter.value); 	*value_ptr =
+//output;
 //      }
 //    });
 //  });
@@ -720,7 +795,8 @@ void PointCaster::draw_controllers_window() {
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Controllers", nullptr);
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
-  if (gui::midi_learn_mode) ImGui::BeginDisabled();
+  if (gui::midi_learn_mode)
+    ImGui::BeginDisabled();
   if (ImGui::Button("Midi Learn")) {
     gui::midi_learn_mode = true;
     ImGui::BeginDisabled();
@@ -728,7 +804,8 @@ void PointCaster::draw_controllers_window() {
   if (gui::midi_learn_mode) {
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Cancel")) gui::midi_learn_mode = false;
+    if (ImGui::Button("Cancel"))
+      gui::midi_learn_mode = false;
   }
   // for (auto device : *devices) {
   //   if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
@@ -738,38 +815,38 @@ void PointCaster::draw_controllers_window() {
   ImGui::End();
 }
 
-//void PointCaster::handleMidiLearn(const libremidi::message &message) {
-//  using namespace libremidi;
+// void PointCaster::handleMidiLearn(const libremidi::message &message) {
+//   using namespace libremidi;
 //
-//  if (!gui::midi_learn_parameter) return;
+//   if (!gui::midi_learn_parameter) return;
 //
-//  auto channel = message.get_channel();
-//  auto type = message.get_message_type();
+//   auto channel = message.get_channel();
+//   auto type = message.get_message_type();
 //
-//  if (type == message_type::CONTROL_CHANGE) {
-//    gui::assigned_midi_parameters.push_back(gui::AssignedMidiParameter {
+//   if (type == message_type::CONTROL_CHANGE) {
+//     gui::assigned_midi_parameters.push_back(gui::AssignedMidiParameter {
 //	*gui::midi_learn_parameter, channel, message[1]});
-//    gui::midi_learn_parameter.reset();
-//    gui::midi_learn_mode = false;
-//    return;
-//  }
+//     gui::midi_learn_parameter.reset();
+//     gui::midi_learn_mode = false;
+//     return;
+//   }
 //
-//  if (type == message_type::PITCH_BEND) {
-//    // use controller number 999 for pitch bends
-//    gui::assigned_midi_parameters.push_back(gui::AssignedMidiParameter {
+//   if (type == message_type::PITCH_BEND) {
+//     // use controller number 999 for pitch bends
+//     gui::assigned_midi_parameters.push_back(gui::AssignedMidiParameter {
 //	*gui::midi_learn_parameter, channel, 999});
-//    gui::midi_learn_parameter.reset();
-//    gui::midi_learn_mode = false;
-//  }
+//     gui::midi_learn_parameter.reset();
+//     gui::midi_learn_mode = false;
+//   }
 //
-//}
+// }
 
 auto output_count = 0;
 
 void PointCaster::drawEvent() {
 
   fill_point_renderer();
-  
+
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
                                GL::FramebufferClear::Depth);
   _imgui_context.newFrame();
@@ -787,14 +864,21 @@ void PointCaster::drawEvent() {
   draw_menu_bar();
   draw_control_bar();
 
-  draw_camera_window();
+  draw_main_viewport();
+  draw_camera_control_windows();
 
-  if (_session.show_sensors_window) draw_sensors_window();
-  if (_session.show_controllers_window) draw_controllers_window();
-  if (_session.show_stats) draw_stats();
-  if (_session.show_radio_window) _radio->draw_imgui_window();
-  if (_session.show_snapshots_window) _snapshots_context->draw_imgui_window();
-  if (_session.show_global_transform_window) pc::sensors::draw_global_controls();
+  if (_session.show_sensors_window)
+    draw_sensors_window();
+  if (_session.show_controllers_window)
+    draw_controllers_window();
+  if (_session.show_stats)
+    draw_stats();
+  if (_session.show_radio_window)
+    _radio->draw_imgui_window();
+  if (_session.show_snapshots_window)
+    _snapshots_context->draw_imgui_window();
+  if (_session.show_global_transform_window)
+    pc::sensors::draw_global_controls();
 
   _imgui_context.updateApplicationCursor(*this);
 
@@ -834,7 +918,7 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 
   // relayout imgui
   _imgui_context.relayout(Vector2{event.windowSize()} / event.dpiScaling(),
-			  event.windowSize(), event.framebufferSize());
+                          event.windowSize(), event.framebufferSize());
 
   // recompute the camera's projection matrix
   // camera->setViewport(event.framebufferSize());
@@ -850,7 +934,8 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     break;
   case KeyEvent::Key::C:
     _session.show_controllers_window = !_session.show_controllers_window;
-    if (!_session.show_controllers_window) gui::midi_learn_mode = false;
+    if (!_session.show_controllers_window)
+      gui::midi_learn_mode = false;
     break;
   case KeyEvent::Key::F:
     _session.show_stats = !_session.show_stats;
@@ -859,7 +944,8 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     _session.show_radio_window = !_session.show_radio_window;
     break;
   case KeyEvent::Key::T:
-    _session.show_global_transform_window = !_session.show_global_transform_window;
+    _session.show_global_transform_window =
+        !_session.show_global_transform_window;
     break;
   default:
     if (_imgui_context.handleKeyPressEvent(event))
@@ -895,40 +981,42 @@ void PointCaster::mouseReleaseEvent(MouseEvent &event) {
 // window
 
 void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
-  if (_imgui_context.handleMouseMoveEvent(event) && _hovering_camera_index == -1) {
+  if (_imgui_context.handleMouseMoveEvent(event) &&
+      _hovering_camera_index == -1) {
     event.setAccepted(true);
     return;
   }
 
   // rotate
   if (event.buttons() == MouseMoveEvent::Button::Left)
-    _cameras.at(_hovering_camera_index)->mouseRotate(event);
+    _camera_controllers.at(_hovering_camera_index)->mouseRotate(event);
   // translate
   else if (event.buttons() == MouseMoveEvent::Button::Right)
-    _cameras.at(_hovering_camera_index)->mouseTranslate(event);
+    _camera_controllers.at(_hovering_camera_index)->mouseTranslate(event);
 
   event.setAccepted();
 }
 
 void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
-  if (_imgui_context.handleMouseScrollEvent(event) && _hovering_camera_index == -1) {
+  if (_imgui_context.handleMouseScrollEvent(event) &&
+      _hovering_camera_index == -1) {
     /* Prevent scrolling the page */
     event.setAccepted(true);
     return;
   }
 
   const Float delta = event.offset().y();
-  if (Math::abs(delta) < 1.0e-2f) return;
+  if (Math::abs(delta) < 1.0e-2f)
+    return;
 
   if (event.modifiers() ==
       Magnum::Platform::Sdl2Application::InputEvent::Modifier::Alt) {
-    _cameras.at(_hovering_camera_index)->zoomPerspective(event);
+    _camera_controllers.at(_hovering_camera_index)->zoomPerspective(event);
 
   } else {
-    _cameras.at(_hovering_camera_index)->dolly(event);
+    _camera_controllers.at(_hovering_camera_index)->dolly(event);
   }
 }
-
 
 } // namespace pc
 
