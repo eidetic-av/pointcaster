@@ -37,6 +37,21 @@ static constexpr Deg_f fov{defaults::fov};
 
 } // namespace defaults
 
+struct ContourDetectionConfiguration {
+  bool enabled;
+  bool greyscale_conversion = true;
+  int blur_size = 10;
+  int canny_min_threshold = 100;
+  int canny_max_threshold = 255;
+  int canny_aperture_size = 3;
+};
+
+struct FrameAnalysisConfiguration {
+  bool enabled;
+  bool draw_on_viewport;
+  ContourDetectionConfiguration contours;
+};
+
 struct CameraConfiguration {
   std::string id;
   std::string name;
@@ -45,6 +60,8 @@ struct CameraConfiguration {
   std::array<float, 3> rotation = defaults::rotation;
   std::array<float, 3> translation = defaults::translation;
   float fov = defaults::fov;
+
+  FrameAnalysisConfiguration frame_analysis;
 };
 
 } // namespace pc::camera

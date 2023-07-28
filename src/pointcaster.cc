@@ -30,8 +30,10 @@
 
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/GL/Context.h>
+#include <Magnum/ImageView.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
 #include <Magnum/GL/PixelFormat.h>
+#include <Magnum/PixelFormat.h>
 #include <Magnum/GL/Renderer.h>
 #include <Magnum/GL/Version.h>
 #include <Magnum/Image.h>
@@ -145,6 +147,7 @@ protected:
   void open_kinect_sensors();
 
   void fill_point_renderer();
+  void render_cameras();
 
   void draw_menu_bar();
   void draw_control_bar();
@@ -279,6 +282,7 @@ PointCaster::PointCaster(const Arguments &args)
   // TODO should drawable groups go inside each camera controller?
   _scene = std::make_unique<Scene3D>();
   _drawable_group = std::make_unique<SceneGraph::DrawableGroup3D>();
+
   _ground_grid =
       std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
   _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
@@ -330,6 +334,7 @@ PointCaster::PointCaster(const Arguments &args)
   GL::Renderer::setClearColor(0x0d1117_rgbf);
 
   _point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.005f);
+  // _point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.05f);
   _sphere_renderer = std::make_unique<SphereRenderer>();
 
   // Start the timer, loop at 144 Hz max
@@ -449,6 +454,27 @@ void PointCaster::fill_point_renderer() {
     _point_cloud_renderer->points = std::move(points);
     _point_cloud_renderer->setDirty();
   }
+}
+
+void PointCaster::render_cameras() {
+
+  for (auto &camera_controller : _camera_controllers) {
+
+    // TODO render size needs to be set via camera configs
+    const auto frame_size = framebufferSize() / dpiScaling();
+
+    camera_controller->setupFramebuffer(frame_size);
+    camera_controller->bindFramebuffer();
+
+    _point_cloud_renderer->draw(camera_controller->camera(), frame_size);
+    _sphere_renderer->draw(camera_controller->camera());
+
+    camera_controller->camera().draw(*_drawable_group);
+
+    camera_controller->runFrameAnalysis();
+  }
+
+  GL::defaultFramebuffer.bind();
 }
 
 void PointCaster::open_kinect_sensors() {
@@ -582,23 +608,14 @@ void PointCaster::draw_main_viewport() {
                                 tab_item_flags)) {
           ImGui::BeginChild("Frame");
 
-          const auto window_size = ImGui::GetWindowSize();
-          const auto frame_size =
-              Vector2i{(int)window_size.x, (int)window_size.y};
+	  const auto& frame_size = camera_controller->frameSize();
+	  Vector2 frame_size_f = {static_cast<float>(frame_size.x()),
+				  static_cast<float>(frame_size.y())};
 
-          camera_controller->setupFramebuffer(frame_size);
-          camera_controller->bindFramebuffer();
+	  ImGuiIntegration::image(camera_controller->outputFrame(),
+				  frame_size_f);
 
-          _point_cloud_renderer->draw(camera_controller->camera(), frame_size);
-          _sphere_renderer->draw(camera_controller->camera());
-
-          camera_controller->camera().draw(*_drawable_group);
-
-          ImGuiIntegration::image(
-              camera_controller->outputFrame(),
-              {(float)frame_size.x(), (float)frame_size.y()});
-
-	  draw_viewport_controls(*camera_controller);
+          draw_viewport_controls(*camera_controller);
 
           if (ImGui::IsItemHovered())
             _hovering_camera_index = i;
@@ -611,7 +628,6 @@ void PointCaster::draw_main_viewport() {
     }
 
     ImGui::End();
-    GL::defaultFramebuffer.bind();
   }
 }
 
@@ -864,10 +880,12 @@ auto output_count = 0;
 
 void PointCaster::drawEvent() {
 
-  fill_point_renderer();
-
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
-                               GL::FramebufferClear::Depth);
+			       GL::FramebufferClear::Depth);
+
+  fill_point_renderer();
+  render_cameras();
+
   _imgui_context.newFrame();
   pc::gui::begin_gui_helpers();
 
@@ -878,8 +896,6 @@ void PointCaster::drawEvent() {
     stopTextInput();
 
   // Draw gui windows
-
-  // ImGui::DockSpaceOverViewport();
 
   draw_menu_bar();
   draw_control_bar();
@@ -910,6 +926,7 @@ void PointCaster::drawEvent() {
 
   _imgui_context.drawFrame();
 
+
   if (ImGuiConfigFlags_ViewportsEnable) {
     ImGui::UpdatePlatformWindows();
     ImGui::RenderPlatformWindowsDefault();
@@ -919,6 +936,18 @@ void PointCaster::drawEvent() {
   GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
   GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
   GL::Renderer::disable(GL::Renderer::Feature::Blending);
+
+  auto error = GL::Renderer::error();
+  if (error == GL::Renderer::Error::InvalidFramebufferOperation)
+    spdlog::info("InvalidFramebufferOperation");
+  if (error == GL::Renderer::Error::InvalidOperation)
+    spdlog::info("InvalidOperation");
+  if (error == GL::Renderer::Error::InvalidValue)
+    spdlog::info("InvalidValue");
+  if (error == GL::Renderer::Error::StackOverflow)
+    spdlog::info("StackOverflow");
+  if (error == GL::Renderer::Error::StackUnderflow)
+    spdlog::info("StackUnderflow");
 
   // TODO the timeline should not be linked to GUI drawing
   // so this needs to be run elsewhere, but still needs to
@@ -930,6 +959,7 @@ void PointCaster::drawEvent() {
 
   // Run the next frame immediately
   redraw();
+
 }
 
 void PointCaster::viewportEvent(ViewportEvent &event) {

@@ -53,7 +53,10 @@ public:
   void setupFramebuffer(const Magnum::Vector2i frame_size);
   void bindFramebuffer();
 
+  const Magnum::Vector2i& frameSize() { return _frame_size; };
+
   Magnum::GL::Texture2D& outputFrame();
+  void runFrameAnalysis();
 
   void draw_imgui_controls();
 
@@ -70,6 +73,7 @@ private:
 
   Magnum::Vector2i _frame_size;
   std::unique_ptr<Magnum::GL::Texture2D> _color;
+  std::unique_ptr<Magnum::GL::Texture2D> _analysis_color;
   std::unique_ptr<Magnum::GL::Renderbuffer> _depth_stencil;
   std::unique_ptr<Magnum::GL::Framebuffer> _framebuffer;
 

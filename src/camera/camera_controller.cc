@@ -5,14 +5,28 @@
 #include <algorithm>
 #include <numbers>
 #include <spdlog/spdlog.h>
+#include <vector>
 
+#include <Magnum/Math/Color.h>
+#include <Magnum/Magnum.h>
+#include <Magnum/ImageView.h>
 #include <Magnum/GL/Buffer.h>
+#include <Magnum/GL/Renderer.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
 #include <Magnum/GL/PixelFormat.h>
-#include <Magnum/Image.h>
+#include <Magnum/GL/ImageFormat.h>
 #include <Magnum/Math/FunctionsBatch.h>
 #include <Magnum/Math/Quaternion.h>
 #include <Magnum/Math/Vector3.h>
+#include <Magnum/PixelFormat.h>
+#include <Magnum/GL/BufferImage.h>
+#include <Magnum/Image.h>
+#include <Corrade/Containers/Array.h>
+#include <Corrade/Containers/ArrayView.h>
+#include <Magnum/Trade/ImageData.h>
+
+#include <opencv2/core/mat.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include "../gui_helpers.h"
 
@@ -84,13 +98,19 @@ void CameraController::setupFramebuffer(Vector2i frame_size) {
   _frame_size = frame_size;
 
   _color = std::make_unique<GL::Texture2D>();
-  _color->setStorage(1, GL::TextureFormat::RGBA8, frame_size);
+  _color->setStorage(1, GL::TextureFormat::RGBA8, _frame_size);
+
+  _analysis_color = std::make_unique<GL::Texture2D>();
+  _analysis_color->setStorage(1, GL::TextureFormat::RGBA8, _frame_size);
 
   _depth_stencil = std::make_unique<GL::Renderbuffer>();
   _depth_stencil->setStorage(GL::RenderbufferFormat::Depth24Stencil8,
-                             frame_size);
-  _framebuffer = std::make_unique<GL::Framebuffer>(Range2Di{{}, frame_size});
+                             _frame_size);
+
+  _framebuffer = std::make_unique<GL::Framebuffer>(Range2Di{{}, _frame_size});
+
   _framebuffer->attachTexture(GL::Framebuffer::ColorAttachment{0}, *_color, 0);
+
   _framebuffer->attachRenderbuffer(
       GL::Framebuffer::BufferAttachment::DepthStencil, *_depth_stencil);
 }
@@ -100,7 +120,65 @@ void CameraController::bindFramebuffer() {
       .bind();
 }
 
-GL::Texture2D &CameraController::outputFrame() { return *_color; }
+GL::Texture2D &CameraController::outputFrame() {
+  if (_config.frame_analysis.enabled &&
+      _config.frame_analysis.draw_on_viewport)
+    return *_analysis_color;
+  return *_color;
+}
+
+void CameraController::runFrameAnalysis() {
+  if (!_config.frame_analysis.enabled) return;
+
+  using namespace Magnum;
+  using namespace Corrade;
+
+  // Grab the image on the CPU
+  Image2D image = _color->image(0, Image2D{PixelFormat::RGBA8Unorm});
+
+  // and construct an opencv type from it
+  cv::Mat mat(_frame_size.y(), _frame_size.x(), CV_8UC4, image.data());
+
+  const auto& contours = _config.frame_analysis.contours;
+
+  // convert the image to grayscale
+  cv::Mat grey;
+  cv::cvtColor(mat, grey, cv::COLOR_RGBA2GRAY);
+
+  // blur the image
+  if (contours.blur_size > 0)
+    cv::blur(grey, grey, cv::Size(contours.blur_size, contours.blur_size));
+
+  // canny edge detection
+  cv::Mat canny;
+  cv::Canny(grey, canny, contours.canny_min_threshold,
+	    contours.canny_max_threshold, contours.canny_aperture_size);
+
+  // find the countours
+  std::vector<std::vector<cv::Point>> contour_list;
+  std::vector<cv::Vec4i> hierarchy;
+  cv::findContours(canny, contour_list, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+
+  // if we don't need to draw the result onto our camera view,
+  // we can leave with just the contour arrays
+  if (!_config.frame_analysis.draw_on_viewport) return;
+
+  // draw the contours onto our image
+  const cv::Scalar line_colour{255, 0, 0};
+  cv::drawContours(mat, contour_list, -1, line_colour, cv::FILLED, cv::LINE_4);
+
+  // move the resulting cv::Mat into an appropriate container
+  auto element_count = mat.total() * mat.channels();
+  Containers::Array<uint8_t> buffer_data(NoInit, element_count);
+  std::copy(mat.datastart, mat.dataend, buffer_data.data());
+
+  GL::BufferImage2D buffer{
+      Magnum::GL::PixelFormat::RGBA, Magnum::GL::PixelType::UnsignedByte,
+      _frame_size, buffer_data, GL::BufferUsage::StaticDraw};
+
+  // and finaly into the GL Texture
+  _analysis_color->setSubImage(0, {}, buffer);
+}
 
 // TODO
 bool _is_dz_started = false;
@@ -309,6 +387,29 @@ void CameraController::draw_imgui_controls() {
     draw_slider<float>("z", &rotate[2], -360, 360);
     setRotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
 
+    ImGui::TreePop();
+  }
+
+  if (ImGui::TreeNode("Frame Analysis")) {
+    auto& frame_analysis = _config.frame_analysis;
+    ImGui::Checkbox("Enabled", &frame_analysis.enabled);
+    if (frame_analysis.enabled) {
+      ImGui::Checkbox("Draw on viewport", &frame_analysis.draw_on_viewport);
+
+      if (ImGui::TreeNode("Contour Detection")) {
+	auto& contours = frame_analysis.contours;
+
+	draw_slider<int>("blur size", &contours.blur_size, 0, 40, 5);
+	draw_slider<int>("canny min", &contours.canny_min_threshold, 0, 255, 100);
+	draw_slider<int>("canny max", &contours.canny_max_threshold, 0, 255, 200);
+	int aperture_in = (contours.canny_aperture_size - 1) / 2;
+	draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
+	contours.canny_aperture_size = aperture_in * 2 + 1;
+	spdlog::info(contours.canny_aperture_size);
+	
+	ImGui::TreePop();
+      }
+    }
     ImGui::TreePop();
   }
 }
