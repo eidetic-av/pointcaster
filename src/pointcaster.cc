@@ -178,14 +178,32 @@ PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
   spdlog::info("This is pointcaster");
 
-  // Set up the window
+  // Get OS resolution
+  SDL_DisplayMode dm;
+  bool have_resolution = false;
+  if (SDL_GetDesktopDisplayMode(0, &dm) != 0)
+    spdlog::warn("Failed to get OS resolution using SDL: {}", SDL_GetError());
+  else {
+    have_resolution = true;
+    spdlog::info("SDL2 returned OS resolution: {}x{}", dm.w, dm.h);
+  }
   const Vector2 dpi_scaling = this->dpiScaling({});
+  spdlog::info("DPI scaling: {}x{}", dpi_scaling.x(), dpi_scaling.y());
+
+  // Set up the window
+
   Configuration conf;
   conf.setTitle("pointcaster");
-  // conf.setSize({1900, 1200});
-  // conf.setSize({1600, 1080});
-  // conf.setSize({960, 640});
-  conf.setSize(conf.size(), dpi_scaling);
+
+  // TODO figure out how to persist window size accross launches
+  if (have_resolution) {
+    constexpr auto start_res_scale = 2.0f / 3.0f;
+    constexpr auto start_ratio = 2.0f / 3.0f;
+    auto start_width = int(dm.w / dpi_scaling.x() * start_res_scale);
+    auto start_height = int(start_width * start_ratio);
+    conf.setSize({start_width, start_height}, dpi_scaling);
+  }
+
   conf.setWindowFlags(Configuration::WindowFlag::Resizable);
 
   // Try 8x MSAA, fall back to zero if not possible.
