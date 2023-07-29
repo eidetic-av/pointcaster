@@ -4,7 +4,17 @@
   "dependencies": [
     "bob-pointclouds",
     "zpp-bits",
-    "opencv",
+    {
+      "name": "opencv",
+      "features": [
+        "tbb"
+      ],
+      "platform":  "windows"
+    },
+    {
+      "name": "opencv",
+      "platform":  "linux"
+    },
     "azure-kinect-sensor-sdk",
     "corrade",
     "eigen3",
