@@ -2,8 +2,9 @@
 #+author: Matt Hughes
 * Building
 + ~pointcaster~ requires [[https://cmake.org/][CMake]] and [[https://vcpkg.io][vcpkg]] to build and manage dependencies. A working CUDA toolkit installation and ~nvcc~ on the path is also required.
-+ Linux builds use GCC 12.3.0 and CUDA 12.2.r12.
-+ Windows builds use Clang 15.0.1 and CUDA 12.2.0.
++ Linux builds use GCC 12.3.0
++ Windows builds use Clang 15.0.1
++ CUDA version for both OS is CUDA 12.2.r12
 *** Configure
 #+begin_src fish
 cmake -B build \
