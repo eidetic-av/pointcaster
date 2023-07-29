@@ -1,34 +1,31 @@
 #include "camera_controller.h"
+#include "../gui_helpers.h"
 #include "../math.h"
 #include "../uuid.h"
 #include "camera_config.h"
-#include <algorithm>
-#include <numbers>
-#include <spdlog/spdlog.h>
-#include <vector>
-
-#include <Magnum/Math/Color.h>
-#include <Magnum/Magnum.h>
-#include <Magnum/ImageView.h>
+#include <Corrade/Containers/Array.h>
+#include <Corrade/Containers/ArrayView.h>
 #include <Magnum/GL/Buffer.h>
-#include <Magnum/GL/Renderer.h>
+#include <Magnum/GL/BufferImage.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
-#include <Magnum/GL/PixelFormat.h>
 #include <Magnum/GL/ImageFormat.h>
+#include <Magnum/GL/PixelFormat.h>
+#include <Magnum/GL/Renderer.h>
+#include <Magnum/Image.h>
+#include <Magnum/ImageView.h>
+#include <Magnum/Magnum.h>
+#include <Magnum/Math/Color.h>
 #include <Magnum/Math/FunctionsBatch.h>
 #include <Magnum/Math/Quaternion.h>
 #include <Magnum/Math/Vector3.h>
 #include <Magnum/PixelFormat.h>
-#include <Magnum/GL/BufferImage.h>
-#include <Magnum/Image.h>
-#include <Corrade/Containers/Array.h>
-#include <Corrade/Containers/ArrayView.h>
 #include <Magnum/Trade/ImageData.h>
-
+#include <algorithm>
+#include <numbers>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgproc.hpp>
-
-#include "../gui_helpers.h"
+#include <spdlog/spdlog.h>
+#include <vector>
 
 namespace pc::camera {
 
@@ -37,18 +34,19 @@ using Magnum::Matrix4;
 using Magnum::Quaternion;
 using Magnum::Vector3;
 using Magnum::Math::Deg;
+using Magnum::Image2D;
 
 std::atomic<uint> CameraController::count = 0;
 
 CameraController::CameraController(Magnum::Platform::Application *app,
-				   Scene3D *scene)
+                                   Scene3D *scene)
     : CameraController(app, scene, CameraConfiguration{}){};
 
 CameraController::CameraController(Magnum::Platform::Application *app,
-                                   Scene3D *scene, CameraConfiguration config)
-    : _config(config) {
-
-  _app = app;
+				   Scene3D *scene, CameraConfiguration config)
+    : _app(app), _config(config), _analysis_thread([this](auto stop_token) {
+	this->frame_analysis(stop_token);
+      }) {
 
   // rotations are manipulated by individual parent objects...
   // this makes rotations easier to reason about and serialize,
@@ -100,8 +98,8 @@ void CameraController::setupFramebuffer(Vector2i frame_size) {
   _color = std::make_unique<GL::Texture2D>();
   _color->setStorage(1, GL::TextureFormat::RGBA8, _frame_size);
 
-  _analysis_color = std::make_unique<GL::Texture2D>();
-  _analysis_color->setStorage(1, GL::TextureFormat::RGBA8, _frame_size);
+  _analysis_frame = std::make_unique<GL::Texture2D>();
+  _analysis_frame->setStorage(1, GL::TextureFormat::RGBA8, _frame_size);
 
   _depth_stencil = std::make_unique<GL::Renderbuffer>();
   _depth_stencil->setStorage(GL::RenderbufferFormat::Depth24Stencil8,
@@ -120,64 +118,118 @@ void CameraController::bindFramebuffer() {
       .bind();
 }
 
-GL::Texture2D &CameraController::outputFrame() {
-  if (_config.frame_analysis.enabled &&
-      _config.frame_analysis.draw_on_viewport)
-    return *_analysis_color;
+GL::Texture2D &CameraController::color_frame() {
+  std::unique_lock lock(_color_frame_mutex);
   return *_color;
 }
 
-void CameraController::runFrameAnalysis() {
+GL::Texture2D &CameraController::analysis_frame() {
+  if (_analysis_frame_buffer_updated) {
+    std::unique_lock lock(_analysis_frame_buffer_data_mutex);
+    // move updated buffer data into our analysis frame Texture2D...
+    // we first need to create an OpenGL Buffer for it
+    GL::BufferImage2D buffer{
+	Magnum::GL::PixelFormat::RGBA, Magnum::GL::PixelType::UnsignedByte,
+	_frame_size, _analysis_frame_buffer_data, GL::BufferUsage::StaticDraw};
+    // then we can set the data
+    _analysis_frame->setSubImage(0, {}, buffer);
+  }
+  return *_analysis_frame;
+}
+
+void CameraController::dispatch_analysis() {
   if (!_config.frame_analysis.enabled) return;
+  std::lock(_dispatch_analysis_mutex, _color_frame_mutex);
+  std::lock_guard lock_dispatch(_dispatch_analysis_mutex, std::adopt_lock);
+  std::lock_guard lock_color(_color_frame_mutex, std::adopt_lock);
+  // move the image onto the CPU for use in our analysis thread
+  _analysis_image = _color->image(0, Image2D{PixelFormat::RGBA8Unorm});
+  _analysis_config = _config.frame_analysis;
+  _analysis_condition_variable.notify_one();
+}
 
-  using namespace Magnum;
-  using namespace Corrade;
+void CameraController::frame_analysis(std::stop_token stop_token) {
+  while (!stop_token.stop_requested()) {
 
-  // Grab the image on the CPU
-  Image2D image = _color->image(0, Image2D{PixelFormat::RGBA8Unorm});
+    std::optional<Magnum::Image2D> image_opt;
+    std::optional<FrameAnalysisConfiguration> config_opt;
 
-  // and construct an opencv type from it
-  cv::Mat mat(_frame_size.y(), _frame_size.x(), CV_8UC4, image.data());
+    {
+      std::unique_lock dispatch_lock(_dispatch_analysis_mutex);
 
-  const auto& contours = _config.frame_analysis.contours;
+      _analysis_condition_variable.wait(dispatch_lock, [&] {
+        auto values_filled =
+            (_analysis_image.has_value() && _analysis_config.has_value());
+        return stop_token.stop_requested() || values_filled;
+      });
 
-  // convert the image to grayscale
-  cv::Mat grey;
-  cv::cvtColor(mat, grey, cv::COLOR_RGBA2GRAY);
+      if (stop_token.stop_requested()) break;
 
-  // blur the image
-  if (contours.blur_size > 0)
-    cv::blur(grey, grey, cv::Size(contours.blur_size, contours.blur_size));
+      // start move the data onto this thread
+      image_opt = std::move(_analysis_image);
+      _analysis_image.reset();
 
-  // canny edge detection
-  cv::Mat canny;
-  cv::Canny(grey, canny, contours.canny_min_threshold,
-	    contours.canny_max_threshold, contours.canny_aperture_size);
+      config_opt = std::move(_analysis_config);
+      _analysis_config.reset();
+    }
 
-  // find the countours
-  std::vector<std::vector<cv::Point>> contour_list;
-  std::vector<cv::Vec4i> hierarchy;
-  cv::findContours(canny, contour_list, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+    // now we are free to process our image without holding the main thread
 
-  // if we don't need to draw the result onto our camera view,
-  // we can leave with just the contour arrays
-  if (!_config.frame_analysis.draw_on_viewport) return;
+    auto& image = *image_opt;
+    auto frame_size = image.size();
+    auto& analysis_config = *config_opt;
+    auto& contours = analysis_config.contours;
 
-  // draw the contours onto our image
-  const cv::Scalar line_colour{255, 0, 0};
-  cv::drawContours(mat, contour_list, -1, line_colour, cv::FILLED, cv::LINE_4);
+    // start by wrapping the image data in an opencv matrix type
+    cv::Mat mat(frame_size.y(), frame_size.x(), CV_8UC4, image.data());
 
-  // move the resulting cv::Mat into an appropriate container
-  auto element_count = mat.total() * mat.channels();
-  Containers::Array<uint8_t> buffer_data(NoInit, element_count);
-  std::copy(mat.datastart, mat.dataend, buffer_data.data());
+    // convert the image to grayscale
+    cv::Mat grey;
+    cv::cvtColor(mat, grey, cv::COLOR_RGBA2GRAY);
 
-  GL::BufferImage2D buffer{
-      Magnum::GL::PixelFormat::RGBA, Magnum::GL::PixelType::UnsignedByte,
-      _frame_size, buffer_data, GL::BufferUsage::StaticDraw};
+    // blur the image
+    if (contours.blur_size > 0)
+      cv::blur(grey, grey, cv::Size(contours.blur_size, contours.blur_size));
 
-  // and finaly into the GL Texture
-  _analysis_color->setSubImage(0, {}, buffer);
+    // canny edge detection
+    cv::Mat canny;
+    cv::Canny(grey, canny, contours.canny_min_threshold,
+	      contours.canny_max_threshold, contours.canny_aperture_size);
+
+    // find the countours
+    std::vector<std::vector<cv::Point>> contour_list;
+    std::vector<cv::Vec4i> hierarchy;
+    cv::findContours(canny, contour_list, cv::RETR_LIST,
+		     cv::CHAIN_APPROX_SIMPLE);
+
+    // TODO the contours can be published on our MQTT network here
+
+    // if we don't need to draw the result onto our camera view,
+    // we can finish here with just the contour arrays
+    if (!analysis_config.draw_on_viewport) continue;
+
+    // create a new RGBA image initialised to fully transparent
+    cv::Mat output_mat(frame_size.y(), frame_size.x(), CV_8UC4,
+			    cv::Scalar(0, 0, 0, 0));
+
+    // draw the contours onto our transparent image
+    const cv::Scalar line_colour{255, 0, 0, 255};
+    constexpr auto line_thickness = 4;
+    cv::drawContours(output_mat, contour_list, -1, line_colour, line_thickness,
+		     cv::LINE_4);
+
+    // copy the resulting cv::Mat data into our buffer data container
+
+    auto element_count = output_mat.total() * output_mat.channels();
+    std::unique_lock lock(_analysis_frame_buffer_data_mutex);
+    _analysis_frame_buffer_data =
+	Containers::Array<uint8_t>(NoInit, element_count);
+
+    std::copy(output_mat.datastart, output_mat.dataend,
+              _analysis_frame_buffer_data.data());
+
+    _analysis_frame_buffer_updated = true;
+  }
 }
 
 // TODO
@@ -405,7 +457,6 @@ void CameraController::draw_imgui_controls() {
 	int aperture_in = (contours.canny_aperture_size - 1) / 2;
 	draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
 	contours.canny_aperture_size = aperture_in * 2 + 1;
-	spdlog::info(contours.canny_aperture_size);
 	
 	ImGui::TreePop();
       }

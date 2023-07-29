@@ -283,10 +283,10 @@ PointCaster::PointCaster(const Arguments &args)
   _scene = std::make_unique<Scene3D>();
   _drawable_group = std::make_unique<SceneGraph::DrawableGroup3D>();
 
-  _ground_grid =
-      std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
-  _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
-                          Matrix4::translation(Vector3(0, 0, 0)));
+  // _ground_grid =
+  //     std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
+  // _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
+  //                         Matrix4::translation(Vector3(0, 0, 0)));
 
   // Deserialize last session
   auto data_dir = path::get_or_create_data_directory();
@@ -333,8 +333,8 @@ PointCaster::PointCaster(const Arguments &args)
   // set background color
   GL::Renderer::setClearColor(0x0d1117_rgbf);
 
-  _point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.005f);
-  // _point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.05f);
+  // _point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.005f);
+  _point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.015f);
   _sphere_renderer = std::make_unique<SphereRenderer>();
 
   // Start the timer, loop at 144 Hz max
@@ -471,7 +471,7 @@ void PointCaster::render_cameras() {
 
     camera_controller->camera().draw(*_drawable_group);
 
-    camera_controller->runFrameAnalysis();
+    camera_controller->dispatch_analysis();
   }
 
   GL::defaultFramebuffer.bind();
@@ -612,8 +612,15 @@ void PointCaster::draw_main_viewport() {
 	  Vector2 frame_size_f = {static_cast<float>(frame_size.x()),
 				  static_cast<float>(frame_size.y())};
 
-	  ImGuiIntegration::image(camera_controller->outputFrame(),
+	  const auto image_pos = ImGui::GetCursorPos();
+	  ImGuiIntegration::image(camera_controller->color_frame(),
 				  frame_size_f);
+
+          if (camera_controller->config().frame_analysis.draw_on_viewport) {
+	    ImGui::SetCursorPos(image_pos);
+            ImGuiIntegration::image(camera_controller->analysis_frame(),
+                                    frame_size_f);
+          }
 
           draw_viewport_controls(*camera_controller);
 

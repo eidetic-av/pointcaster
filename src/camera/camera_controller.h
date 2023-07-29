@@ -1,21 +1,24 @@
 #pragma once
 
+#include "camera_config.h"
+#include <Magnum/Image.h>
 #include <Magnum/GL/Framebuffer.h>
 #include <Magnum/GL/Renderbuffer.h>
 #include <Magnum/GL/RenderbufferFormat.h>
 #include <Magnum/GL/Texture.h>
 #include <Magnum/GL/TextureFormat.h>
 #include <Magnum/Math/Angle.h>
+#include <Magnum/Math/Vector3.h>
 #include <Magnum/Platform/Sdl2Application.h>
 #include <Magnum/SceneGraph/Camera.h>
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
-#include <Magnum/Math/Angle.h>
-#include <Magnum/Math/Vector3.h>
 #include <atomic>
+#include <condition_variable>
 #include <memory>
-#include "camera_config.h"
-#include <Magnum/Math/Vector3.h>
+#include <mutex>
+#include <optional>
+#include <thread>
 
 namespace pc::camera {
 
@@ -55,15 +58,17 @@ public:
 
   const Magnum::Vector2i& frameSize() { return _frame_size; };
 
-  Magnum::GL::Texture2D& outputFrame();
-  void runFrameAnalysis();
+  Magnum::GL::Texture2D& color_frame();
+  Magnum::GL::Texture2D& analysis_frame();
+
+  void dispatch_analysis();
 
   void draw_imgui_controls();
 
 private:
   Magnum::Platform::Application* _app;
-  
   CameraConfiguration _config;
+
   std::unique_ptr<Camera3D> _camera;
 
   std::unique_ptr<Object3D> _camera_parent;
@@ -73,7 +78,6 @@ private:
 
   Magnum::Vector2i _frame_size;
   std::unique_ptr<Magnum::GL::Texture2D> _color;
-  std::unique_ptr<Magnum::GL::Texture2D> _analysis_color;
   std::unique_ptr<Magnum::GL::Renderbuffer> _depth_stencil;
   std::unique_ptr<Magnum::GL::Framebuffer> _framebuffer;
 
@@ -83,6 +87,20 @@ private:
   Magnum::Deg _fov{45};
   Magnum::Float _perspective_value{0.5};
   Magnum::Vector3 _translation{};
+
+  std::mutex _color_frame_mutex;
+
+  std::unique_ptr<Magnum::GL::Texture2D> _analysis_frame;
+  std::optional<Magnum::Image2D> _analysis_image;
+  std::optional<FrameAnalysisConfiguration> _analysis_config;
+  std::jthread _analysis_thread;
+  std::mutex _dispatch_analysis_mutex;
+  std::mutex _analysis_frame_buffer_data_mutex;
+  Corrade::Containers::Array<uint8_t> _analysis_frame_buffer_data;
+  std::atomic_bool _analysis_frame_buffer_updated;
+  std::condition_variable _analysis_condition_variable;
+
+  void frame_analysis(std::stop_token stop_token);
 
   Magnum::Matrix4 make_projection_matrix();
 
