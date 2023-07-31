@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../point_cloud_renderer_config.h"
 #include <Magnum/Math/Angle.h>
 #include <Magnum/Math/Vector3.h>
 #include <array>
@@ -61,6 +62,7 @@ struct CameraConfiguration {
   std::array<float, 3> translation = defaults::translation;
   float fov = defaults::fov;
 
+  PointCloudRendererConfiguration rendering;
   FrameAnalysisConfiguration frame_analysis;
 };
 

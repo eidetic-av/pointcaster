@@ -11,6 +11,7 @@
 #include <pointclouds.h>
 #include "structs.h"
 #include "shaders/particle_sphere.h"
+#include "point_cloud_renderer_config.h"
 
 namespace pc {
 
@@ -19,9 +20,10 @@ namespace pc {
 
   class PointCloudRenderer {
   public:
-    PointCloudRenderer(float particleRadius);
+    PointCloudRenderer();
 
-    PointCloudRenderer& draw(Magnum::SceneGraph::Camera3D& camera, const Vector2i& viewportSize);
+    PointCloudRenderer& draw(Magnum::SceneGraph::Camera3D& camera,
+			     const PointCloudRendererConfiguration& frame_config);
 
     bool isDirty() const { return _dirty; }
 
@@ -30,23 +32,14 @@ namespace pc {
       return *this;
     }
 
-    Float particleRadius() const { return _particleRadius; }
-
-    PointCloudRenderer& setParticleRadius(Float radius) {
-      _particleRadius = radius;
-      return *this;
-    }
-
     pc::types::PointCloud points;
 
   private:
     bool _dirty = false;
 
-    Float _particleRadius = 1.0f;
     GL::Buffer _positions_buffer;
     GL::Buffer _color_buffer;
     GL::Mesh _meshParticles;
     Containers::Pointer<ParticleSphereShader> _particleShader;
   };
-
 }

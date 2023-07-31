@@ -83,6 +83,10 @@ CameraController::CameraController(Magnum::Platform::Application *app,
     _config.id = pc::uuid::word();
   }
   _config.name = "camera_" + std::to_string(++CameraController::count);
+  if (_config.rendering.resolution[0] == 0) {
+    const auto res = _app->framebufferSize() / _app->dpiScaling();
+    _config.rendering.resolution = {res.x(), res.y()};
+  }
 
   spdlog::info("Initialised Camera Controller {} with id {}", _config.name,
 	  _config.id);
@@ -439,6 +443,19 @@ void CameraController::draw_imgui_controls() {
     draw_slider<float>("z", &rotate[2], -360, 360);
     setRotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
 
+    ImGui::TreePop();
+  }
+
+  if (ImGui::TreeNode("Rendering")) {
+    auto& rendering = _config.rendering;
+    // ImGui::Checkbox("ground grid", &rendering.ground_grid);
+    ImGui::TextDisabled("Resolution");
+    ImGui::InputInt("width", &rendering.resolution[0]);
+    ImGui::SameLine();
+    ImGui::InputInt("height", &rendering.resolution[1]);
+    ImGui::Spacing();
+    draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f, 0.0015f);
+    ImGui::Spacing();
     ImGui::TreePop();
   }
 

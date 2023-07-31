@@ -29,6 +29,7 @@
 #include <spdlog/spdlog.h>
 
 #include <Corrade/Utility/StlMath.h>
+#include <Magnum/Magnum.h>
 #include <Magnum/GL/Context.h>
 #include <Magnum/ImageView.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
@@ -283,10 +284,10 @@ PointCaster::PointCaster(const Arguments &args)
   _scene = std::make_unique<Scene3D>();
   _drawable_group = std::make_unique<SceneGraph::DrawableGroup3D>();
 
-  // _ground_grid =
-  //     std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
-  // _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
-  //                         Matrix4::translation(Vector3(0, 0, 0)));
+  _ground_grid =
+      std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
+  _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
+                          Matrix4::translation(Vector3(0, 0, 0)));
 
   // Deserialize last session
   auto data_dir = path::get_or_create_data_directory();
@@ -333,8 +334,7 @@ PointCaster::PointCaster(const Arguments &args)
   // set background color
   GL::Renderer::setClearColor(0x0d1117_rgbf);
 
-  // _point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.005f);
-  _point_cloud_renderer = std::make_unique<PointCloudRenderer>(0.015f);
+  _point_cloud_renderer = std::make_unique<PointCloudRenderer>();
   _sphere_renderer = std::make_unique<SphereRenderer>();
 
   // Start the timer, loop at 144 Hz max
@@ -460,17 +460,22 @@ void PointCaster::render_cameras() {
 
   for (auto &camera_controller : _camera_controllers) {
 
-    // TODO render size needs to be set via camera configs
-    const auto frame_size = framebufferSize() / dpiScaling();
+    auto& rendering_config = camera_controller->config().rendering;
+    const auto frame_size = Vector2i{rendering_config.resolution[0],
+				     rendering_config.resolution[1]};
 
     camera_controller->setupFramebuffer(frame_size);
     camera_controller->bindFramebuffer();
 
-    _point_cloud_renderer->draw(camera_controller->camera(), frame_size);
+    // TODO: manual frame resolution setting
+
+    // draw shaders
+    _point_cloud_renderer->draw(camera_controller->camera(),
+				rendering_config);
     _sphere_renderer->draw(camera_controller->camera());
 
+    // TODO: a bit of a clunky way to 
     camera_controller->camera().draw(*_drawable_group);
-
     camera_controller->dispatch_analysis();
   }
 
@@ -616,11 +621,12 @@ void PointCaster::draw_main_viewport() {
 	  ImGuiIntegration::image(camera_controller->color_frame(),
 				  frame_size_f);
 
-          if (camera_controller->config().frame_analysis.draw_on_viewport) {
+	  auto& analysis = camera_controller->config().frame_analysis;
+	  if (analysis.enabled && analysis.draw_on_viewport) {
 	    ImGui::SetCursorPos(image_pos);
-            ImGuiIntegration::image(camera_controller->analysis_frame(),
-                                    frame_size_f);
-          }
+	    ImGuiIntegration::image(camera_controller->analysis_frame(),
+				    frame_size_f);
+	  }
 
           draw_viewport_controls(*camera_controller);
 

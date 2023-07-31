@@ -18,9 +18,8 @@ using namespace Magnum;
 using namespace Shaders;
 using namespace Math::Literals;
 
-PointCloudRenderer::PointCloudRenderer(float particleRadius)
-    : _particleRadius(particleRadius),
-      _meshParticles(GL::MeshPrimitive::Points) {
+PointCloudRenderer::PointCloudRenderer()
+    : _meshParticles(GL::MeshPrimitive::Points) {
   points = pc::types::PointCloud{};
   _meshParticles.addVertexBuffer(
       _positions_buffer, 0,
@@ -33,7 +32,7 @@ PointCloudRenderer::PointCloudRenderer(float particleRadius)
 
 PointCloudRenderer &
 PointCloudRenderer::draw(Magnum::SceneGraph::Camera3D& camera,
-		    const Vector2i &viewportSize) {
+		    const PointCloudRendererConfiguration &frame_config) {
   if (points.empty()) return *this;
 
   if (_dirty) {
@@ -51,10 +50,11 @@ PointCloudRenderer::draw(Magnum::SceneGraph::Camera3D& camera,
 
   (*_particleShader)
       /* particle data */
-      .setParticleRadius(_particleRadius)
+      .setParticleRadius(frame_config.point_size)
       /* sphere render data */
       .setPointSizeScale(
-	  static_cast<float>(viewportSize.y()) /
+	  static_cast<float>(frame_config.resolution[0]) /
+	  // TODO: get FOV from camera too
 	  Math::tan(22.5_degf)) /* tan(half field-of-view angle (45_deg)*/
       /* view/prj matrices and light */
       .setViewMatrix(camera.cameraMatrix())
