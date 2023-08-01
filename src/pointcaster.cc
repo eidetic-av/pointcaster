@@ -284,10 +284,10 @@ PointCaster::PointCaster(const Arguments &args)
   _scene = std::make_unique<Scene3D>();
   _drawable_group = std::make_unique<SceneGraph::DrawableGroup3D>();
 
-  // _ground_grid =
-  //     std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
-  // _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
-  //                         Matrix4::translation(Vector3(0, 0, 0)));
+  _ground_grid =
+      std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
+  _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
+                          Matrix4::translation(Vector3(0, 0, 0)));
 
   // Deserialize last session
   auto data_dir = path::get_or_create_data_directory();
@@ -471,13 +471,17 @@ void PointCaster::render_cameras() {
       _point_cloud_renderer->setDirty();
     }
 
+    // enable or disable wireframe ground depending on camera settings
+    _ground_grid->set_visible(rendering_config.ground_grid);
+
     // draw shaders
     _point_cloud_renderer->draw(camera_controller->camera(),
 				rendering_config);
     _sphere_renderer->draw(camera_controller->camera());
 
-    // TODO: Add / remove wireframe grid here
+    // render camera
     camera_controller->camera().draw(*_drawable_group);
+
     camera_controller->dispatch_analysis();
   }
 

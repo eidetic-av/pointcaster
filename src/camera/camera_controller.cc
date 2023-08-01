@@ -457,7 +457,7 @@ void CameraController::draw_imgui_controls() {
 
   if (ImGui::TreeNode("Rendering")) {
     auto& rendering = _config.rendering;
-    // ImGui::Checkbox("ground grid", &rendering.ground_grid);
+    ImGui::Checkbox("ground grid", &rendering.ground_grid);
     ImGui::TextDisabled("Resolution");
     ImGui::InputInt("width", &rendering.resolution[0]);
     ImGui::SameLine();

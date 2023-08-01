@@ -20,38 +20,54 @@ using Scene3D = SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 class WireframeObject {
 public:
   explicit WireframeObject(Scene3D *const scene,
-                           SceneGraph::DrawableGroup3D *const drawableGroup) {
-    _obj3D.reset(new Object3D{scene});
-    _flatShader = Shaders::FlatGL3D{};
-    _drawableObj.reset(new FlatShadeObject{*_obj3D, _flatShader, Color3{0.75f},
-                                           _mesh, drawableGroup});
+			   SceneGraph::DrawableGroup3D *const parent_group)
+      : _parent_group(parent_group) {
+    _object.reset(new Object3D{scene});
+    _shader = Shaders::FlatGL3D{};
+    _drawable.reset(new FlatShadeObject{*_object, _shader, Color3{0.75f}, _mesh,
+					_parent_group});
   }
 
-  WireframeObject &setColor(const Color3 &color) {
-    _drawableObj->setColor(color);
+  WireframeObject &set_color(const Color3 &color) {
+    _drawable->setColor(color);
     return *this;
   }
   WireframeObject &transform(const Matrix4 &matrix) {
-    _obj3D->transform(matrix);
+    _object->transform(matrix);
     return *this;
   }
-  WireframeObject &setTransformation(const Matrix4 &matrix) {
-    _obj3D->setTransformation(matrix);
+  WireframeObject &set_transformation(const Matrix4 &matrix) {
+    _object->setTransformation(matrix);
     return *this;
   }
 
+  void set_visible(bool visible) {
+    if (_visible == visible) return;
+    if (_visible && !visible) {
+      _visible = false;
+      _parent_group->remove(*_drawable.get());
+      return;
+    }
+    if (!_visible && visible) {
+      _visible = true;
+      _parent_group->add(*_drawable.get());
+    }
+  }
+
 protected:
+  bool _visible = true;
+  SceneGraph::DrawableGroup3D *const _parent_group;
   GL::Mesh _mesh{NoCreate};
-  Shaders::FlatGL3D _flatShader{NoCreate};
-  Containers::Pointer<Object3D> _obj3D;
-  Containers::Pointer<FlatShadeObject> _drawableObj;
+  Shaders::FlatGL3D _shader{NoCreate};
+  Containers::Pointer<Object3D> _object;
+  Containers::Pointer<FlatShadeObject> _drawable;
 };
 
 class WireframeBox : public WireframeObject {
 public:
   explicit WireframeBox(Scene3D *const scene,
-                        SceneGraph::DrawableGroup3D *const drawableGroup)
-      : WireframeObject{scene, drawableGroup} {
+                        SceneGraph::DrawableGroup3D *const parent_group)
+      : WireframeObject{scene, parent_group} {
     _mesh = MeshTools::compile(Primitives::cubeWireframe());
   }
 };
@@ -59,13 +75,13 @@ public:
 class WireframeGrid : public WireframeObject {
 public:
   explicit WireframeGrid(Scene3D *const scene,
-                         SceneGraph::DrawableGroup3D *const drawableGroup)
-      : WireframeObject{scene, drawableGroup} {
+                         SceneGraph::DrawableGroup3D *const parent_group)
+      : WireframeObject{scene, parent_group} {
     using namespace Magnum::Math::Literals;
 
     _mesh = MeshTools::compile(Primitives::grid3DWireframe({10, 10}));
-    _obj3D->scale(Vector3(3.0f));
-    _obj3D->rotateX(90.0_degf);
+    _object->scale(Vector3(3.0f));
+    _object->rotateX(90.0_degf);
   }
 };
 
