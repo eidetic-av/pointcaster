@@ -19,16 +19,18 @@ list(APPEND LINK_LIBS imgui::imgui)
 find_package(Eigen3 CONFIG REQUIRED)
 list(APPEND LINK_LIBS Eigen3::Eigen)
 
-find_path(EARCUT_HPP_INCLUDE_DIRS REQUIRED "mapbox/earcut.hpp")
-# list(APPEND INCLUDE_DIRS ${EARCUT_HPP_INCLUDE_DIRS})
+find_path(EARCUT_HPP_INCLUDE_DIRS "mapbox/earcut.hpp")
+list(APPEND INCLUDE_DIRS ${EARCUT_HPP_INCLUDE_DIRS})
 
-# ----- Point cloud streaming libs -----
+# ----- Point clouds -----
 
 find_package(bob-pointclouds CONFIG REQUIRED)
 list(APPEND LINK_LIBS bob::pointclouds)
 
 find_package(draco CONFIG REQUIRED)
 list(APPEND LINK_LIBS draco::draco)
+
+# ----- Networking -----
 
 find_package(ZeroMQ CONFIG REQUIRED)
 # zmq needs to be a shared lib on windows
@@ -38,6 +40,12 @@ if (WIN32)
   set(PLATFORM_LIBS ${PLATFORM_LIBS} bcrypt)
 else()
   list(APPEND LINK_LIBS libzmq-static)
+endif()
+
+find_package(PahoMqttCpp CONFIG REQUIRED)
+list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3-static)
+if (NOT WIN32)
+  list(APPEND PLATFORM_LIBS uuid)
 endif()
 
 # ----- Magnum 3D engine -----
@@ -110,6 +118,7 @@ set(SOURCE_FILES
   src/devices/usb.cc
   src/camera/camera_controller.cc
   src/radio.cc
+  src/mqtt_client.cc
   src/snapshots.cc
   src/point_cloud_renderer.cc
   src/sphere_renderer.cc
@@ -127,7 +136,6 @@ set_target_properties(pointcaster PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 target_include_directories(pointcaster PRIVATE
     ${INCLUDE_DIRS} ${OPTIONAL_INCLUDE_DIRS} 
-    ${EARCUT_HPP_INCLUDE_DIRS}
     ${PLATFORM_INCLUDE_DIRS})
 
 target_link_libraries(pointcaster PRIVATE 

@@ -21,12 +21,12 @@
 #include <Magnum/PixelFormat.h>
 #include <Magnum/Trade/ImageData.h>
 #include <algorithm>
+#include <mapbox/earcut.hpp>
 #include <numbers>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgproc.hpp>
 #include <spdlog/spdlog.h>
 #include <vector>
-#include <mapbox/earcut.hpp>
 
 namespace pc::camera {
 
@@ -339,10 +339,11 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
         }
       }
 
-      if (triangulate.publish_triangles) {
-      }
       if (triangulate.publish_vertices) {
       }
+      if (triangulate.publish_triangles) {
+      }
+
     }
 
     if (analysis_config.contours.draw) {
@@ -630,7 +631,8 @@ void CameraController::draw_imgui_controls() {
 	ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
 	if (contours.triangulate.enabled) {
 	  ImGui::Checkbox("Draw triangles", &contours.triangulate.draw);
-	  ImGui::Checkbox("Publish triangles", &contours.triangulate.publish);
+	  ImGui::Checkbox("Publish vertices", &contours.triangulate.publish_vertices);
+	  ImGui::Checkbox("Publish triangles", &contours.triangulate.publish_triangles);
 	}
 
         ImGui::TreePop();

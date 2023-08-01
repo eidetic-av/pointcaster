@@ -12,6 +12,7 @@
       "platform":  "windows"
     },
     "earcut-hpp",
+    "paho-mqttpp3",
     {
       "name": "opencv",
       "platform":  "linux"

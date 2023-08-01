@@ -61,6 +61,7 @@
 #include "gui_helpers.h"
 #include "point_cloud_renderer.h"
 #include "radio.h"
+#include "mqtt_client.h"
 #include "snapshots.h"
 #include "sphere_renderer.h"
 #include "uuid.h"
@@ -138,8 +139,10 @@ protected:
 
   std::unique_ptr<WireframeGrid> _ground_grid;
 
-  std::unique_ptr<Radio> _radio;
   std::unique_ptr<Snapshots> _snapshots_context;
+
+  std::unique_ptr<Radio> _radio;
+  std::unique_ptr<MqttClient> _mqtt;
 
   std::unique_ptr<UsbMonitor> _usb_monitor;
 
@@ -341,8 +344,9 @@ PointCaster::PointCaster(const Arguments &args)
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  // Initialise our network radio for points
+  // Initialise our networks
   _radio = std::make_unique<Radio>();
+  _mqtt = std::make_unique<MqttClient>("pointcaster", "tcp://192.168.1.227:1884");
 
   //
   _snapshots_context = std::make_unique<Snapshots>();
