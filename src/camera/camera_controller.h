@@ -89,13 +89,13 @@ private:
   Magnum::Vector3 _translation{};
 
   std::mutex _color_frame_mutex;
+  std::mutex _dispatch_analysis_mutex;
+  std::mutex _analysis_frame_buffer_data_mutex;
 
   std::unique_ptr<Magnum::GL::Texture2D> _analysis_frame;
   std::optional<Magnum::Image2D> _analysis_image;
   std::optional<FrameAnalysisConfiguration> _analysis_config;
   std::jthread _analysis_thread;
-  std::mutex _dispatch_analysis_mutex;
-  std::mutex _analysis_frame_buffer_data_mutex;
   Corrade::Containers::Array<uint8_t> _analysis_frame_buffer_data;
   std::atomic_bool _analysis_frame_buffer_updated;
   std::condition_variable _analysis_condition_variable;

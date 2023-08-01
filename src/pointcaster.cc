@@ -284,10 +284,10 @@ PointCaster::PointCaster(const Arguments &args)
   _scene = std::make_unique<Scene3D>();
   _drawable_group = std::make_unique<SceneGraph::DrawableGroup3D>();
 
-  _ground_grid =
-      std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
-  _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
-                          Matrix4::translation(Vector3(0, 0, 0)));
+  // _ground_grid =
+  //     std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
+  // _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
+  //                         Matrix4::translation(Vector3(0, 0, 0)));
 
   // Deserialize last session
   auto data_dir = path::get_or_create_data_directory();
@@ -446,35 +446,37 @@ void PointCaster::deserialize_session(std::filesystem::path file_path) {
   spdlog::info("Loaded session '{}'", file_path.filename().string());
 }
 
-void PointCaster::fill_point_renderer() {
-  auto points = pc::sensors::synthesized_point_cloud();
-  points += snapshots::pointCloud();
-
-  if (!points.empty()) {
-    _point_cloud_renderer->points = std::move(points);
-    _point_cloud_renderer->setDirty();
-  }
-}
-
 void PointCaster::render_cameras() {
+
+  PointCloud points;
 
   for (auto &camera_controller : _camera_controllers) {
 
     auto& rendering_config = camera_controller->config().rendering;
-    const auto frame_size = Vector2i{rendering_config.resolution[0],
-				     rendering_config.resolution[1]};
+    const auto frame_size =
+      Vector2i{int(rendering_config.resolution[0] / dpiScaling().x()),
+	       int(rendering_config.resolution[1] / dpiScaling().y())};
 
     camera_controller->setupFramebuffer(frame_size);
     camera_controller->bindFramebuffer();
 
-    // TODO: manual frame resolution setting
+    // TODO: pass selected physical cameras into the
+    // synthesise_point_cloud function 
+    // - make sure to cache already synthesised configurations
+    if (points.empty()) {
+      points = sensors::synthesized_point_cloud();
+      if (rendering_config.snapshots)
+        points += snapshots::point_cloud();
+      _point_cloud_renderer->points = points;
+      _point_cloud_renderer->setDirty();
+    }
 
     // draw shaders
     _point_cloud_renderer->draw(camera_controller->camera(),
 				rendering_config);
     _sphere_renderer->draw(camera_controller->camera());
 
-    // TODO: a bit of a clunky way to 
+    // TODO: Add / remove wireframe grid here
     camera_controller->camera().draw(*_drawable_group);
     camera_controller->dispatch_analysis();
   }
@@ -611,21 +613,23 @@ void PointCaster::draw_main_viewport() {
 
         if (ImGui::BeginTabItem(camera_controller->name().c_str(), nullptr,
                                 tab_item_flags)) {
-          ImGui::BeginChild("Frame");
+          // const auto& frame_size = camera_controller->frameSize();
+          // Vector2 frame_size_f = {
+          //     static_cast<float>(frame_size.x() * dpiScaling().x()),
+          //     static_cast<float>(frame_size.y() * dpiScaling().y())
+	  // };
+	  Vector2 frame_size = {float(windowSize().x() / dpiScaling().x()),
+				float(windowSize().y() / dpiScaling().y())};
 
-	  const auto& frame_size = camera_controller->frameSize();
-	  Vector2 frame_size_f = {static_cast<float>(frame_size.x()),
-				  static_cast<float>(frame_size.y())};
-
-	  const auto image_pos = ImGui::GetCursorPos();
+          const auto image_pos = ImGui::GetCursorPos();
 	  ImGuiIntegration::image(camera_controller->color_frame(),
-				  frame_size_f);
+				  frame_size);
 
 	  auto& analysis = camera_controller->config().frame_analysis;
 	  if (analysis.enabled && analysis.draw_on_viewport) {
 	    ImGui::SetCursorPos(image_pos);
 	    ImGuiIntegration::image(camera_controller->analysis_frame(),
-				    frame_size_f);
+				    frame_size);
 	  }
 
           draw_viewport_controls(*camera_controller);
@@ -633,7 +637,6 @@ void PointCaster::draw_main_viewport() {
           if (ImGui::IsItemHovered())
             _hovering_camera_index = i;
 
-          ImGui::EndChild();
           ImGui::EndTabItem();
         }
       }
@@ -896,7 +899,6 @@ void PointCaster::drawEvent() {
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
 			       GL::FramebufferClear::Depth);
 
-  fill_point_renderer();
   render_cameras();
 
   _imgui_context.newFrame();

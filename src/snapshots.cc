@@ -15,7 +15,7 @@ using namespace pc::types;
 
 std::vector<PointCloud> frames;
 
-PointCloud pointCloud(){
+PointCloud point_cloud(){
   return std::reduce(
       frames.begin(), frames.end(), PointCloud{},
       [](auto a, auto b) -> PointCloud { return a + b; });

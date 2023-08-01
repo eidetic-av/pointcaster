@@ -8,7 +8,7 @@
 namespace pc::snapshots {
 
 extern std::vector<pc::types::PointCloud> frames;
-extern pc::types::PointCloud pointCloud();
+extern pc::types::PointCloud point_cloud();
 
 struct SnapshotsConfiguration {
 };
