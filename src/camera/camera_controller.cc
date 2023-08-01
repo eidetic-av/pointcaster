@@ -286,9 +286,8 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     // TODO the contours can be published on our MQTT network here
     // on a "contours_chain" channel
 
-    //
-
-    // scale the contours to the size of our output image
+    // create a version of the contours list scaled to the size
+    // of our output image
     std::vector<std::vector<cv::Point>> contour_list_scaled;
     std::vector<cv::Point> scaled_contour;
     for (auto &contour : contour_list_norm) {
@@ -301,43 +300,56 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       contour_list_scaled.push_back(scaled_contour);
     }
 
+    // triangulation
+    auto &triangulate = analysis_config.contours.triangulate;
+
+    std::vector<std::array<cv::Point, 3>> triangles;
+    std::vector<cv::Point> vertices;
+
+    if (triangulate.enabled) {
+
+      for (auto &contour : contour_list_scaled) {
+
+        std::vector<std::vector<std::pair<int, int>>> polygon(contour.size());
+        for (auto &point : contour) {
+          polygon[0].push_back({point.x, point.y});
+        }
+        auto indices = mapbox::earcut<int>(polygon);
+
+        std::array<cv::Point, 3> triangle;
+        auto vertex = 0;
+        for (const auto &index : indices) {
+	  auto point =
+	      cv::Point(polygon[0][index].first, polygon[0][index].second);
+
+          triangle[vertex % 3] = {polygon[0][index].first,
+                                  polygon[0][index].second};
+          vertices.push_back(point);
+
+          if (++vertex % 3 == 0) {
+	    triangles.push_back(triangle);
+            if (triangulate.draw) {
+	      static const cv::Scalar triangle_fill(120, 120, 60, 120);
+	      static const cv::Scalar triangle_border(200, 200, 0, 255);
+              cv::fillConvexPoly(output_mat, triangle.data(), 3, triangle_fill);
+              cv::polylines(output_mat, triangle, true, triangle_border, 1, cv::LINE_AA);
+            }
+            vertex = 0;
+          }
+        }
+      }
+
+      if (triangulate.publish_triangles) {
+      }
+      if (triangulate.publish_vertices) {
+      }
+    }
+
     if (analysis_config.contours.draw) {
       const cv::Scalar line_colour{255, 0, 0, 255};
       constexpr auto line_thickness = 4;
       cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
                        line_thickness, cv::LINE_4);
-    }
-
-    // triangulation
-
-    // Run tessellation
-    // Returns array of indices that refer to the vertices of the input polygon.
-    // e.g: the index 6 would refer to {25, 75} in this example.
-    // Three subsequent indices form a triangle.
-    // Output triangles are clockwise.
-
-    const cv::Scalar triangle_fill(128, 128, 190, 90);
-    const cv::Scalar triangle_border(30, 30, 100, 200);
-
-    for (auto &contour : contour_list_scaled) {
-
-      std::vector<std::vector<std::pair<int, int>>> polygon(contour.size());
-      for (auto &point : contour) {
-	polygon[0].push_back({point.x, point.y});
-      }
-      auto indices = mapbox::earcut<int>(polygon);
-
-      std::array<cv::Point, 3> triangle;
-      auto vertex = 0;
-      for (const auto &index : indices) {
-	triangle[vertex % 3] = {polygon[0][index].first,
-				polygon[0][index].second};
-        if (++vertex % 3 == 0) {
-	  cv::fillConvexPoly(output_mat, triangle.data(), 3, triangle_fill);
-	  cv::polylines(output_mat, triangle, true, triangle_border, 3);
-          vertex = 0;
-        }
-      }
     }
 
     // copy the resulting cv::Mat data into our buffer data container
@@ -614,6 +626,12 @@ void CameraController::draw_imgui_controls() {
           draw_slider<float>("min area", &contours.simplify_min_area, 0.0001f,
                              2.0f, 0.0001f);
         }
+
+	ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
+	if (contours.triangulate.enabled) {
+	  ImGui::Checkbox("Draw triangles", &contours.triangulate.draw);
+	  ImGui::Checkbox("Publish triangles", &contours.triangulate.publish);
+	}
 
         ImGui::TreePop();
       }

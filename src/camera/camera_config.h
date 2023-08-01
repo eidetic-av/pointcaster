@@ -45,6 +45,17 @@ struct CannyEdgeConfiguration {
   int aperture_size = 3;
 };
 
+struct SimplifyConfiguration {
+  bool enabled = false;
+};
+
+struct TriangulateConfiguration {
+  bool enabled = false;
+  bool draw = false;
+  bool publish_triangles = false;
+  bool publish_vertices = false;
+};
+
 struct ContourDetectionConfiguration {
   bool enabled;
   bool draw;
@@ -54,6 +65,7 @@ struct ContourDetectionConfiguration {
   bool simplify = false;
   float simplify_arc_scale = 0.001f;
   float simplify_min_area = 0.0001f;
+  TriangulateConfiguration triangulate;
 };
 
 struct FrameAnalysisConfiguration {
