@@ -30,11 +30,11 @@
 namespace pc::camera {
 
 using namespace Magnum;
+using Magnum::Image2D;
 using Magnum::Matrix4;
 using Magnum::Quaternion;
 using Magnum::Vector3;
 using Magnum::Math::Deg;
-using Magnum::Image2D;
 
 std::atomic<uint> CameraController::count = 0;
 
@@ -43,9 +43,9 @@ CameraController::CameraController(Magnum::Platform::Application *app,
     : CameraController(app, scene, CameraConfiguration{}){};
 
 CameraController::CameraController(Magnum::Platform::Application *app,
-				   Scene3D *scene, CameraConfiguration config)
+                                   Scene3D *scene, CameraConfiguration config)
     : _app(app), _config(config), _analysis_thread([this](auto stop_token) {
-	this->frame_analysis(stop_token);
+        this->frame_analysis(stop_token);
       }) {
 
   // rotations are manipulated by individual parent objects...
@@ -68,9 +68,9 @@ CameraController::CameraController(Magnum::Platform::Application *app,
 
   // deserialize our camera configuration into Magnum types
   auto rotation = Euler{Deg_f(_config.rotation[0]), Deg_f(_config.rotation[1]),
-			Deg_f(_config.rotation[2])};
+                        Deg_f(_config.rotation[2])};
   auto translation = Position{_config.translation[0], _config.translation[1],
-		      _config.translation[2]};
+                              _config.translation[2]};
   auto fov = Deg_f(_config.fov);
 
   setRotation(rotation, true);
@@ -89,17 +89,17 @@ CameraController::CameraController(Magnum::Platform::Application *app,
   }
 
   spdlog::info("Initialised Camera Controller {} with id {}", _config.name,
-	  _config.id);
+               _config.id);
 }
 
 CameraController::~CameraController() { CameraController::count--; }
 
 void CameraController::setupFramebuffer(Vector2i frame_size) {
-  if (frame_size == _frame_size) return;
-
+  if (frame_size == _frame_size)
+    return;
 
   std::lock(_dispatch_analysis_mutex, _color_frame_mutex,
-	    _analysis_frame_buffer_data_mutex);
+            _analysis_frame_buffer_data_mutex);
   std::lock_guard lock_dispatch(_dispatch_analysis_mutex, std::adopt_lock);
   std::lock_guard lock_color(_color_frame_mutex, std::adopt_lock);
   std::lock_guard lock(_analysis_frame_buffer_data_mutex, std::adopt_lock);
@@ -142,8 +142,8 @@ GL::Texture2D &CameraController::analysis_frame() {
     // move updated buffer data into our analysis frame Texture2D...
     // we first need to create an OpenGL Buffer for it
     GL::BufferImage2D buffer{
-	Magnum::GL::PixelFormat::RGBA, Magnum::GL::PixelType::UnsignedByte,
-	_frame_size, _analysis_frame_buffer_data, GL::BufferUsage::StaticDraw};
+        Magnum::GL::PixelFormat::RGBA, Magnum::GL::PixelType::UnsignedByte,
+        _frame_size, _analysis_frame_buffer_data, GL::BufferUsage::StaticDraw};
     // then we can set the data
     _analysis_frame->setSubImage(0, {}, buffer);
   }
@@ -151,7 +151,8 @@ GL::Texture2D &CameraController::analysis_frame() {
 }
 
 void CameraController::dispatch_analysis() {
-  if (!_config.frame_analysis.enabled) return;
+  if (!_config.frame_analysis.enabled)
+    return;
   std::lock(_dispatch_analysis_mutex, _color_frame_mutex);
   std::lock_guard lock_dispatch(_dispatch_analysis_mutex, std::adopt_lock);
   std::lock_guard lock_color(_color_frame_mutex, std::adopt_lock);
@@ -176,7 +177,8 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
         return stop_token.stop_requested() || values_filled;
       });
 
-      if (stop_token.stop_requested()) break;
+      if (stop_token.stop_requested())
+        break;
 
       // start move the data onto this thread
       image_opt = std::move(_analysis_image);
@@ -188,28 +190,30 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
     // now we are free to process our image without holding the main thread
 
-    auto& image = *image_opt;
+    auto &image = *image_opt;
     auto input_frame_size = image.size();
-    auto& analysis_config = *config_opt;
+    auto &analysis_config = *config_opt;
 
     // start by wrapping the image data in an opencv matrix type
     cv::Mat input_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
-		image.data());
+                      image.data());
 
     // and scale to analysis size if changed
     cv::Mat scaled_mat;
     if (input_frame_size.x() != analysis_config.resolution[0] ||
         input_frame_size.y() != analysis_config.resolution[1]) {
-      auto& resolution = analysis_config.resolution;
-      if (resolution[0] == 0) resolution[0] = input_frame_size.x();
-      if (resolution[1] == 0) resolution[1] = input_frame_size.y();
+      auto &resolution = analysis_config.resolution;
+      if (resolution[0] == 0)
+        resolution[0] = input_frame_size.x();
+      if (resolution[1] == 0)
+        resolution[1] = input_frame_size.y();
       cv::resize(input_mat, scaled_mat, {resolution[0], resolution[1]}, 0, 0,
-		 cv::INTER_LINEAR);
+                 cv::INTER_LINEAR);
     } else {
       scaled_mat = input_mat;
     }
 
-    auto& contours = analysis_config.contours;
+    auto &contours = analysis_config.contours;
 
     // convert the image to grayscale
     cv::Mat grey;
@@ -222,12 +226,12 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     // canny edge detection
     cv::Mat canny;
     cv::Canny(grey, canny, contours.canny_min_threshold,
-	      contours.canny_max_threshold, contours.canny_aperture_size);
+              contours.canny_max_threshold, contours.canny_aperture_size);
 
     // find the countours
     std::vector<std::vector<cv::Point>> contour_list;
     cv::findContours(canny, contour_list, cv::RETR_LIST,
-		     cv::CHAIN_APPROX_SIMPLE);
+                     cv::CHAIN_APPROX_SIMPLE);
 
     // normalise the contours
     std::vector<std::vector<cv::Point2f>> contour_list_norm;
@@ -236,9 +240,9 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     for (auto &contour : contour_list) {
       norm_contour.clear();
       for (auto &point : contour) {
-	norm_contour.push_back(
-	    {point.x / static_cast<float>(analysis_config.resolution[0]),
-	     point.y / static_cast<float>(analysis_config.resolution[1])});
+        norm_contour.push_back(
+            {point.x / static_cast<float>(analysis_config.resolution[0]),
+             point.y / static_cast<float>(analysis_config.resolution[1])});
       }
       contour_list_norm.push_back(norm_contour);
     }
@@ -246,10 +250,10 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     // poly simplification
     if (contours.simplify) {
       for (auto it = contour_list_norm.begin();
-	   it != contour_list_norm.end();) {
-	auto &contour = *it;
+           it != contour_list_norm.end();) {
+        auto &contour = *it;
 
-	// remove contours that are too small
+        // remove contours that are too small
         const double area = cv::contourArea(contour);
         if (area < contours.simplify_min_area / 1000) {
           it = contour_list_norm.erase(it);
@@ -264,52 +268,53 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
         ++it;
       }
     }
+    // TODO the contours can be published on our MQTT network here
 
-      // TODO the contours can be published on our MQTT network here
+    //
 
-      // if we don't need to draw the result onto our camera view,
-      // we can finish here with just the contour arrays
-      if (!analysis_config.draw_on_viewport)
-        continue;
+    // if we don't need to draw the result onto our camera view,
+    // we can finish here with just the contour arrays
+    if (!analysis_config.draw_on_viewport)
+      continue;
 
-      // create a new RGBA image initialised to fully transparent
-      cv::Mat output_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
-                         cv::Scalar(0, 0, 0, 0));
+    // create a new RGBA image initialised to fully transparent
+    cv::Mat output_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
+                       cv::Scalar(0, 0, 0, 0));
 
-      // scale the contours to the size of our output image
-      std::vector<std::vector<cv::Point>> contour_list_scaled;
+    // scale the contours to the size of our output image
+    std::vector<std::vector<cv::Point>> contour_list_scaled;
 
-      std::vector<cv::Point> scaled_contour;
-      for (auto &contour : contour_list_norm) {
-        scaled_contour.clear();
-        for (auto &point : contour) {
-          scaled_contour.push_back(
-              {static_cast<int>(point.x * input_frame_size.x()),
-               static_cast<int>(point.y * input_frame_size.y())});
-          // spdlog::info("{}. {}", scaled_contour.back().x,
-          // scaled_contour.back().y);
-        }
-        contour_list_scaled.push_back(scaled_contour);
+    std::vector<cv::Point> scaled_contour;
+    for (auto &contour : contour_list_norm) {
+      scaled_contour.clear();
+      for (auto &point : contour) {
+        scaled_contour.push_back(
+            {static_cast<int>(point.x * input_frame_size.x()),
+             static_cast<int>(point.y * input_frame_size.y())});
+        // spdlog::info("{}. {}", scaled_contour.back().x,
+        // scaled_contour.back().y);
       }
-
-      // draw the contours onto our transparent image
-      const cv::Scalar line_colour{255, 0, 0, 255};
-      constexpr auto line_thickness = 4;
-      cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
-                       line_thickness, cv::LINE_4);
-
-      // copy the resulting cv::Mat data into our buffer data container
-
-      auto element_count = output_mat.total() * output_mat.channels();
-      std::unique_lock lock(_analysis_frame_buffer_data_mutex);
-      _analysis_frame_buffer_data =
-          Containers::Array<uint8_t>(NoInit, element_count);
-
-      std::copy(output_mat.datastart, output_mat.dataend,
-                _analysis_frame_buffer_data.data());
-
-      _analysis_frame_buffer_updated = true;
+      contour_list_scaled.push_back(scaled_contour);
     }
+
+    // draw the contours onto our transparent image
+    const cv::Scalar line_colour{255, 0, 0, 255};
+    constexpr auto line_thickness = 4;
+    cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
+                     line_thickness, cv::LINE_4);
+
+    // copy the resulting cv::Mat data into our buffer data container
+
+    auto element_count = output_mat.total() * output_mat.channels();
+    std::unique_lock lock(_analysis_frame_buffer_data_mutex);
+    _analysis_frame_buffer_data =
+        Containers::Array<uint8_t>(NoInit, element_count);
+
+    std::copy(output_mat.datastart, output_mat.dataend,
+              _analysis_frame_buffer_data.data());
+
+    _analysis_frame_buffer_updated = true;
+  }
 }
 
 // TODO
@@ -331,7 +336,7 @@ Matrix4 CameraController::make_projection_matrix() {
       unproject(_frame_size / 2, depth_at(_frame_size / 2));
   auto camera_location = _camera_parent->transformation().translation();
   spdlog::info("camera_location: {}, {}, {}", camera_location.x(),
-	  camera_location.y(), camera_location.z());
+               camera_location.y(), camera_location.z());
   const auto target_distance = (camera_location - focal_point).length();
 
   if (!_is_dz_started) {
@@ -365,11 +370,12 @@ Matrix4 CameraController::make_projection_matrix() {
 }
 
 void CameraController::setRotation(
-				   const Magnum::Math::Vector3<Magnum::Math::Rad<float>> &rotation, bool force) {
+    const Magnum::Math::Vector3<Magnum::Math::Rad<float>> &rotation,
+    bool force) {
 
   std::array<float, 3> input_deg = {float(Deg_f(rotation.x())),
-				    float(Deg_f(rotation.y())),
-				    float(Deg_f(rotation.z()))};
+                                    float(Deg_f(rotation.y())),
+                                    float(Deg_f(rotation.z()))};
   if (!force && _config.rotation[0] == input_deg[0] &&
       _config.rotation[1] == input_deg[1] &&
       _config.rotation[2] == input_deg[2]) {
@@ -377,7 +383,7 @@ void CameraController::setRotation(
   }
 
   _config.rotation = {float(Deg_f(rotation.x())), float(Deg_f(rotation.y())),
-		      float(Deg_f(rotation.z()))};
+                      float(Deg_f(rotation.z()))};
 
   _yaw_parent->resetTransformation();
   auto y_rotation = rotation.y() - defaults::magnum::rotation.y();
@@ -393,7 +399,7 @@ void CameraController::setRotation(
 }
 
 void CameraController::setTranslation(
-				      const Magnum::Math::Vector3<float> &translation, bool force) {
+    const Magnum::Math::Vector3<float> &translation, bool force) {
   if (!force && _config.translation[0] == translation.x() &&
       _config.translation[1] == translation.y() &&
       _config.translation[2] == translation.z()) {
@@ -405,7 +411,8 @@ void CameraController::setTranslation(
   _camera_parent->setTransformation(transform);
 }
 
-void CameraController::dolly(Magnum::Platform::Sdl2Application::MouseScrollEvent &event) {
+void CameraController::dolly(
+    Magnum::Platform::Sdl2Application::MouseScrollEvent &event) {
   const auto delta = event.offset().y();
   const auto frame_centre = _frame_size / 2;
   const auto centre_depth = depth_at(frame_centre);
@@ -428,7 +435,7 @@ void CameraController::mouseRotate(
     rotation_amount.y() = Rad(delta.x());
   }
   auto rotation = Euler{Deg_f(_config.rotation[0]), Deg_f(_config.rotation[1]),
-			Deg_f(_config.rotation[2])};
+                        Deg_f(_config.rotation[2])};
   setRotation(rotation + rotation_amount);
 }
 
@@ -439,9 +446,9 @@ void CameraController::mouseTranslate(
   const Vector3 p = unproject(event.position(), centre_depth);
   const auto delta =
       Vector3{(float)event.relativePosition().x() * _move_speed.x(),
-	      (float)event.relativePosition().y() * _move_speed.y(), 0};
+              (float)event.relativePosition().y() * _move_speed.y(), 0};
   auto translation = Position{_config.translation[0], _config.translation[1],
-		      _config.translation[2]};
+                              _config.translation[2]};
   setTranslation(translation + delta);
 }
 
@@ -476,17 +483,17 @@ CameraController::unproject(const Magnum::Vector2i &window_position,
   return _camera->projectionMatrix().inverted().transformPoint(in);
 }
 
-Float CameraController::depth_at(const Vector2i& window_position) {
+Float CameraController::depth_at(const Vector2i &window_position) {
 
   /* First scale the position from being relative to window size to being
      relative to framebuffer size as those two can be different on HiDPI
      systems */
 
-  const Vector2i position = window_position * Vector2{ _app->framebufferSize() } /
-     Vector2{_app->windowSize()};
-  const Vector2i fbPosition{ position.x(),
-                           GL::defaultFramebuffer.viewport().sizeY() -
-                               position.y() - 1 };
+  const Vector2i position = window_position * Vector2{_app->framebufferSize()} /
+                            Vector2{_app->windowSize()};
+  const Vector2i fbPosition{position.x(),
+                            GL::defaultFramebuffer.viewport().sizeY() -
+                                position.y() - 1};
 
   GL::defaultFramebuffer.mapForRead(
       GL::DefaultFramebuffer::ReadAttachment::Front);
@@ -502,7 +509,7 @@ Float CameraController::depth_at(const Vector2i& window_position) {
 void CameraController::draw_imgui_controls() {
 
   using pc::gui::draw_slider;
-  
+
   if (ImGui::TreeNode("Transform")) {
 
     ImGui::TextDisabled("Translation");
@@ -523,20 +530,21 @@ void CameraController::draw_imgui_controls() {
   }
 
   if (ImGui::TreeNode("Rendering")) {
-    auto& rendering = _config.rendering;
+    auto &rendering = _config.rendering;
     ImGui::Checkbox("ground grid", &rendering.ground_grid);
     ImGui::TextDisabled("Resolution");
     ImGui::InputInt("width", &rendering.resolution[0]);
     ImGui::SameLine();
     ImGui::InputInt("height", &rendering.resolution[1]);
     ImGui::Spacing();
-    draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f, 0.0015f);
+    draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
+                       0.0015f);
     ImGui::Spacing();
     ImGui::TreePop();
   }
 
   if (ImGui::TreeNode("Frame Analysis")) {
-    auto& frame_analysis = _config.frame_analysis;
+    auto &frame_analysis = _config.frame_analysis;
     ImGui::Checkbox("Enabled", &frame_analysis.enabled);
     if (frame_analysis.enabled) {
       ImGui::Checkbox("Draw on viewport", &frame_analysis.draw_on_viewport);
@@ -548,19 +556,23 @@ void CameraController::draw_imgui_controls() {
       ImGui::Spacing();
 
       if (ImGui::TreeNode("Contour Detection")) {
-	auto& contours = frame_analysis.contours;
+        auto &contours = frame_analysis.contours;
 
-	draw_slider<int>("blur size", &contours.blur_size, 0, 40, 3);
-	draw_slider<int>("canny min", &contours.canny_min_threshold, 0, 255, 100);
-	draw_slider<int>("canny max", &contours.canny_max_threshold, 0, 255, 255);
-	int aperture_in = (contours.canny_aperture_size - 1) / 2;
-	draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
-	contours.canny_aperture_size = aperture_in * 2 + 1;
+        draw_slider<int>("blur size", &contours.blur_size, 0, 40, 3);
+        draw_slider<int>("canny min", &contours.canny_min_threshold, 0, 255,
+                         100);
+        draw_slider<int>("canny max", &contours.canny_max_threshold, 0, 255,
+                         255);
+        int aperture_in = (contours.canny_aperture_size - 1) / 2;
+        draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
+        contours.canny_aperture_size = aperture_in * 2 + 1;
 
-	ImGui::Checkbox("Simplify", &contours.simplify);
+        ImGui::Checkbox("Simplify", &contours.simplify);
         if (contours.simplify) {
-	  draw_slider<float>("arc scale", &contours.simplify_arc_scale, 0.000001f, 0.015f, 0.001f);
-	  draw_slider<float>("min area", &contours.simplify_min_area, 0.0001f, 2.0f, 0.0001f);
+          draw_slider<float>("arc scale", &contours.simplify_arc_scale,
+                             0.000001f, 0.015f, 0.001f);
+          draw_slider<float>("min area", &contours.simplify_min_area, 0.0001f,
+                             2.0f, 0.0001f);
         }
 
         ImGui::TreePop();

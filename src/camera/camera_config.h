@@ -27,7 +27,7 @@ namespace magnum {
 
 static constexpr Euler rotation{Deg_f{defaults::rotation[0]},
                                 Deg_f{defaults::rotation[1]},
-				Deg_f{defaults::rotation[2]}};
+                                Deg_f{defaults::rotation[2]}};
 static constexpr float distance = defaults::distance;
 static const Position translation{defaults::translation[0],
                                   defaults::translation[1],
