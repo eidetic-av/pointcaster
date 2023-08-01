@@ -630,7 +630,8 @@ void PointCaster::draw_main_viewport() {
 				  frame_size);
 
 	  auto& analysis = camera_controller->config().frame_analysis;
-	  if (analysis.enabled && analysis.draw_on_viewport) {
+
+	  if (analysis.enabled && (analysis.contours.draw)) {
 	    ImGui::SetCursorPos(image_pos);
 	    ImGuiIntegration::image(camera_controller->analysis_frame(),
 				    frame_size);

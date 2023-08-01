@@ -38,13 +38,19 @@ static constexpr Deg_f fov{defaults::fov};
 
 } // namespace defaults
 
+struct CannyEdgeConfiguration {
+  bool enabled = false;
+  int min_threshold = 100;
+  int max_threshold = 255;
+  int aperture_size = 3;
+};
+
 struct ContourDetectionConfiguration {
   bool enabled;
+  bool draw;
   bool greyscale_conversion = true;
   int blur_size = 3;
-  int canny_min_threshold = 100;
-  int canny_max_threshold = 255;
-  int canny_aperture_size = 3;
+  CannyEdgeConfiguration canny;
   bool simplify = false;
   float simplify_arc_scale = 0.001f;
   float simplify_min_area = 0.0001f;
@@ -52,7 +58,6 @@ struct ContourDetectionConfiguration {
 
 struct FrameAnalysisConfiguration {
   bool enabled;
-  bool draw_on_viewport;
   std::array<int, 2> resolution;
   ContourDetectionConfiguration contours;
 };

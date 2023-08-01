@@ -26,6 +26,7 @@
 #include <opencv2/imgproc.hpp>
 #include <spdlog/spdlog.h>
 #include <vector>
+#include <mapbox/earcut.hpp>
 
 namespace pc::camera {
 
@@ -194,7 +195,11 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     auto input_frame_size = image.size();
     auto &analysis_config = *config_opt;
 
-    // start by wrapping the image data in an opencv matrix type
+    // create a new RGBA image initialised to fully transparent
+    cv::Mat output_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
+                       cv::Scalar(0, 0, 0, 0));
+
+    // start by wrapping the input image data in an opencv matrix type
     cv::Mat input_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
                       image.data());
 
@@ -213,24 +218,31 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       scaled_mat = input_mat;
     }
 
+    // contour detection
     auto &contours = analysis_config.contours;
 
+    cv::Mat contours_input(scaled_mat);
+
     // convert the image to grayscale
-    cv::Mat grey;
-    cv::cvtColor(scaled_mat, grey, cv::COLOR_RGBA2GRAY);
+    cv::cvtColor(contours_input, contours_input, cv::COLOR_RGBA2GRAY);
 
     // blur the image
     if (contours.blur_size > 0)
-      cv::blur(grey, grey, cv::Size(contours.blur_size, contours.blur_size));
+      cv::blur(contours_input, contours_input,
+	       cv::Size(contours.blur_size, contours.blur_size));
 
-    // canny edge detection
-    cv::Mat canny;
-    cv::Canny(grey, canny, contours.canny_min_threshold,
-              contours.canny_max_threshold, contours.canny_aperture_size);
+    // // perform canny edge detection
+    if (contours.canny.enabled) {
+      cv::Mat canny;
+      cv::Canny(contours_input, contours_input, contours.canny.min_threshold,
+		contours.canny.max_threshold, contours.canny.aperture_size);
+    }
 
-    // find the countours
+    cv::threshold(contours_input, contours_input, 100, 255, cv::THRESH_BINARY);
+
+    // find the countours in the frame
     std::vector<std::vector<cv::Point>> contour_list;
-    cv::findContours(canny, contour_list, cv::RETR_LIST,
+    cv::findContours(contours_input, contour_list, cv::RETR_EXTERNAL,
                      cv::CHAIN_APPROX_SIMPLE);
 
     // normalise the contours
@@ -247,7 +259,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       contour_list_norm.push_back(norm_contour);
     }
 
-    // poly simplification
+    // simplifaction
     if (contours.simplify) {
       for (auto it = contour_list_norm.begin();
            it != contour_list_norm.end();) {
@@ -262,28 +274,22 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
         // simplify the remaining shapes
         const double epsilon =
-            contours.simplify_arc_scale * cv::arcLength(contour, true);
-        cv::approxPolyDP(contour, contour, epsilon, true);
+            contours.simplify_arc_scale * cv::arcLength(contour, false);
+        cv::approxPolyDP(contour, contour, epsilon, false);
 
         ++it;
       }
     }
+
+    // now we have our output contours as a chain
+
     // TODO the contours can be published on our MQTT network here
+    // on a "contours_chain" channel
 
     //
 
-    // if we don't need to draw the result onto our camera view,
-    // we can finish here with just the contour arrays
-    if (!analysis_config.draw_on_viewport)
-      continue;
-
-    // create a new RGBA image initialised to fully transparent
-    cv::Mat output_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
-                       cv::Scalar(0, 0, 0, 0));
-
     // scale the contours to the size of our output image
     std::vector<std::vector<cv::Point>> contour_list_scaled;
-
     std::vector<cv::Point> scaled_contour;
     for (auto &contour : contour_list_norm) {
       scaled_contour.clear();
@@ -291,20 +297,50 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
         scaled_contour.push_back(
             {static_cast<int>(point.x * input_frame_size.x()),
              static_cast<int>(point.y * input_frame_size.y())});
-        // spdlog::info("{}. {}", scaled_contour.back().x,
-        // scaled_contour.back().y);
       }
       contour_list_scaled.push_back(scaled_contour);
     }
 
-    // draw the contours onto our transparent image
-    const cv::Scalar line_colour{255, 0, 0, 255};
-    constexpr auto line_thickness = 4;
-    cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
-                     line_thickness, cv::LINE_4);
+    if (analysis_config.contours.draw) {
+      const cv::Scalar line_colour{255, 0, 0, 255};
+      constexpr auto line_thickness = 4;
+      cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
+                       line_thickness, cv::LINE_4);
+    }
+
+    // triangulation
+
+    // Run tessellation
+    // Returns array of indices that refer to the vertices of the input polygon.
+    // e.g: the index 6 would refer to {25, 75} in this example.
+    // Three subsequent indices form a triangle.
+    // Output triangles are clockwise.
+
+    const cv::Scalar triangle_fill(128, 128, 190, 90);
+    const cv::Scalar triangle_border(30, 30, 100, 200);
+
+    for (auto &contour : contour_list_scaled) {
+
+      std::vector<std::vector<std::pair<int, int>>> polygon(contour.size());
+      for (auto &point : contour) {
+	polygon[0].push_back({point.x, point.y});
+      }
+      auto indices = mapbox::earcut<int>(polygon);
+
+      std::array<cv::Point, 3> triangle;
+      auto vertex = 0;
+      for (const auto &index : indices) {
+	triangle[vertex % 3] = {polygon[0][index].first,
+				polygon[0][index].second};
+        if (++vertex % 3 == 0) {
+	  cv::fillConvexPoly(output_mat, triangle.data(), 3, triangle_fill);
+	  cv::polylines(output_mat, triangle, true, triangle_border, 3);
+          vertex = 0;
+        }
+      }
+    }
 
     // copy the resulting cv::Mat data into our buffer data container
-
     auto element_count = output_mat.total() * output_mat.channels();
     std::unique_lock lock(_analysis_frame_buffer_data_mutex);
     _analysis_frame_buffer_data =
@@ -547,7 +583,6 @@ void CameraController::draw_imgui_controls() {
     auto &frame_analysis = _config.frame_analysis;
     ImGui::Checkbox("Enabled", &frame_analysis.enabled);
     if (frame_analysis.enabled) {
-      ImGui::Checkbox("Draw on viewport", &frame_analysis.draw_on_viewport);
 
       ImGui::TextDisabled("Resolution");
       ImGui::InputInt("width", &frame_analysis.resolution[0]);
@@ -558,14 +593,19 @@ void CameraController::draw_imgui_controls() {
       if (ImGui::TreeNode("Contour Detection")) {
         auto &contours = frame_analysis.contours;
 
+	ImGui::Checkbox("Draw on viewport", &contours.draw);
+
         draw_slider<int>("blur size", &contours.blur_size, 0, 40, 3);
-        draw_slider<int>("canny min", &contours.canny_min_threshold, 0, 255,
+
+        ImGui::Checkbox("Canny edge detection", &contours.canny.enabled);
+
+        draw_slider<int>("canny min", &contours.canny.min_threshold, 0, 255,
                          100);
-        draw_slider<int>("canny max", &contours.canny_max_threshold, 0, 255,
+        draw_slider<int>("canny max", &contours.canny.max_threshold, 0, 255,
                          255);
-        int aperture_in = (contours.canny_aperture_size - 1) / 2;
+        int aperture_in = (contours.canny.aperture_size - 1) / 2;
         draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
-        contours.canny_aperture_size = aperture_in * 2 + 1;
+        contours.canny.aperture_size = aperture_in * 2 + 1;
 
         ImGui::Checkbox("Simplify", &contours.simplify);
         if (contours.simplify) {

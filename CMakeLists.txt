@@ -14,10 +14,13 @@ find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
 list(APPEND LINK_LIBS imgui::imgui)
 
-# ----- Eigen lib for geometry -----
+# ----- Geometry -----
 
 find_package(Eigen3 CONFIG REQUIRED)
 list(APPEND LINK_LIBS Eigen3::Eigen)
+
+find_path(EARCUT_HPP_INCLUDE_DIRS REQUIRED "mapbox/earcut.hpp")
+# list(APPEND INCLUDE_DIRS ${EARCUT_HPP_INCLUDE_DIRS})
 
 # ----- Point cloud streaming libs -----
 
@@ -124,6 +127,7 @@ set_target_properties(pointcaster PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 target_include_directories(pointcaster PRIVATE
     ${INCLUDE_DIRS} ${OPTIONAL_INCLUDE_DIRS} 
+    ${EARCUT_HPP_INCLUDE_DIRS}
     ${PLATFORM_INCLUDE_DIRS})
 
 target_link_libraries(pointcaster PRIVATE 
