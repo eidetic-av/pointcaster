@@ -43,9 +43,11 @@ else()
 endif()
 
 find_package(PahoMqttCpp CONFIG REQUIRED)
-list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3-static)
-if (NOT WIN32)
-  list(APPEND PLATFORM_LIBS uuid)
+# paho also needs to be a shared lib on windows
+if (WIN32)
+  list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3)
+else()
+  list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3-static uuid)
 endif()
 
 # ----- Magnum 3D engine -----
