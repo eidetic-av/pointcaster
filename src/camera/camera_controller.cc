@@ -189,16 +189,31 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     // now we are free to process our image without holding the main thread
 
     auto& image = *image_opt;
-    auto frame_size = image.size();
+    auto input_frame_size = image.size();
     auto& analysis_config = *config_opt;
-    auto& contours = analysis_config.contours;
 
     // start by wrapping the image data in an opencv matrix type
-    cv::Mat mat(frame_size.y(), frame_size.x(), CV_8UC4, image.data());
+    cv::Mat input_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
+		image.data());
+
+    // and scale to analysis size if changed
+    cv::Mat scaled_mat;
+    if (input_frame_size.x() != analysis_config.resolution[0] ||
+        input_frame_size.y() != analysis_config.resolution[1]) {
+      auto& resolution = analysis_config.resolution;
+      if (resolution[0] == 0) resolution[0] = input_frame_size.x();
+      if (resolution[1] == 0) resolution[1] = input_frame_size.y();
+      cv::resize(input_mat, scaled_mat, {resolution[0], resolution[1]}, 0, 0,
+		 cv::INTER_LINEAR);
+    } else {
+      scaled_mat = input_mat;
+    }
+
+    auto& contours = analysis_config.contours;
 
     // convert the image to grayscale
     cv::Mat grey;
-    cv::cvtColor(mat, grey, cv::COLOR_RGBA2GRAY);
+    cv::cvtColor(scaled_mat, grey, cv::COLOR_RGBA2GRAY);
 
     // blur the image
     if (contours.blur_size > 0)
@@ -215,6 +230,20 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     cv::findContours(canny, contour_list, cv::RETR_LIST,
 		     cv::CHAIN_APPROX_SIMPLE);
 
+    // normalise the contours
+    std::vector<std::vector<cv::Point2f>> contour_list_norm;
+
+    std::vector<cv::Point2f> norm_contour;
+    for (auto &contour : contour_list) {
+      norm_contour.clear();
+      for (auto &point : contour) {
+	norm_contour.push_back(
+	    {point.x / static_cast<float>(analysis_config.resolution[0]),
+	     point.y / static_cast<float>(analysis_config.resolution[1])});
+      }
+      contour_list_norm.push_back(norm_contour);
+    }
+
     // TODO the contours can be published on our MQTT network here
 
     // if we don't need to draw the result onto our camera view,
@@ -222,14 +251,30 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     if (!analysis_config.draw_on_viewport) continue;
 
     // create a new RGBA image initialised to fully transparent
-    cv::Mat output_mat(frame_size.y(), frame_size.x(), CV_8UC4,
-			    cv::Scalar(0, 0, 0, 0));
+    cv::Mat output_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
+		       cv::Scalar(0, 0, 0, 0));
+
+    // scale the contours to the size of our output image
+    std::vector<std::vector<cv::Point>> contour_list_scaled;
+
+    std::vector<cv::Point> scaled_contour;
+    for (auto &contour : contour_list_norm) {
+      scaled_contour.clear();
+      for (auto &point : contour) {
+        scaled_contour.push_back(
+            {static_cast<int>(point.x * input_frame_size.x()),
+	     static_cast<int>(point.y * input_frame_size.y())});
+	//spdlog::info("{}. {}", scaled_contour.back().x, scaled_contour.back().y);
+      }
+      contour_list_scaled.push_back(scaled_contour);
+    }
+    
 
     // draw the contours onto our transparent image
     const cv::Scalar line_colour{255, 0, 0, 255};
     constexpr auto line_thickness = 4;
-    cv::drawContours(output_mat, contour_list, -1, line_colour, line_thickness,
-		     cv::LINE_4);
+    cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
+		     line_thickness, cv::LINE_4);
 
     // copy the resulting cv::Mat data into our buffer data container
 
@@ -473,6 +518,12 @@ void CameraController::draw_imgui_controls() {
     ImGui::Checkbox("Enabled", &frame_analysis.enabled);
     if (frame_analysis.enabled) {
       ImGui::Checkbox("Draw on viewport", &frame_analysis.draw_on_viewport);
+
+      ImGui::TextDisabled("Resolution");
+      ImGui::InputInt("width", &frame_analysis.resolution[0]);
+      ImGui::SameLine();
+      ImGui::InputInt("height", &frame_analysis.resolution[1]);
+      ImGui::Spacing();
 
       if (ImGui::TreeNode("Contour Detection")) {
 	auto& contours = frame_analysis.contours;

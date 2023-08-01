@@ -50,6 +50,7 @@ struct ContourDetectionConfiguration {
 struct FrameAnalysisConfiguration {
   bool enabled;
   bool draw_on_viewport;
+  std::array<int, 2> resolution;
   ContourDetectionConfiguration contours;
 };
 
