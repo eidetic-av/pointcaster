@@ -133,6 +133,10 @@ set(SOURCE_FILES
 
 corrade_add_resource(RESOURCES resources.conf)
 
+if (WIN32)
+  list(APPEND SOURCE_FILES resources/windows-dpi.manifest)
+endif()
+
 add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
 set_target_properties(pointcaster PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
