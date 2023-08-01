@@ -41,10 +41,13 @@ static constexpr Deg_f fov{defaults::fov};
 struct ContourDetectionConfiguration {
   bool enabled;
   bool greyscale_conversion = true;
-  int blur_size = 10;
+  int blur_size = 3;
   int canny_min_threshold = 100;
   int canny_max_threshold = 255;
   int canny_aperture_size = 3;
+  bool simplify = false;
+  float simplify_arc_scale = 0.001f;
+  float simplify_min_area = 0.0001f;
 };
 
 struct FrameAnalysisConfiguration {

@@ -226,7 +226,6 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
     // find the countours
     std::vector<std::vector<cv::Point>> contour_list;
-    std::vector<cv::Vec4i> hierarchy;
     cv::findContours(canny, contour_list, cv::RETR_LIST,
 		     cv::CHAIN_APPROX_SIMPLE);
 
@@ -244,50 +243,73 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       contour_list_norm.push_back(norm_contour);
     }
 
-    // TODO the contours can be published on our MQTT network here
+    // poly simplification
+    if (contours.simplify) {
+      for (auto it = contour_list_norm.begin();
+	   it != contour_list_norm.end();) {
+	auto &contour = *it;
 
-    // if we don't need to draw the result onto our camera view,
-    // we can finish here with just the contour arrays
-    if (!analysis_config.draw_on_viewport) continue;
+	// remove contours that are too small
+        const double area = cv::contourArea(contour);
+        if (area < contours.simplify_min_area / 1000) {
+          it = contour_list_norm.erase(it);
+          continue;
+        }
 
-    // create a new RGBA image initialised to fully transparent
-    cv::Mat output_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
-		       cv::Scalar(0, 0, 0, 0));
+        // simplify the remaining shapes
+        const double epsilon =
+            contours.simplify_arc_scale * cv::arcLength(contour, true);
+        cv::approxPolyDP(contour, contour, epsilon, true);
 
-    // scale the contours to the size of our output image
-    std::vector<std::vector<cv::Point>> contour_list_scaled;
-
-    std::vector<cv::Point> scaled_contour;
-    for (auto &contour : contour_list_norm) {
-      scaled_contour.clear();
-      for (auto &point : contour) {
-        scaled_contour.push_back(
-            {static_cast<int>(point.x * input_frame_size.x()),
-	     static_cast<int>(point.y * input_frame_size.y())});
-	//spdlog::info("{}. {}", scaled_contour.back().x, scaled_contour.back().y);
+        ++it;
       }
-      contour_list_scaled.push_back(scaled_contour);
     }
-    
 
-    // draw the contours onto our transparent image
-    const cv::Scalar line_colour{255, 0, 0, 255};
-    constexpr auto line_thickness = 4;
-    cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
-		     line_thickness, cv::LINE_4);
+      // TODO the contours can be published on our MQTT network here
 
-    // copy the resulting cv::Mat data into our buffer data container
+      // if we don't need to draw the result onto our camera view,
+      // we can finish here with just the contour arrays
+      if (!analysis_config.draw_on_viewport)
+        continue;
 
-    auto element_count = output_mat.total() * output_mat.channels();
-    std::unique_lock lock(_analysis_frame_buffer_data_mutex);
-    _analysis_frame_buffer_data =
-	Containers::Array<uint8_t>(NoInit, element_count);
+      // create a new RGBA image initialised to fully transparent
+      cv::Mat output_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
+                         cv::Scalar(0, 0, 0, 0));
 
-    std::copy(output_mat.datastart, output_mat.dataend,
-              _analysis_frame_buffer_data.data());
+      // scale the contours to the size of our output image
+      std::vector<std::vector<cv::Point>> contour_list_scaled;
 
-    _analysis_frame_buffer_updated = true;
-  }
+      std::vector<cv::Point> scaled_contour;
+      for (auto &contour : contour_list_norm) {
+        scaled_contour.clear();
+        for (auto &point : contour) {
+          scaled_contour.push_back(
+              {static_cast<int>(point.x * input_frame_size.x()),
+               static_cast<int>(point.y * input_frame_size.y())});
+          // spdlog::info("{}. {}", scaled_contour.back().x,
+          // scaled_contour.back().y);
+        }
+        contour_list_scaled.push_back(scaled_contour);
+      }
+
+      // draw the contours onto our transparent image
+      const cv::Scalar line_colour{255, 0, 0, 255};
+      constexpr auto line_thickness = 4;
+      cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
+                       line_thickness, cv::LINE_4);
+
+      // copy the resulting cv::Mat data into our buffer data container
+
+      auto element_count = output_mat.total() * output_mat.channels();
+      std::unique_lock lock(_analysis_frame_buffer_data_mutex);
+      _analysis_frame_buffer_data =
+          Containers::Array<uint8_t>(NoInit, element_count);
+
+      std::copy(output_mat.datastart, output_mat.dataend,
+                _analysis_frame_buffer_data.data());
+
+      _analysis_frame_buffer_updated = true;
+    }
 }
 
 // TODO
@@ -528,14 +550,20 @@ void CameraController::draw_imgui_controls() {
       if (ImGui::TreeNode("Contour Detection")) {
 	auto& contours = frame_analysis.contours;
 
-	draw_slider<int>("blur size", &contours.blur_size, 0, 40, 5);
+	draw_slider<int>("blur size", &contours.blur_size, 0, 40, 3);
 	draw_slider<int>("canny min", &contours.canny_min_threshold, 0, 255, 100);
-	draw_slider<int>("canny max", &contours.canny_max_threshold, 0, 255, 200);
+	draw_slider<int>("canny max", &contours.canny_max_threshold, 0, 255, 255);
 	int aperture_in = (contours.canny_aperture_size - 1) / 2;
 	draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
 	contours.canny_aperture_size = aperture_in * 2 + 1;
-	
-	ImGui::TreePop();
+
+	ImGui::Checkbox("Simplify", &contours.simplify);
+        if (contours.simplify) {
+	  draw_slider<float>("arc scale", &contours.simplify_arc_scale, 0.000001f, 0.015f, 0.001f);
+	  draw_slider<float>("min area", &contours.simplify_min_area, 0.0001f, 2.0f, 0.0001f);
+        }
+
+        ImGui::TreePop();
       }
     }
     ImGui::TreePop();
