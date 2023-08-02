@@ -28,6 +28,10 @@
 #include <spdlog/spdlog.h>
 #include <vector>
 
+#if WITH_MQTT
+#include "../mqtt/mqtt_client.h"
+#endif
+
 namespace pc::camera {
 
 using namespace Magnum;
@@ -303,24 +307,24 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     // triangulation
     auto &triangulate = analysis_config.contours.triangulate;
 
-    std::vector<std::array<cv::Point, 3>> triangles;
+    std::vector<std::array<cv::Point2f, 3>> triangles;
     std::vector<cv::Point> vertices;
 
     if (triangulate.enabled) {
 
-      for (auto &contour : contour_list_scaled) {
+      for (auto &contour : contour_list_norm) {
 
-        std::vector<std::vector<std::pair<int, int>>> polygon(contour.size());
+        std::vector<std::vector<std::pair<float, float>>> polygon(contour.size());
         for (auto &point : contour) {
           polygon[0].push_back({point.x, point.y});
         }
         auto indices = mapbox::earcut<int>(polygon);
 
-        std::array<cv::Point, 3> triangle;
+        std::array<cv::Point2f, 3> triangle;
         auto vertex = 0;
         for (const auto &index : indices) {
 	  auto point =
-	      cv::Point(polygon[0][index].first, polygon[0][index].second);
+	      cv::Point2f(polygon[0][index].first, polygon[0][index].second);
 
           triangle[vertex % 3] = {polygon[0][index].first,
                                   polygon[0][index].second};
@@ -328,23 +332,37 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
           if (++vertex % 3 == 0) {
 	    triangles.push_back(triangle);
+
             if (triangulate.draw) {
 	      static const cv::Scalar triangle_fill(120, 120, 60, 120);
-	      static const cv::Scalar triangle_border(200, 200, 0, 255);
-              cv::fillConvexPoly(output_mat, triangle.data(), 3, triangle_fill);
-              cv::polylines(output_mat, triangle, true, triangle_border, 1, cv::LINE_AA);
+	      static const cv::Scalar triangle_border(255, 255, 0, 255);
+
+	      std::array<cv::Point, 3> triangle_scaled;
+	      std::transform(
+		  triangle.begin(), triangle.end(), triangle_scaled.begin(),
+		  [&](auto &point) {
+		    return cv::Point{
+			static_cast<int>(point.x * input_frame_size.x()),
+			static_cast<int>(point.y * input_frame_size.y())};
+		  });
+
+              cv::fillConvexPoly(output_mat, triangle_scaled.data(), 3,
+                                 triangle_fill);
+              cv::polylines(output_mat, triangle_scaled, true, triangle_border, 1,
+			    cv::LINE_AA);
             }
+
             vertex = 0;
           }
         }
       }
 
-      if (triangulate.publish_vertices) {
+      if (triangulate.publish) {
+#if WITH_MQTT
+	auto& mqtt = MqttClient::instance();
+	mqtt->publish("triangles", "test");
+#endif
       }
-
-      if (triangulate.publish_triangles) {
-      }
-
     }
 
     if (analysis_config.contours.draw) {
@@ -632,12 +650,9 @@ void CameraController::draw_imgui_controls() {
 	ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
 	if (contours.triangulate.enabled) {
 	  ImGui::Checkbox("Draw triangles", &contours.triangulate.draw);
-
 #if WITH_MQTT
-	  ImGui::Checkbox("Publish vertices",
-			  &contours.triangulate.publish_vertices);
 	  ImGui::Checkbox("Publish triangles",
-			  &contours.triangulate.publish_triangles);
+			  &contours.triangulate.publish);
 #endif
 	}
 

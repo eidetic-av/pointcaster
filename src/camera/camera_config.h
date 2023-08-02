@@ -52,8 +52,7 @@ struct SimplifyConfiguration {
 struct TriangulateConfiguration {
   bool enabled = false;
   bool draw = false;
-  bool publish_triangles = false;
-  bool publish_vertices = false;
+  bool publish = false;
 };
 
 struct ContourDetectionConfiguration {

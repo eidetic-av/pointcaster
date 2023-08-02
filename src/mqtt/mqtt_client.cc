@@ -14,6 +14,9 @@ using namespace std::chrono_literals;
 
 static const std::regex uri_pattern(R"(^([a-zA-Z]+):\/\/([^:\/]+):(\d+)$)");
 
+std::shared_ptr<MqttClient> MqttClient::_instance;
+std::mutex MqttClient::_mutex;
+
 std::string input_hostname;
 int input_port;
 
@@ -105,8 +108,8 @@ void MqttClient::publish(const std::string_view topic,
 void MqttClient::publish(const std::string_view topic,
 			 const std::vector<uint8_t>& payload) {
   if (!check_connected()) return;
-  auto msg = mqtt::make_message(topic.data(), payload.data(), payload.size());
-  _client->publish(msg);
+  mqtt::topic t(*_client.get(), topic.data());
+  t.publish(payload.data(), payload.size());
 }
 
 void MqttClient::set_uri(const std::string_view uri) {

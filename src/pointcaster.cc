@@ -154,10 +154,6 @@ protected:
 
   ImGuiIntegration::Context _imgui_context{NoCreate};
 
-#if WITH_MQTT
-  std::unique_ptr<MqttClient> _mqtt;
-#endif
-
   void open_kinect_sensors();
 
   void fill_point_renderer();
@@ -358,7 +354,7 @@ PointCaster::PointCaster(const Arguments &args)
   _radio = std::make_unique<Radio>();
 
 #if WITH_MQTT
-  _mqtt = std::make_unique<MqttClient>(_session.mqtt_config);
+  MqttClient::create(_session.mqtt_config);
 #endif
 
   //
@@ -956,7 +952,7 @@ void PointCaster::drawEvent() {
 
 #if WITH_MQTT
   if (_session.show_mqtt_window)
-    _mqtt->draw_imgui_window();
+    MqttClient::instance()->draw_imgui_window();
 #endif
 
   _imgui_context.updateApplicationCursor(*this);
