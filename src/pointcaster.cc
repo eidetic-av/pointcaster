@@ -61,7 +61,6 @@
 #include "gui_helpers.h"
 #include "point_cloud_renderer.h"
 #include "radio.h"
-#include "mqtt_client.h"
 #include "snapshots.h"
 #include "sphere_renderer.h"
 #include "uuid.h"
@@ -70,6 +69,11 @@
 // TODO these need to be removed when initialisation loop is made generic
 #include "devices/k4a/k4a_device.h"
 #include <k4a/k4a.h>
+
+#if WITH_MQTT
+#include "mqtt/mqtt_client.h"
+#endif
+#include "mqtt/mqtt_client_config.h"
 
 #if WITH_SKYBRIDGE
 #include "skybridge.h"
@@ -96,18 +100,21 @@ using Scene3D = Magnum::SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 
 struct PointCasterSession {
   std::string id;
+  bool auto_connect_sensors = false;
 
   // GUI
   std::vector<char> imgui_layout;
   bool show_sensors_window = true;
   bool show_controllers_window = false;
-  bool show_radio_window = true;
+  bool show_radio_window = false;
   bool show_snapshots_window = false;
-  bool show_global_transform_window = true;
-  bool show_stats = true;
-  bool auto_connect_sensors = false;
+  bool show_global_transform_window = false;
+  bool show_stats = false;
+  bool show_mqtt_window = false;
 
   std::vector<CameraConfiguration> cameras;
+
+  MqttClientConfiguration mqtt_config;
 };
 
 class PointCaster : public Platform::Application {
@@ -142,11 +149,14 @@ protected:
   std::unique_ptr<Snapshots> _snapshots_context;
 
   std::unique_ptr<Radio> _radio;
-  std::unique_ptr<MqttClient> _mqtt;
 
   std::unique_ptr<UsbMonitor> _usb_monitor;
 
   ImGuiIntegration::Context _imgui_context{NoCreate};
+
+#if WITH_MQTT
+  std::unique_ptr<MqttClient> _mqtt;
+#endif
 
   void open_kinect_sensors();
 
@@ -346,7 +356,10 @@ PointCaster::PointCaster(const Arguments &args)
 
   // Initialise our networks
   _radio = std::make_unique<Radio>();
-  _mqtt = std::make_unique<MqttClient>("pointcaster", "tcp://192.168.1.227:1884");
+
+#if WITH_MQTT
+  _mqtt = std::make_unique<MqttClient>(_session.mqtt_config);
+#endif
 
   //
   _snapshots_context = std::make_unique<Snapshots>();
@@ -526,6 +539,7 @@ void PointCaster::draw_menu_bar() {
       window_item("Sensors", "s", _session.show_sensors_window);
       window_item("Controllers", "c", _session.show_controllers_window);
       window_item("RenderStats", "f", _session.show_stats);
+      window_item("MQTT", "m", _session.show_mqtt_window);
 
       ImGui::EndMenu();
     }
@@ -939,6 +953,11 @@ void PointCaster::drawEvent() {
     _snapshots_context->draw_imgui_window();
   if (_session.show_global_transform_window)
     pc::sensors::draw_global_controls();
+
+#if WITH_MQTT
+  if (_session.show_mqtt_window)
+    _mqtt->draw_imgui_window();
+#endif
 
   _imgui_context.updateApplicationCursor(*this);
 

@@ -7,6 +7,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 option(WITH_K4A "Enable Azure Kinect support" ON)
+option(WITH_MQTT "Enable MQTT client support" ON)
 
 # ----- imgui lib -----
 
@@ -42,13 +43,18 @@ else()
   list(APPEND LINK_LIBS libzmq-static)
 endif()
 
-find_package(PahoMqttCpp CONFIG REQUIRED)
-# paho also needs to be a shared lib on windows
-if (WIN32)
-  list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3)
-else()
-  list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3-static uuid)
+if (WITH_MQTT)
+  find_package(PahoMqttCpp CONFIG REQUIRED)
+  list(APPEND OPTIONAL_SRC src/mqtt/mqtt_client.cc)
+  # paho also needs to be a shared lib on windows
+  if (WIN32)
+    list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3)
+  else()
+    list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3-static uuid)
+  endif()
+  add_compile_definitions(WITH_MQTT)
 endif()
+
 
 # ----- Magnum 3D engine -----
 
@@ -120,7 +126,6 @@ set(SOURCE_FILES
   src/devices/usb.cc
   src/camera/camera_controller.cc
   src/radio.cc
-  src/mqtt_client.cc
   src/snapshots.cc
   src/point_cloud_renderer.cc
   src/sphere_renderer.cc
