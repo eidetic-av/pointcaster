@@ -70,6 +70,10 @@ struct OpticalFlowConfiguration {
   bool publish = false;
   int feature_point_count = 250;
   float feature_point_distance = 10.0f;
+  float magnitude_scale = 1.0f;
+  float magnitude_exponent = 1.0f;
+  float minimum_distance = 0.0f;
+  float maximum_distance = 0.5f;
 };
 
 struct FrameAnalysisConfiguration {

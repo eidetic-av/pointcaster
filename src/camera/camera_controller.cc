@@ -212,21 +212,24 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     if (input_frame_size.x() != analysis_config.resolution[0] ||
         input_frame_size.y() != analysis_config.resolution[1]) {
       auto &resolution = analysis_config.resolution;
-      if (resolution[0] == 0)
-        resolution[0] = input_frame_size.x();
-      if (resolution[1] == 0)
-        resolution[1] = input_frame_size.y();
-      cv::resize(input_mat, scaled_mat, {resolution[0], resolution[1]}, 0, 0,
-                 cv::INTER_LINEAR);
+      if (resolution[0] != 0 && resolution[1] != 0) {
+        cv::resize(input_mat, scaled_mat, {resolution[0], resolution[1]}, 0, 0,
+                   cv::INTER_LINEAR);
+      } else {
+        scaled_mat = input_mat;
+      }
     } else {
       scaled_mat = input_mat;
     }
 
-    const cv::Vec2f output_scale = {
-	static_cast<float>(input_mat.cols) / scaled_mat.cols,
-	static_cast<float>(input_mat.rows) / scaled_mat.rows};
+    const cv::Point2f output_scale = {
+        static_cast<float>(input_mat.cols) / scaled_mat.cols,
+        static_cast<float>(input_mat.rows) / scaled_mat.rows};
+    const cv::Point2i output_resolution = {input_frame_size.x(),
+                                           input_frame_size.y()};
 
     cv::Mat analysis_input(scaled_mat);
+    auto analysis_frame_size = analysis_input.size;
 
     // convert the image to grayscale
     cv::cvtColor(analysis_input, analysis_input, cv::COLOR_RGBA2GRAY);
@@ -239,12 +242,12 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     // blur the image
     if (analysis_config.blur_size > 0)
       cv::blur(analysis_input, analysis_input,
-	       cv::Size(analysis_config.blur_size, analysis_config.blur_size));
+               cv::Size(analysis_config.blur_size, analysis_config.blur_size));
 
     // done manipulating our analysis input frame here
 
     if (!_previous_analysis_image.has_value() ||
-	_previous_analysis_image.value().size != analysis_input.size) {
+        _previous_analysis_image.value().size != analysis_input.size) {
       // initialise the previous frame if needed
       _previous_analysis_image = analysis_input;
     }
@@ -252,10 +255,10 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     // onto analysis functions
 
     // // perform canny edge detection
-    auto& canny = analysis_config.canny;
+    auto &canny = analysis_config.canny;
     if (canny.enabled) {
       cv::Canny(analysis_input, analysis_input, canny.min_threshold,
-		canny.max_threshold, canny.aperture_size);
+                canny.max_threshold, canny.aperture_size);
     }
 
     // find the countours in the frame
@@ -278,7 +281,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       contour_list_norm.push_back(norm_contour);
     }
 
-    // conrtour simplifiction
+    // contour simplifiction
     if (contours.simplify) {
       for (auto it = contour_list_norm.begin();
            it != contour_list_norm.end();) {
@@ -324,7 +327,8 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
       for (auto &contour : contour_list_norm) {
 
-        std::vector<std::vector<std::pair<float, float>>> polygon(contour.size());
+        std::vector<std::vector<std::pair<float, float>>> polygon(
+            contour.size());
         for (auto &point : contour) {
           polygon[0].push_back({point.x, point.y});
         }
@@ -333,33 +337,33 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
         std::array<cv::Point2f, 3> triangle;
         auto vertex = 0;
         for (const auto &index : indices) {
-	  auto point =
-	      cv::Point2f(polygon[0][index].first, polygon[0][index].second);
+          auto point =
+              cv::Point2f(polygon[0][index].first, polygon[0][index].second);
 
           triangle[vertex % 3] = {polygon[0][index].first,
                                   polygon[0][index].second};
-	  vertices.push_back({point.x, point.y});
+          vertices.push_back({point.x, point.y});
 
           if (++vertex % 3 == 0) {
-	    triangles.push_back(triangle);
+            triangles.push_back(triangle);
 
             if (triangulate.draw) {
-	      static const cv::Scalar triangle_fill(120, 120, 60, 120);
-	      static const cv::Scalar triangle_border(255, 255, 0, 255);
+              static const cv::Scalar triangle_fill(120, 120, 60, 120);
+              static const cv::Scalar triangle_border(255, 255, 0, 255);
 
-	      std::array<cv::Point, 3> triangle_scaled;
-	      std::transform(
-		  triangle.begin(), triangle.end(), triangle_scaled.begin(),
-		  [&](auto &point) {
-		    return cv::Point{
-			static_cast<int>(point.x * input_frame_size.x()),
-			static_cast<int>(point.y * input_frame_size.y())};
-		  });
+              std::array<cv::Point, 3> triangle_scaled;
+              std::transform(
+                  triangle.begin(), triangle.end(), triangle_scaled.begin(),
+                  [&](auto &point) {
+                    return cv::Point{
+                        static_cast<int>(point.x * input_frame_size.x()),
+                        static_cast<int>(point.y * input_frame_size.y())};
+                  });
 
               cv::fillConvexPoly(output_mat, triangle_scaled.data(), 3,
                                  triangle_fill);
-              cv::polylines(output_mat, triangle_scaled, true, triangle_border, 1,
-			    cv::LINE_AA);
+              cv::polylines(output_mat, triangle_scaled, true, triangle_border,
+                            1, cv::LINE_AA);
             }
 
             vertex = 0;
@@ -369,10 +373,9 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
       if (triangulate.publish) {
 #if WITH_MQTT
-	MqttClient::instance()->publish("triangles", vertices);
+        MqttClient::instance()->publish("triangles", vertices);
 #endif
       }
-
     }
 
     if (contours.draw) {
@@ -383,37 +386,96 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     }
 
     // optical flow
-    const auto& optical_flow = analysis_config.optical_flow;
+    const auto &optical_flow = analysis_config.optical_flow;
     if (optical_flow.enabled) {
 
       static const cv::Scalar line_colour{200, 200, 255, 200};
 
-      // TODO: can probably use the contour vertices as feature points
+      struct FlowVector {
+        std::array<float, 2> position;
+        std::array<float, 2> magnitude;
+        std::array<float, 4> as_array() const {
+          return {position[0], position[1], magnitude[0], magnitude[1]};
+        }
+      };
+
+      std::vector<FlowVector> flow_field;
+      // collect data as flattened layout as well
+      // (easier to serialize for publishing)
+      std::vector<std::array<float, 4>> flow_field_flattened;
+
+      // find acceptable feature points to track accross
+      // the previous frame
       std::vector<cv::Point2f> feature_points;
       cv::goodFeaturesToTrack(_previous_analysis_image.value(), feature_points,
-			      optical_flow.feature_point_count, 0.01,
-			      optical_flow.feature_point_distance);
+                              optical_flow.feature_point_count, 0.01,
+                              optical_flow.feature_point_distance);
 
+      // track the feature points' motion into the new frame
       std::vector<cv::Point2f> new_feature_points;
       std::vector<uchar> status;
       if (feature_points.size() > 0) {
-	cv::calcOpticalFlowPyrLK(_previous_analysis_image.value(),
-				 analysis_input, feature_points,
-				 new_feature_points, status, cv::noArray());
+        cv::calcOpticalFlowPyrLK(_previous_analysis_image.value(),
+                                 analysis_input, feature_points,
+                                 new_feature_points, status, cv::noArray());
       }
 
-      if (optical_flow.draw) {
+      for (size_t i = 0; i < feature_points.size(); ++i) {
+        if (status[i] == false)
+          continue;
+        cv::Point2f start = {feature_points[i].x, feature_points[i].y};
+        cv::Point2f end = {new_feature_points[i].x, new_feature_points[i].y};
 
-	for (size_t i = 0; i < feature_points.size(); ++i) {
-	  if (status[i]) {
-	    cv::Point2f line_start = {feature_points[i].x * output_scale[0],
-				      feature_points[i].y * output_scale[1]};
-	    cv::Point2f line_end = {new_feature_points[i].x * output_scale[0],
-				    new_feature_points[i].y * output_scale[1]};
-	    cv::line(output_mat, line_start, line_end, line_colour, 3,
-		     cv::LINE_4);
+        cv::Point2f distance{end.x - start.x, end.y - start.y};
+        float magnitude =
+            std::sqrt(distance.x * distance.x + distance.y * distance.y);
+        float scaled_magnitude =
+            std::pow(magnitude, optical_flow.magnitude_exponent) *
+            optical_flow.magnitude_scale;
+
+        cv::Point2f scaled_distance{distance.x * scaled_magnitude / magnitude,
+                                    distance.y * scaled_magnitude / magnitude};
+
+        cv::Point2f normalised_position{start.x / analysis_frame_size[0],
+                                        start.y / analysis_frame_size[1]};
+        cv::Point2f normalised_distance{
+            scaled_distance.x / analysis_frame_size[0],
+            scaled_distance.y / analysis_frame_size[1]};
+
+        cv::Point2f absolute_distance{std::abs(normalised_distance.x),
+                                      std::abs(normalised_distance.y)};
+
+        if (absolute_distance.x > optical_flow.minimum_distance &&
+            absolute_distance.y > optical_flow.minimum_distance &&
+            absolute_distance.x < optical_flow.maximum_distance &&
+            absolute_distance.y < optical_flow.maximum_distance) {
+
+          FlowVector flow_vector;
+          flow_vector.position = {normalised_position.x, normalised_position.y};
+          flow_vector.magnitude = {normalised_distance.x,
+                                   normalised_distance.y};
+          flow_field.push_back(flow_vector);
+          flow_field_flattened.push_back(flow_vector.as_array());
+
+          if (optical_flow.draw) {
+            cv::Point2f scaled_end = {
+                normalised_position.x + normalised_distance.x,
+                normalised_position.y + normalised_distance.y};
+            cv::Point2f frame_start{normalised_position.x * output_resolution.x,
+                                    normalised_position.y *
+                                        output_resolution.y};
+            cv::Point2f frame_end{scaled_end.x * output_resolution.x,
+                                  scaled_end.y * output_resolution.y};
+            cv::line(output_mat, frame_start, frame_end, line_colour, 3,
+                     cv::LINE_4);
           }
         }
+      }
+
+      if (flow_field.size() > 0 && optical_flow.publish) {
+#if WITH_MQTT
+        MqttClient::instance()->publish("flow", flow_field_flattened);
+#endif
       }
     }
 
@@ -650,7 +712,7 @@ void CameraController::draw_imgui_controls() {
     ImGui::InputInt("height", &rendering.resolution[1]);
     ImGui::Spacing();
     draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
-		       0.0015f);
+                       0.0015f);
   }
 
   if (ImGui::CollapsingHeader("Analysis", _config.analysis_open)) {
@@ -674,17 +736,17 @@ void CameraController::draw_imgui_controls() {
       auto &canny = frame_analysis.canny;
       ImGui::Checkbox("Canny edge detection", &canny.enabled);
       if (canny.enabled) {
-	draw_slider<int>("canny min", &canny.min_threshold, 0, 255, 100);
-	draw_slider<int>("canny max", &canny.max_threshold, 0, 255, 255);
-	int aperture_in = (canny.aperture_size - 1) / 2;
-	draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
-	canny.aperture_size = aperture_in * 2 + 1;
+        draw_slider<int>("canny min", &canny.min_threshold, 0, 255, 100);
+        draw_slider<int>("canny max", &canny.max_threshold, 0, 255, 255);
+        int aperture_in = (canny.aperture_size - 1) / 2;
+        draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
+        canny.aperture_size = aperture_in * 2 + 1;
       }
 
       if (gui::begin_tree_node("Contours", frame_analysis.contours_open)) {
         auto &contours = frame_analysis.contours;
 
-	ImGui::Checkbox("Draw on viewport", &contours.draw);
+        ImGui::Checkbox("Draw on viewport", &contours.draw);
 
         ImGui::Checkbox("Simplify", &contours.simplify);
         if (contours.simplify) {
@@ -694,25 +756,37 @@ void CameraController::draw_imgui_controls() {
                              2.0f, 0.0001f);
         }
 
-	ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
-	if (contours.triangulate.enabled) {
-	  ImGui::Checkbox("Draw triangles", &contours.triangulate.draw);
-	  ImGui::Checkbox("Publish triangles",
-			  &contours.triangulate.publish);
-	}
-	ImGui::TreePop();
+        ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
+        if (contours.triangulate.enabled) {
+          ImGui::Checkbox("Draw triangles", &contours.triangulate.draw);
+          ImGui::Checkbox("Publish triangles", &contours.triangulate.publish);
+        }
+        ImGui::TreePop();
       }
 
-      if (gui::begin_tree_node("Optical Flow", frame_analysis.optical_flow_open)) {
-	auto &optical_flow = frame_analysis.optical_flow;
-	ImGui::Checkbox("Enabled", &optical_flow.enabled);
-	ImGui::Checkbox("Draw", &optical_flow.draw);
-	ImGui::Checkbox("Publish", &optical_flow.publish);
+      if (gui::begin_tree_node("Optical Flow",
+                               frame_analysis.optical_flow_open)) {
+        auto &optical_flow = frame_analysis.optical_flow;
+        ImGui::Checkbox("Enabled", &optical_flow.enabled);
+        ImGui::Checkbox("Draw", &optical_flow.draw);
+        ImGui::Checkbox("Publish", &optical_flow.publish);
 
-	draw_slider<int>("Feature points", &optical_flow.feature_point_count, 25, 1000, 250);
-	draw_slider<float>("Points distance", &optical_flow.feature_point_distance, 0.001f, 30.0f, 10.0f);
-	
-	ImGui::TreePop();
+        draw_slider<int>("Feature points", &optical_flow.feature_point_count,
+                         25, 1000, 250);
+        draw_slider<float>("Points distance",
+                           &optical_flow.feature_point_distance, 0.001f, 30.0f,
+                           10.0f);
+        draw_slider<float>("Magnitude", &optical_flow.magnitude_scale, 0.1f,
+                           5.0f, 1.0f);
+        draw_slider<float>("Magnitude exponent",
+                           &optical_flow.magnitude_exponent, 0.001f, 2.5f,
+                           1.0f);
+        draw_slider<float>("Minimum distance", &optical_flow.minimum_distance,
+                           0.0f, 0.2f, 0.0f);
+        draw_slider<float>("Maximum distance", &optical_flow.maximum_distance,
+                           0.0f, 0.8f, 0.8f);
+
+        ImGui::TreePop();
       }
     }
   }
