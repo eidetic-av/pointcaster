@@ -30,7 +30,6 @@
 
 #if WITH_MQTT
 #include "../mqtt/mqtt_client.h"
-#include <msgpack.hpp>
 #endif
 
 namespace pc::camera {
@@ -358,14 +357,12 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
         }
       }
 
-      if (triangulate.publish) {
 #if WITH_MQTT
-	msgpack::sbuffer send_buffer;
-	msgpack::pack(send_buffer, vertices);
-	auto &mqtt = MqttClient::instance();
-	mqtt->publish("triangles", send_buffer.data(), send_buffer.size());
-#endif
+      if (triangulate.publish) {
+	MqttClient::instance()->publish("triangles", vertices);
       }
+#endif
+
     }
 
     if (analysis_config.contours.draw) {

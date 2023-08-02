@@ -7,6 +7,7 @@
 #include <chrono>
 #include <future>
 #include <stdexcept>
+#include <msgpack.hpp>
 
 namespace pc {
 

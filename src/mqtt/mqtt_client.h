@@ -8,6 +8,7 @@
 #include <mqtt/async_client.h>
 #include <mutex>
 #include <string_view>
+#include <msgpack.hpp>
 
 namespace pc {
 
@@ -46,6 +47,13 @@ public:
   void publish(const std::string_view topic, const std::vector<uint8_t> &bytes);
   void publish(const std::string_view topic, const void *payload,
 	       const std::size_t size);
+
+  template <typename T>
+  void publish(const std::string_view topic, const T &data) {
+    msgpack::sbuffer send_buffer;
+    msgpack::pack(send_buffer, data);
+    publish(topic, send_buffer.data(), send_buffer.size());
+  }
 
   void draw_imgui_window();
 
