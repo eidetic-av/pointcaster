@@ -1,12 +1,13 @@
 #pragma once
 
 #include "mqtt_client_config.h"
+#include <atomic>
 #include <expected>
 #include <future>
 #include <memory>
 #include <mqtt/async_client.h>
-#include <string_view>
 #include <mutex>
+#include <string_view>
 
 namespace pc {
 
@@ -25,6 +26,8 @@ public:
     _instance = make_instance(config);
   }
 
+  static bool connected() { return _connected; };
+
   MqttClient(const MqttClient &) = delete;
   MqttClient &operator=(const MqttClient &) = delete;
 
@@ -41,12 +44,15 @@ public:
 
   void publish(const std::string_view topic, const std::string_view message);
   void publish(const std::string_view topic, const std::vector<uint8_t> &bytes);
+  void publish(const std::string_view topic, const void *payload,
+	       const std::size_t size);
 
   void draw_imgui_window();
 
 private:
   static std::mutex _mutex;
   static std::shared_ptr<MqttClient> _instance;
+  static std::atomic_bool _connected;
 
   static std::shared_ptr<MqttClient>
   make_instance(MqttClientConfiguration &config) {

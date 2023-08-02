@@ -30,6 +30,7 @@
 
 #if WITH_MQTT
 #include "../mqtt/mqtt_client.h"
+#include <msgpack.hpp>
 #endif
 
 namespace pc::camera {
@@ -308,7 +309,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     auto &triangulate = analysis_config.contours.triangulate;
 
     std::vector<std::array<cv::Point2f, 3>> triangles;
-    std::vector<cv::Point> vertices;
+    std::vector<std::array<float, 2>> vertices;
 
     if (triangulate.enabled) {
 
@@ -328,7 +329,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
           triangle[vertex % 3] = {polygon[0][index].first,
                                   polygon[0][index].second};
-          vertices.push_back(point);
+	  vertices.push_back({point.x, point.y});
 
           if (++vertex % 3 == 0) {
 	    triangles.push_back(triangle);
@@ -359,8 +360,10 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
       if (triangulate.publish) {
 #if WITH_MQTT
-	auto& mqtt = MqttClient::instance();
-	mqtt->publish("triangles", "test");
+	msgpack::sbuffer send_buffer;
+	msgpack::pack(send_buffer, vertices);
+	auto &mqtt = MqttClient::instance();
+	mqtt->publish("triangles", send_buffer.data(), send_buffer.size());
 #endif
       }
     }

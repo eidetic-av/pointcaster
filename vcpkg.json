@@ -13,6 +13,7 @@
     },
     "earcut-hpp",
     "paho-mqttpp3",
+    "msgpack",
     {
       "name": "opencv",
       "platform":  "linux"

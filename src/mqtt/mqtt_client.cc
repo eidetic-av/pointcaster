@@ -16,6 +16,7 @@ static const std::regex uri_pattern(R"(^([a-zA-Z]+):\/\/([^:\/]+):(\d+)$)");
 
 std::shared_ptr<MqttClient> MqttClient::_instance;
 std::mutex MqttClient::_mutex;
+std::atomic_bool MqttClient::_connected = false;
 
 std::string input_hostname;
 int input_port;
@@ -73,9 +74,12 @@ void MqttClient::connect(const std::string_view host_name, const int port) {
 
   _connection_future = std::async(std::launch::async, [this, options]() {
     if (_client->connect(options)->wait_for(10s)) {
+      MqttClient::_connected = true;
       spdlog::info("MQTT connection active");
-    } else
+    } else {
       spdlog::warn("MQTT connection failed");
+      MqttClient::_connected = false;
+    }
   });
 }
 
@@ -83,33 +87,31 @@ void MqttClient::disconnect() {
   if (!_client) return;
   try {
     _client->disconnect()->wait();
+    _client.reset();
+    MqttClient::_connected = false;
+    spdlog::info("Disconnected from MQTT broker");
   } catch (mqtt::exception &e) {
     spdlog::error(e.what());
   }
-  _client.reset();
-  spdlog::info("Disconnected from MQTT broker");
-}
-
-bool MqttClient::check_connected() {
-  if (!_client) {
-    spdlog::warn("Attempt to publish with disconnected MQTT client");
-    return false;
-  }
-  return true;
 }
 
 void MqttClient::publish(const std::string_view topic,
                          const std::string_view message) {
-  if (!check_connected()) return;
+  if (!_connected) return;
   mqtt::topic t(*_client.get(), topic.data());
   t.publish(message.data());
 }
 
 void MqttClient::publish(const std::string_view topic,
-			 const std::vector<uint8_t>& payload) {
-  if (!check_connected()) return;
+			 const std::vector<uint8_t> &payload) {
+  publish(topic, payload.data(), payload.size());
+}
+
+void MqttClient::publish(const std::string_view topic, const void *payload,
+                         const std::size_t size) {
+  if (!_connected) return;
   mqtt::topic t(*_client.get(), topic.data());
-  t.publish(payload.data(), payload.size());
+  t.publish(payload, size);
 }
 
 void MqttClient::set_uri(const std::string_view uri) {
