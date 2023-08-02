@@ -103,10 +103,11 @@ void CameraController::setupFramebuffer(Vector2i frame_size) {
   if (frame_size == _frame_size)
     return;
 
-  std::lock(_dispatch_analysis_mutex, _color_frame_mutex,
-            _analysis_frame_buffer_data_mutex);
+  std::lock(_dispatch_analysis_mutex, _color_frame_mutex, _analysis_frame_mutex,
+	    _analysis_frame_buffer_data_mutex);
   std::lock_guard lock_dispatch(_dispatch_analysis_mutex, std::adopt_lock);
   std::lock_guard lock_color(_color_frame_mutex, std::adopt_lock);
+  std::lock_guard lock_analysis(_analysis_frame_mutex, std::adopt_lock);
   std::lock_guard lock(_analysis_frame_buffer_data_mutex, std::adopt_lock);
 
   _frame_size = frame_size;
@@ -142,8 +143,9 @@ GL::Texture2D &CameraController::color_frame() {
 }
 
 GL::Texture2D &CameraController::analysis_frame() {
+  std::lock_guard lock_frame(_analysis_frame_mutex);
   if (_analysis_frame_buffer_updated) {
-    std::lock_guard lock(_analysis_frame_buffer_data_mutex);
+    std::lock_guard lock_buffer(_analysis_frame_buffer_data_mutex);
     // move updated buffer data into our analysis frame Texture2D...
     // we first need to create an OpenGL Buffer for it
     GL::BufferImage2D buffer{

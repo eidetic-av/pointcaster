@@ -90,6 +90,7 @@ private:
   Magnum::Vector3 _translation{};
 
   std::mutex _color_frame_mutex;
+  std::mutex _analysis_frame_mutex;
   std::mutex _dispatch_analysis_mutex;
   std::mutex _analysis_frame_buffer_data_mutex;
 
