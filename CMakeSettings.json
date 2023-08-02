@@ -1,7 +1,7 @@
 ﻿{
   "configurations": [
     {
-      "name": "x64-Clang",
+      "name": "x64-Clang-Debug",
       "generator": "Ninja",
       "configurationType": "Debug",
       "inheritEnvironments": [ "clang_cl_x64" ],
@@ -12,12 +12,24 @@
       "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake"
     },
     {
-      "name": "x64-Clang-Release",
+      "name": "x64-Clang-RelWithDebInfo",
       "generator": "Ninja",
       "configurationType": "RelWithDebInfo",
+      "buildRoot": "${projectDir}\\build\\RelWithDebInfo\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "-DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_OVERLAY_PORTS=\"${projectDir}\\ports\"",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "inheritEnvironments": [ "clang_cl_x64_x64" ]
+    },
+    {
+      "name": "x64-Clang-Release",
+      "generator": "Ninja",
+      "configurationType": "Release",
       "buildRoot": "${projectDir}\\build\\Release\\${name}",
       "installRoot": "${projectDir}\\out\\install\\${name}",
-      "cmakeCommandArgs": "-DVCPKG_TARGET_TRIPLET=x64-windows-release -DVCPKG_OVERLAY_PORTS=\"${projectDir}\\ports\"",
+      "cmakeCommandArgs": "-DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_OVERLAY_PORTS=\"${projectDir}\\ports\"",
       "buildCommandArgs": "",
       "ctestCommandArgs": "",
       "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
