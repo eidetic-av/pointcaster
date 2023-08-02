@@ -69,9 +69,9 @@ void MqttClient::connect(const std::string_view host_name, const int port) {
 		     .finalize();
 
   _connection_future = std::async(std::launch::async, [this, options]() {
-    if (_client->connect(options)->wait_for(10s))
+    if (_client->connect(options)->wait_for(10s)) {
       spdlog::info("MQTT connection active");
-    else
+    } else
       spdlog::warn("MQTT connection failed");
   });
 }
@@ -87,14 +87,26 @@ void MqttClient::disconnect() {
   spdlog::info("Disconnected from MQTT broker");
 }
 
-void MqttClient::publish(const std::string_view topic,
-                         const std::string_view message) {
+bool MqttClient::check_connected() {
   if (!_client) {
     spdlog::warn("Attempt to publish with disconnected MQTT client");
-    return;
+    return false;
   }
+  return true;
+}
+
+void MqttClient::publish(const std::string_view topic,
+                         const std::string_view message) {
+  if (!check_connected()) return;
   mqtt::topic t(*_client.get(), topic.data());
   t.publish(message.data());
+}
+
+void MqttClient::publish(const std::string_view topic,
+			 const std::vector<uint8_t>& payload) {
+  if (!check_connected()) return;
+  auto msg = mqtt::make_message(topic.data(), payload.data(), payload.size());
+  _client->publish(msg);
 }
 
 void MqttClient::set_uri(const std::string_view uri) {
@@ -117,7 +129,7 @@ void MqttClient::draw_imgui_window() {
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("MQTT", nullptr);
   ImGui::InputText("Broker hostname", &input_hostname);
-  ImGui::InputInt("Broker Port", &input_port);
+  ImGui::InputInt("Broker port", &input_port);
   ImGui::Spacing();
 
   const auto draw_connect_buttons = [this]() {

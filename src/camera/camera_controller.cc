@@ -341,6 +341,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
       if (triangulate.publish_vertices) {
       }
+
       if (triangulate.publish_triangles) {
       }
 
@@ -631,8 +632,13 @@ void CameraController::draw_imgui_controls() {
 	ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
 	if (contours.triangulate.enabled) {
 	  ImGui::Checkbox("Draw triangles", &contours.triangulate.draw);
-	  ImGui::Checkbox("Publish vertices", &contours.triangulate.publish_vertices);
-	  ImGui::Checkbox("Publish triangles", &contours.triangulate.publish_triangles);
+
+#if WITH_MQTT
+	  ImGui::Checkbox("Publish vertices",
+			  &contours.triangulate.publish_vertices);
+	  ImGui::Checkbox("Publish triangles",
+			  &contours.triangulate.publish_triangles);
+#endif
 	}
 
         ImGui::TreePop();
