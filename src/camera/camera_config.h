@@ -68,6 +68,8 @@ struct OpticalFlowConfiguration {
   bool enabled = false;
   bool draw = false;
   bool publish = false;
+  int feature_point_count = 250;
+  float feature_point_distance = 10.0f;
 };
 
 struct FrameAnalysisConfiguration {

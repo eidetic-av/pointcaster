@@ -19,6 +19,7 @@
 #include <mutex>
 #include <optional>
 #include <thread>
+#include <opencv2/opencv.hpp>
 
 namespace pc::camera {
 
@@ -99,6 +100,8 @@ private:
   Corrade::Containers::Array<uint8_t> _analysis_frame_buffer_data;
   std::atomic_bool _analysis_frame_buffer_updated;
   std::condition_variable _analysis_condition_variable;
+
+  std::optional<cv::Mat> _previous_analysis_image;
 
   void frame_analysis(std::stop_token stop_token);
 

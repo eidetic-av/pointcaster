@@ -222,6 +222,10 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       scaled_mat = input_mat;
     }
 
+    const cv::Vec2f output_scale = {
+	static_cast<float>(input_mat.cols) / scaled_mat.cols,
+	static_cast<float>(input_mat.rows) / scaled_mat.rows};
+
     cv::Mat analysis_input(scaled_mat);
 
     // convert the image to grayscale
@@ -236,6 +240,16 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     if (analysis_config.blur_size > 0)
       cv::blur(analysis_input, analysis_input,
 	       cv::Size(analysis_config.blur_size, analysis_config.blur_size));
+
+    // done manipulating our analysis input frame here
+
+    if (!_previous_analysis_image.has_value() ||
+	_previous_analysis_image.value().size != analysis_input.size) {
+      // initialise the previous frame if needed
+      _previous_analysis_image = analysis_input;
+    }
+
+    // onto analysis functions
 
     // // perform canny edge detection
     auto& canny = analysis_config.canny;
@@ -264,7 +278,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       contour_list_norm.push_back(norm_contour);
     }
 
-    // conrtour simplifaction
+    // conrtour simplifiction
     if (contours.simplify) {
       for (auto it = contour_list_norm.begin();
            it != contour_list_norm.end();) {
@@ -363,7 +377,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
     if (contours.draw) {
       const cv::Scalar line_colour{255, 0, 0, 255};
-      constexpr auto line_thickness = 4;
+      constexpr auto line_thickness = 3;
       cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
                        line_thickness, cv::LINE_4);
     }
@@ -372,8 +386,35 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     const auto& optical_flow = analysis_config.optical_flow;
     if (optical_flow.enabled) {
 
-      spdlog::info("should be enabled");
-      
+      static const cv::Scalar line_colour{200, 200, 255, 200};
+
+      // TODO: can probably use the contour vertices as feature points
+      std::vector<cv::Point2f> feature_points;
+      cv::goodFeaturesToTrack(_previous_analysis_image.value(), feature_points,
+			      optical_flow.feature_point_count, 0.01,
+			      optical_flow.feature_point_distance);
+
+      std::vector<cv::Point2f> new_feature_points;
+      std::vector<uchar> status;
+      if (feature_points.size() > 0) {
+	cv::calcOpticalFlowPyrLK(_previous_analysis_image.value(),
+				 analysis_input, feature_points,
+				 new_feature_points, status, cv::noArray());
+      }
+
+      if (optical_flow.draw) {
+
+	for (size_t i = 0; i < feature_points.size(); ++i) {
+	  if (status[i]) {
+	    cv::Point2f line_start = {feature_points[i].x * output_scale[0],
+				      feature_points[i].y * output_scale[1]};
+	    cv::Point2f line_end = {new_feature_points[i].x * output_scale[0],
+				    new_feature_points[i].y * output_scale[1]};
+	    cv::line(output_mat, line_start, line_end, line_colour, 3,
+		     cv::LINE_4);
+          }
+        }
+      }
     }
 
     // copy the resulting cv::Mat data into our buffer data container
@@ -386,6 +427,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
               _analysis_frame_buffer_data.data());
 
     _analysis_frame_buffer_updated = true;
+    _previous_analysis_image = analysis_input;
   }
 }
 
@@ -582,7 +624,7 @@ void CameraController::draw_imgui_controls() {
 
   using pc::gui::draw_slider;
 
-  if (gui::begin_tree_node("Transform", _config.transform_open)) {
+  if (ImGui::CollapsingHeader("Transform", _config.transform_open)) {
 
     ImGui::TextDisabled("Translation");
     auto translate = _config.translation;
@@ -597,11 +639,9 @@ void CameraController::draw_imgui_controls() {
     draw_slider<float>("y", &rotate[1], -360, 360);
     draw_slider<float>("z", &rotate[2], -360, 360);
     setRotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
-
-    ImGui::TreePop();
   }
 
-  if (gui::begin_tree_node("Rendering", _config.rendering_open)) {
+  if (ImGui::CollapsingHeader("Rendering", _config.rendering_open)) {
     auto &rendering = _config.rendering;
     ImGui::Checkbox("ground grid", &rendering.ground_grid);
     ImGui::TextDisabled("Resolution");
@@ -611,11 +651,9 @@ void CameraController::draw_imgui_controls() {
     ImGui::Spacing();
     draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
 		       0.0015f);
-    ImGui::Spacing();
-    ImGui::TreePop();
   }
 
-  if (gui::begin_tree_node("Analysis", _config.analysis_open)) {
+  if (ImGui::CollapsingHeader("Analysis", _config.analysis_open)) {
     auto &frame_analysis = _config.frame_analysis;
     ImGui::Checkbox("Enabled", &frame_analysis.enabled);
     if (frame_analysis.enabled) {
@@ -670,10 +708,13 @@ void CameraController::draw_imgui_controls() {
 	ImGui::Checkbox("Enabled", &optical_flow.enabled);
 	ImGui::Checkbox("Draw", &optical_flow.draw);
 	ImGui::Checkbox("Publish", &optical_flow.publish);
+
+	draw_slider<int>("Feature points", &optical_flow.feature_point_count, 25, 1000, 250);
+	draw_slider<float>("Points distance", &optical_flow.feature_point_distance, 0.001f, 30.0f, 10.0f);
+	
 	ImGui::TreePop();
       }
     }
-    ImGui::TreePop();
   }
 }
 
