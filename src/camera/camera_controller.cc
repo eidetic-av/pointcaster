@@ -222,31 +222,32 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       scaled_mat = input_mat;
     }
 
-    // contour detection
-    auto &contours = analysis_config.contours;
-
-    cv::Mat contours_input(scaled_mat);
+    cv::Mat analysis_input(scaled_mat);
 
     // convert the image to grayscale
-    cv::cvtColor(contours_input, contours_input, cv::COLOR_RGBA2GRAY);
+    cv::cvtColor(analysis_input, analysis_input, cv::COLOR_RGBA2GRAY);
+
+    // binary colour thresholding
+    cv::threshold(analysis_input, analysis_input,
+                  analysis_config.binary_threshold[0],
+                  analysis_config.binary_threshold[1], cv::THRESH_BINARY);
 
     // blur the image
-    if (contours.blur_size > 0)
-      cv::blur(contours_input, contours_input,
-	       cv::Size(contours.blur_size, contours.blur_size));
+    if (analysis_config.blur_size > 0)
+      cv::blur(analysis_input, analysis_input,
+	       cv::Size(analysis_config.blur_size, analysis_config.blur_size));
 
     // // perform canny edge detection
-    if (contours.canny.enabled) {
-      cv::Mat canny;
-      cv::Canny(contours_input, contours_input, contours.canny.min_threshold,
-		contours.canny.max_threshold, contours.canny.aperture_size);
+    auto& canny = analysis_config.canny;
+    if (canny.enabled) {
+      cv::Canny(analysis_input, analysis_input, canny.min_threshold,
+		canny.max_threshold, canny.aperture_size);
     }
 
-    cv::threshold(contours_input, contours_input, 100, 255, cv::THRESH_BINARY);
-
     // find the countours in the frame
+    auto &contours = analysis_config.contours;
     std::vector<std::vector<cv::Point>> contour_list;
-    cv::findContours(contours_input, contour_list, cv::RETR_EXTERNAL,
+    cv::findContours(analysis_input, contour_list, cv::RETR_EXTERNAL,
                      cv::CHAIN_APPROX_SIMPLE);
 
     // normalise the contours
@@ -263,7 +264,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       contour_list_norm.push_back(norm_contour);
     }
 
-    // simplifaction
+    // conrtour simplifaction
     if (contours.simplify) {
       for (auto it = contour_list_norm.begin();
            it != contour_list_norm.end();) {
@@ -285,11 +286,6 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       }
     }
 
-    // now we have our output contours as a chain
-
-    // TODO the contours can be published on our MQTT network here
-    // on a "contours_chain" channel
-
     // create a version of the contours list scaled to the size
     // of our output image
     std::vector<std::vector<cv::Point>> contour_list_scaled;
@@ -304,7 +300,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       contour_list_scaled.push_back(scaled_contour);
     }
 
-    // triangulation
+    // triangulation for building polygons from contours
     auto &triangulate = analysis_config.contours.triangulate;
 
     std::vector<std::array<cv::Point2f, 3>> triangles;
@@ -357,19 +353,27 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
         }
       }
 
-#if WITH_MQTT
       if (triangulate.publish) {
+#if WITH_MQTT
 	MqttClient::instance()->publish("triangles", vertices);
-      }
 #endif
+      }
 
     }
 
-    if (analysis_config.contours.draw) {
+    if (contours.draw) {
       const cv::Scalar line_colour{255, 0, 0, 255};
       constexpr auto line_thickness = 4;
       cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
                        line_thickness, cv::LINE_4);
+    }
+
+    // optical flow
+    const auto& optical_flow = analysis_config.optical_flow;
+    if (optical_flow.enabled) {
+
+      spdlog::info("should be enabled");
+      
     }
 
     // copy the resulting cv::Mat data into our buffer data container
@@ -578,7 +582,7 @@ void CameraController::draw_imgui_controls() {
 
   using pc::gui::draw_slider;
 
-  if (ImGui::TreeNode("Transform")) {
+  if (gui::begin_tree_node("Transform", _config.transform_open)) {
 
     ImGui::TextDisabled("Translation");
     auto translate = _config.translation;
@@ -597,7 +601,7 @@ void CameraController::draw_imgui_controls() {
     ImGui::TreePop();
   }
 
-  if (ImGui::TreeNode("Rendering")) {
+  if (gui::begin_tree_node("Rendering", _config.rendering_open)) {
     auto &rendering = _config.rendering;
     ImGui::Checkbox("ground grid", &rendering.ground_grid);
     ImGui::TextDisabled("Resolution");
@@ -606,12 +610,12 @@ void CameraController::draw_imgui_controls() {
     ImGui::InputInt("height", &rendering.resolution[1]);
     ImGui::Spacing();
     draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
-                       0.0015f);
+		       0.0015f);
     ImGui::Spacing();
     ImGui::TreePop();
   }
 
-  if (ImGui::TreeNode("Frame Analysis")) {
+  if (gui::begin_tree_node("Analysis", _config.analysis_open)) {
     auto &frame_analysis = _config.frame_analysis;
     ImGui::Checkbox("Enabled", &frame_analysis.enabled);
     if (frame_analysis.enabled) {
@@ -622,22 +626,27 @@ void CameraController::draw_imgui_controls() {
       ImGui::InputInt("height", &frame_analysis.resolution[1]);
       ImGui::Spacing();
 
-      if (ImGui::TreeNode("Contour Detection")) {
+      ImGui::TextDisabled("Binary threshold");
+      draw_slider<int>("min", &frame_analysis.binary_threshold[0], 1, 255, 1);
+      draw_slider<int>("max", &frame_analysis.binary_threshold[1], 1, 255, 255);
+      ImGui::Spacing();
+
+      draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
+
+      auto &canny = frame_analysis.canny;
+      ImGui::Checkbox("Canny edge detection", &canny.enabled);
+      if (canny.enabled) {
+	draw_slider<int>("canny min", &canny.min_threshold, 0, 255, 100);
+	draw_slider<int>("canny max", &canny.max_threshold, 0, 255, 255);
+	int aperture_in = (canny.aperture_size - 1) / 2;
+	draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
+	canny.aperture_size = aperture_in * 2 + 1;
+      }
+
+      if (gui::begin_tree_node("Contours", frame_analysis.contours_open)) {
         auto &contours = frame_analysis.contours;
 
 	ImGui::Checkbox("Draw on viewport", &contours.draw);
-
-        draw_slider<int>("blur size", &contours.blur_size, 0, 40, 3);
-
-        ImGui::Checkbox("Canny edge detection", &contours.canny.enabled);
-
-        draw_slider<int>("canny min", &contours.canny.min_threshold, 0, 255,
-                         100);
-        draw_slider<int>("canny max", &contours.canny.max_threshold, 0, 255,
-                         255);
-        int aperture_in = (contours.canny.aperture_size - 1) / 2;
-        draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
-        contours.canny.aperture_size = aperture_in * 2 + 1;
 
         ImGui::Checkbox("Simplify", &contours.simplify);
         if (contours.simplify) {
@@ -650,13 +659,18 @@ void CameraController::draw_imgui_controls() {
 	ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
 	if (contours.triangulate.enabled) {
 	  ImGui::Checkbox("Draw triangles", &contours.triangulate.draw);
-#if WITH_MQTT
 	  ImGui::Checkbox("Publish triangles",
 			  &contours.triangulate.publish);
-#endif
 	}
+	ImGui::TreePop();
+      }
 
-        ImGui::TreePop();
+      if (gui::begin_tree_node("Optical Flow", frame_analysis.optical_flow_open)) {
+	auto &optical_flow = frame_analysis.optical_flow;
+	ImGui::Checkbox("Enabled", &optical_flow.enabled);
+	ImGui::Checkbox("Draw", &optical_flow.draw);
+	ImGui::Checkbox("Publish", &optical_flow.publish);
+	ImGui::TreePop();
       }
     }
     ImGui::TreePop();

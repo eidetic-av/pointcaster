@@ -58,19 +58,32 @@ struct TriangulateConfiguration {
 struct ContourDetectionConfiguration {
   bool enabled;
   bool draw;
-  bool greyscale_conversion = true;
-  int blur_size = 3;
-  CannyEdgeConfiguration canny;
   bool simplify = false;
   float simplify_arc_scale = 0.001f;
   float simplify_min_area = 0.0001f;
   TriangulateConfiguration triangulate;
 };
 
+struct OpticalFlowConfiguration {
+  bool enabled = false;
+  bool draw = false;
+  bool publish = false;
+};
+
 struct FrameAnalysisConfiguration {
   bool enabled;
   std::array<int, 2> resolution;
+  std::array<int, 2> binary_threshold = {1, 255};
+  bool greyscale_conversion = true;
+  int blur_size = 3;
+
+  CannyEdgeConfiguration canny;
+
   ContourDetectionConfiguration contours;
+  bool contours_open;
+  
+  OpticalFlowConfiguration optical_flow;
+  bool optical_flow_open;
 };
 
 struct CameraConfiguration {
@@ -81,9 +94,13 @@ struct CameraConfiguration {
   std::array<float, 3> rotation = defaults::rotation;
   std::array<float, 3> translation = defaults::translation;
   float fov = defaults::fov;
+  bool transform_open;
 
   PointCloudRendererConfiguration rendering;
+  bool rendering_open;
+
   FrameAnalysisConfiguration frame_analysis;
+  bool analysis_open;
 };
 
 } // namespace pc::camera
