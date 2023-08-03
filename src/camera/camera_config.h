@@ -79,9 +79,9 @@ struct OpticalFlowConfiguration {
 struct FrameAnalysisConfiguration {
   bool enabled;
   std::array<int, 2> resolution;
-  std::array<int, 2> binary_threshold = {1, 255};
+  std::array<int, 2> binary_threshold = {50, 255};
   bool greyscale_conversion = true;
-  int blur_size = 3;
+  int blur_size = 1;
 
   CannyEdgeConfiguration canny;
 
