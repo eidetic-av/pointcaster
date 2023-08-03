@@ -103,8 +103,8 @@ CameraController::~CameraController() {
 }
 
 void CameraController::setupFramebuffer(Vector2i frame_size) {
-  if (frame_size == _frame_size)
-    return;
+  spdlog::info("calling setupFramebuffer({}, {})", frame_size.x(), frame_size.y());
+  if (frame_size == _frame_size) return;
 
   std::lock(_dispatch_analysis_mutex, _color_frame_mutex, _analysis_frame_mutex,
 	    _analysis_frame_buffer_data_mutex);

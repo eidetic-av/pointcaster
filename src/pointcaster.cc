@@ -632,25 +632,27 @@ void PointCaster::draw_main_viewport() {
 
         if (ImGui::BeginTabItem(camera_controller->name().c_str(), nullptr,
                                 tab_item_flags)) {
-          // const auto& frame_size = camera_controller->frameSize();
-          // Vector2 frame_size_f = {
-          //     static_cast<float>(frame_size.x() * dpiScaling().x()),
-          //     static_cast<float>(frame_size.y() * dpiScaling().y())
-	  // };
-	  Vector2 frame_size = {float(windowSize().x() / dpiScaling().x()),
-				float(windowSize().y() / dpiScaling().y())};
+
+	  auto *tab_bar = ImGui::GetCurrentTabBar();
+	  float tab_bar_height =
+	    (tab_bar->BarRect.Max.y - tab_bar->BarRect.Min.y) + 5;
+	  // TODO 5 pixels above? where's it come from
+
+	  const auto window_size = ImGui::GetWindowSize();
+	  const Vector2 frame_size {window_size.x,
+				   window_size.y - tab_bar_height};
 
           const auto image_pos = ImGui::GetCursorPos();
-	  ImGuiIntegration::image(camera_controller->color_frame(),
-				  frame_size);
+          ImGuiIntegration::image(camera_controller->color_frame(),
+                                  {frame_size.x(), frame_size.y()});
 
-	  auto& analysis = camera_controller->config().frame_analysis;
+          auto& analysis = camera_controller->config().frame_analysis;
 
 	  if (analysis.enabled && (analysis.contours.draw)) {
 	    ImGui::SetCursorPos(image_pos);
 	    ImGuiIntegration::image(camera_controller->analysis_frame(),
-				    frame_size);
-	  }
+				    {frame_size.x(), frame_size.y()});
+          }
 
           draw_viewport_controls(*camera_controller);
 
