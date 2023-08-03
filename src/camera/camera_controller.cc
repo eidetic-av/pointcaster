@@ -712,9 +712,9 @@ void CameraController::draw_imgui_controls() {
     auto &rendering = _config.rendering;
     ImGui::Checkbox("ground grid", &rendering.ground_grid);
     ImGui::TextDisabled("Resolution");
-    ImGui::InputInt("width", &rendering.resolution[0]);
+    ImGui::InputInt("render width", &rendering.resolution[0]);
     ImGui::SameLine();
-    ImGui::InputInt("height", &rendering.resolution[1]);
+    ImGui::InputInt("render height", &rendering.resolution[1]);
     ImGui::Spacing();
     draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
                        0.0015f);
