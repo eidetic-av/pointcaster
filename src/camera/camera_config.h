@@ -53,6 +53,7 @@ struct TriangulateConfiguration {
   bool enabled = false;
   bool draw = false;
   bool publish = false;
+  float minimum_area = 0.0f;
 };
 
 struct ContourDetectionConfiguration {

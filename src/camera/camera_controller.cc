@@ -339,6 +339,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
         auto indices = mapbox::earcut<int>(polygon);
 
         std::array<cv::Point2f, 3> triangle;
+
         auto vertex = 0;
         for (const auto &index : indices) {
           auto point =
@@ -346,28 +347,40 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
           triangle[vertex % 3] = {polygon[0][index].first,
 				  polygon[0][index].second};
-	  vertices.push_back({point.x, 1 - point.y});
 
           if (++vertex % 3 == 0) {
-            triangles.push_back(triangle);
 
-            if (triangulate.draw) {
-              static const cv::Scalar triangle_fill(120, 120, 60, 120);
-              static const cv::Scalar triangle_border(255, 255, 0, 255);
+	    float a = cv::norm(triangle[1] - triangle[0]);
+	    float b = cv::norm(triangle[2] - triangle[1]);
+	    float c = cv::norm(triangle[2] - triangle[0]);
+	    float s = (a + b + c) / 2.0f;
+	    float area = std::sqrt(s * (s - a) * (s - b) * (s - c));
 
-              std::array<cv::Point, 3> triangle_scaled;
-              std::transform(
-                  triangle.begin(), triangle.end(), triangle_scaled.begin(),
-                  [&](auto &point) {
-                    return cv::Point{
-                        static_cast<int>(point.x * input_frame_size.x()),
-                        static_cast<int>(point.y * input_frame_size.y())};
-                  });
+            if (area >= triangulate.minimum_area) {
 
-              cv::fillConvexPoly(output_mat, triangle_scaled.data(), 3,
-                                 triangle_fill);
-              cv::polylines(output_mat, triangle_scaled, true, triangle_border,
-                            1, cv::LINE_AA);
+              triangles.push_back(triangle);
+              vertices.push_back({triangle[0].x, 1 - triangle[0].y});
+              vertices.push_back({triangle[1].x, 1 - triangle[1].y});
+              vertices.push_back({triangle[2].x, 1 - triangle[2].y});
+
+              if (triangulate.draw) {
+                static const cv::Scalar triangle_fill(120, 120, 60, 120);
+                static const cv::Scalar triangle_border(255, 255, 0, 255);
+
+                std::array<cv::Point, 3> triangle_scaled;
+                std::transform(
+                    triangle.begin(), triangle.end(), triangle_scaled.begin(),
+                    [&](auto &point) {
+                      return cv::Point{
+                          static_cast<int>(point.x * input_frame_size.x()),
+                          static_cast<int>(point.y * input_frame_size.y())};
+                    });
+
+                cv::fillConvexPoly(output_mat, triangle_scaled.data(), 3,
+                                   triangle_fill);
+                cv::polylines(output_mat, triangle_scaled, true,
+                              triangle_border, 1, cv::LINE_AA);
+              }
             }
 
             vertex = 0;
@@ -376,19 +389,21 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       }
 
       if (triangulate.publish && !vertices.empty()) {
-	if (vertices.size() % 3 != 0)
+	if (vertices.size() < 3) {
 	  spdlog::warn("Invalid triangle vertex count: {}", vertices.size());
+	} else {
 #if WITH_MQTT
-        MqttClient::instance()->publish("triangles", vertices);
+	  MqttClient::instance()->publish("triangles", vertices);
 #endif
+	}
       }
     }
 
     if (contours.draw) {
       const cv::Scalar line_colour{255, 0, 0, 255};
-      constexpr auto line_thickness = 3;
+      constexpr auto line_thickness = 2;
       cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
-                       line_thickness, cv::LINE_4);
+                       line_thickness, cv::LINE_AA);
     }
 
     // optical flow
@@ -476,7 +491,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
             cv::Point2f frame_end{scaled_end.x * output_resolution.x,
                                   scaled_end.y * output_resolution.y};
             cv::line(output_mat, frame_start, frame_end, line_colour, 3,
-                     cv::LINE_4);
+                     cv::LINE_AA);
           }
         }
       }
@@ -769,6 +784,7 @@ void CameraController::draw_imgui_controls() {
         if (contours.triangulate.enabled) {
           ImGui::Checkbox("Draw triangles", &contours.triangulate.draw);
           ImGui::Checkbox("Publish triangles", &contours.triangulate.publish);
+	  draw_slider<float>("Min tri area", &contours.triangulate.minimum_area, 0.0f, 0.02f, 0.0f);
         }
         ImGui::TreePop();
       }
