@@ -97,7 +97,10 @@ CameraController::CameraController(Magnum::Platform::Application *app,
                _config.id);
 }
 
-CameraController::~CameraController() { CameraController::count--; }
+CameraController::~CameraController() {
+  _analysis_thread.request_stop();
+  CameraController::count--;
+}
 
 void CameraController::setupFramebuffer(Vector2i frame_size) {
   if (frame_size == _frame_size)

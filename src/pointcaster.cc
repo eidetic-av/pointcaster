@@ -409,6 +409,7 @@ PointCaster::PointCaster(const Arguments &args)
 
 void PointCaster::saveAndQuit() {
   serialize_session();
+  Device::attached_devices.clear();
   exit(0);
 }
 
