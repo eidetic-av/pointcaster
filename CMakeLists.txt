@@ -3,6 +3,9 @@ project(bob-pointcaster LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(LINUX TRUE)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -48,7 +51,7 @@ if (WITH_MQTT)
   # paho needs to be a shared lib on windows
   if (WIN32)
     list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3)
-  else()
+  elseif(LINUX)
     list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3-static uuid)
   endif()
   find_package(msgpack-cxx CONFIG REQUIRED)
@@ -154,6 +157,12 @@ target_include_directories(pointcaster PRIVATE
 target_link_libraries(pointcaster PRIVATE 
     ${LINK_LIBS} ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
 
+if (LINUX)
+  # enable thread sanitizer for debug builds
+  # target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
+  # target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
+endif()
+
 # ----- Post-build actions -----
 
 if (WIN32 AND WITH_K4A)
@@ -164,7 +173,7 @@ if (WIN32 AND WITH_K4A)
     $<TARGET_FILE_DIR:pointcaster>)
 endif()
 
-if (NOT WIN32)
+if (LINUX)
   # copy compile_commands.json for lsp integration on linux
   add_custom_target(copy-compile-commands ALL
     ${CMAKE_COMMAND} -E copy_if_different
