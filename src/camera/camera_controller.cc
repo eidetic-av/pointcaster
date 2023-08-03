@@ -103,7 +103,6 @@ CameraController::~CameraController() {
 }
 
 void CameraController::setupFramebuffer(Vector2i frame_size) {
-  spdlog::info("calling setupFramebuffer({}, {})", frame_size.x(), frame_size.y());
   if (frame_size == _frame_size) return;
 
   std::lock(_dispatch_analysis_mutex, _color_frame_mutex, _analysis_frame_mutex,
@@ -377,8 +376,10 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       }
 
       if (triangulate.publish && !vertices.empty()) {
+	if (vertices.size() % 3 != 0)
+	  spdlog::warn("Invalid triangle vertex count: {}", vertices.size());
 #if WITH_MQTT
-	MqttClient::instance()->publish("triangles", vertices);
+        MqttClient::instance()->publish("triangles", vertices);
 #endif
       }
     }
