@@ -346,8 +346,8 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
               cv::Point2f(polygon[0][index].first, polygon[0][index].second);
 
           triangle[vertex % 3] = {polygon[0][index].first,
-                                  polygon[0][index].second};
-          vertices.push_back({point.x, point.y});
+				  polygon[0][index].second};
+	  vertices.push_back({point.x, 1 - point.y});
 
           if (++vertex % 3 == 0) {
             triangles.push_back(triangle);
@@ -376,9 +376,9 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
         }
       }
 
-      if (triangulate.publish) {
+      if (triangulate.publish && !vertices.empty()) {
 #if WITH_MQTT
-        MqttClient::instance()->publish("triangles", vertices);
+	MqttClient::instance()->publish("triangles", vertices);
 #endif
       }
     }
@@ -399,9 +399,12 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       struct FlowVector {
         std::array<float, 2> position;
         std::array<float, 2> magnitude;
-        std::array<float, 4> as_array() const {
+        std::array<float, 4> array() const {
           return {position[0], position[1], magnitude[0], magnitude[1]};
         }
+	std::array<float, 4> flipped_array() const {
+	  return {position[0], 1 - position[1], magnitude[0], magnitude[1]};
+	}
       };
 
       std::vector<FlowVector> flow_field;
@@ -459,8 +462,8 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
           flow_vector.position = {normalised_position.x, normalised_position.y};
           flow_vector.magnitude = {normalised_distance.x,
                                    normalised_distance.y};
-          flow_field.push_back(flow_vector);
-          flow_field_flattened.push_back(flow_vector.as_array());
+	  flow_field.push_back(flow_vector);
+	  flow_field_flattened.push_back(flow_vector.flipped_array());
 
           if (optical_flow.draw) {
             cv::Point2f scaled_end = {
