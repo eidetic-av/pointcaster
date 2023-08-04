@@ -129,9 +129,9 @@ public:
 protected:
   PointCasterSession _session;
 
-  void serialize_session();
-  void serialize_session(std::filesystem::path file_path);
-  void deserialize_session(std::filesystem::path file_path);
+  void save_session();
+  void save_session(std::filesystem::path file_path);
+  void load_session(std::filesystem::path file_path);
 
   std::vector<std::jthread> _async_tasks;
 
@@ -167,7 +167,7 @@ protected:
   void draw_sensors_window();
   void draw_controllers_window();
 
-  void saveAndQuit();
+  void save_and_quit();
 
   // void initControllers();
   // void handleMidiLearn(const libremidi::message &message);
@@ -298,7 +298,7 @@ PointCaster::PointCaster(const Arguments &args)
   _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
                           Matrix4::translation(Vector3(0, 0, 0)));
 
-  // Deserialize last session
+  // load last session
   auto data_dir = path::get_or_create_data_directory();
   std::filesystem::path last_modified_session_file;
   std::filesystem::file_time_type last_write_time;
@@ -318,10 +318,10 @@ PointCaster::PointCaster(const Arguments &args)
     spdlog::info("No previous session file found. Creating new session.");
     _session = {.id = pc::uuid::word()};
     auto file_path = data_dir / (_session.id + ".pcs");
-    serialize_session(file_path);
+    save_session(file_path);
   } else {
     spdlog::info("Found previous session file");
-    deserialize_session(last_modified_session_file);
+    load_session(last_modified_session_file);
   }
 
   // If there are no cameras in the scene, initialise at least one
@@ -396,30 +396,22 @@ PointCaster::PointCaster(const Arguments &args)
   // init libusb and any attached devices
   _usb_monitor = std::make_unique<UsbMonitor>();
 
-  // TODO replace the k4a routine with something generic in usb.cc
-  // open each k4a on startup:
-  // for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
-  //   pointer<pc::sensors::Device> p;
-  //   p.reset(new pc::sensors::K4ADevice());
-  //   pc::sensors::attached_devices.push_back(std::move(p));
-  // }
-
   timeline.start();
 }
 
-void PointCaster::saveAndQuit() {
-  serialize_session();
+void PointCaster::save_and_quit() {
+  save_session();
   Device::attached_devices.clear();
   exit(0);
 }
 
-void PointCaster::serialize_session() {
+void PointCaster::save_session() {
   auto data_dir = path::get_or_create_data_directory();
   auto file_path = data_dir / (_session.id + ".pcs");
-  serialize_session(file_path);
+  save_session(file_path);
 }
 
-void PointCaster::serialize_session(std::filesystem::path file_path) {
+void PointCaster::save_session(std::filesystem::path file_path) {
   spdlog::info("Saving session to {}", file_path.string());
 
   // save imgui layout
@@ -440,7 +432,7 @@ void PointCaster::serialize_session(std::filesystem::path file_path) {
   path::save_file(file_path, data);
 }
 
-void PointCaster::deserialize_session(std::filesystem::path file_path) {
+void PointCaster::load_session(std::filesystem::path file_path) {
   spdlog::info("Loading state from {}", file_path.string());
   auto buffer = path::load_file(file_path);
   auto in = zpp::bits::in(buffer);
@@ -514,7 +506,7 @@ void PointCaster::draw_menu_bar() {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
       if (ImGui::MenuItem("Quit", "q"))
-        saveAndQuit();
+        save_and_quit();
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Window")) {
@@ -554,7 +546,7 @@ void PointCaster::draw_control_bar() {
                                   control_bar_flags)) {
     if (ImGui::BeginMenuBar()) {
       if (ImGui::Button(ICON_FA_FLOPPY_DISK)) {
-        serialize_session();
+        save_session();
       }
 
       if (ImGui::Button(ICON_FA_FOLDER_OPEN)) {
@@ -1034,7 +1026,7 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
   case KeyEvent::Key::Q:
-    saveAndQuit();
+    save_and_quit();
     break;
   case KeyEvent::Key::S:
     _session.show_sensors_window = !_session.show_sensors_window;
