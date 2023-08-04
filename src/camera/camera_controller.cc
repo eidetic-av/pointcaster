@@ -79,7 +79,7 @@ CameraController::CameraController(Magnum::Platform::Application *app,
   auto fov = Deg_f(_config.fov);
 
   set_rotation(rotation, true);
-  set_translation(translation, true);
+  set_translation(translation);
 
   _camera->setProjectionMatrix(
       Matrix4::perspectiveProjection(fov, 4.0f / 3.0f, 0.001f, 200.0f));
@@ -633,12 +633,7 @@ void CameraController::set_rotation(
 }
 
 void CameraController::set_translation(
-    const Magnum::Math::Vector3<float> &translation, bool force) {
-  if (!force && _config.translation[0] == translation.x() &&
-      _config.translation[1] == translation.y() &&
-      _config.translation[2] == translation.z()) {
-    return;
-  }
+    const Magnum::Math::Vector3<float> &translation) {
   _config.translation = {translation.x(), translation.y(), translation.z()};
   auto transform = _camera_parent->transformationMatrix();
   transform.translation() = {translation.z(), translation.y(), translation.x()};
@@ -742,66 +737,65 @@ Float CameraController::depth_at(const Vector2i &window_position) {
 
 void CameraController::draw_imgui_controls() {
 
-  using pc::gui::draw_slider;
+    using pc::gui::draw_slider;
+    using pc::gui::vector_table;
 
-  if (ImGui::CollapsingHeader("Transform", _config.transform_open)) {
+    if (ImGui::CollapsingHeader("Transform", _config.transform_open)) {
+        auto &translate = _config.translation;
+        if (vector_table("Translation", translate, -10.f, 10.f, 0.0f)) {
+            set_translation(Position{translate[0], translate[1], translate[2]});
+        }
+	auto &rotate = _config.rotation;
+	if (vector_table("Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
+	    set_rotation(
+		Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
+	}
+    }
 
-    ImGui::TextDisabled("Translation");
-    auto translate = _config.translation;
-    draw_slider<float>("x", &translate[0], -10, 10);
-    draw_slider<float>("y", &translate[1], -10, 10);
-    draw_slider<float>("z", &translate[2], -10, 10);
-    set_translation(Position{translate[0], translate[1], translate[2]});
+    if (ImGui::CollapsingHeader("Rendering", _config.rendering_open)) {
+        auto &rendering = _config.rendering;
+        ImGui::Checkbox("ground grid", &rendering.ground_grid);
+        ImGui::TextDisabled("Resolution");
+        ImGui::InputInt("render width", &rendering.resolution[0]);
+        ImGui::SameLine();
+        ImGui::InputInt("render height", &rendering.resolution[1]);
+        ImGui::Spacing();
+        draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
+                           0.0015f);
+    }
 
-    ImGui::TextDisabled("Rotation");
-    auto rotate = _config.rotation;
-    draw_slider<float>("x", &rotate[0], -360, 360);
-    draw_slider<float>("y", &rotate[1], -360, 360);
-    draw_slider<float>("z", &rotate[2], -360, 360);
-    set_rotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
-  }
+    if (ImGui::CollapsingHeader("Analysis", _config.analysis_open)) {
+        auto &frame_analysis = _config.frame_analysis;
+        ImGui::Checkbox("Enabled", &frame_analysis.enabled);
+        if (frame_analysis.enabled) {
 
-  if (ImGui::CollapsingHeader("Rendering", _config.rendering_open)) {
-    auto &rendering = _config.rendering;
-    ImGui::Checkbox("ground grid", &rendering.ground_grid);
-    ImGui::TextDisabled("Resolution");
-    ImGui::InputInt("render width", &rendering.resolution[0]);
-    ImGui::SameLine();
-    ImGui::InputInt("render height", &rendering.resolution[1]);
-    ImGui::Spacing();
-    draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
-                       0.0015f);
-  }
+            ImGui::TextDisabled("Resolution");
+            ImGui::InputInt("width", &frame_analysis.resolution[0]);
+            ImGui::SameLine();
+            ImGui::InputInt("height", &frame_analysis.resolution[1]);
+            ImGui::Spacing();
 
-  if (ImGui::CollapsingHeader("Analysis", _config.analysis_open)) {
-    auto &frame_analysis = _config.frame_analysis;
-    ImGui::Checkbox("Enabled", &frame_analysis.enabled);
-    if (frame_analysis.enabled) {
+            ImGui::TextDisabled("Binary threshold");
+            draw_slider<int>("min", &frame_analysis.binary_threshold[0], 1, 255,
+                             1);
+            draw_slider<int>("max", &frame_analysis.binary_threshold[1], 1, 255,
+                             255);
+            ImGui::Spacing();
 
-      ImGui::TextDisabled("Resolution");
-      ImGui::InputInt("width", &frame_analysis.resolution[0]);
-      ImGui::SameLine();
-      ImGui::InputInt("height", &frame_analysis.resolution[1]);
-      ImGui::Spacing();
+            draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
 
-      ImGui::TextDisabled("Binary threshold");
-      draw_slider<int>("min", &frame_analysis.binary_threshold[0], 1, 255, 1);
-      draw_slider<int>("max", &frame_analysis.binary_threshold[1], 1, 255, 255);
-      ImGui::Spacing();
-
-      draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
-
-      auto &canny = frame_analysis.canny;
-      ImGui::Checkbox("Canny edge detection", &canny.enabled);
-      if (canny.enabled) {
+            auto &canny = frame_analysis.canny;
+            ImGui::Checkbox("Canny edge detection", &canny.enabled);
+            if (canny.enabled) {
         draw_slider<int>("canny min", &canny.min_threshold, 0, 255, 100);
         draw_slider<int>("canny max", &canny.max_threshold, 0, 255, 255);
         int aperture_in = (canny.aperture_size - 1) / 2;
         draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
         canny.aperture_size = aperture_in * 2 + 1;
-      }
+            }
 
-      if (gui::begin_tree_node("Contours", frame_analysis.contours_open)) {
+            if (gui::begin_tree_node("Contours",
+                                     frame_analysis.contours_open)) {
         auto &contours = frame_analysis.contours;
 
         ImGui::Checkbox("Draw on viewport", &contours.draw);
@@ -825,10 +819,10 @@ void CameraController::draw_imgui_controls() {
                              0.0f, 0.02f, 0.0f);
         }
         ImGui::TreePop();
-      }
+            }
 
-      if (gui::begin_tree_node("Optical Flow",
-                               frame_analysis.optical_flow_open)) {
+            if (gui::begin_tree_node("Optical Flow",
+                                     frame_analysis.optical_flow_open)) {
         auto &optical_flow = frame_analysis.optical_flow;
         ImGui::Checkbox("Enabled", &optical_flow.enabled);
         ImGui::Checkbox("Draw", &optical_flow.draw);
@@ -850,9 +844,9 @@ void CameraController::draw_imgui_controls() {
                            0.0f, 0.8f, 0.8f);
 
         ImGui::TreePop();
-      }
+            }
+        }
     }
-  }
 }
 
 } // namespace pc::camera

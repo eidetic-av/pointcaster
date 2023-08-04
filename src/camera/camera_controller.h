@@ -45,7 +45,7 @@ public:
   Camera3D &camera() const { return *_camera; }
 
   void set_rotation(const Magnum::Math::Vector3<Magnum::Math::Rad<float>>& rotation, bool force = false);
-  void set_translation(const Magnum::Math::Vector3<float>& translation, bool force = false);
+  void set_translation(const Magnum::Math::Vector3<float>& translation);
   void dolly(Magnum::Platform::Sdl2Application::MouseScrollEvent& event);
 
   void mouse_rotate(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);

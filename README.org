@@ -21,10 +21,10 @@ cmake --build build
 *** Notes
 + To run multiple Azure Kinect sensors on Linux, you must boot with the following kernel parameter that adjusts memory provided to USB hosts. 
   Set it to a number appropriate for your system and camera count.
-  1024MB is enough for me:
+  256MB is enough (and is probably overkill):
 
 #+begin_src
-usbcore.usbfs_memory_mb=1024
+usbcore.usbfs_memory_mb=256
 #+end_src
 
 ** ZeroMQ
