@@ -102,18 +102,20 @@ CameraController::~CameraController() {
   CameraController::count--;
 }
 
-void CameraController::setupFramebuffer(Vector2i frame_size) {
-  if (frame_size == _frame_size) return;
+void CameraController::setup_framebuffer(Vector2i frame_size) {
+  if (frame_size == _frame_size) {
+    bind_framebuffer();
+    return;
+  }
 
   std::lock(_dispatch_analysis_mutex, _color_frame_mutex, _analysis_frame_mutex,
-	    _analysis_frame_buffer_data_mutex);
+            _analysis_frame_buffer_data_mutex);
   std::lock_guard lock_dispatch(_dispatch_analysis_mutex, std::adopt_lock);
   std::lock_guard lock_color(_color_frame_mutex, std::adopt_lock);
   std::lock_guard lock_analysis(_analysis_frame_mutex, std::adopt_lock);
   std::lock_guard lock(_analysis_frame_buffer_data_mutex, std::adopt_lock);
 
   _frame_size = frame_size;
-
   frame_size /= _app->dpiScaling();
 
   _color = std::make_unique<GL::Texture2D>();
@@ -132,9 +134,11 @@ void CameraController::setupFramebuffer(Vector2i frame_size) {
 
   _framebuffer->attachRenderbuffer(
       GL::Framebuffer::BufferAttachment::DepthStencil, *_depth_stencil);
+
+  bind_framebuffer();
 }
 
-void CameraController::bindFramebuffer() {
+void CameraController::bind_framebuffer() {
   _framebuffer->clear(GL::FramebufferClear::Color | GL::FramebufferClear::Depth)
       .bind();
 }
@@ -364,15 +368,15 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
               cv::Point2f(polygon[0][index].first, polygon[0][index].second);
 
           triangle[vertex % 3] = {polygon[0][index].first,
-				  polygon[0][index].second};
+                                  polygon[0][index].second};
 
           if (++vertex % 3 == 0) {
 
-	    float a = cv::norm(triangle[1] - triangle[0]);
-	    float b = cv::norm(triangle[2] - triangle[1]);
-	    float c = cv::norm(triangle[2] - triangle[0]);
-	    float s = (a + b + c) / 2.0f;
-	    float area = std::sqrt(s * (s - a) * (s - b) * (s - c));
+            float a = cv::norm(triangle[1] - triangle[0]);
+            float b = cv::norm(triangle[2] - triangle[1]);
+            float c = cv::norm(triangle[2] - triangle[0]);
+            float s = (a + b + c) / 2.0f;
+            float area = std::sqrt(s * (s - a) * (s - b) * (s - c));
 
             if (area >= triangulate.minimum_area) {
 
@@ -407,13 +411,13 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       }
 
       if (triangulate.publish && !vertices.empty()) {
-	if (vertices.size() < 3) {
-	  spdlog::warn("Invalid triangle vertex count: {}", vertices.size());
-	} else {
+        if (vertices.size() < 3) {
+          spdlog::warn("Invalid triangle vertex count: {}", vertices.size());
+        } else {
 #if WITH_MQTT
-	  MqttClient::instance()->publish("triangles", vertices);
+          MqttClient::instance()->publish("triangles", vertices);
 #endif
-	}
+        }
       }
     }
 
@@ -436,9 +440,9 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
         std::array<float, 4> array() const {
           return {position[0], position[1], magnitude[0], magnitude[1]};
         }
-	std::array<float, 4> flipped_array() const {
-	  return {position[0], 1 - position[1], magnitude[0], magnitude[1]};
-	}
+        std::array<float, 4> flipped_array() const {
+          return {position[0], 1 - position[1], magnitude[0], magnitude[1]};
+        }
       };
 
       std::vector<FlowVector> flow_field;
@@ -496,8 +500,8 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
           flow_vector.position = {normalised_position.x, normalised_position.y};
           flow_vector.magnitude = {normalised_distance.x,
                                    normalised_distance.y};
-	  flow_field.push_back(flow_vector);
-	  flow_field_flattened.push_back(flow_vector.flipped_array());
+          flow_field.push_back(flow_vector);
+          flow_field_flattened.push_back(flow_vector.flipped_array());
 
           if (optical_flow.draw) {
             cv::Point2f scaled_end = {
@@ -541,8 +545,10 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
 int CameraController::analysis_time() {
   std::chrono::milliseconds time = _analysis_time;
-  if (time.count() > 0) return time.count();
-  else return 1;
+  if (time.count() > 0)
+    return time.count();
+  else
+    return 1;
 }
 
 // TODO

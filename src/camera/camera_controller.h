@@ -55,8 +55,7 @@ public:
   CameraController &setPerspective(const Magnum::Float &value);
   CameraController &zoomPerspective(Magnum::Platform::Sdl2Application::MouseScrollEvent &event);
 
-  void setupFramebuffer(const Magnum::Vector2i frame_size);
-  void bindFramebuffer();
+  void setup_framebuffer(const Magnum::Vector2i frame_size);
 
   const Magnum::Vector2i& frameSize() { return _frame_size; };
 
@@ -107,6 +106,8 @@ private:
   std::atomic<std::chrono::milliseconds> _analysis_time;
 
   void frame_analysis(std::stop_token stop_token);
+
+  void bind_framebuffer();
 
   Magnum::Matrix4 make_projection_matrix();
 

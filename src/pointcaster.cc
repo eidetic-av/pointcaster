@@ -471,8 +471,7 @@ void PointCaster::render_cameras() {
       Vector2i{int(rendering_config.resolution[0] / dpiScaling().x()),
 	       int(rendering_config.resolution[1] / dpiScaling().y())};
 
-    camera_controller->setupFramebuffer(frame_size);
-    camera_controller->bindFramebuffer();
+    camera_controller->setup_framebuffer(frame_size);
 
     // TODO: pass selected physical cameras into the
     // synthesise_point_cloud function 
@@ -503,7 +502,7 @@ void PointCaster::render_cameras() {
 }
 
 void PointCaster::open_kinect_sensors() {
-  run_async([&]() {
+  run_async([&] {
     for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
       auto p = std::make_shared<K4ADevice>();
       Device::attached_devices.push_back(std::move(p));
@@ -740,7 +739,7 @@ void PointCaster::draw_sensors_window() {
     open_kinect_sensors();
 
   if (ImGui::Button("Close")) {
-    run_async([]() { Device::attached_devices.clear(); });
+    run_async([] { Device::attached_devices.clear(); });
   }
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
