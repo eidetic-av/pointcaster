@@ -808,11 +808,15 @@ void CameraController::draw_imgui_controls() {
                              2.0f, 0.0001f);
         }
 
+        ImGui::Checkbox("Publish", &contours.publish);
+        ImGui::Spacing();
+
         ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
         if (contours.triangulate.enabled) {
           ImGui::Checkbox("Draw triangles", &contours.triangulate.draw);
           ImGui::Checkbox("Publish triangles", &contours.triangulate.publish);
-	  draw_slider<float>("Min tri area", &contours.triangulate.minimum_area, 0.0f, 0.02f, 0.0f);
+          draw_slider<float>("Min tri area", &contours.triangulate.minimum_area,
+                             0.0f, 0.02f, 0.0f);
         }
         ImGui::TreePop();
       }
