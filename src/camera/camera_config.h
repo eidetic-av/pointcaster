@@ -57,8 +57,9 @@ struct TriangulateConfiguration {
 };
 
 struct ContourDetectionConfiguration {
-  bool enabled;
-  bool draw;
+  bool enabled = false;
+  bool draw = false;
+  bool publish = false;
   bool simplify = false;
   float simplify_arc_scale = 0.001f;
   float simplify_min_area = 0.0001f;

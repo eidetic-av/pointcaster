@@ -272,40 +272,57 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     cv::findContours(analysis_input, contour_list, cv::RETR_EXTERNAL,
                      cv::CHAIN_APPROX_SIMPLE);
 
+    // TODO use serializable types all the way through instead of
+    // doubling up with the opencv types and std library types
+
     // normalise the contours
     std::vector<std::vector<cv::Point2f>> contour_list_norm;
+    // keep a std copy to easily serialize for publishing
+    std::vector<std::vector<std::array<float, 2>>> contour_list_std;
 
     std::vector<cv::Point2f> norm_contour;
     for (auto &contour : contour_list) {
       norm_contour.clear();
+
       for (auto &point : contour) {
         norm_contour.push_back(
             {point.x / static_cast<float>(analysis_config.resolution[0]),
              point.y / static_cast<float>(analysis_config.resolution[1])});
       }
-      contour_list_norm.push_back(norm_contour);
-    }
 
-    // contour simplifiction
-    if (contours.simplify) {
-      for (auto it = contour_list_norm.begin();
-           it != contour_list_norm.end();) {
-        auto &contour = *it;
+      bool use_contour = true;
 
+      if (contours.simplify) {
         // remove contours that are too small
-        const double area = cv::contourArea(contour);
+        const double area = cv::contourArea(norm_contour);
         if (area < contours.simplify_min_area / 1000) {
-          it = contour_list_norm.erase(it);
+          use_contour = false;
           continue;
         }
-
-        // simplify the remaining shapes
+        // simplify remaining shapes
         const double epsilon =
-            contours.simplify_arc_scale * cv::arcLength(contour, false);
-        cv::approxPolyDP(contour, contour, epsilon, false);
-
-        ++it;
+            contours.simplify_arc_scale * cv::arcLength(norm_contour, false);
+        cv::approxPolyDP(norm_contour, norm_contour, epsilon, false);
       }
+
+      if (use_contour) {
+        contour_list_norm.push_back(norm_contour);
+
+        if (contours.publish) {
+          // if we're publishing shapes we need to use std types
+          std::vector<std::array<float, 2>> contour_std;
+          for (auto &point : norm_contour) {
+            contour_std.push_back({point.x, point.y});
+          }
+          contour_list_std.push_back(contour_std);
+        }
+      }
+    }
+
+    if (contours.publish) {
+#if WITH_MQTT
+      MqttClient::instance()->publish("contours", contour_list_std);
+#endif
     }
 
     // create a version of the contours list scaled to the size
