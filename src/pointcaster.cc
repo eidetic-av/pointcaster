@@ -801,6 +801,22 @@ void PointCaster::draw_stats() {
       ImGui::Spacing();
       ImGui::Text("%.0f FPS", 1000.0f / (avg_duration * 1000));
     }
+
+    for (auto &camera_controller : _camera_controllers) {
+      if (ImGui::CollapsingHeader(camera_controller->name().c_str())) {
+	if (camera_controller->config().frame_analysis.enabled) {
+	  ImGui::Text("Analysis Duration");
+	  ImGui::BeginTable("analysis_duration", 2);
+	  ImGui::TableNextColumn();
+	  ImGui::Text("Current");
+	  ImGui::TableNextColumn();
+	  auto duration = camera_controller->analysis_time();
+	  ImGui::Text("%ims", duration);
+          ImGui::EndTable();
+	  ImGui::Text("%.0f FPS", 1000.0f / duration);
+	}
+      }
+    }
   }
 
   ImGui::PopItemWidth();

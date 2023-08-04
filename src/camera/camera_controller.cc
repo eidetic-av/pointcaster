@@ -198,6 +198,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     }
 
     // now we are free to process our image without holding the main thread
+    auto start_time = std::chrono::system_clock::now();
 
     auto &image = *image_opt;
     auto input_frame_size = image.size();
@@ -514,7 +515,17 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
     _analysis_frame_buffer_updated = true;
     _previous_analysis_image = analysis_input;
+
+    using namespace std::chrono;
+    auto end_time = system_clock::now();
+    _analysis_time = duration_cast<milliseconds>(end_time - start_time);
   }
+}
+
+int CameraController::analysis_time() {
+  std::chrono::milliseconds time = _analysis_time;
+  if (time.count() > 0) return time.count();
+  else return 1;
 }
 
 // TODO

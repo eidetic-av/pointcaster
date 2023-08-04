@@ -15,6 +15,7 @@
 #include <Magnum/SceneGraph/Scene.h>
 #include <atomic>
 #include <condition_variable>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -63,6 +64,7 @@ public:
   Magnum::GL::Texture2D& analysis_frame();
 
   void dispatch_analysis();
+  int analysis_time();
 
   void draw_imgui_controls();
 
@@ -101,8 +103,8 @@ private:
   Corrade::Containers::Array<uint8_t> _analysis_frame_buffer_data;
   std::atomic_bool _analysis_frame_buffer_updated;
   std::condition_variable _analysis_condition_variable;
-
   std::optional<cv::Mat> _previous_analysis_image;
+  std::atomic<std::chrono::milliseconds> _analysis_time;
 
   void frame_analysis(std::stop_token stop_token);
 
