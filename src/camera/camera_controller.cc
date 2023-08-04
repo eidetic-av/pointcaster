@@ -78,8 +78,8 @@ CameraController::CameraController(Magnum::Platform::Application *app,
                               _config.translation[2]};
   auto fov = Deg_f(_config.fov);
 
-  setRotation(rotation, true);
-  setTranslation(translation, true);
+  set_rotation(rotation, true);
+  set_translation(translation, true);
 
   _camera->setProjectionMatrix(
       Matrix4::perspectiveProjection(fov, 4.0f / 3.0f, 0.001f, 200.0f));
@@ -603,7 +603,7 @@ Matrix4 CameraController::make_projection_matrix() {
       Deg(new_fov), _frame_size.x() / _frame_size.y(), 0.001f, 200.0f);
 }
 
-void CameraController::setRotation(
+void CameraController::set_rotation(
     const Magnum::Math::Vector3<Magnum::Math::Rad<float>> &rotation,
     bool force) {
 
@@ -632,7 +632,7 @@ void CameraController::setRotation(
   _roll_parent->rotate(z_rotation, Vector3::zAxis());
 }
 
-void CameraController::setTranslation(
+void CameraController::set_translation(
     const Magnum::Math::Vector3<float> &translation, bool force) {
   if (!force && _config.translation[0] == translation.x() &&
       _config.translation[1] == translation.y() &&
@@ -657,7 +657,7 @@ void CameraController::dolly(
   _config.translation = {translation.z(), translation.y(), translation.x()};
 }
 
-void CameraController::mouseRotate(
+void CameraController::mouse_rotate(
     Magnum::Platform::Sdl2Application::MouseMoveEvent &event) {
   auto delta = Vector2{event.relativePosition()} * _rotate_speed;
   Euler rotation_amount;
@@ -670,10 +670,10 @@ void CameraController::mouseRotate(
   }
   auto rotation = Euler{Deg_f(_config.rotation[0]), Deg_f(_config.rotation[1]),
                         Deg_f(_config.rotation[2])};
-  setRotation(rotation + rotation_amount);
+  set_rotation(rotation + rotation_amount);
 }
 
-void CameraController::mouseTranslate(
+void CameraController::mouse_translate(
     Magnum::Platform::Sdl2Application::MouseMoveEvent &event) {
   const auto frame_centre = _frame_size / 2;
   const auto centre_depth = depth_at(frame_centre);
@@ -683,21 +683,21 @@ void CameraController::mouseTranslate(
               (float)event.relativePosition().y() * _move_speed.y(), 0};
   auto translation = Position{_config.translation[0], _config.translation[1],
                               _config.translation[2]};
-  setTranslation(translation + delta);
+  set_translation(translation + delta);
 }
 
 CameraController &
-CameraController::setPerspective(const Magnum::Float &perspective_value) {
+CameraController::set_perspective(const Magnum::Float &perspective_value) {
   _perspective_value = Math::max(Math::min(perspective_value, 1.0f),
                                  std::numeric_limits<float>::min());
   _camera->setProjectionMatrix(make_projection_matrix());
   return *this;
 }
 
-CameraController &CameraController::zoomPerspective(
+CameraController &CameraController::zoom_perspective(
     Magnum::Platform::Sdl2Application::MouseScrollEvent &event) {
   auto delta = event.offset().y();
-  setPerspective(_perspective_value - delta / 10);
+  set_perspective(_perspective_value - delta / 10);
   return *this;
 }
 
@@ -751,14 +751,14 @@ void CameraController::draw_imgui_controls() {
     draw_slider<float>("x", &translate[0], -10, 10);
     draw_slider<float>("y", &translate[1], -10, 10);
     draw_slider<float>("z", &translate[2], -10, 10);
-    setTranslation(Position{translate[0], translate[1], translate[2]});
+    set_translation(Position{translate[0], translate[1], translate[2]});
 
     ImGui::TextDisabled("Rotation");
     auto rotate = _config.rotation;
     draw_slider<float>("x", &rotate[0], -360, 360);
     draw_slider<float>("y", &rotate[1], -360, 360);
     draw_slider<float>("z", &rotate[2], -360, 360);
-    setRotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
+    set_rotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
   }
 
   if (ImGui::CollapsingHeader("Rendering", _config.rendering_open)) {

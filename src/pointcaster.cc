@@ -1096,10 +1096,10 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
 
   // rotate
   if (event.buttons() == MouseMoveEvent::Button::Left)
-    _camera_controllers.at(_hovering_camera_index)->mouseRotate(event);
+    _camera_controllers.at(_hovering_camera_index)->mouse_rotate(event);
   // translate
   else if (event.buttons() == MouseMoveEvent::Button::Right)
-    _camera_controllers.at(_hovering_camera_index)->mouseTranslate(event);
+    _camera_controllers.at(_hovering_camera_index)->mouse_translate(event);
 
   event.setAccepted();
 }
@@ -1118,7 +1118,7 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
 
   if (event.modifiers() ==
       Magnum::Platform::Sdl2Application::InputEvent::Modifier::Alt) {
-    _camera_controllers.at(_hovering_camera_index)->zoomPerspective(event);
+    _camera_controllers.at(_hovering_camera_index)->zoom_perspective(event);
 
   } else {
     _camera_controllers.at(_hovering_camera_index)->dolly(event);

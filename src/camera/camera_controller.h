@@ -44,20 +44,18 @@ public:
   const std::string name() const { return _config.name; };
   Camera3D &camera() const { return *_camera; }
 
-  void setRotation(const Magnum::Math::Vector3<Magnum::Math::Rad<float>>& rotation, bool force = false);
-  void setTranslation(const Magnum::Math::Vector3<float>& translation, bool force = false);
+  void set_rotation(const Magnum::Math::Vector3<Magnum::Math::Rad<float>>& rotation, bool force = false);
+  void set_translation(const Magnum::Math::Vector3<float>& translation, bool force = false);
   void dolly(Magnum::Platform::Sdl2Application::MouseScrollEvent& event);
 
-  void mouseRotate(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);
-  void mouseTranslate(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);
+  void mouse_rotate(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);
+  void mouse_translate(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);
 
   // 0 is regular perspective, 1 is orthographic
-  CameraController &setPerspective(const Magnum::Float &value);
-  CameraController &zoomPerspective(Magnum::Platform::Sdl2Application::MouseScrollEvent &event);
+  CameraController &set_perspective(const Magnum::Float &value);
+  CameraController &zoom_perspective(Magnum::Platform::Sdl2Application::MouseScrollEvent &event);
 
   void setup_framebuffer(const Magnum::Vector2i frame_size);
-
-  const Magnum::Vector2i& frameSize() { return _frame_size; };
 
   Magnum::GL::Texture2D& color_frame();
   Magnum::GL::Texture2D& analysis_frame();
