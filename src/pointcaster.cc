@@ -104,7 +104,7 @@ struct PointCasterSession {
 
   // GUI
   std::vector<char> imgui_layout;
-  bool show_sensors_window = true;
+  bool show_devices_window = true;
   bool show_controllers_window = false;
   bool show_radio_window = false;
   bool show_snapshots_window = false;
@@ -164,7 +164,7 @@ protected:
   void draw_main_viewport();
   void draw_viewport_controls(CameraController& selected_camera);
   void draw_camera_control_windows();
-  void draw_sensors_window();
+  void draw_devices_window();
   void draw_controllers_window();
 
   void save_and_quit();
@@ -426,6 +426,13 @@ void PointCaster::save_session(std::filesystem::path file_path) {
     _session.cameras.push_back(camera->config());
   }
 
+  // save device configurations
+  // TODO this saves to a separate file,
+  // move this save data into the _session object
+  for (auto &device : Device::attached_devices) {
+    device->serialize_config();
+  }
+
   std::vector<uint8_t> data;
   auto out = zpp::bits::out(data);
   auto success = out(_session);
@@ -524,7 +531,7 @@ void PointCaster::draw_menu_bar() {
       };
 
       window_item("Transform", "t", _session.show_global_transform_window);
-      window_item("Sensors", "s", _session.show_sensors_window);
+      window_item("Devices", "d", _session.show_devices_window);
       window_item("Controllers", "c", _session.show_controllers_window);
       window_item("RenderStats", "f", _session.show_stats);
       window_item("MQTT", "m", _session.show_mqtt_window);
@@ -720,10 +727,10 @@ void PointCaster::draw_camera_control_windows() {
   }
 }
 
-void PointCaster::draw_sensors_window() {
+void PointCaster::draw_devices_window() {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
-  ImGui::Begin("Sensors", nullptr);
+  ImGui::Begin("Devices", nullptr);
 
   ImGui::Checkbox("USB auto-connect", &_session.auto_connect_sensors);
 
@@ -947,8 +954,8 @@ void PointCaster::drawEvent() {
   draw_main_viewport();
   draw_camera_control_windows();
 
-  if (_session.show_sensors_window)
-    draw_sensors_window();
+  if (_session.show_devices_window)
+    draw_devices_window();
   if (_session.show_controllers_window)
     draw_controllers_window();
   if (_session.show_stats)
@@ -1029,7 +1036,7 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     save_and_quit();
     break;
   case KeyEvent::Key::S:
-    _session.show_sensors_window = !_session.show_sensors_window;
+    _session.show_devices_window = !_session.show_devices_window;
     break;
   case KeyEvent::Key::C:
     _session.show_controllers_window = !_session.show_controllers_window;
