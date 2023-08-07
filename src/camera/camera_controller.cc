@@ -316,7 +316,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
           // if we're publishing shapes we need to use std types
           std::vector<std::array<float, 2>> contour_std;
           for (auto &point : norm_contour) {
-            contour_std.push_back({point.x, point.y});
+            contour_std.push_back({point.x, 1 - point.y});
           }
           contour_list_std.push_back(contour_std);
         }
