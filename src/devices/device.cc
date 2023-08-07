@@ -136,18 +136,16 @@ void Device::draw_imgui_controls() {
 
     pc::types::int3 offset_in{config.offset.x, config.offset.y,
                                config.offset.z};
-    ImGui::TextDisabled("Offset Output");
-    draw_slider<int>("x", &offset_in.x, -10000, 10000);
-    draw_slider<int>("y", &offset_in.y, -10000, 10000);
-    draw_slider<int>("z", &offset_in.z, -10000, 10000);
-    config.offset.x = offset_in.x;
-    config.offset.y = offset_in.y;
-    config.offset.z = offset_in.z;
+    if (pc::gui::vector_table("Position", offset_in, -10000, 10000, 0)) {
+      config.offset.x = offset_in.x;
+      config.offset.y = offset_in.y;
+      config.offset.z = offset_in.z;
+    };
 
-    ImGui::TextDisabled("Rotate Output");
-    draw_slider<float>("x", &config.rotation_deg.x, -180, 180);
-    draw_slider<float>("y", &config.rotation_deg.y, -180, 180);
-    draw_slider<float>("z", &config.rotation_deg.z, -180, 180);
+    pc::types::float3 rotation = config.rotation_deg;
+    if (pc::gui::vector_table("Rotation", rotation, -180.0f, 180.0f, 0.0f)) {
+      config.rotation_deg = rotation;
+    };
 
     ImGui::TextDisabled("Scale Output");
     draw_slider<float>("uniform", &config.scale, 0.0f, 4.0f);

@@ -104,7 +104,7 @@ struct PointCasterSession {
 
   // GUI
   std::vector<char> imgui_layout;
-  bool show_sensors_window = true;
+  bool show_devices_window = true;
   bool show_controllers_window = false;
   bool show_radio_window = false;
   bool show_snapshots_window = false;
@@ -129,9 +129,9 @@ public:
 protected:
   PointCasterSession _session;
 
-  void serialize_session();
-  void serialize_session(std::filesystem::path file_path);
-  void deserialize_session(std::filesystem::path file_path);
+  void save_session();
+  void save_session(std::filesystem::path file_path);
+  void load_session(std::filesystem::path file_path);
 
   std::vector<std::jthread> _async_tasks;
 
@@ -164,10 +164,10 @@ protected:
   void draw_main_viewport();
   void draw_viewport_controls(CameraController& selected_camera);
   void draw_camera_control_windows();
-  void draw_sensors_window();
+  void draw_devices_window();
   void draw_controllers_window();
 
-  void saveAndQuit();
+  void save_and_quit();
 
   // void initControllers();
   // void handleMidiLearn(const libremidi::message &message);
@@ -298,7 +298,7 @@ PointCaster::PointCaster(const Arguments &args)
   _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
                           Matrix4::translation(Vector3(0, 0, 0)));
 
-  // Deserialize last session
+  // load last session
   auto data_dir = path::get_or_create_data_directory();
   std::filesystem::path last_modified_session_file;
   std::filesystem::file_time_type last_write_time;
@@ -318,10 +318,10 @@ PointCaster::PointCaster(const Arguments &args)
     spdlog::info("No previous session file found. Creating new session.");
     _session = {.id = pc::uuid::word()};
     auto file_path = data_dir / (_session.id + ".pcs");
-    serialize_session(file_path);
+    save_session(file_path);
   } else {
     spdlog::info("Found previous session file");
-    deserialize_session(last_modified_session_file);
+    load_session(last_modified_session_file);
   }
 
   // If there are no cameras in the scene, initialise at least one
@@ -396,30 +396,22 @@ PointCaster::PointCaster(const Arguments &args)
   // init libusb and any attached devices
   _usb_monitor = std::make_unique<UsbMonitor>();
 
-  // TODO replace the k4a routine with something generic in usb.cc
-  // open each k4a on startup:
-  // for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
-  //   pointer<pc::sensors::Device> p;
-  //   p.reset(new pc::sensors::K4ADevice());
-  //   pc::sensors::attached_devices.push_back(std::move(p));
-  // }
-
   timeline.start();
 }
 
-void PointCaster::saveAndQuit() {
-  serialize_session();
+void PointCaster::save_and_quit() {
+  save_session();
   Device::attached_devices.clear();
   exit(0);
 }
 
-void PointCaster::serialize_session() {
+void PointCaster::save_session() {
   auto data_dir = path::get_or_create_data_directory();
   auto file_path = data_dir / (_session.id + ".pcs");
-  serialize_session(file_path);
+  save_session(file_path);
 }
 
-void PointCaster::serialize_session(std::filesystem::path file_path) {
+void PointCaster::save_session(std::filesystem::path file_path) {
   spdlog::info("Saving session to {}", file_path.string());
 
   // save imgui layout
@@ -434,13 +426,20 @@ void PointCaster::serialize_session(std::filesystem::path file_path) {
     _session.cameras.push_back(camera->config());
   }
 
+  // save device configurations
+  // TODO this saves to a separate file,
+  // move this save data into the _session object
+  for (auto &device : Device::attached_devices) {
+    device->serialize_config();
+  }
+
   std::vector<uint8_t> data;
   auto out = zpp::bits::out(data);
   auto success = out(_session);
   path::save_file(file_path, data);
 }
 
-void PointCaster::deserialize_session(std::filesystem::path file_path) {
+void PointCaster::load_session(std::filesystem::path file_path) {
   spdlog::info("Loading state from {}", file_path.string());
   auto buffer = path::load_file(file_path);
   auto in = zpp::bits::in(buffer);
@@ -471,8 +470,7 @@ void PointCaster::render_cameras() {
       Vector2i{int(rendering_config.resolution[0] / dpiScaling().x()),
 	       int(rendering_config.resolution[1] / dpiScaling().y())};
 
-    camera_controller->setupFramebuffer(frame_size);
-    camera_controller->bindFramebuffer();
+    camera_controller->setup_framebuffer(frame_size);
 
     // TODO: pass selected physical cameras into the
     // synthesise_point_cloud function 
@@ -503,7 +501,7 @@ void PointCaster::render_cameras() {
 }
 
 void PointCaster::open_kinect_sensors() {
-  run_async([&]() {
+  run_async([&] {
     for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
       auto p = std::make_shared<K4ADevice>();
       Device::attached_devices.push_back(std::move(p));
@@ -515,7 +513,7 @@ void PointCaster::draw_menu_bar() {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
       if (ImGui::MenuItem("Quit", "q"))
-        saveAndQuit();
+        save_and_quit();
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Window")) {
@@ -533,7 +531,7 @@ void PointCaster::draw_menu_bar() {
       };
 
       window_item("Transform", "t", _session.show_global_transform_window);
-      window_item("Sensors", "s", _session.show_sensors_window);
+      window_item("Devices", "d", _session.show_devices_window);
       window_item("Controllers", "c", _session.show_controllers_window);
       window_item("RenderStats", "f", _session.show_stats);
       window_item("MQTT", "m", _session.show_mqtt_window);
@@ -555,7 +553,7 @@ void PointCaster::draw_control_bar() {
                                   control_bar_flags)) {
     if (ImGui::BeginMenuBar()) {
       if (ImGui::Button(ICON_FA_FLOPPY_DISK)) {
-        serialize_session();
+        save_session();
       }
 
       if (ImGui::Button(ICON_FA_FOLDER_OPEN)) {
@@ -729,10 +727,10 @@ void PointCaster::draw_camera_control_windows() {
   }
 }
 
-void PointCaster::draw_sensors_window() {
+void PointCaster::draw_devices_window() {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
-  ImGui::Begin("Sensors", nullptr);
+  ImGui::Begin("Devices", nullptr);
 
   ImGui::Checkbox("USB auto-connect", &_session.auto_connect_sensors);
 
@@ -740,7 +738,7 @@ void PointCaster::draw_sensors_window() {
     open_kinect_sensors();
 
   if (ImGui::Button("Close")) {
-    run_async([]() { Device::attached_devices.clear(); });
+    run_async([] { Device::attached_devices.clear(); });
   }
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
@@ -956,8 +954,8 @@ void PointCaster::drawEvent() {
   draw_main_viewport();
   draw_camera_control_windows();
 
-  if (_session.show_sensors_window)
-    draw_sensors_window();
+  if (_session.show_devices_window)
+    draw_devices_window();
   if (_session.show_controllers_window)
     draw_controllers_window();
   if (_session.show_stats)
@@ -1035,10 +1033,10 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
   case KeyEvent::Key::Q:
-    saveAndQuit();
+    save_and_quit();
     break;
   case KeyEvent::Key::S:
-    _session.show_sensors_window = !_session.show_sensors_window;
+    _session.show_devices_window = !_session.show_devices_window;
     break;
   case KeyEvent::Key::C:
     _session.show_controllers_window = !_session.show_controllers_window;
@@ -1097,10 +1095,10 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
 
   // rotate
   if (event.buttons() == MouseMoveEvent::Button::Left)
-    _camera_controllers.at(_hovering_camera_index)->mouseRotate(event);
+    _camera_controllers.at(_hovering_camera_index)->mouse_rotate(event);
   // translate
   else if (event.buttons() == MouseMoveEvent::Button::Right)
-    _camera_controllers.at(_hovering_camera_index)->mouseTranslate(event);
+    _camera_controllers.at(_hovering_camera_index)->mouse_translate(event);
 
   event.setAccepted();
 }
@@ -1119,7 +1117,7 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
 
   if (event.modifiers() ==
       Magnum::Platform::Sdl2Application::InputEvent::Modifier::Alt) {
-    _camera_controllers.at(_hovering_camera_index)->zoomPerspective(event);
+    _camera_controllers.at(_hovering_camera_index)->zoom_perspective(event);
 
   } else {
     _camera_controllers.at(_hovering_camera_index)->dolly(event);

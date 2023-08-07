@@ -78,8 +78,8 @@ CameraController::CameraController(Magnum::Platform::Application *app,
                               _config.translation[2]};
   auto fov = Deg_f(_config.fov);
 
-  setRotation(rotation, true);
-  setTranslation(translation, true);
+  set_rotation(rotation, true);
+  set_translation(translation);
 
   _camera->setProjectionMatrix(
       Matrix4::perspectiveProjection(fov, 4.0f / 3.0f, 0.001f, 200.0f));
@@ -102,18 +102,20 @@ CameraController::~CameraController() {
   CameraController::count--;
 }
 
-void CameraController::setupFramebuffer(Vector2i frame_size) {
-  if (frame_size == _frame_size) return;
+void CameraController::setup_framebuffer(Vector2i frame_size) {
+  if (frame_size == _frame_size) {
+    bind_framebuffer();
+    return;
+  }
 
   std::lock(_dispatch_analysis_mutex, _color_frame_mutex, _analysis_frame_mutex,
-	    _analysis_frame_buffer_data_mutex);
+            _analysis_frame_buffer_data_mutex);
   std::lock_guard lock_dispatch(_dispatch_analysis_mutex, std::adopt_lock);
   std::lock_guard lock_color(_color_frame_mutex, std::adopt_lock);
   std::lock_guard lock_analysis(_analysis_frame_mutex, std::adopt_lock);
   std::lock_guard lock(_analysis_frame_buffer_data_mutex, std::adopt_lock);
 
   _frame_size = frame_size;
-
   frame_size /= _app->dpiScaling();
 
   _color = std::make_unique<GL::Texture2D>();
@@ -132,9 +134,11 @@ void CameraController::setupFramebuffer(Vector2i frame_size) {
 
   _framebuffer->attachRenderbuffer(
       GL::Framebuffer::BufferAttachment::DepthStencil, *_depth_stencil);
+
+  bind_framebuffer();
 }
 
-void CameraController::bindFramebuffer() {
+void CameraController::bind_framebuffer() {
   _framebuffer->clear(GL::FramebufferClear::Color | GL::FramebufferClear::Depth)
       .bind();
 }
@@ -312,7 +316,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
           // if we're publishing shapes we need to use std types
           std::vector<std::array<float, 2>> contour_std;
           for (auto &point : norm_contour) {
-            contour_std.push_back({point.x, point.y});
+            contour_std.push_back({point.x, 1 - point.y});
           }
           contour_list_std.push_back(contour_std);
         }
@@ -364,15 +368,15 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
               cv::Point2f(polygon[0][index].first, polygon[0][index].second);
 
           triangle[vertex % 3] = {polygon[0][index].first,
-				  polygon[0][index].second};
+                                  polygon[0][index].second};
 
           if (++vertex % 3 == 0) {
 
-	    float a = cv::norm(triangle[1] - triangle[0]);
-	    float b = cv::norm(triangle[2] - triangle[1]);
-	    float c = cv::norm(triangle[2] - triangle[0]);
-	    float s = (a + b + c) / 2.0f;
-	    float area = std::sqrt(s * (s - a) * (s - b) * (s - c));
+            float a = cv::norm(triangle[1] - triangle[0]);
+            float b = cv::norm(triangle[2] - triangle[1]);
+            float c = cv::norm(triangle[2] - triangle[0]);
+            float s = (a + b + c) / 2.0f;
+            float area = std::sqrt(s * (s - a) * (s - b) * (s - c));
 
             if (area >= triangulate.minimum_area) {
 
@@ -407,13 +411,13 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
       }
 
       if (triangulate.publish && !vertices.empty()) {
-	if (vertices.size() < 3) {
-	  spdlog::warn("Invalid triangle vertex count: {}", vertices.size());
-	} else {
+        if (vertices.size() < 3) {
+          spdlog::warn("Invalid triangle vertex count: {}", vertices.size());
+        } else {
 #if WITH_MQTT
-	  MqttClient::instance()->publish("triangles", vertices);
+          MqttClient::instance()->publish("triangles", vertices);
 #endif
-	}
+        }
       }
     }
 
@@ -436,9 +440,9 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
         std::array<float, 4> array() const {
           return {position[0], position[1], magnitude[0], magnitude[1]};
         }
-	std::array<float, 4> flipped_array() const {
-	  return {position[0], 1 - position[1], magnitude[0], magnitude[1]};
-	}
+        std::array<float, 4> flipped_array() const {
+          return {position[0], 1 - position[1], magnitude[0], magnitude[1]};
+        }
       };
 
       std::vector<FlowVector> flow_field;
@@ -496,8 +500,8 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
           flow_vector.position = {normalised_position.x, normalised_position.y};
           flow_vector.magnitude = {normalised_distance.x,
                                    normalised_distance.y};
-	  flow_field.push_back(flow_vector);
-	  flow_field_flattened.push_back(flow_vector.flipped_array());
+          flow_field.push_back(flow_vector);
+          flow_field_flattened.push_back(flow_vector.flipped_array());
 
           if (optical_flow.draw) {
             cv::Point2f scaled_end = {
@@ -541,8 +545,10 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
 int CameraController::analysis_time() {
   std::chrono::milliseconds time = _analysis_time;
-  if (time.count() > 0) return time.count();
-  else return 1;
+  if (time.count() > 0)
+    return time.count();
+  else
+    return 1;
 }
 
 // TODO
@@ -597,7 +603,7 @@ Matrix4 CameraController::make_projection_matrix() {
       Deg(new_fov), _frame_size.x() / _frame_size.y(), 0.001f, 200.0f);
 }
 
-void CameraController::setRotation(
+void CameraController::set_rotation(
     const Magnum::Math::Vector3<Magnum::Math::Rad<float>> &rotation,
     bool force) {
 
@@ -626,13 +632,8 @@ void CameraController::setRotation(
   _roll_parent->rotate(z_rotation, Vector3::zAxis());
 }
 
-void CameraController::setTranslation(
-    const Magnum::Math::Vector3<float> &translation, bool force) {
-  if (!force && _config.translation[0] == translation.x() &&
-      _config.translation[1] == translation.y() &&
-      _config.translation[2] == translation.z()) {
-    return;
-  }
+void CameraController::set_translation(
+    const Magnum::Math::Vector3<float> &translation) {
   _config.translation = {translation.x(), translation.y(), translation.z()};
   auto transform = _camera_parent->transformationMatrix();
   transform.translation() = {translation.z(), translation.y(), translation.x()};
@@ -651,7 +652,7 @@ void CameraController::dolly(
   _config.translation = {translation.z(), translation.y(), translation.x()};
 }
 
-void CameraController::mouseRotate(
+void CameraController::mouse_rotate(
     Magnum::Platform::Sdl2Application::MouseMoveEvent &event) {
   auto delta = Vector2{event.relativePosition()} * _rotate_speed;
   Euler rotation_amount;
@@ -664,10 +665,10 @@ void CameraController::mouseRotate(
   }
   auto rotation = Euler{Deg_f(_config.rotation[0]), Deg_f(_config.rotation[1]),
                         Deg_f(_config.rotation[2])};
-  setRotation(rotation + rotation_amount);
+  set_rotation(rotation + rotation_amount);
 }
 
-void CameraController::mouseTranslate(
+void CameraController::mouse_translate(
     Magnum::Platform::Sdl2Application::MouseMoveEvent &event) {
   const auto frame_centre = _frame_size / 2;
   const auto centre_depth = depth_at(frame_centre);
@@ -677,21 +678,21 @@ void CameraController::mouseTranslate(
               (float)event.relativePosition().y() * _move_speed.y(), 0};
   auto translation = Position{_config.translation[0], _config.translation[1],
                               _config.translation[2]};
-  setTranslation(translation + delta);
+  set_translation(translation + delta);
 }
 
 CameraController &
-CameraController::setPerspective(const Magnum::Float &perspective_value) {
+CameraController::set_perspective(const Magnum::Float &perspective_value) {
   _perspective_value = Math::max(Math::min(perspective_value, 1.0f),
                                  std::numeric_limits<float>::min());
   _camera->setProjectionMatrix(make_projection_matrix());
   return *this;
 }
 
-CameraController &CameraController::zoomPerspective(
+CameraController &CameraController::zoom_perspective(
     Magnum::Platform::Sdl2Application::MouseScrollEvent &event) {
   auto delta = event.offset().y();
-  setPerspective(_perspective_value - delta / 10);
+  set_perspective(_perspective_value - delta / 10);
   return *this;
 }
 
@@ -736,66 +737,65 @@ Float CameraController::depth_at(const Vector2i &window_position) {
 
 void CameraController::draw_imgui_controls() {
 
-  using pc::gui::draw_slider;
+    using pc::gui::draw_slider;
+    using pc::gui::vector_table;
 
-  if (ImGui::CollapsingHeader("Transform", _config.transform_open)) {
+    if (ImGui::CollapsingHeader("Transform", _config.transform_open)) {
+        auto &translate = _config.translation;
+        if (vector_table("Translation", translate, -10.f, 10.f, 0.0f)) {
+            set_translation(Position{translate[0], translate[1], translate[2]});
+        }
+	auto &rotate = _config.rotation;
+	if (vector_table("Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
+	    set_rotation(
+		Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
+	}
+    }
 
-    ImGui::TextDisabled("Translation");
-    auto translate = _config.translation;
-    draw_slider<float>("x", &translate[0], -10, 10);
-    draw_slider<float>("y", &translate[1], -10, 10);
-    draw_slider<float>("z", &translate[2], -10, 10);
-    setTranslation(Position{translate[0], translate[1], translate[2]});
+    if (ImGui::CollapsingHeader("Rendering", _config.rendering_open)) {
+        auto &rendering = _config.rendering;
+        ImGui::Checkbox("ground grid", &rendering.ground_grid);
+        ImGui::TextDisabled("Resolution");
+        ImGui::InputInt("render width", &rendering.resolution[0]);
+        ImGui::SameLine();
+        ImGui::InputInt("render height", &rendering.resolution[1]);
+        ImGui::Spacing();
+        draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
+                           0.0015f);
+    }
 
-    ImGui::TextDisabled("Rotation");
-    auto rotate = _config.rotation;
-    draw_slider<float>("x", &rotate[0], -360, 360);
-    draw_slider<float>("y", &rotate[1], -360, 360);
-    draw_slider<float>("z", &rotate[2], -360, 360);
-    setRotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
-  }
+    if (ImGui::CollapsingHeader("Analysis", _config.analysis_open)) {
+        auto &frame_analysis = _config.frame_analysis;
+        ImGui::Checkbox("Enabled", &frame_analysis.enabled);
+        if (frame_analysis.enabled) {
 
-  if (ImGui::CollapsingHeader("Rendering", _config.rendering_open)) {
-    auto &rendering = _config.rendering;
-    ImGui::Checkbox("ground grid", &rendering.ground_grid);
-    ImGui::TextDisabled("Resolution");
-    ImGui::InputInt("render width", &rendering.resolution[0]);
-    ImGui::SameLine();
-    ImGui::InputInt("render height", &rendering.resolution[1]);
-    ImGui::Spacing();
-    draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
-                       0.0015f);
-  }
+            ImGui::TextDisabled("Resolution");
+            ImGui::InputInt("width", &frame_analysis.resolution[0]);
+            ImGui::SameLine();
+            ImGui::InputInt("height", &frame_analysis.resolution[1]);
+            ImGui::Spacing();
 
-  if (ImGui::CollapsingHeader("Analysis", _config.analysis_open)) {
-    auto &frame_analysis = _config.frame_analysis;
-    ImGui::Checkbox("Enabled", &frame_analysis.enabled);
-    if (frame_analysis.enabled) {
+            ImGui::TextDisabled("Binary threshold");
+            draw_slider<int>("min", &frame_analysis.binary_threshold[0], 1, 255,
+                             1);
+            draw_slider<int>("max", &frame_analysis.binary_threshold[1], 1, 255,
+                             255);
+            ImGui::Spacing();
 
-      ImGui::TextDisabled("Resolution");
-      ImGui::InputInt("width", &frame_analysis.resolution[0]);
-      ImGui::SameLine();
-      ImGui::InputInt("height", &frame_analysis.resolution[1]);
-      ImGui::Spacing();
+            draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
 
-      ImGui::TextDisabled("Binary threshold");
-      draw_slider<int>("min", &frame_analysis.binary_threshold[0], 1, 255, 1);
-      draw_slider<int>("max", &frame_analysis.binary_threshold[1], 1, 255, 255);
-      ImGui::Spacing();
-
-      draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
-
-      auto &canny = frame_analysis.canny;
-      ImGui::Checkbox("Canny edge detection", &canny.enabled);
-      if (canny.enabled) {
+            auto &canny = frame_analysis.canny;
+            ImGui::Checkbox("Canny edge detection", &canny.enabled);
+            if (canny.enabled) {
         draw_slider<int>("canny min", &canny.min_threshold, 0, 255, 100);
         draw_slider<int>("canny max", &canny.max_threshold, 0, 255, 255);
         int aperture_in = (canny.aperture_size - 1) / 2;
         draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
         canny.aperture_size = aperture_in * 2 + 1;
-      }
+            }
 
-      if (gui::begin_tree_node("Contours", frame_analysis.contours_open)) {
+            if (gui::begin_tree_node("Contours",
+                                     frame_analysis.contours_open)) {
         auto &contours = frame_analysis.contours;
 
         ImGui::Checkbox("Draw on viewport", &contours.draw);
@@ -819,10 +819,10 @@ void CameraController::draw_imgui_controls() {
                              0.0f, 0.02f, 0.0f);
         }
         ImGui::TreePop();
-      }
+            }
 
-      if (gui::begin_tree_node("Optical Flow",
-                               frame_analysis.optical_flow_open)) {
+            if (gui::begin_tree_node("Optical Flow",
+                                     frame_analysis.optical_flow_open)) {
         auto &optical_flow = frame_analysis.optical_flow;
         ImGui::Checkbox("Enabled", &optical_flow.enabled);
         ImGui::Checkbox("Draw", &optical_flow.draw);
@@ -844,9 +844,9 @@ void CameraController::draw_imgui_controls() {
                            0.0f, 0.8f, 0.8f);
 
         ImGui::TreePop();
-      }
+            }
+        }
     }
-  }
 }
 
 } // namespace pc::camera
