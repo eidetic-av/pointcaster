@@ -208,6 +208,12 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     auto input_frame_size = image.size();
     auto &analysis_config = *config_opt;
 
+    if (input_frame_size.x() <= 1 || input_frame_size.y() <= 1) {
+      spdlog::warn("Analysis received invalid frame size: {}x{}",
+		   input_frame_size.x(), input_frame_size.y());
+      continue;
+    }
+
     // create a new RGBA image initialised to fully transparent
     cv::Mat output_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
                        cv::Scalar(0, 0, 0, 0));
@@ -216,7 +222,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     cv::Mat input_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
                       image.data());
 
-    // and scale to analysis size if changed
+    // and scale to analysis size if different
     cv::Mat scaled_mat;
     if (input_frame_size.x() != analysis_config.resolution[0] ||
         input_frame_size.y() != analysis_config.resolution[1]) {
