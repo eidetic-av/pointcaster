@@ -55,7 +55,7 @@ public:
   CameraController &set_perspective(const Magnum::Float &value);
   CameraController &zoom_perspective(Magnum::Platform::Sdl2Application::MouseScrollEvent &event);
 
-  void setup_framebuffer(const Magnum::Vector2i frame_size);
+  void setup_framebuffer(Magnum::Vector2i frame_size);
 
   Magnum::GL::Texture2D& color_frame();
   Magnum::GL::Texture2D& analysis_frame();

@@ -69,7 +69,7 @@ CameraController::CameraController(Magnum::Platform::Application *app,
        defaults::magnum::translation.x()},
       {}, Vector3::yAxis()));
 
-  _camera->setAspectRatioPolicy(SceneGraph::AspectRatioPolicy::Extend);
+  _camera->setAspectRatioPolicy(SceneGraph::AspectRatioPolicy::NotPreserved);
 
   // deserialize our camera configuration into Magnum types
   auto rotation = Euler{Deg_f(_config.rotation[0]), Deg_f(_config.rotation[1]),
@@ -81,17 +81,19 @@ CameraController::CameraController(Magnum::Platform::Application *app,
   set_rotation(rotation, true);
   set_translation(translation);
 
-  _camera->setProjectionMatrix(
-      Matrix4::perspectiveProjection(fov, 4.0f / 3.0f, 0.001f, 200.0f));
-
   if (_config.id.empty()) {
     _config.id = pc::uuid::word();
   }
   _config.name = "camera_" + std::to_string(++CameraController::count);
   if (_config.rendering.resolution[0] == 0) {
-    const auto res = _app->framebufferSize();
-    _config.rendering.resolution = {res.x(), res.y()};
+    const auto app_res = _app->framebufferSize();
+    _config.rendering.resolution = {app_res.x(), app_res.y()};
   }
+  auto resolution = _config.rendering.resolution;
+  auto aspect_ratio = resolution[0] / resolution[1];
+
+  _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
+      Deg_f(_config.fov), aspect_ratio, 0.001f, 200.0f));
 
   spdlog::info("Initialised Camera Controller {} with id {}", _config.name,
                _config.id);
@@ -103,10 +105,24 @@ CameraController::~CameraController() {
 }
 
 void CameraController::setup_framebuffer(Vector2i frame_size) {
-  if (frame_size == _frame_size) {
+
+  Vector2i scaled_size{
+      static_cast<int>(frame_size.x() / _app->dpiScaling().x()),
+      static_cast<int>(frame_size.y() / _app->dpiScaling().y())};
+
+  if (scaled_size == _frame_size) {
     bind_framebuffer();
     return;
   }
+
+  _frame_size = scaled_size;
+
+  auto aspect_ratio = frame_size.x() / static_cast<float>(frame_size.y());
+
+  // TODO replace the aspect ratio fix here when we have
+  // a more solid handle over fov control
+  _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
+      Deg_f(_config.fov), aspect_ratio, 0.001f, 200.0f));
 
   std::lock(_dispatch_analysis_mutex, _color_frame_mutex, _analysis_frame_mutex,
             _analysis_frame_buffer_data_mutex);
@@ -114,9 +130,6 @@ void CameraController::setup_framebuffer(Vector2i frame_size) {
   std::lock_guard lock_color(_color_frame_mutex, std::adopt_lock);
   std::lock_guard lock_analysis(_analysis_frame_mutex, std::adopt_lock);
   std::lock_guard lock(_analysis_frame_buffer_data_mutex, std::adopt_lock);
-
-  _frame_size = frame_size;
-  frame_size /= _app->dpiScaling();
 
   _color = std::make_unique<GL::Texture2D>();
   _color->setStorage(1, GL::TextureFormat::RGBA8, _frame_size);
@@ -760,12 +773,28 @@ void CameraController::draw_imgui_controls() {
 
     if (ImGui::CollapsingHeader("Rendering", _config.rendering_open)) {
         auto &rendering = _config.rendering;
-        ImGui::Checkbox("ground grid", &rendering.ground_grid);
-        ImGui::TextDisabled("Resolution");
-        ImGui::InputInt("render width", &rendering.resolution[0]);
-        ImGui::SameLine();
-        ImGui::InputInt("render height", &rendering.resolution[1]);
+
+	auto current_scale_mode = rendering.scale_mode;
+	if (current_scale_mode == ScaleMode::Letterbox) {
+	    vector_table("Resolution", rendering.resolution, 2, 7680,
+			 {1920, 1080});
+	} else if (current_scale_mode == ScaleMode::Span) {
+	    // disable setting y resolution manually in span mode,
+	    // it's inferred from the x resolution and window size
+	    vector_table("Resolution", rendering.resolution, 2, 7680,
+			 {1920, 1080}, {false, true});
+	}
+
+        auto scale_mode_i = static_cast<int>(current_scale_mode);
+	const char *options[] = {"Span", "Letterbox"};
+	ImGui::Combo("Scale mode", &scale_mode_i, options,
+		     static_cast<int>(ScaleMode::Count));
+	rendering.scale_mode = static_cast<ScaleMode>(scale_mode_i);
+
         ImGui::Spacing();
+
+	ImGui::Checkbox("ground grid", &rendering.ground_grid);
+
         draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
                            0.0015f);
     }

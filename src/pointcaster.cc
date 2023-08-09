@@ -466,6 +466,7 @@ void PointCaster::render_cameras() {
   for (auto &camera_controller : _camera_controllers) {
 
     auto& rendering_config = camera_controller->config().rendering;
+
     const auto frame_size =
       Vector2i{int(rendering_config.resolution[0] / dpiScaling().x()),
 	       int(rendering_config.resolution[1] / dpiScaling().y())};
@@ -623,6 +624,7 @@ void PointCaster::draw_main_viewport() {
 
       for (int i = 0; i < _camera_controllers.size(); i++) {
         const auto &camera_controller = _camera_controllers.at(i);
+	const auto camera_config = camera_controller->config();
 
         ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
         if (new_camera_index == i)
@@ -631,30 +633,91 @@ void PointCaster::draw_main_viewport() {
         if (ImGui::BeginTabItem(camera_controller->name().c_str(), nullptr,
                                 tab_item_flags)) {
 
+	  const auto window_size = ImGui::GetWindowSize();
+
 	  auto *tab_bar = ImGui::GetCurrentTabBar();
 	  float tab_bar_height =
-	    (tab_bar->BarRect.Max.y - tab_bar->BarRect.Min.y) + 5;
+	      (tab_bar->BarRect.Max.y - tab_bar->BarRect.Min.y) + 5;
 	  // TODO 5 pixels above? where's it come from
 
-	  const auto window_size = ImGui::GetWindowSize();
-	  const Vector2 frame_size {window_size.x,
-				   window_size.y - tab_bar_height};
+	  auto rendering = camera_config.rendering;
+          auto scale_mode = rendering.scale_mode;
+	  const Vector2 frame_space{window_size.x,
+				    window_size.y - tab_bar_height};
 
-          const auto image_pos = ImGui::GetCursorPos();
-          ImGuiIntegration::image(camera_controller->color_frame(),
-                                  {frame_size.x(), frame_size.y()});
+          if (scale_mode == ScaleMode::Span) {
 
-          auto& analysis = camera_controller->config().frame_analysis;
+            const auto image_pos = ImGui::GetCursorPos();
+            ImGuiIntegration::image(camera_controller->color_frame(),
+                                    {frame_space.x(), frame_space.y()});
 
-	  if (analysis.enabled && (analysis.contours.draw)) {
-	    ImGui::SetCursorPos(image_pos);
-	    ImGuiIntegration::image(camera_controller->analysis_frame(),
-				    {frame_size.x(), frame_size.y()});
-          }
+            auto analysis = camera_config.frame_analysis;
+
+            if (analysis.enabled && (analysis.contours.draw)) {
+              ImGui::SetCursorPos(image_pos);
+              ImGuiIntegration::image(camera_controller->analysis_frame(),
+                                      {frame_space.x(), frame_space.y()});
+            }
+	  } else if (scale_mode == ScaleMode::Letterbox) {
+
+            float width, height, horizontal_offset, vertical_offset;
+
+            auto frame_aspect_ratio = rendering.resolution[0] /
+                                static_cast<float>(rendering.resolution[1]);
+	    auto space_aspect_ratio = frame_space.x() / frame_space.y();
+
+	    constexpr auto frame_spacing = 5.0f;
+
+	    if (frame_aspect_ratio > space_aspect_ratio) {
+	      width = frame_space.x();
+	      height = std::round(width / frame_aspect_ratio);
+	      horizontal_offset = 0.0f;
+	      vertical_offset =
+		  std::max(0.0f, (frame_space.y() - height) / 2.0f - frame_spacing);
+	    } else {
+	      height = frame_space.y() - 2 * frame_spacing;
+	      width = std::round(height * frame_aspect_ratio);
+	      vertical_offset = 0.0f;
+	      horizontal_offset =
+		  std::max(0.0f, (frame_space.x() - width) / 2.0f);
+	    }
+
+            ImGui::Dummy({horizontal_offset, vertical_offset});
+	    if (horizontal_offset != 0.0f) ImGui::SameLine();
+
+            constexpr auto border_size = 1.0f;
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, border_size);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0, 0});
+
+	    ImGui::BeginChildFrame(ImGui::GetID("letterboxed"),
+				   {width, height});
+
+            const auto image_pos = ImGui::GetCursorPos();
+            ImGuiIntegration::image(camera_controller->color_frame(),
+                                    {width, height});
+
+            auto &analysis = camera_controller->config().frame_analysis;
+
+            if (analysis.enabled && (analysis.contours.draw)) {
+              ImGui::SetCursorPos(image_pos);
+              ImGuiIntegration::image(camera_controller->analysis_frame(),
+                                      {width, height});
+            }
+
+            ImGui::EndChildFrame();
+
+	    ImGui::PopStyleVar();
+            ImGui::PopStyleVar();
+
+	    if (horizontal_offset != 0.0f) ImGui::SameLine();
+            ImGui::Dummy({horizontal_offset, vertical_offset});
+	  }
 
           draw_viewport_controls(*camera_controller);
 
-          if (ImGui::IsItemHovered())
+          if (ImGui::IsWindowHovered(
+                  ImGuiHoveredFlags_RootAndChildWindows
+                  ))
             _hovering_camera_index = i;
 
           ImGui::EndTabItem();
