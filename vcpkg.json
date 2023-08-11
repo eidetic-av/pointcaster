@@ -15,7 +15,6 @@
     "cppzmq",
     "libusb",
     "imgui",
-    "physx",
     {
       "name": "opencv",
       "features": ["tbb"],
