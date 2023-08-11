@@ -2,10 +2,12 @@ cmake_minimum_required(VERSION 3.22.0)
 project(bob-pointcaster LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 17)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX TRUE)
 endif()
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -14,6 +16,13 @@ option(WITH_MQTT "Enable MQTT client support" ON)
 option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
 option(WITH_MEMORY_SANITIZER "Enable memory sanitizer on Debug configuration builds" OFF)
+
+find_program(MOLD_LINKER_FOUND mold)
+if (LINUX AND MOLD_LINKER_FOUND)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fuse-ld=mold")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fuse-ld=mold")
+endif()
+
 
 # ----- imgui lib -----
 
