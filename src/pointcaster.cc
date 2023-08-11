@@ -105,6 +105,7 @@ struct PointCasterSession {
   // GUI
   std::vector<char> imgui_layout;
   bool fullscreen = false;
+  bool hide_ui = false;
   bool show_devices_window = true;
   bool show_controllers_window = false;
   bool show_radio_window = false;
@@ -647,7 +648,12 @@ void PointCaster::draw_main_viewport() {
 	      (tab_bar->BarRect.Max.y - tab_bar->BarRect.Min.y) + 5;
 	  // TODO 5 pixels above? where's it come from
 
-	  auto rendering = camera_config.rendering;
+          if (_session.hide_ui) {
+	    tab_bar_height = 0;
+            ImGui::SetCursorPosY(0);
+          }
+
+          auto rendering = camera_config.rendering;
           auto scale_mode = rendering.scale_mode;
 	  const Vector2 frame_space{window_size.x,
 				    window_size.y - tab_bar_height};
@@ -721,7 +727,9 @@ void PointCaster::draw_main_viewport() {
             ImGui::Dummy({horizontal_offset, vertical_offset});
 	  }
 
-          draw_viewport_controls(*camera_controller);
+          if (!_session.hide_ui) {
+            draw_viewport_controls(*camera_controller);
+          }
 
           if (ImGui::IsWindowHovered(
                   ImGuiHoveredFlags_RootAndChildWindows
@@ -1030,25 +1038,26 @@ void PointCaster::drawEvent() {
   // draw_control_bar();
 
   draw_main_viewport();
-  draw_camera_control_windows();
 
-  if (_session.show_devices_window)
-    draw_devices_window();
-  if (_session.show_controllers_window)
-    draw_controllers_window();
-  if (_session.show_stats)
-    draw_stats();
-  if (_session.show_radio_window)
-    _radio->draw_imgui_window();
-  if (_session.show_snapshots_window)
-    _snapshots_context->draw_imgui_window();
-  if (_session.show_global_transform_window)
-    pc::sensors::draw_global_controls();
-
+  if (!_session.hide_ui) {
+    draw_camera_control_windows();
+    if (_session.show_devices_window)
+      draw_devices_window();
+    if (_session.show_controllers_window)
+      draw_controllers_window();
+    if (_session.show_stats)
+      draw_stats();
+    if (_session.show_radio_window)
+      _radio->draw_imgui_window();
+    if (_session.show_snapshots_window)
+      _snapshots_context->draw_imgui_window();
+    if (_session.show_global_transform_window)
+      pc::sensors::draw_global_controls();
 #if WITH_MQTT
-  if (_session.show_mqtt_window)
-    MqttClient::instance()->draw_imgui_window();
+    if (_session.show_mqtt_window)
+      MqttClient::instance()->draw_imgui_window();
 #endif
+  }
 
   _imgui_context.updateApplicationCursor(*this);
 
@@ -1152,7 +1161,7 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     _session.show_stats = !_session.show_stats;
     break;
   case KeyEvent::Key::U:
-    _session.show_stats = !_session.show_stats;
+    _session.hide_ui = !_session.hide_ui;
     break;
   default:
     if (_imgui_context.handleKeyPressEvent(event))
