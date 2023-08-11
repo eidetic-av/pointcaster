@@ -25,7 +25,7 @@
 #include <numbers>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgproc.hpp>
-#include <spdlog/spdlog.h>
+#include "../logger.h"
 #include <vector>
 
 #if WITH_MQTT
@@ -91,11 +91,11 @@ CameraController::CameraController(Magnum::Platform::Application *app,
   if (resolution[0] == 0 || resolution[1] == 0)
     _config.rendering.resolution = pc::camera::defaults::rendering_resolution;
 
-  spdlog::info("{}x{}", resolution[0], resolution[1]);
+  pc::logger->info("{}x{}", resolution[0], resolution[1]);
 
   setup_framebuffer({resolution[0], resolution[1]});
 
-  spdlog::info("Initialised Camera Controller {} with id {}", _config.name,
+  pc::logger->info("Initialised Camera Controller {} with id {}", _config.name,
                _config.id);
 }
 
@@ -174,7 +174,7 @@ GL::Texture2D &CameraController::analysis_frame() {
     // move updated buffer data into our analysis frame Texture2D...
     // we first need to create an OpenGL Buffer for it
     if (_analysis_frame_buffer_data.size() != _frame_size.x() * _frame_size.y() * 4) {
-      spdlog::warn("Analysis framebuffer size mismatch");
+      pc::logger->warn("Analysis framebuffer size mismatch");
       return *_analysis_frame;
     }
     GL::BufferImage2D buffer{
@@ -232,7 +232,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     auto &analysis_config = *config_opt;
 
     if (input_frame_size.x() <= 1 || input_frame_size.y() <= 1) {
-      spdlog::warn("Analysis received invalid frame size: {}x{}",
+      pc::logger->warn("Analysis received invalid frame size: {}x{}",
 		   input_frame_size.x(), input_frame_size.y());
       continue;
     }
@@ -442,7 +442,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
       if (triangulate.publish && !vertices.empty()) {
         if (vertices.size() < 3) {
-          spdlog::warn("Invalid triangle vertex count: {}", vertices.size());
+          pc::logger->warn("Invalid triangle vertex count: {}", vertices.size());
         } else {
 #if WITH_MQTT
 	  if (!stop_token.stop_requested()) MqttClient::instance()->publish("triangles", vertices);
@@ -602,7 +602,7 @@ Matrix4 CameraController::make_projection_matrix() {
   const auto focal_point =
       unproject(_frame_size / 2, depth_at(_frame_size / 2));
   auto camera_location = _camera_parent->transformation().translation();
-  spdlog::info("camera_location: {}, {}, {}", camera_location.x(),
+  pc::logger->info("camera_location: {}, {}, {}", camera_location.x(),
                camera_location.y(), camera_location.z());
   const auto target_distance = (camera_location - focal_point).length();
 

@@ -2,8 +2,8 @@
 #include <Corrade/Utility/Debug.h>
 #include <chrono>
 #include <imgui.h>
-#include <spdlog/spdlog.h>
 #include <numeric>
+#include "logger.h"
 
 // TODO capturing a synthesized pointcloud shouldn't be coming from the
 // sensors namespace
@@ -56,7 +56,7 @@ void Snapshots::draw_imgui_window() {
 }
 
 void Snapshots::capture() {
-  spdlog::info("Capturing frame");
+  pc::logger->info("Capturing frame");
   frames.push_back({pc::sensors::synthesized_point_cloud()});
 }
 

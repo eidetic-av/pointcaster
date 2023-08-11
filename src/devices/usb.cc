@@ -2,7 +2,7 @@
 #include "device.h"
 #include "libusb.h"
 #include <fmt/format.h>
-#include <spdlog/spdlog.h>
+#include "../logger.h"
 #include <iomanip>
 #include <mutex>
 #include <optional>
@@ -56,13 +56,13 @@ UsbMonitor::UsbMonitor() {
       &_usb_hotplug_callback_handle);
 
   if (libusb_rc_result != LIBUSB_SUCCESS) {
-    spdlog::error("USB initialisation error {}", libusb_rc_result);
+    pc::logger->error("USB initialisation error {}", libusb_rc_result);
     return;
   }
 
   // start a thread that waits for libusb events and runs them
   _usb_monitor_thread = std::jthread([&](auto stop_token) {
-    spdlog::info("Started USB monitor thread");
+    pc::logger->info("Started USB monitor thread");
     while (!stop_token.stop_requested()) {
       struct timeval usb_event_timeout = {1, 0}; // 1 second
       int result = libusb_handle_events_timeout_completed(
@@ -70,14 +70,14 @@ UsbMonitor::UsbMonitor() {
       if (result == LIBUSB_ERROR_TIMEOUT)
         continue;
       if (result < 0) {
-        spdlog::warn("libusb event error: {}", result);
+        pc::logger->warn("libusb event error: {}", result);
       }
     }
     // when run_usb_handler is false, finalise the thread
     // by freeing all libusb resources
     libusb_hotplug_deregister_callback(nullptr, _usb_hotplug_callback_handle);
     libusb_exit(nullptr);
-    spdlog::info("Closed USB monitor thread");
+    pc::logger->info("Closed USB monitor thread");
   });
 }
 

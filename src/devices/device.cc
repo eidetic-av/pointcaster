@@ -1,6 +1,6 @@
 #include "device.h"
 #include "../path.h"
-#include <spdlog/spdlog.h>
+#include "../logger.h"
 #include <imgui.h>
 #include "../gui_helpers.h"
 
@@ -27,14 +27,14 @@ pc::types::PointCloud synthesized_point_cloud() {
 
 void Device::serialize_config() const {
   // TODO error handling
-  spdlog::info("Serializing device configuration for '{}'", this->name);
+  pc::logger->info("Serializing device configuration for '{}'", this->name);
   auto id = this->_driver->id();
   std::vector<uint8_t> data;
   auto out = zpp::bits::out(data);
   auto success = out(config);
   auto data_dir = path::get_or_create_data_directory();
   auto file_path = data_dir / (id + ".pcc");
-  spdlog::info("Saving to {}", file_path.string());
+  pc::logger->info("Saving to {}", file_path.string());
   path::save_file(file_path, data);
 };
 
@@ -46,15 +46,15 @@ void Device::deserialize_config(std::vector<uint8_t> buffer) {
 void Device::deserialize_config_from_device_id(const std::string &device_id) {
   auto data_dir = path::data_directory();
   auto file_path = data_dir / (device_id + ".pcc");
-  spdlog::info("Loading from {}", file_path.string());
+  pc::logger->info("Loading from {}", file_path.string());
 
   if (!std::filesystem::exists(file_path)) {
-    spdlog::warn("Config doesn't exist");
+    pc::logger->warn("Config doesn't exist");
     return;
   }
 
   deserialize_config(path::load_file(file_path));
-  spdlog::info("Loaded");
+  pc::logger->info("Loaded");
 }
 
 void Device::deserialize_config_from_this_device() {

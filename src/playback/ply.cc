@@ -2,16 +2,16 @@
 #include <exception>
 #include <imgui.h>
 #include <nfd.h>
-#include <spdlog/spdlog.h>
+#include "logger.h"
 
 namespace pc::playback {
 
 PlySequencePlayer::PlySequencePlayer() {}
 
 void PlySequencePlayer::addSequence(const std::string &directory) try {
-  spdlog::info("Loading ply sequence from: {}", directory);
+  pc::logger->info("Loading ply sequence from: {}", directory);
 } catch (std::exception e) {
-  spdlog::error("Exception thrown attempting to load sequence.\n{}", e.what());
+  pc::logger->error("Exception thrown attempting to load sequence.\n{}", e.what());
 }
 
 void PlySequencePlayer::drawImGuiControls() {

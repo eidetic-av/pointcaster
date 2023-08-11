@@ -1,5 +1,5 @@
 #include "radio.h"
-#include <spdlog/spdlog.h>
+#include "logger.h"
 #include <chrono>
 #include <map>
 #include <numeric>
@@ -43,7 +43,7 @@ Radio::Radio() {
          auto destination = fmt::format("tcp://*:{}", config.port);
          // auto destination = fmt::format("tcp://192.168.1.10:{}", port);
          radio.bind(destination);
-	 spdlog::info("Radio broadcasting on port {}", config.port);
+	 pc::logger->info("Radio broadcasting on port {}", config.port);
 
          time_point<system_clock> start_send_time;
          time_point<system_clock> end_send_time;
@@ -107,7 +107,7 @@ Radio::Radio() {
            }
          }
 
-	 spdlog::info("Ending radio broadcast");
+	 pc::logger->info("Ending radio broadcast");
        });
  }
 

@@ -1,12 +1,12 @@
 #include "k4a_device.h"
-#include <spdlog/spdlog.h>
+#include "../../logger.h"
 #include <functional>
 #include <imgui.h>
 
 namespace pc::sensors {
 
 K4ADevice::K4ADevice() {
-  spdlog::info("Initialising K4ADevice");
+  pc::logger->info("Initialising K4ADevice");
 
   _driver = std::make_unique<K4ADriver>();
   if (attached_devices.size() == 0)
@@ -20,14 +20,14 @@ K4ADevice::K4ADevice() {
     _contrast = driver->get_contrast();
     _gain = driver->get_gain();
   } catch (::k4a::error &e) {
-    spdlog::error(e.what());
+    pc::logger->error(e.what());
   }
 
   // load last saved configuration on startup
   deserialize_config_from_this_device();
 }
 
-K4ADevice::~K4ADevice() { spdlog::info("Closing {}", name); }
+K4ADevice::~K4ADevice() { pc::logger->info("Closing {}", name); }
 
 std::string K4ADevice::get_broadcast_id() { return _driver->id(); }
 
@@ -38,7 +38,7 @@ void K4ADevice::update_device_control(int *target, int value,
       set_func(value);
       *target = value;
     } catch (::k4a::error e) {
-      spdlog::error(e.what());
+      pc::logger->error(e.what());
     }
   }
 }
