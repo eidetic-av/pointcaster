@@ -1148,6 +1148,9 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   case KeyEvent::Key::F:
     set_full_screen(!_full_screen);
     break;
+  case KeyEvent::Key::G:
+    _session.hide_ui = !_session.hide_ui;
+    break;
   case KeyEvent::Key::Q:
     save_and_quit();
     break;
@@ -1159,9 +1162,6 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     break;
   case KeyEvent::Key::T:
     _session.show_stats = !_session.show_stats;
-    break;
-  case KeyEvent::Key::U:
-    _session.hide_ui = !_session.hide_ui;
     break;
   default:
     if (_imgui_context.handleKeyPressEvent(event))
