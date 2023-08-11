@@ -815,18 +815,10 @@ void CameraController::draw_imgui_controls() {
         ImGui::Checkbox("Enabled", &frame_analysis.enabled);
         if (frame_analysis.enabled) {
 
-            ImGui::TextDisabled("Resolution");
-            ImGui::InputInt("width", &frame_analysis.resolution[0]);
-            ImGui::SameLine();
-            ImGui::InputInt("height", &frame_analysis.resolution[1]);
-            ImGui::Spacing();
-
-            ImGui::TextDisabled("Binary threshold");
-            draw_slider<int>("min", &frame_analysis.binary_threshold[0], 1, 255,
-                             1);
-            draw_slider<int>("max", &frame_analysis.binary_threshold[1], 1, 255,
-                             255);
-            ImGui::Spacing();
+	    vector_table("Resolution", frame_analysis.resolution, 2, 3840,
+			 {480, 270});
+            vector_table("Binary threshold", frame_analysis.binary_threshold, 1,
+                         255, {50, 255}, {}, {"min", "max"});
 
             draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
 

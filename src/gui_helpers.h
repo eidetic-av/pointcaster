@@ -65,8 +65,9 @@ void draw_slider(std::string_view label_text, T *value, T min, T max,
 
 template <typename T, std::size_t N>
 bool vector_table(const std::string &label, std::array<T, N> &vec, T min, T max,
-		  std::array<T, N> reset_values,
-		  std::array<bool, N> disabled = std::array<bool, N>{false}) {
+                  std::array<T, N> reset_values,
+                  std::array<bool, N> disabled = std::array<bool, N>{false},
+                  std::array<std::string, N> labels = std::array<std::string, N>{""}) {
   static_assert(N >= 2 && N <= 4, "Vector array must have 2, 3 or 4 elements");
 
   constexpr auto outer_horizontal_padding = 4;
@@ -102,6 +103,8 @@ bool vector_table(const std::string &label, std::array<T, N> &vec, T min, T max,
 
   auto original_vec = vec;
 
+  auto use_labels = !labels.at(0).empty();
+
   for (std::size_t i = 0; i < N; ++i) {
     if (disabled[i]) ImGui::BeginDisabled();
     ImGui::TableNextRow();
@@ -109,7 +112,8 @@ bool vector_table(const std::string &label, std::array<T, N> &vec, T min, T max,
     ImGui::Dummy({0, label_padding_top});
     ImGui::Dummy({label_padding_left, 0});
     ImGui::SameLine(0, 0);
-    ImGui::Text(dimensions[i]);
+    if (use_labels) ImGui::Text(labels[i].c_str());
+    else ImGui::Text(dimensions[i]);
     ImGui::SameLine(0, 0);
     ImGui::Dummy({label_padding_right, 0});
     ImGui::TableSetColumnIndex(1);
