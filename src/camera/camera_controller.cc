@@ -1,5 +1,6 @@
 #include "camera_controller.h"
 #include "../gui_helpers.h"
+#include "../logger.h"
 #include "../math.h"
 #include "../uuid.h"
 #include "camera_config.h"
@@ -25,7 +26,6 @@
 #include <numbers>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgproc.hpp>
-#include "../logger.h"
 #include <vector>
 
 #if WITH_MQTT
@@ -96,7 +96,7 @@ CameraController::CameraController(Magnum::Platform::Application *app,
   setup_framebuffer({resolution[0], resolution[1]});
 
   pc::logger->info("Initialised Camera Controller {} with id {}", _config.name,
-               _config.id);
+                   _config.id);
 }
 
 CameraController::~CameraController() {
@@ -111,11 +111,13 @@ void CameraController::setup_framebuffer(Vector2i frame_size) {
       static_cast<int>(frame_size.y() / _app->dpiScaling().y())};
 
   auto aspect_ratio = frame_size.x() / static_cast<float>(frame_size.y());
-  if (_config.rendering.scale_mode == ScaleMode::Span && viewport_size.has_value()) {
+  if (_config.rendering.scale_mode == ScaleMode::Span &&
+      viewport_size.has_value()) {
     // automatically set frame height based on size of viewport
     aspect_ratio = viewport_size->x() / viewport_size->y();
     scaled_size.y() = scaled_size.x() / aspect_ratio;
-    _config.rendering.resolution[1] = _config.rendering.resolution[0] / aspect_ratio;
+    _config.rendering.resolution[1] =
+        _config.rendering.resolution[0] / aspect_ratio;
   }
 
   if (scaled_size == _frame_size) {
@@ -173,13 +175,14 @@ GL::Texture2D &CameraController::analysis_frame() {
     std::lock_guard lock_buffer(_analysis_frame_buffer_data_mutex);
     // move updated buffer data into our analysis frame Texture2D...
     // we first need to create an OpenGL Buffer for it
-    if (_analysis_frame_buffer_data.size() != _frame_size.x() * _frame_size.y() * 4) {
+    if (_analysis_frame_buffer_data.size() !=
+        _frame_size.x() * _frame_size.y() * 4) {
       pc::logger->warn("Analysis framebuffer size mismatch");
       return *_analysis_frame;
     }
     GL::BufferImage2D buffer{
-      Magnum::GL::PixelFormat::RGBA, Magnum::GL::PixelType::UnsignedByte,
-      _frame_size, _analysis_frame_buffer_data, GL::BufferUsage::StaticDraw};
+        Magnum::GL::PixelFormat::RGBA, Magnum::GL::PixelType::UnsignedByte,
+        _frame_size, _analysis_frame_buffer_data, GL::BufferUsage::StaticDraw};
     // then we can set the data
     _analysis_frame->setSubImage(0, {}, buffer);
   }
@@ -233,7 +236,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
     if (input_frame_size.x() <= 1 || input_frame_size.y() <= 1) {
       pc::logger->warn("Analysis received invalid frame size: {}x{}",
-		   input_frame_size.x(), input_frame_size.y());
+                       input_frame_size.x(), input_frame_size.y());
       continue;
     }
 
@@ -355,7 +358,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
     if (contours.publish) {
 #if WITH_MQTT
       if (!stop_token.stop_requested())
-	MqttClient::instance()->publish("contours", contour_list_std);
+        MqttClient::instance()->publish("contours", contour_list_std);
 #endif
     }
 
@@ -442,10 +445,12 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
       if (triangulate.publish && !vertices.empty()) {
         if (vertices.size() < 3) {
-          pc::logger->warn("Invalid triangle vertex count: {}", vertices.size());
+          pc::logger->warn("Invalid triangle vertex count: {}",
+                           vertices.size());
         } else {
 #if WITH_MQTT
-	  if (!stop_token.stop_requested()) MqttClient::instance()->publish("triangles", vertices);
+          if (!stop_token.stop_requested())
+            MqttClient::instance()->publish("triangles", vertices);
 #endif
         }
       }
@@ -550,13 +555,14 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
       if (flow_field.size() > 0 && optical_flow.publish) {
 #if WITH_MQTT
-	if (!stop_token.stop_requested())
-	  MqttClient::instance()->publish("flow", flow_field_flattened);
+        if (!stop_token.stop_requested())
+          MqttClient::instance()->publish("flow", flow_field_flattened);
 #endif
       }
     }
 
-    if (stop_token.stop_requested()) break;
+    if (stop_token.stop_requested())
+      break;
 
     // copy the resulting cv::Mat data into our buffer data container
     auto element_count = output_mat.total() * output_mat.channels();
@@ -603,7 +609,7 @@ Matrix4 CameraController::make_projection_matrix() {
       unproject(_frame_size / 2, depth_at(_frame_size / 2));
   auto camera_location = _camera_parent->transformation().translation();
   pc::logger->info("camera_location: {}, {}, {}", camera_location.x(),
-               camera_location.y(), camera_location.z());
+                   camera_location.y(), camera_location.z());
   const auto target_distance = (camera_location - focal_point).length();
 
   if (!_is_dz_started) {
@@ -770,85 +776,93 @@ Float CameraController::depth_at(const Vector2i &window_position) {
 
 void CameraController::draw_imgui_controls() {
 
-    using pc::gui::draw_slider;
-    using pc::gui::vector_table;
+  using pc::gui::draw_slider;
+  using pc::gui::vector_table;
 
-    if (ImGui::CollapsingHeader("Transform", _config.transform_open)) {
-        auto &translate = _config.translation;
-        if (vector_table("Translation", translate, -10.f, 10.f, 0.0f)) {
-            set_translation(Position{translate[0], translate[1], translate[2]});
-        }
-	auto &rotate = _config.rotation;
-	if (vector_table("Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
-	    set_rotation(
-		Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
-	}
+  ImGui::SetNextItemOpen(_config.transform_open);
+  if (ImGui::CollapsingHeader("Transform", _config.transform_open)) {
+    _config.transform_open = true;
+    auto &translate = _config.translation;
+    if (vector_table("Translation", translate, -10.f, 10.f, 0.0f)) {
+      set_translation(Position{translate[0], translate[1], translate[2]});
+    }
+    auto &rotate = _config.rotation;
+    if (vector_table("Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
+      set_rotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
+    }
+  } else {
+    _config.transform_open = false;
+  }
+
+  ImGui::SetNextItemOpen(_config.rendering_open);
+  if (ImGui::CollapsingHeader("Rendering")) {
+    _config.rendering_open = true;
+    auto &rendering = _config.rendering;
+
+    auto current_scale_mode = rendering.scale_mode;
+    if (current_scale_mode == ScaleMode::Letterbox) {
+      vector_table("Resolution", rendering.resolution, 2, 7680,
+                   {pc::camera::defaults::rendering_resolution[0],
+                    pc::camera::defaults::rendering_resolution[1]});
+    } else if (current_scale_mode == ScaleMode::Span) {
+      // disable setting y resolution manually in span mode,
+      // it's inferred from the x resolution and window size
+      vector_table("Resolution", rendering.resolution, 2, 7680,
+                   {pc::camera::defaults::rendering_resolution[0],
+                    pc::camera::defaults::rendering_resolution[1]},
+                   {false, true});
     }
 
-    if (ImGui::CollapsingHeader("Rendering", _config.rendering_open)) {
-        auto &rendering = _config.rendering;
-
-	auto current_scale_mode = rendering.scale_mode;
-        if (current_scale_mode == ScaleMode::Letterbox) {
-	    vector_table("Resolution", rendering.resolution, 2, 7680,
-			 {pc::camera::defaults::rendering_resolution[0],
-			  pc::camera::defaults::rendering_resolution[1]});
-        } else if (current_scale_mode == ScaleMode::Span) {
-            // disable setting y resolution manually in span mode,
-	    // it's inferred from the x resolution and window size
-	    vector_table("Resolution", rendering.resolution, 2, 7680,
-			 {pc::camera::defaults::rendering_resolution[0],
-			  pc::camera::defaults::rendering_resolution[1]},
-			 {false, true});
-        }
-
-        auto scale_mode_i = static_cast<int>(current_scale_mode);
-	const char *options[] = {"Span", "Letterbox"};
-	ImGui::Combo("Scale mode", &scale_mode_i, options,
-		     static_cast<int>(ScaleMode::Count));
-	rendering.scale_mode = static_cast<ScaleMode>(scale_mode_i);
-        if (rendering.scale_mode != current_scale_mode) {
-	    const auto aspect_ratio_policy =
-		rendering.scale_mode == ScaleMode::Letterbox
-		    ? SceneGraph::AspectRatioPolicy::NotPreserved
-		    : SceneGraph::AspectRatioPolicy::Extend;
-	    _camera->setAspectRatioPolicy(aspect_ratio_policy);
-        }
-
-        ImGui::Spacing();
-
-	ImGui::Checkbox("ground grid", &rendering.ground_grid);
-
-        draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
-                           0.0015f);
+    auto scale_mode_i = static_cast<int>(current_scale_mode);
+    const char *options[] = {"Span", "Letterbox"};
+    ImGui::Combo("Scale mode", &scale_mode_i, options,
+                 static_cast<int>(ScaleMode::Count));
+    rendering.scale_mode = static_cast<ScaleMode>(scale_mode_i);
+    if (rendering.scale_mode != current_scale_mode) {
+      const auto aspect_ratio_policy =
+          rendering.scale_mode == ScaleMode::Letterbox
+              ? SceneGraph::AspectRatioPolicy::NotPreserved
+              : SceneGraph::AspectRatioPolicy::Extend;
+      _camera->setAspectRatioPolicy(aspect_ratio_policy);
     }
 
-    if (ImGui::CollapsingHeader("Analysis", _config.analysis_open)) {
-        auto &frame_analysis = _config.frame_analysis;
-        ImGui::Checkbox("Enabled", &frame_analysis.enabled);
-        if (frame_analysis.enabled) {
+    ImGui::Spacing();
 
-	    vector_table("Resolution", frame_analysis.resolution, 2, 3840,
-			 {pc::camera::defaults::analysis_resolution[0],
-			  pc::camera::defaults::analysis_resolution[1]},
-			 {}, {"width", "height"});
-            vector_table("Binary threshold", frame_analysis.binary_threshold, 1,
-                         255, {50, 255}, {}, {"min", "max"});
+    ImGui::Checkbox("ground grid", &rendering.ground_grid);
 
-            draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
+    draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
+                       0.0015f);
+  } else {
+    _config.rendering_open = false;
+  }
 
-            auto &canny = frame_analysis.canny;
-            ImGui::Checkbox("Canny edge detection", &canny.enabled);
-            if (canny.enabled) {
+  ImGui::SetNextItemOpen(_config.analysis_open);
+  if (ImGui::CollapsingHeader("Analysis", _config.analysis_open)) {
+    _config.analysis_open = true;
+    auto &frame_analysis = _config.frame_analysis;
+    ImGui::Checkbox("Enabled", &frame_analysis.enabled);
+    if (frame_analysis.enabled) {
+
+      vector_table("Resolution", frame_analysis.resolution, 2, 3840,
+                   {pc::camera::defaults::analysis_resolution[0],
+                    pc::camera::defaults::analysis_resolution[1]},
+                   {}, {"width", "height"});
+      vector_table("Binary threshold", frame_analysis.binary_threshold, 1, 255,
+                   {50, 255}, {}, {"min", "max"});
+
+      draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
+
+      auto &canny = frame_analysis.canny;
+      ImGui::Checkbox("Canny edge detection", &canny.enabled);
+      if (canny.enabled) {
         draw_slider<int>("canny min", &canny.min_threshold, 0, 255, 100);
         draw_slider<int>("canny max", &canny.max_threshold, 0, 255, 255);
         int aperture_in = (canny.aperture_size - 1) / 2;
         draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
         canny.aperture_size = aperture_in * 2 + 1;
-            }
+      }
 
-            if (gui::begin_tree_node("Contours",
-                                     frame_analysis.contours_open)) {
+      if (gui::begin_tree_node("Contours", frame_analysis.contours_open)) {
         auto &contours = frame_analysis.contours;
 
         ImGui::Checkbox("Draw on viewport", &contours.draw);
@@ -872,10 +886,10 @@ void CameraController::draw_imgui_controls() {
                              0.0f, 0.02f, 0.0f);
         }
         ImGui::TreePop();
-            }
+      }
 
-            if (gui::begin_tree_node("Optical Flow",
-                                     frame_analysis.optical_flow_open)) {
+      if (gui::begin_tree_node("Optical Flow",
+                               frame_analysis.optical_flow_open)) {
         auto &optical_flow = frame_analysis.optical_flow;
         ImGui::Checkbox("Enabled", &optical_flow.enabled);
         ImGui::Checkbox("Draw", &optical_flow.draw);
@@ -897,9 +911,11 @@ void CameraController::draw_imgui_controls() {
                            0.0f, 0.8f, 0.8f);
 
         ImGui::TreePop();
-            }
-        }
+      }
     }
+  } else {
+    _config.analysis_open = false;
+  }
 }
 
 } // namespace pc::camera
