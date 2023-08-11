@@ -26,7 +26,7 @@
 #include "path.h"
 #include "pointer.h"
 #include "structs.h"
-#include <spdlog/spdlog.h>
+#include "logger.h"
 
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/Magnum.h>
@@ -106,6 +106,7 @@ struct PointCasterSession {
   std::vector<char> imgui_layout;
   bool fullscreen = false;
   bool hide_ui = false;
+  bool show_log = false;
   bool show_devices_window = true;
   bool show_controllers_window = false;
   bool show_radio_window = false;
@@ -154,6 +155,9 @@ protected:
 
   ImGuiIntegration::Context _imgui_context{NoCreate};
 
+  ImFont *_font;
+  ImFont *_mono_font;
+
   void save_session();
   void save_session(std::filesystem::path file_path);
   void load_session(std::filesystem::path file_path);
@@ -170,6 +174,7 @@ protected:
   void draw_camera_control_windows();
   void draw_devices_window();
   void draw_controllers_window();
+  void draw_onscreen_log();
 
   Vector2i _restore_window_size;
   Vector2i _restore_window_position;
@@ -198,15 +203,15 @@ protected:
 
 PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
-  spdlog::info("This is pointcaster");
+  pc::logger->info("This is pointcaster");
 
   // Get OS resolution
   SDL_DisplayMode dm;
   if (SDL_GetDesktopDisplayMode(0, &dm) != 0)
-    spdlog::warn("Failed to get display resolution using SDL: {}", SDL_GetError());
+    pc::logger->warn("Failed to get display resolution using SDL: {}", SDL_GetError());
   else {
     _display_resolution = {dm.w, dm.h};
-    spdlog::info("SDL2 returned display resolution: {}x{}", dm.w, dm.h);
+    pc::logger->info("SDL2 returned display resolution: {}x{}", dm.w, dm.h);
   }
 
   // Set up the window
@@ -254,9 +259,17 @@ PointCaster::PointCaster(const Arguments &args)
   ImFontConfig font_config;
   font_config.FontDataOwnedByAtlas = false;
   const auto font_size = 14.0f;
-  ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+  _font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(font.data()), font.size(),
-      14.0f * framebufferSize().x() / size.x(), &font_config);
+      font_size * framebufferSize().x() / size.x(), &font_config);
+
+  auto mono_font = rs.getRaw("IosevkaArtisan");
+  ImFontConfig mono_font_config;
+  mono_font_config.FontDataOwnedByAtlas = false;
+  const auto mono_font_size = 16.0f;
+  _mono_font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+      const_cast<char *>(mono_font.data()), mono_font.size(),
+      mono_font_size * framebufferSize().x() / size.x(), &mono_font_config);
 
   auto font_icons = rs.getRaw("FontAwesomeSolid");
   static const ImWchar icons_ranges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
@@ -323,12 +336,12 @@ PointCaster::PointCaster(const Arguments &args)
   }
 
   if (last_modified_session_file.empty()) {
-    spdlog::info("No previous session file found. Creating new session.");
+    pc::logger->info("No previous session file found. Creating new session.");
     _session = {.id = pc::uuid::word()};
     auto file_path = data_dir / (_session.id + ".pcs");
     save_session(file_path);
   } else {
-    spdlog::info("Found previous session file");
+    pc::logger->info("Found previous session file");
     load_session(last_modified_session_file);
   }
 
@@ -382,7 +395,7 @@ PointCaster::PointCaster(const Arguments &args)
   // create a callback for the USB handler thread
   // that will add new devices to our main sensor list
   registerUsbAttachCallback([&](auto attached_device) {
-    spdlog::debug("attached usb callback");
+    pc::logger->debug("attached usb callback");
     if (!_session.auto_connect_sensors)
       return;
 
@@ -399,7 +412,7 @@ PointCaster::PointCaster(const Arguments &args)
   });
   registerUsbDetachCallback([&](auto detached_device) {
     // std::erase(*devices, detached_device);
-    spdlog::debug("detached usb callback");
+    pc::logger->debug("detached usb callback");
   });
   // init libusb and any attached devices
   _usb_monitor = std::make_unique<UsbMonitor>();
@@ -426,7 +439,7 @@ void PointCaster::save_session() {
 }
 
 void PointCaster::save_session(std::filesystem::path file_path) {
-  spdlog::info("Saving session to {}", file_path.string());
+  pc::logger->info("Saving session to {}", file_path.string());
 
   // save imgui layout
   std::size_t imgui_layout_size;
@@ -454,7 +467,7 @@ void PointCaster::save_session(std::filesystem::path file_path) {
 }
 
 void PointCaster::load_session(std::filesystem::path file_path) {
-  spdlog::info("Loading state from {}", file_path.string());
+  pc::logger->info("Loading state from {}", file_path.string());
   auto buffer = path::load_file(file_path);
   auto in = zpp::bits::in(buffer);
   auto success = in(_session);
@@ -470,7 +483,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     _camera_controllers.push_back(std::move(saved_camera));
   }
 
-  spdlog::info("Loaded session '{}'", file_path.filename().string());
+  pc::logger->info("Loaded session '{}'", file_path.filename().string());
 }
 
 void PointCaster::render_cameras() {
@@ -601,6 +614,73 @@ void PointCaster::draw_control_bar() {
   // }
 }
 
+void PointCaster::draw_onscreen_log() {
+  // if draw log
+  ImVec2 log_window_size{400, 150};
+  const auto viewport_size = ImGui::GetWindowSize();
+
+  using namespace std::chrono_literals;
+  auto latest_messages = pc::logger_lines(10, 10s);
+
+  if (latest_messages.size() > 0) {
+    ImGui::SetNextWindowPos({viewport_size.x - log_window_size.x,
+			     viewport_size.y - log_window_size.y});
+    ImGui::SetNextWindowSize({log_window_size.x, log_window_size.y});
+    ImGui::SetNextWindowBgAlpha(0.5f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushFont(_mono_font);
+    constexpr auto log_window_flags =
+	ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoFocusOnAppearing |
+	ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking;
+    ImGui::Begin("log", nullptr, log_window_flags);
+    ImGui::PushTextWrapPos(log_window_size.x);
+    for (auto log_entry : latest_messages) {
+      ImGui::Spacing();
+
+      auto [log_level, message] = log_entry;
+
+      switch (log_level) {
+      case spdlog::level::info:
+	ImGui::PushStyleColor(ImGuiCol_Text,
+			      ImVec4(1.0f, 1.0f, 1.0f, 1.0f)); // Green
+	ImGui::Text(" [info]");
+	ImGui::SameLine();
+	break;
+      case spdlog::level::warn:
+	ImGui::PushStyleColor(ImGuiCol_Text,
+			      ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow
+	ImGui::Text(" [warn]");
+	ImGui::SameLine();
+	break;
+      case spdlog::level::err:
+	ImGui::PushStyleColor(ImGuiCol_Text,
+			      ImVec4(1.0f, 0.0f, 0.0f, 1.0f)); // Red
+	ImGui::Text("[error]");
+	ImGui::SameLine();
+	break;
+      case spdlog::level::debug:
+	ImGui::PushStyleColor(ImGuiCol_Text,
+			      ImVec4(0.0f, 1.0f, 0.0f, 1.0f)); // Red
+	ImGui::Text("[debug]");
+	ImGui::SameLine();
+	break;
+      case spdlog::level::critical:
+	ImGui::PushStyleColor(ImGuiCol_Text,
+			      ImVec4(1.0f, 0.0f, 1.0f, 1.0f)); // Red
+	ImGui::Text(" [crit]");
+	ImGui::SameLine();
+	break;
+      }
+      ImGui::TextUnformatted(message.c_str());
+      ImGui::PopStyleColor();
+      ImGui::SetScrollHereY();
+    }
+    ImGui::End();
+    ImGui::PopFont();
+    ImGui::PopStyleVar();
+  }
+}
+
 void PointCaster::draw_main_viewport() {
 
   _hovering_camera_index = -1;
@@ -635,7 +715,7 @@ void PointCaster::draw_main_viewport() {
         auto new_camera = std::make_unique<CameraController>(this, _scene.get());
         _camera_controllers.push_back(std::move(new_camera));
         new_camera_index = _camera_controllers.size() - 1;
-        spdlog::info("new camera: {}", new_camera_index);
+        pc::logger->info("new camera: {}", new_camera_index);
       }
 
       for (int i = 0; i < _camera_controllers.size(); i++) {
@@ -739,6 +819,10 @@ void PointCaster::draw_main_viewport() {
             draw_viewport_controls(*camera_controller);
           }
 
+          if (!_session.show_log) {
+	    draw_onscreen_log();
+          }
+
           if (ImGui::IsWindowHovered(
                   ImGuiHoveredFlags_RootAndChildWindows
                   ))
@@ -814,7 +898,7 @@ void PointCaster::draw_camera_control_windows() {
   for (const auto &camera_controller : _camera_controllers) {
     if (!camera_controller->config().show_window)
       continue;
-    const auto frame_size = 
+    ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
     ImGui::Begin(camera_controller->name().c_str());
     camera_controller->draw_imgui_controls();
     ImGui::End();
@@ -823,6 +907,7 @@ void PointCaster::draw_camera_control_windows() {
 
 void PointCaster::draw_devices_window() {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Devices", nullptr);
 
@@ -921,7 +1006,7 @@ void PointCaster::draw_stats() {
 //  std::thread midi_startup([&]() {
 //    midi_in midi;
 //    auto port_count = midi.get_port_count();
-//    spdlog::info("Detected {} MIDI ports", port_count);
+//    pc::logger->info("Detected {} MIDI ports", port_count);
 //    midi.open_port(0);
 //    midi.set_callback([&](const message &message) {
 //      if (gui::midi_learn_mode) {
@@ -973,6 +1058,7 @@ void PointCaster::draw_stats() {
 
 void PointCaster::draw_controllers_window() {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Controllers", nullptr);
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
@@ -1090,15 +1176,15 @@ void PointCaster::drawEvent() {
 
   auto error = GL::Renderer::error();
   if (error == GL::Renderer::Error::InvalidFramebufferOperation)
-    spdlog::info("InvalidFramebufferOperation");
+    pc::logger->warn("InvalidFramebufferOperation");
   if (error == GL::Renderer::Error::InvalidOperation)
-    spdlog::info("InvalidOperation");
+    pc::logger->warn("InvalidOperation");
   if (error == GL::Renderer::Error::InvalidValue)
-    spdlog::info("InvalidValue");
+    pc::logger->warn("InvalidValue");
   if (error == GL::Renderer::Error::StackOverflow)
-    spdlog::info("StackOverflow");
+    pc::logger->warn("StackOverflow");
   if (error == GL::Renderer::Error::StackUnderflow)
-    spdlog::info("StackUnderflow");
+    pc::logger->warn("StackUnderflow");
 
   // TODO the timeline should not be linked to GUI drawing
   // so this needs to be run elsewhere, but still needs to
@@ -1115,7 +1201,7 @@ void PointCaster::drawEvent() {
 
 void PointCaster::set_full_screen(bool full_screen) {
   if (full_screen && _display_resolution.has_value()) {
-    spdlog::info("going full screen");
+    pc::logger->info("going full screen");
     if (!_full_screen) {
       _restore_window_size = windowSize() / dpiScaling();
       SDL_GetWindowPosition(window(), &_restore_window_position.x(), &_restore_window_position.y());
@@ -1124,7 +1210,7 @@ void PointCaster::set_full_screen(bool full_screen) {
     SDL_SetWindowPosition(window(), 0, 0);
     _full_screen = true;
   } else if (!full_screen) {
-    spdlog::info("restoring out");
+    pc::logger->info("restoring out");
     setWindowSize(_restore_window_size);
     SDL_SetWindowPosition(window(), _restore_window_position.x(), _restore_window_position.y());
     _full_screen = false;

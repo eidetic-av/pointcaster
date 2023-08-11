@@ -11,6 +11,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_MQTT "Enable MQTT client support" ON)
+option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
+option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
+option(WITH_MEMORY_SANITIZER "Enable memory sanitizer on Debug configuration builds" OFF)
 
 # ----- imgui lib -----
 
@@ -157,10 +160,15 @@ target_include_directories(pointcaster PRIVATE
 target_link_libraries(pointcaster PRIVATE 
     ${LINK_LIBS} ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
 
-if (LINUX)
-  # enable thread sanitizer for debug builds
-  # target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
-  # target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
+if (WITH_THREAD_SANITIZER)
+  target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
+  target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
+elseif(WITH_ADDRESS_SANITIZER)
+  target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
+  target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
+elseif(WITH_MEMORY_SANITIZER)
+  target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=memory>")
+  target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=memory>")
 endif()
 
 # ----- Post-build actions -----

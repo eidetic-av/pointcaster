@@ -173,9 +173,13 @@ GL::Texture2D &CameraController::analysis_frame() {
     std::lock_guard lock_buffer(_analysis_frame_buffer_data_mutex);
     // move updated buffer data into our analysis frame Texture2D...
     // we first need to create an OpenGL Buffer for it
+    if (_analysis_frame_buffer_data.size() != _frame_size.x() * _frame_size.y() * 4) {
+      spdlog::warn("Analysis framebuffer size mismatch");
+      return *_analysis_frame;
+    }
     GL::BufferImage2D buffer{
-        Magnum::GL::PixelFormat::RGBA, Magnum::GL::PixelType::UnsignedByte,
-        _frame_size, _analysis_frame_buffer_data, GL::BufferUsage::StaticDraw};
+      Magnum::GL::PixelFormat::RGBA, Magnum::GL::PixelType::UnsignedByte,
+      _frame_size, _analysis_frame_buffer_data, GL::BufferUsage::StaticDraw};
     // then we can set the data
     _analysis_frame->setSubImage(0, {}, buffer);
   }
