@@ -1128,27 +1128,30 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 
 void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
-  case KeyEvent::Key::Q:
-    save_and_quit();
-    break;
-  case KeyEvent::Key::D:
-    _session.show_devices_window = !_session.show_devices_window;
-    break;
-  case KeyEvent::Key::S:
-    save_session();
-    break;
   case KeyEvent::Key::C:
     _session.show_controllers_window = !_session.show_controllers_window;
     if (!_session.show_controllers_window)
       gui::midi_learn_mode = false;
     break;
+  case KeyEvent::Key::D:
+    _session.show_devices_window = !_session.show_devices_window;
+    break;
   case KeyEvent::Key::F:
     set_full_screen(!_full_screen);
+    break;
+  case KeyEvent::Key::Q:
+    save_and_quit();
     break;
   case KeyEvent::Key::R:
     _session.show_radio_window = !_session.show_radio_window;
     break;
+  case KeyEvent::Key::S:
+    save_session();
+    break;
   case KeyEvent::Key::T:
+    _session.show_stats = !_session.show_stats;
+    break;
+  case KeyEvent::Key::U:
     _session.show_stats = !_session.show_stats;
     break;
   default:
