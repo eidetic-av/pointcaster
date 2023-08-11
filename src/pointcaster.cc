@@ -170,6 +170,11 @@ protected:
   void draw_devices_window();
   void draw_controllers_window();
 
+  Vector2i _restore_window_size;
+  Vector2i _restore_window_position;
+  bool _full_screen;
+  void set_full_screen(bool full_screen);
+
   void save_and_quit();
 
   // void initControllers();
@@ -1091,6 +1096,24 @@ void PointCaster::drawEvent() {
 
 }
 
+void PointCaster::set_full_screen(bool full_screen) {
+  if (full_screen && _display_resolution.has_value()) {
+    spdlog::info("going full screen");
+    if (!_full_screen) {
+      _restore_window_size = windowSize() / dpiScaling();
+      SDL_GetWindowPosition(window(), &_restore_window_position.x(), &_restore_window_position.y());
+    }
+    setWindowSize(_display_resolution.value() / dpiScaling());
+    SDL_SetWindowPosition(window(), 0, 0);
+    _full_screen = true;
+  } else if (!full_screen) {
+    spdlog::info("restoring out");
+    setWindowSize(_restore_window_size);
+    SDL_SetWindowPosition(window(), _restore_window_position.x(), _restore_window_position.y());
+    _full_screen = false;
+  }
+}
+
 void PointCaster::viewportEvent(ViewportEvent &event) {
   // resize main framebuffer
   GL::defaultFramebuffer.setViewport({{}, event.framebufferSize()});
@@ -1120,11 +1143,7 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
       gui::midi_learn_mode = false;
     break;
   case KeyEvent::Key::F:
-    if (_display_resolution.has_value())
-      spdlog::info("Fullscreening to {}x{}, dpi {}x{}",
-                   _display_resolution->x(), _display_resolution->y(),
-		   dpiScaling().x(), dpiScaling().y());
-    setWindowSize(_display_resolution.value() / dpiScaling());
+    set_full_screen(!_full_screen);
     break;
   case KeyEvent::Key::R:
     _session.show_radio_window = !_session.show_radio_window;
