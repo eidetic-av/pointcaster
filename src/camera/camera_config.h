@@ -23,6 +23,9 @@ static const std::array<float, 3> translation{
     distance *std::cos(float(Rad_f(rotation[0])))};
 static constexpr float fov = 45;
 
+static constexpr std::array<int, 2> rendering_resolution{3840, 2160};
+static constexpr std::array<int, 2> analysis_resolution{480, 270};
+
 namespace magnum {
 
 static constexpr Euler rotation{Deg_f{defaults::rotation[0]},
@@ -80,7 +83,7 @@ struct OpticalFlowConfiguration {
 
 struct FrameAnalysisConfiguration {
   bool enabled;
-  std::array<int, 2> resolution = {480, 270};
+  std::array<int, 2> resolution = defaults::rendering_resolution;
   std::array<int, 2> binary_threshold = {
       50, 255};
   bool greyscale_conversion = true;

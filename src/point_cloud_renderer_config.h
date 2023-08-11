@@ -13,7 +13,7 @@ enum class LetterboxMode {
 };
 
 struct PointCloudRendererConfiguration {
-  std::array<int, 2> resolution;
+  std::array<int, 2> resolution{3840, 2160};
   ScaleMode scale_mode = ScaleMode::Span;
   LetterboxMode letterbox_mode = LetterboxMode::Aspect16x9;
   float point_size = 0.0015f;

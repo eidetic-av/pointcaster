@@ -74,7 +74,6 @@ CameraController::CameraController(Magnum::Platform::Application *app,
                         Deg_f(_config.rotation[2])};
   auto translation = Position{_config.translation[0], _config.translation[1],
                               _config.translation[2]};
-  auto fov = Deg_f(_config.fov);
 
   set_rotation(rotation, true);
   set_translation(translation);
@@ -86,7 +85,15 @@ CameraController::CameraController(Magnum::Platform::Application *app,
 
   auto resolution = _config.rendering.resolution;
   _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
-      Deg_f(_config.fov), resolution[0] / resolution[1], 0.001f, 200.0f));
+      Deg_f(_config.fov), static_cast<float>(resolution[0]) / resolution[1],
+      0.001f, 200.0f));
+
+  if (resolution[0] == 0 || resolution[1] == 0)
+    _config.rendering.resolution = pc::camera::defaults::rendering_resolution;
+
+  spdlog::info("{}x{}", resolution[0], resolution[1]);
+
+  setup_framebuffer({resolution[0], resolution[1]});
 
   spdlog::info("Initialised Camera Controller {} with id {}", _config.name,
                _config.id);
@@ -774,15 +781,18 @@ void CameraController::draw_imgui_controls() {
         auto &rendering = _config.rendering;
 
 	auto current_scale_mode = rendering.scale_mode;
-	if (current_scale_mode == ScaleMode::Letterbox) {
+        if (current_scale_mode == ScaleMode::Letterbox) {
 	    vector_table("Resolution", rendering.resolution, 2, 7680,
-			 {1920, 1080});
-	} else if (current_scale_mode == ScaleMode::Span) {
-	    // disable setting y resolution manually in span mode,
+			 {pc::camera::defaults::rendering_resolution[0],
+			  pc::camera::defaults::rendering_resolution[1]});
+        } else if (current_scale_mode == ScaleMode::Span) {
+            // disable setting y resolution manually in span mode,
 	    // it's inferred from the x resolution and window size
 	    vector_table("Resolution", rendering.resolution, 2, 7680,
-			 {1920, 1080}, {false, true});
-	}
+			 {pc::camera::defaults::rendering_resolution[0],
+			  pc::camera::defaults::rendering_resolution[1]},
+			 {false, true});
+        }
 
         auto scale_mode_i = static_cast<int>(current_scale_mode);
 	const char *options[] = {"Span", "Letterbox"};
@@ -811,7 +821,9 @@ void CameraController::draw_imgui_controls() {
         if (frame_analysis.enabled) {
 
 	    vector_table("Resolution", frame_analysis.resolution, 2, 3840,
-			 {480, 270}, {}, {"width", "height"});
+			 {pc::camera::defaults::analysis_resolution[0],
+			  pc::camera::defaults::analysis_resolution[1]},
+			 {}, {"width", "height"});
             vector_table("Binary threshold", frame_analysis.binary_threshold, 1,
                          255, {50, 255}, {}, {"min", "max"});
 

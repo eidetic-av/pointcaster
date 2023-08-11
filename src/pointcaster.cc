@@ -479,6 +479,8 @@ void PointCaster::render_cameras() {
       Vector2i{int(rendering_config.resolution[0] / dpiScaling().x()),
 	       int(rendering_config.resolution[1] / dpiScaling().y())};
 
+    if (frame_size.x() < 1 || frame_size.y() < 1) continue;
+
     camera_controller->setup_framebuffer(frame_size);
 
     // TODO: pass selected physical cameras into the
@@ -742,7 +744,7 @@ void PointCaster::draw_main_viewport() {
       ImGui::EndTabBar();
     }
 
-    ImGui::End();
+    ImGui::End(); // "CamerasRoot"
   }
 }
 
