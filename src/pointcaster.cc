@@ -410,6 +410,12 @@ PointCaster::PointCaster(const Arguments &args)
 void PointCaster::save_and_quit() {
   save_session();
   Device::attached_devices.clear();
+
+  // just clean up some other threads ourself before calling the Magnum exit
+  // TODO I think the need for this indicates bigger ownership problems
+  _usb_monitor.reset();
+  _radio.reset();
+
   exit(0);
 }
 

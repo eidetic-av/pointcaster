@@ -21,8 +21,6 @@
 
 namespace pc {
 
-std::jthread usb_monitor_thread;
-
 UsbMonitor::UsbMonitor() {
   libusb_init(nullptr);
 
@@ -63,7 +61,7 @@ UsbMonitor::UsbMonitor() {
   }
 
   // start a thread that waits for libusb events and runs them
-  usb_monitor_thread = std::jthread([&](auto stop_token) {
+  _usb_monitor_thread = std::jthread([&](auto stop_token) {
     spdlog::info("Started USB monitor thread");
     while (!stop_token.stop_requested()) {
       struct timeval usb_event_timeout = {1, 0}; // 1 second

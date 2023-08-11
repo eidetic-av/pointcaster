@@ -28,9 +28,8 @@ MqttClient::MqttClient(MqttClientConfiguration &config) : _config(config) {
 }
 
 MqttClient::~MqttClient() {
-  spdlog::info("Disconnecting");
+  if (!_client) return;
   _client->disconnect()->wait();
-  spdlog::info("Disconnected");
 }
 
 void MqttClient::connect() {

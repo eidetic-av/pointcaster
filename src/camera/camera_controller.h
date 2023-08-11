@@ -71,12 +71,11 @@ private:
   Magnum::Platform::Application* _app;
   CameraConfiguration _config;
 
-  std::unique_ptr<Camera3D> _camera;
-
-  std::unique_ptr<Object3D> _camera_parent;
   std::unique_ptr<Object3D> _yaw_parent;
   std::unique_ptr<Object3D> _pitch_parent;
+  std::unique_ptr<Object3D> _camera_parent;
   std::unique_ptr<Object3D> _roll_parent;
+  std::unique_ptr<Camera3D> _camera;
 
   Magnum::Vector2i _frame_size;
   std::unique_ptr<Magnum::GL::Texture2D> _color;

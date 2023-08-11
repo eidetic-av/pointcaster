@@ -350,7 +350,8 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
     if (contours.publish) {
 #if WITH_MQTT
-      MqttClient::instance()->publish("contours", contour_list_std);
+      if (!stop_token.stop_requested())
+	MqttClient::instance()->publish("contours", contour_list_std);
 #endif
     }
 
@@ -440,7 +441,7 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
           spdlog::warn("Invalid triangle vertex count: {}", vertices.size());
         } else {
 #if WITH_MQTT
-          MqttClient::instance()->publish("triangles", vertices);
+	  if (!stop_token.stop_requested()) MqttClient::instance()->publish("triangles", vertices);
 #endif
         }
       }
@@ -545,10 +546,13 @@ void CameraController::frame_analysis(std::stop_token stop_token) {
 
       if (flow_field.size() > 0 && optical_flow.publish) {
 #if WITH_MQTT
-        MqttClient::instance()->publish("flow", flow_field_flattened);
+	if (!stop_token.stop_requested())
+	  MqttClient::instance()->publish("flow", flow_field_flattened);
 #endif
       }
     }
+
+    if (stop_token.stop_requested()) break;
 
     // copy the resulting cv::Mat data into our buffer data container
     auto element_count = output_mat.total() * output_mat.channels();
