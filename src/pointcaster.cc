@@ -104,6 +104,7 @@ struct PointCasterSession {
 
   // GUI
   std::vector<char> imgui_layout;
+  bool fullscreen = false;
   bool show_devices_window = true;
   bool show_controllers_window = false;
   bool show_radio_window = false;
@@ -129,14 +130,12 @@ public:
 protected:
   PointCasterSession _session;
 
-  void save_session();
-  void save_session(std::filesystem::path file_path);
-  void load_session(std::filesystem::path file_path);
-
   std::vector<std::jthread> _async_tasks;
 
   std::unique_ptr<Scene3D> _scene;
   std::unique_ptr<SceneGraph::DrawableGroup3D> _drawable_group;
+
+  std::optional<Vector2i> _display_resolution;
 
   std::vector<std::unique_ptr<CameraController>> _camera_controllers;
   int _hovering_camera_index = -1;
@@ -153,6 +152,10 @@ protected:
   std::unique_ptr<UsbMonitor> _usb_monitor;
 
   ImGuiIntegration::Context _imgui_context{NoCreate};
+
+  void save_session();
+  void save_session(std::filesystem::path file_path);
+  void load_session(std::filesystem::path file_path);
 
   void open_kinect_sensors();
 
@@ -193,36 +196,35 @@ PointCaster::PointCaster(const Arguments &args)
 
   // Get OS resolution
   SDL_DisplayMode dm;
-  bool have_resolution = false;
   if (SDL_GetDesktopDisplayMode(0, &dm) != 0)
-    spdlog::warn("Failed to get OS resolution using SDL: {}", SDL_GetError());
+    spdlog::warn("Failed to get display resolution using SDL: {}", SDL_GetError());
   else {
-    have_resolution = true;
-    spdlog::info("SDL2 returned OS resolution: {}x{}", dm.w, dm.h);
+    _display_resolution = {dm.w, dm.h};
+    spdlog::info("SDL2 returned display resolution: {}x{}", dm.w, dm.h);
   }
-  const Vector2 dpi_scaling = this->dpiScaling({});
-  spdlog::info("DPI scaling: {}", dpi_scaling.x());
 
   // Set up the window
 
-  Configuration conf;
+  Sdl2Application::Configuration conf;
   conf.setTitle("pointcaster");
 
   // TODO figure out how to persist window size accross launches
-  if (have_resolution) {
+  if (_display_resolution.has_value()) {
+    auto& resolution = _display_resolution.value();
     constexpr auto start_res_scale = 2.0f / 3.0f;
     constexpr auto start_ratio = 2.0f / 3.0f;
-    auto start_width = int(dm.w / dpi_scaling.x() * start_res_scale);
+    auto start_width = int(resolution.x() / 1.5f * start_res_scale);
     auto start_height = int(start_width * start_ratio);
-    conf.setSize({start_width, start_height}, dpi_scaling);
+    conf.setSize({start_width, start_height}, {1.5f, 1.5f});
   }
 
-  conf.setWindowFlags(Configuration::WindowFlag::Resizable);
+  conf.setWindowFlags(Sdl2Application::Configuration::WindowFlag::Resizable);
+
 
   // Try 8x MSAA, fall back to zero if not possible.
   // Enable only 2x MSAA if we have enough DPI.
   GLConfiguration gl_conf;
-  gl_conf.setSampleCount(dpi_scaling.max() < 2.0f ? 8 : 2);
+  gl_conf.setSampleCount(8);
   if (!tryCreate(conf, gl_conf))
     create(conf, gl_conf.setSampleCount(0));
 
@@ -644,6 +646,7 @@ void PointCaster::draw_main_viewport() {
           auto scale_mode = rendering.scale_mode;
 	  const Vector2 frame_space{window_size.x,
 				    window_size.y - tab_bar_height};
+	  camera_controller->viewport_size = frame_space;
 
           if (scale_mode == ScaleMode::Span) {
 
@@ -736,7 +739,7 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
   const auto viewport_window_pos = ImGui::GetWindowPos();
 
   constexpr auto button_size = ImVec2{28, 28};
-  constexpr auto control_inset = ImVec2{10, 5};
+  constexpr auto control_inset = ImVec2{5, 35};
 
   constexpr auto viewport_controls_flags =
       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
@@ -767,14 +770,19 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
     ImGui::PopStyleVar();
   };
 
-  draw_button(ICON_FA_SLIDERS, [&]() {
+  draw_button(ICON_FA_SLIDERS, [&] {
     camera_config.show_window = !camera_config.show_window;
    }, camera_config.show_window);
 
+  draw_button(ICON_FA_ENVELOPE, [&] {
+	if (camera_config.rendering.scale_mode == ScaleMode::Span)
+	  camera_config.rendering.scale_mode = ScaleMode::Letterbox;
+	else camera_config.rendering.scale_mode = ScaleMode::Span;
+   }, camera_config.rendering.scale_mode == ScaleMode::Letterbox);
+
   const auto controls_window_size = ImGui::GetWindowSize();
 
-  ImGui::SetWindowPos({viewport_window_pos.x + viewport_window_size.x -
-			   controls_window_size.x - control_inset.x,
+  ImGui::SetWindowPos({viewport_window_pos.x + control_inset.x,
 		       viewport_window_pos.y + control_inset.y});
 
   ImGui::End();
@@ -783,9 +791,11 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
 
 void PointCaster::draw_camera_control_windows() {
   for (const auto &camera_controller : _camera_controllers) {
-    if (!camera_controller->config().show_window) continue;
+    if (!camera_controller->config().show_window)
+      continue;
+    const auto frame_size = 
     ImGui::Begin(camera_controller->name().c_str());
-      camera_controller->draw_imgui_controls();
+    camera_controller->draw_imgui_controls();
     ImGui::End();
   }
 }
@@ -1011,8 +1021,8 @@ void PointCaster::drawEvent() {
 
   // Draw gui windows
 
-  draw_menu_bar();
-  draw_control_bar();
+  // draw_menu_bar();
+  // draw_control_bar();
 
   draw_main_viewport();
   draw_camera_control_windows();
@@ -1098,8 +1108,11 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   case KeyEvent::Key::Q:
     save_and_quit();
     break;
-  case KeyEvent::Key::S:
+  case KeyEvent::Key::D:
     _session.show_devices_window = !_session.show_devices_window;
+    break;
+  case KeyEvent::Key::S:
+    save_session();
     break;
   case KeyEvent::Key::C:
     _session.show_controllers_window = !_session.show_controllers_window;
@@ -1107,14 +1120,17 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
       gui::midi_learn_mode = false;
     break;
   case KeyEvent::Key::F:
-    _session.show_stats = !_session.show_stats;
+    if (_display_resolution.has_value())
+      spdlog::info("Fullscreening to {}x{}, dpi {}x{}",
+                   _display_resolution->x(), _display_resolution->y(),
+		   dpiScaling().x(), dpiScaling().y());
+    setWindowSize(_display_resolution.value() / dpiScaling());
     break;
   case KeyEvent::Key::R:
     _session.show_radio_window = !_session.show_radio_window;
     break;
   case KeyEvent::Key::T:
-    _session.show_global_transform_window =
-        !_session.show_global_transform_window;
+    _session.show_stats = !_session.show_stats;
     break;
   default:
     if (_imgui_context.handleKeyPressEvent(event))

@@ -69,8 +69,6 @@ CameraController::CameraController(Magnum::Platform::Application *app,
        defaults::magnum::translation.x()},
       {}, Vector3::yAxis()));
 
-  _camera->setAspectRatioPolicy(SceneGraph::AspectRatioPolicy::NotPreserved);
-
   // deserialize our camera configuration into Magnum types
   auto rotation = Euler{Deg_f(_config.rotation[0]), Deg_f(_config.rotation[1]),
                         Deg_f(_config.rotation[2])};
@@ -110,14 +108,20 @@ void CameraController::setup_framebuffer(Vector2i frame_size) {
       static_cast<int>(frame_size.x() / _app->dpiScaling().x()),
       static_cast<int>(frame_size.y() / _app->dpiScaling().y())};
 
+  auto aspect_ratio = frame_size.x() / static_cast<float>(frame_size.y());
+  if (_config.rendering.scale_mode == ScaleMode::Span && viewport_size.has_value()) {
+    // automatically set frame height based on size of viewport
+    aspect_ratio = viewport_size->x() / viewport_size->y();
+    scaled_size.y() = scaled_size.x() / aspect_ratio;
+    _config.rendering.resolution[1] = _config.rendering.resolution[0] / aspect_ratio;
+  }
+
   if (scaled_size == _frame_size) {
     bind_framebuffer();
     return;
   }
 
   _frame_size = scaled_size;
-
-  auto aspect_ratio = frame_size.x() / static_cast<float>(frame_size.y());
 
   // TODO replace the aspect ratio fix here when we have
   // a more solid handle over fov control
@@ -790,6 +794,13 @@ void CameraController::draw_imgui_controls() {
 	ImGui::Combo("Scale mode", &scale_mode_i, options,
 		     static_cast<int>(ScaleMode::Count));
 	rendering.scale_mode = static_cast<ScaleMode>(scale_mode_i);
+        if (rendering.scale_mode != current_scale_mode) {
+	    const auto aspect_ratio_policy =
+		rendering.scale_mode == ScaleMode::Letterbox
+		    ? SceneGraph::AspectRatioPolicy::NotPreserved
+		    : SceneGraph::AspectRatioPolicy::Extend;
+	    _camera->setAspectRatioPolicy(aspect_ratio_policy);
+        }
 
         ImGui::Spacing();
 
