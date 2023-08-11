@@ -83,15 +83,10 @@ CameraController::CameraController(Magnum::Platform::Application *app,
     _config.id = pc::uuid::word();
   }
   _config.name = "camera_" + std::to_string(++CameraController::count);
-  if (_config.rendering.resolution[0] == 0) {
-    const auto app_res = _app->framebufferSize();
-    _config.rendering.resolution = {app_res.x(), app_res.y()};
-  }
-  auto resolution = _config.rendering.resolution;
-  auto aspect_ratio = resolution[0] / resolution[1];
 
+  auto resolution = _config.rendering.resolution;
   _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
-      Deg_f(_config.fov), aspect_ratio, 0.001f, 200.0f));
+      Deg_f(_config.fov), resolution[0] / resolution[1], 0.001f, 200.0f));
 
   spdlog::info("Initialised Camera Controller {} with id {}", _config.name,
                _config.id);
@@ -816,7 +811,7 @@ void CameraController::draw_imgui_controls() {
         if (frame_analysis.enabled) {
 
 	    vector_table("Resolution", frame_analysis.resolution, 2, 3840,
-			 {480, 270});
+			 {480, 270}, {}, {"width", "height"});
             vector_table("Binary threshold", frame_analysis.binary_threshold, 1,
                          255, {50, 255}, {}, {"min", "max"});
 
