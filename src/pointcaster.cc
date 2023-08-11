@@ -349,7 +349,7 @@ PointCaster::PointCaster(const Arguments &args)
   GL::Renderer::enable(GL::Renderer::Feature::ProgramPointSize);
 
   // set background color
-  GL::Renderer::setClearColor(0x0d1117_rgbf);
+  GL::Renderer::setClearColor(0x000000_rgbf);
 
   _point_cloud_renderer = std::make_unique<PointCloudRenderer>();
   _sphere_renderer = std::make_unique<SphereRenderer>();
