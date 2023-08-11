@@ -107,7 +107,7 @@ Radio::Radio() {
            }
          }
 
-	 pc::logger->info("Ending radio broadcast");
+	 pc::logger->info("Ended radio thread");
        });
  }
 
