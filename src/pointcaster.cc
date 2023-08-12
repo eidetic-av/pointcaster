@@ -12,6 +12,9 @@
 #include <vector>
 #include <functional>
 
+#include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
 #include <zpp_bits.h>
 
 #ifdef _WIN32
@@ -27,6 +30,7 @@
 #include "pointer.h"
 #include "structs.h"
 #include "logger.h"
+#include "session.h"
 
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/Magnum.h>
@@ -97,28 +101,6 @@ using uint = unsigned int;
 
 using Object3D = Magnum::SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
 using Scene3D = Magnum::SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
-
-struct PointCasterSession {
-  std::string id;
-  bool auto_connect_sensors = false;
-
-  // GUI
-  std::vector<char> imgui_layout;
-  bool fullscreen = false;
-  bool hide_ui = false;
-  bool show_log = false;
-  bool show_devices_window = true;
-  bool show_controllers_window = false;
-  bool show_radio_window = false;
-  bool show_snapshots_window = false;
-  bool show_global_transform_window = false;
-  bool show_stats = false;
-  bool show_mqtt_window = false;
-
-  std::vector<CameraConfiguration> cameras;
-
-  MqttClientConfiguration mqtt_config;
-};
 
 class PointCaster : public Platform::Application {
 public:
@@ -325,7 +307,7 @@ PointCaster::PointCaster(const Arguments &args)
   std::filesystem::file_time_type last_write_time;
 
   for (const auto &entry : std::filesystem::directory_iterator(data_dir)) {
-    if (!entry.is_regular_file() || entry.path().extension() != ".pcs")
+    if (!entry.is_regular_file() || entry.path().extension() != ".json")
       continue;
 
     auto write_time = std::filesystem::last_write_time(entry);
@@ -338,7 +320,7 @@ PointCaster::PointCaster(const Arguments &args)
   if (last_modified_session_file.empty()) {
     pc::logger->info("No previous session file found. Creating new session.");
     _session = {.id = pc::uuid::word()};
-    auto file_path = data_dir / (_session.id + ".pcs");
+    auto file_path = data_dir / (_session.id + ".json");
     save_session(file_path);
   } else {
     pc::logger->info("Found previous session file");
@@ -428,18 +410,22 @@ void PointCaster::save_and_quit() {
 
 void PointCaster::save_session() {
   auto data_dir = path::get_or_create_data_directory();
-  auto file_path = data_dir / (_session.id + ".pcs");
+  auto file_path = data_dir / (_session.id + ".json");
   save_session(file_path);
 }
 
 void PointCaster::save_session(std::filesystem::path file_path) {
   pc::logger->info("Saving session to {}", file_path.string());
 
-  // save imgui layout
+  // save imgui layout to an adjacent file
   std::size_t imgui_layout_size;
   auto imgui_layout_data = ImGui::SaveIniSettingsToMemory(&imgui_layout_size);
-  _session.imgui_layout = std::vector<char>(
-      imgui_layout_data, imgui_layout_data + imgui_layout_size);
+  std::vector<char> layout_data(imgui_layout_data,
+				imgui_layout_data + imgui_layout_size);
+  std::filesystem::path layout_file_path = file_path;
+  layout_file_path.replace_extension(".layout");
+  std::ofstream layout_file(layout_file_path, std::ios::binary);
+  layout_file.write(layout_data.data(), layout_data.size());
 
   // save camera configurations
   _session.cameras.clear();
@@ -454,19 +440,44 @@ void PointCaster::save_session(std::filesystem::path file_path) {
     device->serialize_config();
   }
 
-  std::vector<uint8_t> data;
-  auto out = zpp::bits::out(data);
-  auto success = out(_session);
-  path::save_file(file_path, data);
+  nlohmann::json session_json = _session;
+  std::ofstream file(file_path);
+  file << session_json.dump(2);
 }
 
 void PointCaster::load_session(std::filesystem::path file_path) {
   pc::logger->info("Loading state from {}", file_path.string());
-  auto buffer = path::load_file(file_path);
-  auto in = zpp::bits::in(buffer);
-  auto success = in(_session);
-  ImGui::LoadIniSettingsFromMemory(_session.imgui_layout.data(),
-                                   _session.imgui_layout.size());
+
+  std::ifstream file(file_path);
+
+  if (!file.is_open()) {
+    pc::logger->warn("Failed to open file");
+    return;
+  }
+
+  nlohmann::json file_json;
+  file >> file_json;
+  _session = file_json.get<PointCasterSession>();
+
+  // check if there is an adjacent .layout file
+  // and load if so
+  std::filesystem::path layout_file_path = file_path;
+  layout_file_path.replace_extension(".layout");
+
+  // and load if so
+  std::ifstream layout_file(layout_file_path, std::ios::binary | std::ios::ate);
+  if (layout_file.is_open()) {
+    std::streamsize layout_size = layout_file.tellg();
+    layout_file.seekg(0, std::ios::beg);
+
+    _session.imgui_layout.resize(layout_size);
+    layout_file.read(_session.imgui_layout.data(), layout_size);
+
+    ImGui::LoadIniSettingsFromMemory(_session.imgui_layout.data(),
+                                     _session.imgui_layout.size());
+  } else {
+    pc::logger->info("Failed to open adjacent .layout file");
+  }
 
   // get saved camera configurations to populate the cams list
   for (auto &saved_camera_config : _session.cameras) {

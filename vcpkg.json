@@ -7,6 +7,7 @@
     "earcut-hpp",
     "paho-mqttpp3",
     "msgpack",
+    "nlohmann-json",
     "azure-kinect-sensor-sdk",
     "corrade",
     "eigen3",

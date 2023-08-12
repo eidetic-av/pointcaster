@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <nlohmann/json.hpp>
 
 enum class ScaleMode {
   Span, Letterbox,
@@ -20,3 +21,7 @@ struct PointCloudRendererConfiguration {
   bool ground_grid = true;
   bool snapshots = true;
 };
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(PointCloudRendererConfiguration, resolution,
+                                   scale_mode, letterbox_mode, point_size,
+                                   ground_grid, snapshots);

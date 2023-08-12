@@ -6,6 +6,7 @@
 #include <array>
 #include <string>
 #include <zpp_bits.h>
+#include <nlohmann/json.hpp>
 
 namespace pc::camera {
 
@@ -47,10 +48,13 @@ struct CannyEdgeConfiguration {
   int max_threshold = 255;
   int aperture_size = 3;
 };
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CannyEdgeConfiguration, enabled,
+				   min_threshold, max_threshold, aperture_size);
 
 struct SimplifyConfiguration {
   bool enabled = false;
 };
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SimplifyConfiguration, enabled);
 
 struct TriangulateConfiguration {
   bool enabled = false;
@@ -58,6 +62,8 @@ struct TriangulateConfiguration {
   bool publish = false;
   float minimum_area = 0.0f;
 };
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TriangulateConfiguration, enabled, draw,
+				   publish, minimum_area);
 
 struct ContourDetectionConfiguration {
   bool enabled = false;
@@ -68,6 +74,9 @@ struct ContourDetectionConfiguration {
   float simplify_min_area = 0.0001f;
   TriangulateConfiguration triangulate;
 };
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ContourDetectionConfiguration, enabled, draw,
+				   publish, simplify, simplify_arc_scale,
+				   simplify_min_area, triangulate);
 
 struct OpticalFlowConfiguration {
   bool enabled = false;
@@ -80,6 +89,11 @@ struct OpticalFlowConfiguration {
   float minimum_distance = 0.0f;
   float maximum_distance = 0.5f;
 };
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(OpticalFlowConfiguration, enabled, draw,
+				   publish, feature_point_count,
+				   feature_point_distance, magnitude_scale,
+				   magnitude_exponent, minimum_distance,
+				   maximum_distance);
 
 struct FrameAnalysisConfiguration {
   bool enabled;
@@ -98,6 +112,12 @@ struct FrameAnalysisConfiguration {
   bool optical_flow_open;
 };
 
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FrameAnalysisConfiguration, enabled,
+				   resolution, binary_threshold,
+				   greyscale_conversion, blur_size, canny,
+				   contours, contours_open, optical_flow,
+				   optical_flow_open);
+
 struct CameraConfiguration {
   std::string id;
   std::string name;
@@ -114,5 +134,9 @@ struct CameraConfiguration {
   FrameAnalysisConfiguration frame_analysis;
   bool analysis_open;
 };
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CameraConfiguration, id, name, show_window, rotation, translation, fov, transform_open,
+				   rendering, rendering_open, frame_analysis,
+				   analysis_open);
 
 } // namespace pc::camera
