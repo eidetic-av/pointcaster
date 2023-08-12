@@ -1,6 +1,7 @@
 #pragma once
 
 #include "camera_config.h"
+#include "../analysis/analyser_2d.h"
 #include <Magnum/Image.h>
 #include <Magnum/GL/Framebuffer.h>
 #include <Magnum/GL/Renderbuffer.h>
@@ -70,6 +71,7 @@ public:
 private:
   Magnum::Platform::Application* _app;
   CameraConfiguration _config;
+  pc::analysis::Analyser2D _frame_analyser;
 
   std::unique_ptr<Object3D> _yaw_parent;
   std::unique_ptr<Object3D> _pitch_parent;
@@ -90,21 +92,6 @@ private:
   Magnum::Vector3 _translation{};
 
   std::mutex _color_frame_mutex;
-  std::mutex _analysis_frame_mutex;
-  std::mutex _dispatch_analysis_mutex;
-  std::mutex _analysis_frame_buffer_data_mutex;
-
-  std::unique_ptr<Magnum::GL::Texture2D> _analysis_frame;
-  std::optional<Magnum::Image2D> _analysis_image;
-  std::optional<FrameAnalysisConfiguration> _analysis_config;
-  std::jthread _analysis_thread;
-  Corrade::Containers::Array<uint8_t> _analysis_frame_buffer_data;
-  std::atomic_bool _analysis_frame_buffer_updated;
-  std::condition_variable _analysis_condition_variable;
-  std::optional<cv::Mat> _previous_analysis_image;
-  std::atomic<std::chrono::milliseconds> _analysis_time;
-
-  void frame_analysis(std::stop_token stop_token);
 
   void bind_framebuffer();
 

@@ -145,6 +145,7 @@ set(SOURCE_FILES
   src/devices/device.cc
   src/devices/usb.cc
   src/camera/camera_controller.cc
+  src/analysis/analyser_2d.cc
   src/radio.cc
   src/snapshots.cc
   src/point_cloud_renderer.cc

@@ -1,0 +1,52 @@
+#pragma once
+
+#include "analyser_2d_config.h"
+#include <Magnum/GL/Texture.h>
+#include <Magnum/Image.h>
+#include <Magnum/Magnum.h>
+#include <chrono>
+#include <condition_variable>
+#include <opencv2/opencv.hpp>
+#include <thread>
+
+namespace pc::analysis {
+
+class Analyser2D {
+public:
+
+  Analyser2D();
+
+  Analyser2D(const Analyser2D&) = delete;
+  Analyser2D& operator=(const Analyser2D&) = delete;
+  
+  void set_frame_size(Magnum::Vector2i frame_size);
+  void dispatch_analysis(Magnum::GL::Texture2D &texture,
+                         Analyser2DConfiguration &config);
+
+  Magnum::GL::Texture2D& analysis_frame();
+
+  int analysis_time();
+
+private:
+  std::optional<Magnum::Image2D> _input_image;
+  std::optional<pc::analysis::Analyser2DConfiguration> _input_config;
+  Magnum::Vector2i _frame_size;
+
+  std::jthread _analysis_thread;
+  std::mutex _dispatch_mutex;
+  std::condition_variable _dispatch_condition_variable;
+
+  std::unique_ptr<Magnum::GL::Texture2D> _analysis_frame;
+  std::mutex _analysis_frame_mutex;
+  std::mutex _analysis_frame_buffer_data_mutex;
+  Corrade::Containers::Array<uint8_t> _analysis_frame_buffer_data;
+  std::atomic_bool _analysis_frame_buffer_updated;
+
+  std::optional<cv::Mat> _previous_analysis_image;
+
+  std::atomic<std::chrono::milliseconds> _analysis_time;
+
+  void frame_analysis(std::stop_token stop_token);
+};
+
+} // namespace pc::analysis
