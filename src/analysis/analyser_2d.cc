@@ -243,7 +243,16 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     const cv::Point2i analysis_frame_size = {analysis_config.resolution[0],
 					     analysis_config.resolution[1]};
 
-    cv::Mat analysis_input = setup_input_frame(image, analysis_config);
+    cv::Mat analysis_input;
+    // TODO this try/catch could be replaced with better CUDA
+    // synchronisation... it throws when k4a initialises it's CUDA pipeline
+    // because it puts CUDA in a state where opencv cannot use it
+    try {
+      analysis_input = setup_input_frame(image, analysis_config);
+    } catch (cv::Exception e) {
+      pc::logger->error(e.what());
+      continue;
+    }
 
     // create a new RGBA image initialised to fully transparent
     cv::Mat output_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
