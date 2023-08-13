@@ -48,7 +48,7 @@ CameraController::CameraController(Magnum::Platform::Application *app,
     : CameraController(app, scene, CameraConfiguration{}){};
 
 CameraController::CameraController(Magnum::Platform::Application *app,
-				   Scene3D *scene, CameraConfiguration config)
+                                   Scene3D *scene, CameraConfiguration config)
     : _app(app), _config(config) {
 
   // rotations are manipulated by individual parent objects...
@@ -97,9 +97,7 @@ CameraController::CameraController(Magnum::Platform::Application *app,
                    _config.id);
 }
 
-CameraController::~CameraController() {
-  CameraController::count--;
-}
+CameraController::~CameraController() { CameraController::count--; }
 
 void CameraController::setup_framebuffer(Vector2i frame_size) {
 
