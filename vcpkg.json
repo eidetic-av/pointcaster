@@ -18,12 +18,7 @@
     "imgui",
     {
       "name": "opencv",
-      "features": ["tbb"],
-      "platform": "windows"
-    },
-    {
-      "name": "opencv",
-      "platform": "linux"
+      "features": ["cuda"]
     },
     {
       "name": "imgui",
