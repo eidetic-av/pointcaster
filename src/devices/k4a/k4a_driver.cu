@@ -18,15 +18,15 @@
 // TODO fix spdlog for linux nvcc
 #ifdef _WIN32
 
-#include <spdlog/spdlog.h>
+#include "../../logger.h"
 
 template <typename... Args>
 inline void log_info(const std::string &fmt_string, Args &&...args) {
-  spdlog::info(fmt_string, std::forward<Args>(args)...);
+  pc::logger->info(fmt_string, std::forward<Args>(args)...);
 }
 template <typename... Args>
 inline void log_error(const std::string &fmt_string, Args &&...args) {
-  spdlog::error(fmt_string, std::forward<Args>(args)...);
+  pc::logger->error(fmt_string, std::forward<Args>(args)...);
 }
 
 #else

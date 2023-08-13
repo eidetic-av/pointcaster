@@ -1,6 +1,7 @@
 #pragma once
 
 #include "camera_config.h"
+#include "../analysis/analyser_2d.h"
 #include <Magnum/Image.h>
 #include <Magnum/GL/Framebuffer.h>
 #include <Magnum/GL/Renderbuffer.h>
@@ -35,6 +36,8 @@ class CameraController {
 public:
   static std::atomic<uint> count;
 
+  std::optional<Magnum::Vector2> viewport_size;
+
   CameraController(Magnum::Platform::Application *app, Scene3D *scene);
   CameraController(Magnum::Platform::Application *app, Scene3D *scene, CameraConfiguration config);
 
@@ -55,7 +58,7 @@ public:
   CameraController &set_perspective(const Magnum::Float &value);
   CameraController &zoom_perspective(Magnum::Platform::Sdl2Application::MouseScrollEvent &event);
 
-  void setup_framebuffer(const Magnum::Vector2i frame_size);
+  void setup_framebuffer(Magnum::Vector2i frame_size);
 
   Magnum::GL::Texture2D& color_frame();
   Magnum::GL::Texture2D& analysis_frame();
@@ -68,13 +71,13 @@ public:
 private:
   Magnum::Platform::Application* _app;
   CameraConfiguration _config;
+  pc::analysis::Analyser2D _frame_analyser;
 
-  std::unique_ptr<Camera3D> _camera;
-
-  std::unique_ptr<Object3D> _camera_parent;
   std::unique_ptr<Object3D> _yaw_parent;
   std::unique_ptr<Object3D> _pitch_parent;
+  std::unique_ptr<Object3D> _camera_parent;
   std::unique_ptr<Object3D> _roll_parent;
+  std::unique_ptr<Camera3D> _camera;
 
   Magnum::Vector2i _frame_size;
   std::unique_ptr<Magnum::GL::Texture2D> _color;
@@ -89,21 +92,6 @@ private:
   Magnum::Vector3 _translation{};
 
   std::mutex _color_frame_mutex;
-  std::mutex _analysis_frame_mutex;
-  std::mutex _dispatch_analysis_mutex;
-  std::mutex _analysis_frame_buffer_data_mutex;
-
-  std::unique_ptr<Magnum::GL::Texture2D> _analysis_frame;
-  std::optional<Magnum::Image2D> _analysis_image;
-  std::optional<FrameAnalysisConfiguration> _analysis_config;
-  std::jthread _analysis_thread;
-  Corrade::Containers::Array<uint8_t> _analysis_frame_buffer_data;
-  std::atomic_bool _analysis_frame_buffer_updated;
-  std::condition_variable _analysis_condition_variable;
-  std::optional<cv::Mat> _previous_analysis_image;
-  std::atomic<std::chrono::milliseconds> _analysis_time;
-
-  void frame_analysis(std::stop_token stop_token);
 
   void bind_framebuffer();
 

@@ -2,12 +2,12 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 #include <regex>
-#include <spdlog/spdlog.h>
 #include <fmt/format.h>
 #include <chrono>
 #include <future>
 #include <stdexcept>
 #include <msgpack.hpp>
+#include "../logger.h"
 
 namespace pc {
 
@@ -28,9 +28,8 @@ MqttClient::MqttClient(MqttClientConfiguration &config) : _config(config) {
 }
 
 MqttClient::~MqttClient() {
-  spdlog::info("Disconnecting");
+  if (!_client) return;
   _client->disconnect()->wait();
-  spdlog::info("Disconnected");
 }
 
 void MqttClient::connect() {
@@ -42,7 +41,7 @@ void MqttClient::connect(const std::string_view uri) {
   std::smatch match;
   if (!std::regex_search(uri_str, match, uri_pattern)) {
     const auto error_msg = fmt::format("Invalid MQTT URI: {}", uri);
-    spdlog::error(error_msg);
+    pc::logger->error(error_msg);
     throw std::invalid_argument(error_msg);
   }
   try {
@@ -50,7 +49,7 @@ void MqttClient::connect(const std::string_view uri) {
     const auto port = std::stoi(match.str(3));
     connect(host_name, port);
   } catch (std::exception &e) {
-    spdlog::error(e.what());
+    pc::logger->error(e.what());
     throw;
   }
 }
@@ -63,7 +62,7 @@ void MqttClient::connect(const std::string_view host_name, const int port) {
     disconnect();
   }
 
-  spdlog::info("Connecting to MQTT broker at {}", _config.broker_uri);
+  pc::logger->info("Connecting to MQTT broker at {}", _config.broker_uri);
 
   _client = std::make_unique<mqtt::async_client>(_config.broker_uri.data(),
 						 _config.client_id.data());
@@ -76,9 +75,9 @@ void MqttClient::connect(const std::string_view host_name, const int port) {
   _connection_future = std::async(std::launch::async, [this, options]() {
     if (_client->connect(options)->wait_for(10s)) {
       MqttClient::_connected = true;
-      spdlog::info("MQTT connection active");
+      pc::logger->info("MQTT connection active");
     } else {
-      spdlog::warn("MQTT connection failed");
+      pc::logger->warn("MQTT connection failed");
       MqttClient::_connected = false;
     }
   });
@@ -90,9 +89,9 @@ void MqttClient::disconnect() {
     _client->disconnect()->wait();
     _client.reset();
     MqttClient::_connected = false;
-    spdlog::info("Disconnected from MQTT broker");
+    pc::logger->info("Disconnected from MQTT broker");
   } catch (mqtt::exception &e) {
-    spdlog::error(e.what());
+    pc::logger->error(e.what());
   }
 }
 
@@ -119,7 +118,7 @@ void MqttClient::set_uri(const std::string_view uri) {
   const std::string uri_str { uri };
   std::smatch match;
   if (!std::regex_search(uri_str, match, uri_pattern)) {
-    spdlog::error("Invalid MQTT URI: {}", uri);
+    pc::logger->error("Invalid MQTT URI: {}", uri);
     return;
   }
   _config.broker_uri = uri;

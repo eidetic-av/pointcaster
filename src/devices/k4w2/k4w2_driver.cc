@@ -16,7 +16,7 @@ K4W2Driver::~K4W2Driver() { close(); }
 
 bool K4W2Driver::open() {
     //_pipeline = new libfreenect2::OpenGLPacketPipeline();
-    //spdlog::info("dev count: {}", _freenect2.enumerateDevices());
+    //pc::logger->info("dev count: {}", _freenect2.enumerateDevices());
 
  // // start a thread that captures new frames and dumps them into raw buffers
  // std::thread capture_loop([&]() {

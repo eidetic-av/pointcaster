@@ -12,6 +12,9 @@
 #include <vector>
 #include <functional>
 
+#include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
 #include <zpp_bits.h>
 
 #ifdef _WIN32
@@ -26,7 +29,8 @@
 #include "path.h"
 #include "pointer.h"
 #include "structs.h"
-#include <spdlog/spdlog.h>
+#include "logger.h"
+#include "session.h"
 
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/Magnum.h>
@@ -98,25 +102,6 @@ using uint = unsigned int;
 using Object3D = Magnum::SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
 using Scene3D = Magnum::SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 
-struct PointCasterSession {
-  std::string id;
-  bool auto_connect_sensors = false;
-
-  // GUI
-  std::vector<char> imgui_layout;
-  bool show_devices_window = true;
-  bool show_controllers_window = false;
-  bool show_radio_window = false;
-  bool show_snapshots_window = false;
-  bool show_global_transform_window = false;
-  bool show_stats = false;
-  bool show_mqtt_window = false;
-
-  std::vector<CameraConfiguration> cameras;
-
-  MqttClientConfiguration mqtt_config;
-};
-
 class PointCaster : public Platform::Application {
 public:
   explicit PointCaster(const Arguments &args);
@@ -129,14 +114,12 @@ public:
 protected:
   PointCasterSession _session;
 
-  void save_session();
-  void save_session(std::filesystem::path file_path);
-  void load_session(std::filesystem::path file_path);
-
   std::vector<std::jthread> _async_tasks;
 
   std::unique_ptr<Scene3D> _scene;
   std::unique_ptr<SceneGraph::DrawableGroup3D> _drawable_group;
+
+  std::optional<Vector2i> _display_resolution;
 
   std::vector<std::unique_ptr<CameraController>> _camera_controllers;
   int _hovering_camera_index = -1;
@@ -154,6 +137,13 @@ protected:
 
   ImGuiIntegration::Context _imgui_context{NoCreate};
 
+  ImFont *_font;
+  ImFont *_mono_font;
+
+  void save_session();
+  void save_session(std::filesystem::path file_path);
+  void load_session(std::filesystem::path file_path);
+
   void open_kinect_sensors();
 
   void fill_point_renderer();
@@ -166,6 +156,12 @@ protected:
   void draw_camera_control_windows();
   void draw_devices_window();
   void draw_controllers_window();
+  void draw_onscreen_log();
+
+  Vector2i _restore_window_size;
+  Vector2i _restore_window_position;
+  bool _full_screen;
+  void set_full_screen(bool full_screen);
 
   void save_and_quit();
 
@@ -189,40 +185,39 @@ protected:
 
 PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
-  spdlog::info("This is pointcaster");
+  pc::logger->info("This is pointcaster");
 
   // Get OS resolution
   SDL_DisplayMode dm;
-  bool have_resolution = false;
   if (SDL_GetDesktopDisplayMode(0, &dm) != 0)
-    spdlog::warn("Failed to get OS resolution using SDL: {}", SDL_GetError());
+    pc::logger->warn("Failed to get display resolution using SDL: {}", SDL_GetError());
   else {
-    have_resolution = true;
-    spdlog::info("SDL2 returned OS resolution: {}x{}", dm.w, dm.h);
+    _display_resolution = {dm.w, dm.h};
+    pc::logger->info("SDL2 returned display resolution: {}x{}", dm.w, dm.h);
   }
-  const Vector2 dpi_scaling = this->dpiScaling({});
-  spdlog::info("DPI scaling: {}", dpi_scaling.x());
 
   // Set up the window
 
-  Configuration conf;
+  Sdl2Application::Configuration conf;
   conf.setTitle("pointcaster");
 
   // TODO figure out how to persist window size accross launches
-  if (have_resolution) {
+  if (_display_resolution.has_value()) {
+    auto& resolution = _display_resolution.value();
     constexpr auto start_res_scale = 2.0f / 3.0f;
     constexpr auto start_ratio = 2.0f / 3.0f;
-    auto start_width = int(dm.w / dpi_scaling.x() * start_res_scale);
+    auto start_width = int(resolution.x() / 1.5f * start_res_scale);
     auto start_height = int(start_width * start_ratio);
-    conf.setSize({start_width, start_height}, dpi_scaling);
+    conf.setSize({start_width, start_height}, {1.5f, 1.5f});
   }
 
-  conf.setWindowFlags(Configuration::WindowFlag::Resizable);
+  conf.setWindowFlags(Sdl2Application::Configuration::WindowFlag::Resizable);
+
 
   // Try 8x MSAA, fall back to zero if not possible.
   // Enable only 2x MSAA if we have enough DPI.
   GLConfiguration gl_conf;
-  gl_conf.setSampleCount(dpi_scaling.max() < 2.0f ? 8 : 2);
+  gl_conf.setSampleCount(8);
   if (!tryCreate(conf, gl_conf))
     create(conf, gl_conf.setSampleCount(0));
 
@@ -246,9 +241,17 @@ PointCaster::PointCaster(const Arguments &args)
   ImFontConfig font_config;
   font_config.FontDataOwnedByAtlas = false;
   const auto font_size = 14.0f;
-  ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+  _font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(font.data()), font.size(),
-      14.0f * framebufferSize().x() / size.x(), &font_config);
+      font_size * framebufferSize().x() / size.x(), &font_config);
+
+  auto mono_font = rs.getRaw("IosevkaArtisan");
+  ImFontConfig mono_font_config;
+  mono_font_config.FontDataOwnedByAtlas = false;
+  const auto mono_font_size = 16.0f;
+  _mono_font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+      const_cast<char *>(mono_font.data()), mono_font.size(),
+      mono_font_size * framebufferSize().x() / size.x(), &mono_font_config);
 
   auto font_icons = rs.getRaw("FontAwesomeSolid");
   static const ImWchar icons_ranges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
@@ -304,7 +307,7 @@ PointCaster::PointCaster(const Arguments &args)
   std::filesystem::file_time_type last_write_time;
 
   for (const auto &entry : std::filesystem::directory_iterator(data_dir)) {
-    if (!entry.is_regular_file() || entry.path().extension() != ".pcs")
+    if (!entry.is_regular_file() || entry.path().extension() != ".json")
       continue;
 
     auto write_time = std::filesystem::last_write_time(entry);
@@ -315,12 +318,12 @@ PointCaster::PointCaster(const Arguments &args)
   }
 
   if (last_modified_session_file.empty()) {
-    spdlog::info("No previous session file found. Creating new session.");
+    pc::logger->info("No previous session file found. Creating new session.");
     _session = {.id = pc::uuid::word()};
-    auto file_path = data_dir / (_session.id + ".pcs");
+    auto file_path = data_dir / (_session.id + ".json");
     save_session(file_path);
   } else {
-    spdlog::info("Found previous session file");
+    pc::logger->info("Found previous session file");
     load_session(last_modified_session_file);
   }
 
@@ -341,7 +344,7 @@ PointCaster::PointCaster(const Arguments &args)
   GL::Renderer::enable(GL::Renderer::Feature::ProgramPointSize);
 
   // set background color
-  GL::Renderer::setClearColor(0x0d1117_rgbf);
+  GL::Renderer::setClearColor(0x000000_rgbf);
 
   _point_cloud_renderer = std::make_unique<PointCloudRenderer>();
   _sphere_renderer = std::make_unique<SphereRenderer>();
@@ -374,7 +377,7 @@ PointCaster::PointCaster(const Arguments &args)
   // create a callback for the USB handler thread
   // that will add new devices to our main sensor list
   registerUsbAttachCallback([&](auto attached_device) {
-    spdlog::debug("attached usb callback");
+    pc::logger->debug("attached usb callback");
     if (!_session.auto_connect_sensors)
       return;
 
@@ -391,7 +394,7 @@ PointCaster::PointCaster(const Arguments &args)
   });
   registerUsbDetachCallback([&](auto detached_device) {
     // std::erase(*devices, detached_device);
-    spdlog::debug("detached usb callback");
+    pc::logger->debug("detached usb callback");
   });
   // init libusb and any attached devices
   _usb_monitor = std::make_unique<UsbMonitor>();
@@ -407,18 +410,22 @@ void PointCaster::save_and_quit() {
 
 void PointCaster::save_session() {
   auto data_dir = path::get_or_create_data_directory();
-  auto file_path = data_dir / (_session.id + ".pcs");
+  auto file_path = data_dir / (_session.id + ".json");
   save_session(file_path);
 }
 
 void PointCaster::save_session(std::filesystem::path file_path) {
-  spdlog::info("Saving session to {}", file_path.string());
+  pc::logger->info("Saving session to {}", file_path.string());
 
-  // save imgui layout
+  // save imgui layout to an adjacent file
   std::size_t imgui_layout_size;
   auto imgui_layout_data = ImGui::SaveIniSettingsToMemory(&imgui_layout_size);
-  _session.imgui_layout = std::vector<char>(
-      imgui_layout_data, imgui_layout_data + imgui_layout_size);
+  std::vector<char> layout_data(imgui_layout_data,
+				imgui_layout_data + imgui_layout_size);
+  std::filesystem::path layout_file_path = file_path;
+  layout_file_path.replace_extension(".layout");
+  std::ofstream layout_file(layout_file_path, std::ios::binary);
+  layout_file.write(layout_data.data(), layout_data.size());
 
   // save camera configurations
   _session.cameras.clear();
@@ -433,19 +440,44 @@ void PointCaster::save_session(std::filesystem::path file_path) {
     device->serialize_config();
   }
 
-  std::vector<uint8_t> data;
-  auto out = zpp::bits::out(data);
-  auto success = out(_session);
-  path::save_file(file_path, data);
+  nlohmann::json session_json = _session;
+  std::ofstream file(file_path);
+  file << session_json.dump(2);
 }
 
 void PointCaster::load_session(std::filesystem::path file_path) {
-  spdlog::info("Loading state from {}", file_path.string());
-  auto buffer = path::load_file(file_path);
-  auto in = zpp::bits::in(buffer);
-  auto success = in(_session);
-  ImGui::LoadIniSettingsFromMemory(_session.imgui_layout.data(),
-                                   _session.imgui_layout.size());
+  pc::logger->info("Loading state from {}", file_path.string());
+
+  std::ifstream file(file_path);
+
+  if (!file.is_open()) {
+    pc::logger->warn("Failed to open file");
+    return;
+  }
+
+  nlohmann::json file_json;
+  file >> file_json;
+  _session = file_json.get<PointCasterSession>();
+
+  // check if there is an adjacent .layout file
+  // and load if so
+  std::filesystem::path layout_file_path = file_path;
+  layout_file_path.replace_extension(".layout");
+
+  // and load if so
+  std::ifstream layout_file(layout_file_path, std::ios::binary | std::ios::ate);
+  if (layout_file.is_open()) {
+    std::streamsize layout_size = layout_file.tellg();
+    layout_file.seekg(0, std::ios::beg);
+
+    _session.imgui_layout.resize(layout_size);
+    layout_file.read(_session.imgui_layout.data(), layout_size);
+
+    ImGui::LoadIniSettingsFromMemory(_session.imgui_layout.data(),
+                                     _session.imgui_layout.size());
+  } else {
+    pc::logger->info("Failed to open adjacent .layout file");
+  }
 
   // get saved camera configurations to populate the cams list
   for (auto &saved_camera_config : _session.cameras) {
@@ -456,7 +488,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     _camera_controllers.push_back(std::move(saved_camera));
   }
 
-  spdlog::info("Loaded session '{}'", file_path.filename().string());
+  pc::logger->info("Loaded session '{}'", file_path.filename().string());
 }
 
 void PointCaster::render_cameras() {
@@ -466,9 +498,12 @@ void PointCaster::render_cameras() {
   for (auto &camera_controller : _camera_controllers) {
 
     auto& rendering_config = camera_controller->config().rendering;
+
     const auto frame_size =
       Vector2i{int(rendering_config.resolution[0] / dpiScaling().x()),
 	       int(rendering_config.resolution[1] / dpiScaling().y())};
+
+    if (frame_size.x() < 1 || frame_size.y() < 1) continue;
 
     camera_controller->setup_framebuffer(frame_size);
 
@@ -584,6 +619,73 @@ void PointCaster::draw_control_bar() {
   // }
 }
 
+void PointCaster::draw_onscreen_log() {
+  // if draw log
+  ImVec2 log_window_size{400, 150};
+  const auto viewport_size = ImGui::GetWindowSize();
+
+  using namespace std::chrono_literals;
+  auto latest_messages = pc::logger_lines(10, 10s);
+
+  if (latest_messages.size() > 0) {
+    ImGui::SetNextWindowPos({viewport_size.x - log_window_size.x,
+			     viewport_size.y - log_window_size.y});
+    ImGui::SetNextWindowSize({log_window_size.x, log_window_size.y});
+    ImGui::SetNextWindowBgAlpha(0.5f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushFont(_mono_font);
+    constexpr auto log_window_flags =
+	ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoFocusOnAppearing |
+	ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking;
+    ImGui::Begin("log", nullptr, log_window_flags);
+    ImGui::PushTextWrapPos(log_window_size.x);
+    for (auto log_entry : latest_messages) {
+      ImGui::Spacing();
+
+      auto [log_level, message] = log_entry;
+
+      switch (log_level) {
+      case spdlog::level::info:
+	ImGui::PushStyleColor(ImGuiCol_Text,
+			      ImVec4(1.0f, 1.0f, 1.0f, 1.0f)); // Green
+	ImGui::Text(" [info]");
+	ImGui::SameLine();
+	break;
+      case spdlog::level::warn:
+	ImGui::PushStyleColor(ImGuiCol_Text,
+			      ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow
+	ImGui::Text(" [warn]");
+	ImGui::SameLine();
+	break;
+      case spdlog::level::err:
+	ImGui::PushStyleColor(ImGuiCol_Text,
+			      ImVec4(1.0f, 0.0f, 0.0f, 1.0f)); // Red
+	ImGui::Text("[error]");
+	ImGui::SameLine();
+	break;
+      case spdlog::level::debug:
+	ImGui::PushStyleColor(ImGuiCol_Text,
+			      ImVec4(0.0f, 1.0f, 0.0f, 1.0f)); // Red
+	ImGui::Text("[debug]");
+	ImGui::SameLine();
+	break;
+      case spdlog::level::critical:
+	ImGui::PushStyleColor(ImGuiCol_Text,
+			      ImVec4(1.0f, 0.0f, 1.0f, 1.0f)); // Red
+	ImGui::Text(" [crit]");
+	ImGui::SameLine();
+	break;
+      }
+      ImGui::TextUnformatted(message.c_str());
+      ImGui::PopStyleColor();
+      ImGui::SetScrollHereY();
+    }
+    ImGui::End();
+    ImGui::PopFont();
+    ImGui::PopStyleVar();
+  }
+}
+
 void PointCaster::draw_main_viewport() {
 
   _hovering_camera_index = -1;
@@ -618,11 +720,12 @@ void PointCaster::draw_main_viewport() {
         auto new_camera = std::make_unique<CameraController>(this, _scene.get());
         _camera_controllers.push_back(std::move(new_camera));
         new_camera_index = _camera_controllers.size() - 1;
-        spdlog::info("new camera: {}", new_camera_index);
+        pc::logger->info("new camera: {}", new_camera_index);
       }
 
       for (int i = 0; i < _camera_controllers.size(); i++) {
         const auto &camera_controller = _camera_controllers.at(i);
+	const auto camera_config = camera_controller->config();
 
         ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
         if (new_camera_index == i)
@@ -631,30 +734,103 @@ void PointCaster::draw_main_viewport() {
         if (ImGui::BeginTabItem(camera_controller->name().c_str(), nullptr,
                                 tab_item_flags)) {
 
+	  const auto window_size = ImGui::GetWindowSize();
+
 	  auto *tab_bar = ImGui::GetCurrentTabBar();
 	  float tab_bar_height =
-	    (tab_bar->BarRect.Max.y - tab_bar->BarRect.Min.y) + 5;
+	      (tab_bar->BarRect.Max.y - tab_bar->BarRect.Min.y) + 5;
 	  // TODO 5 pixels above? where's it come from
 
-	  const auto window_size = ImGui::GetWindowSize();
-	  const Vector2 frame_size {window_size.x,
-				   window_size.y - tab_bar_height};
-
-          const auto image_pos = ImGui::GetCursorPos();
-          ImGuiIntegration::image(camera_controller->color_frame(),
-                                  {frame_size.x(), frame_size.y()});
-
-          auto& analysis = camera_controller->config().frame_analysis;
-
-	  if (analysis.enabled && (analysis.contours.draw)) {
-	    ImGui::SetCursorPos(image_pos);
-	    ImGuiIntegration::image(camera_controller->analysis_frame(),
-				    {frame_size.x(), frame_size.y()});
+          if (_session.hide_ui) {
+	    tab_bar_height = 0;
+            ImGui::SetCursorPosY(0);
           }
 
-          draw_viewport_controls(*camera_controller);
+          auto rendering = camera_config.rendering;
+          auto scale_mode = rendering.scale_mode;
+	  const Vector2 frame_space{window_size.x,
+				    window_size.y - tab_bar_height};
+	  camera_controller->viewport_size = frame_space;
 
-          if (ImGui::IsItemHovered())
+          if (scale_mode == ScaleMode::Span) {
+
+            const auto image_pos = ImGui::GetCursorPos();
+            ImGuiIntegration::image(camera_controller->color_frame(),
+                                    {frame_space.x(), frame_space.y()});
+
+            auto analysis = camera_config.frame_analysis;
+
+            if (analysis.enabled && (analysis.contours.draw)) {
+              ImGui::SetCursorPos(image_pos);
+              ImGuiIntegration::image(camera_controller->analysis_frame(),
+                                      {frame_space.x(), frame_space.y()});
+            }
+	  } else if (scale_mode == ScaleMode::Letterbox) {
+
+            float width, height, horizontal_offset, vertical_offset;
+
+            auto frame_aspect_ratio = rendering.resolution[0] /
+                                static_cast<float>(rendering.resolution[1]);
+	    auto space_aspect_ratio = frame_space.x() / frame_space.y();
+
+	    constexpr auto frame_spacing = 5.0f;
+
+	    if (frame_aspect_ratio > space_aspect_ratio) {
+	      width = frame_space.x();
+	      height = std::round(width / frame_aspect_ratio);
+	      horizontal_offset = 0.0f;
+	      vertical_offset =
+		  std::max(0.0f, (frame_space.y() - height) / 2.0f - frame_spacing);
+	    } else {
+	      height = frame_space.y() - 2 * frame_spacing;
+	      width = std::round(height * frame_aspect_ratio);
+	      vertical_offset = 0.0f;
+	      horizontal_offset =
+		  std::max(0.0f, (frame_space.x() - width) / 2.0f);
+	    }
+
+            ImGui::Dummy({horizontal_offset, vertical_offset});
+	    if (horizontal_offset != 0.0f) ImGui::SameLine();
+
+            constexpr auto border_size = 1.0f;
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, border_size);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0, 0});
+
+	    ImGui::BeginChildFrame(ImGui::GetID("letterboxed"),
+				   {width, height});
+
+            const auto image_pos = ImGui::GetCursorPos();
+            ImGuiIntegration::image(camera_controller->color_frame(),
+                                    {width, height});
+
+            auto &analysis = camera_controller->config().frame_analysis;
+
+            if (analysis.enabled && (analysis.contours.draw)) {
+              ImGui::SetCursorPos(image_pos);
+              ImGuiIntegration::image(camera_controller->analysis_frame(),
+                                      {width, height});
+            }
+
+            ImGui::EndChildFrame();
+
+	    ImGui::PopStyleVar();
+            ImGui::PopStyleVar();
+
+	    if (horizontal_offset != 0.0f) ImGui::SameLine();
+            ImGui::Dummy({horizontal_offset, vertical_offset});
+	  }
+
+          if (!_session.hide_ui) {
+            draw_viewport_controls(*camera_controller);
+          }
+
+          if (!_session.show_log) {
+	    draw_onscreen_log();
+          }
+
+          if (ImGui::IsWindowHovered(
+                  ImGuiHoveredFlags_RootAndChildWindows
+                  ))
             _hovering_camera_index = i;
 
           ImGui::EndTabItem();
@@ -663,7 +839,7 @@ void PointCaster::draw_main_viewport() {
       ImGui::EndTabBar();
     }
 
-    ImGui::End();
+    ImGui::End(); // "CamerasRoot"
   }
 }
 
@@ -673,7 +849,7 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
   const auto viewport_window_pos = ImGui::GetWindowPos();
 
   constexpr auto button_size = ImVec2{28, 28};
-  constexpr auto control_inset = ImVec2{10, 5};
+  constexpr auto control_inset = ImVec2{5, 35};
 
   constexpr auto viewport_controls_flags =
       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
@@ -704,14 +880,19 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
     ImGui::PopStyleVar();
   };
 
-  draw_button(ICON_FA_SLIDERS, [&]() {
+  draw_button(ICON_FA_SLIDERS, [&] {
     camera_config.show_window = !camera_config.show_window;
    }, camera_config.show_window);
 
+  draw_button(ICON_FA_ENVELOPE, [&] {
+	if (camera_config.rendering.scale_mode == ScaleMode::Span)
+	  camera_config.rendering.scale_mode = ScaleMode::Letterbox;
+	else camera_config.rendering.scale_mode = ScaleMode::Span;
+   }, camera_config.rendering.scale_mode == ScaleMode::Letterbox);
+
   const auto controls_window_size = ImGui::GetWindowSize();
 
-  ImGui::SetWindowPos({viewport_window_pos.x + viewport_window_size.x -
-			   controls_window_size.x - control_inset.x,
+  ImGui::SetWindowPos({viewport_window_pos.x + control_inset.x,
 		       viewport_window_pos.y + control_inset.y});
 
   ImGui::End();
@@ -720,15 +901,18 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
 
 void PointCaster::draw_camera_control_windows() {
   for (const auto &camera_controller : _camera_controllers) {
-    if (!camera_controller->config().show_window) continue;
+    if (!camera_controller->config().show_window)
+      continue;
+    ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
     ImGui::Begin(camera_controller->name().c_str());
-      camera_controller->draw_imgui_controls();
+    camera_controller->draw_imgui_controls();
     ImGui::End();
   }
 }
 
 void PointCaster::draw_devices_window() {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Devices", nullptr);
 
@@ -827,7 +1011,7 @@ void PointCaster::draw_stats() {
 //  std::thread midi_startup([&]() {
 //    midi_in midi;
 //    auto port_count = midi.get_port_count();
-//    spdlog::info("Detected {} MIDI ports", port_count);
+//    pc::logger->info("Detected {} MIDI ports", port_count);
 //    midi.open_port(0);
 //    midi.set_callback([&](const message &message) {
 //      if (gui::midi_learn_mode) {
@@ -879,6 +1063,7 @@ void PointCaster::draw_stats() {
 
 void PointCaster::draw_controllers_window() {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Controllers", nullptr);
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
@@ -948,29 +1133,30 @@ void PointCaster::drawEvent() {
 
   // Draw gui windows
 
-  draw_menu_bar();
-  draw_control_bar();
+  // draw_menu_bar();
+  // draw_control_bar();
 
   draw_main_viewport();
-  draw_camera_control_windows();
 
-  if (_session.show_devices_window)
-    draw_devices_window();
-  if (_session.show_controllers_window)
-    draw_controllers_window();
-  if (_session.show_stats)
-    draw_stats();
-  if (_session.show_radio_window)
-    _radio->draw_imgui_window();
-  if (_session.show_snapshots_window)
-    _snapshots_context->draw_imgui_window();
-  if (_session.show_global_transform_window)
-    pc::sensors::draw_global_controls();
-
+  if (!_session.hide_ui) {
+    draw_camera_control_windows();
+    if (_session.show_devices_window)
+      draw_devices_window();
+    if (_session.show_controllers_window)
+      draw_controllers_window();
+    if (_session.show_stats)
+      draw_stats();
+    if (_session.show_radio_window)
+      _radio->draw_imgui_window();
+    if (_session.show_snapshots_window)
+      _snapshots_context->draw_imgui_window();
+    if (_session.show_global_transform_window)
+      pc::sensors::draw_global_controls();
 #if WITH_MQTT
-  if (_session.show_mqtt_window)
-    MqttClient::instance()->draw_imgui_window();
+    if (_session.show_mqtt_window)
+      MqttClient::instance()->draw_imgui_window();
 #endif
+  }
 
   _imgui_context.updateApplicationCursor(*this);
 
@@ -995,15 +1181,15 @@ void PointCaster::drawEvent() {
 
   auto error = GL::Renderer::error();
   if (error == GL::Renderer::Error::InvalidFramebufferOperation)
-    spdlog::info("InvalidFramebufferOperation");
+    pc::logger->warn("InvalidFramebufferOperation");
   if (error == GL::Renderer::Error::InvalidOperation)
-    spdlog::info("InvalidOperation");
+    pc::logger->warn("InvalidOperation");
   if (error == GL::Renderer::Error::InvalidValue)
-    spdlog::info("InvalidValue");
+    pc::logger->warn("InvalidValue");
   if (error == GL::Renderer::Error::StackOverflow)
-    spdlog::info("StackOverflow");
+    pc::logger->warn("StackOverflow");
   if (error == GL::Renderer::Error::StackUnderflow)
-    spdlog::info("StackUnderflow");
+    pc::logger->warn("StackUnderflow");
 
   // TODO the timeline should not be linked to GUI drawing
   // so this needs to be run elsewhere, but still needs to
@@ -1016,6 +1202,24 @@ void PointCaster::drawEvent() {
   // Run the next frame immediately
   redraw();
 
+}
+
+void PointCaster::set_full_screen(bool full_screen) {
+  if (full_screen && _display_resolution.has_value()) {
+    pc::logger->info("going full screen");
+    if (!_full_screen) {
+      _restore_window_size = windowSize() / dpiScaling();
+      SDL_GetWindowPosition(window(), &_restore_window_position.x(), &_restore_window_position.y());
+    }
+    setWindowSize(_display_resolution.value() / dpiScaling());
+    SDL_SetWindowPosition(window(), 0, 0);
+    _full_screen = true;
+  } else if (!full_screen) {
+    pc::logger->info("restoring out");
+    setWindowSize(_restore_window_size);
+    SDL_SetWindowPosition(window(), _restore_window_position.x(), _restore_window_position.y());
+    _full_screen = false;
+  }
 }
 
 void PointCaster::viewportEvent(ViewportEvent &event) {
@@ -1032,26 +1236,31 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 
 void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
-  case KeyEvent::Key::Q:
-    save_and_quit();
-    break;
-  case KeyEvent::Key::S:
-    _session.show_devices_window = !_session.show_devices_window;
-    break;
   case KeyEvent::Key::C:
     _session.show_controllers_window = !_session.show_controllers_window;
     if (!_session.show_controllers_window)
       gui::midi_learn_mode = false;
     break;
+  case KeyEvent::Key::D:
+    _session.show_devices_window = !_session.show_devices_window;
+    break;
   case KeyEvent::Key::F:
-    _session.show_stats = !_session.show_stats;
+    set_full_screen(!_full_screen);
+    break;
+  case KeyEvent::Key::G:
+    _session.hide_ui = !_session.hide_ui;
+    break;
+  case KeyEvent::Key::Q:
+    save_and_quit();
     break;
   case KeyEvent::Key::R:
     _session.show_radio_window = !_session.show_radio_window;
     break;
+  case KeyEvent::Key::S:
+    save_session();
+    break;
   case KeyEvent::Key::T:
-    _session.show_global_transform_window =
-        !_session.show_global_transform_window;
+    _session.show_stats = !_session.show_stats;
     break;
   default:
     if (_imgui_context.handleKeyPressEvent(event))

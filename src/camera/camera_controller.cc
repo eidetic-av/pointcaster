@@ -1,5 +1,7 @@
 #include "camera_controller.h"
+#include "../analysis/analyser_2d_config.h"
 #include "../gui_helpers.h"
+#include "../logger.h"
 #include "../math.h"
 #include "../uuid.h"
 #include "camera_config.h"
@@ -21,11 +23,9 @@
 #include <Magnum/PixelFormat.h>
 #include <Magnum/Trade/ImageData.h>
 #include <algorithm>
-#include <mapbox/earcut.hpp>
 #include <numbers>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgproc.hpp>
-#include <spdlog/spdlog.h>
 #include <vector>
 
 #if WITH_MQTT
@@ -48,10 +48,8 @@ CameraController::CameraController(Magnum::Platform::Application *app,
     : CameraController(app, scene, CameraConfiguration{}){};
 
 CameraController::CameraController(Magnum::Platform::Application *app,
-                                   Scene3D *scene, CameraConfiguration config)
-    : _app(app), _config(config), _analysis_thread([this](auto stop_token) {
-        this->frame_analysis(stop_token);
-      }) {
+				   Scene3D *scene, CameraConfiguration config)
+    : _app(app), _config(config) {
 
   // rotations are manipulated by individual parent objects...
   // this makes rotations easier to reason about and serialize,
@@ -69,60 +67,74 @@ CameraController::CameraController(Magnum::Platform::Application *app,
        defaults::magnum::translation.x()},
       {}, Vector3::yAxis()));
 
-  _camera->setAspectRatioPolicy(SceneGraph::AspectRatioPolicy::Extend);
-
   // deserialize our camera configuration into Magnum types
   auto rotation = Euler{Deg_f(_config.rotation[0]), Deg_f(_config.rotation[1]),
                         Deg_f(_config.rotation[2])};
   auto translation = Position{_config.translation[0], _config.translation[1],
                               _config.translation[2]};
-  auto fov = Deg_f(_config.fov);
 
   set_rotation(rotation, true);
   set_translation(translation);
-
-  _camera->setProjectionMatrix(
-      Matrix4::perspectiveProjection(fov, 4.0f / 3.0f, 0.001f, 200.0f));
 
   if (_config.id.empty()) {
     _config.id = pc::uuid::word();
   }
   _config.name = "camera_" + std::to_string(++CameraController::count);
-  if (_config.rendering.resolution[0] == 0) {
-    const auto res = _app->framebufferSize();
-    _config.rendering.resolution = {res.x(), res.y()};
-  }
 
-  spdlog::info("Initialised Camera Controller {} with id {}", _config.name,
-               _config.id);
+  auto resolution = _config.rendering.resolution;
+  _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
+      Deg_f(_config.fov), static_cast<float>(resolution[0]) / resolution[1],
+      0.001f, 200.0f));
+
+  if (resolution[0] == 0 || resolution[1] == 0)
+    _config.rendering.resolution = pc::camera::defaults::rendering_resolution;
+
+  pc::logger->info("{}x{}", resolution[0], resolution[1]);
+
+  setup_framebuffer({resolution[0], resolution[1]});
+
+  pc::logger->info("Initialised Camera Controller {} with id {}", _config.name,
+                   _config.id);
 }
 
 CameraController::~CameraController() {
-  _analysis_thread.request_stop();
   CameraController::count--;
 }
 
 void CameraController::setup_framebuffer(Vector2i frame_size) {
-  if (frame_size == _frame_size) {
+
+  Vector2i scaled_size{
+      static_cast<int>(frame_size.x() / _app->dpiScaling().x()),
+      static_cast<int>(frame_size.y() / _app->dpiScaling().y())};
+
+  auto aspect_ratio = frame_size.x() / static_cast<float>(frame_size.y());
+  if (_config.rendering.scale_mode == ScaleMode::Span &&
+      viewport_size.has_value()) {
+    // automatically set frame height based on size of viewport
+    aspect_ratio = viewport_size->x() / viewport_size->y();
+    scaled_size.y() = scaled_size.x() / aspect_ratio;
+    _config.rendering.resolution[1] =
+        _config.rendering.resolution[0] / aspect_ratio;
+  }
+
+  if (scaled_size == _frame_size) {
     bind_framebuffer();
     return;
   }
 
-  std::lock(_dispatch_analysis_mutex, _color_frame_mutex, _analysis_frame_mutex,
-            _analysis_frame_buffer_data_mutex);
-  std::lock_guard lock_dispatch(_dispatch_analysis_mutex, std::adopt_lock);
-  std::lock_guard lock_color(_color_frame_mutex, std::adopt_lock);
-  std::lock_guard lock_analysis(_analysis_frame_mutex, std::adopt_lock);
-  std::lock_guard lock(_analysis_frame_buffer_data_mutex, std::adopt_lock);
+  _frame_size = scaled_size;
 
-  _frame_size = frame_size;
-  frame_size /= _app->dpiScaling();
+  _frame_analyser.set_frame_size(_frame_size);
+
+  // TODO replace the aspect ratio fix here when we have
+  // a more solid handle over fov control
+  _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
+      Deg_f(_config.fov), aspect_ratio, 0.001f, 200.0f));
+
+  std::lock_guard lock_color(_color_frame_mutex);
 
   _color = std::make_unique<GL::Texture2D>();
   _color->setStorage(1, GL::TextureFormat::RGBA8, _frame_size);
-
-  _analysis_frame = std::make_unique<GL::Texture2D>();
-  _analysis_frame->setStorage(1, GL::TextureFormat::RGBA8, _frame_size);
 
   _depth_stencil = std::make_unique<GL::Renderbuffer>();
   _depth_stencil->setStorage(GL::RenderbufferFormat::Depth24Stencil8,
@@ -149,406 +161,16 @@ GL::Texture2D &CameraController::color_frame() {
 }
 
 GL::Texture2D &CameraController::analysis_frame() {
-  std::lock_guard lock_frame(_analysis_frame_mutex);
-  if (_analysis_frame_buffer_updated) {
-    std::lock_guard lock_buffer(_analysis_frame_buffer_data_mutex);
-    // move updated buffer data into our analysis frame Texture2D...
-    // we first need to create an OpenGL Buffer for it
-    GL::BufferImage2D buffer{
-        Magnum::GL::PixelFormat::RGBA, Magnum::GL::PixelType::UnsignedByte,
-        _frame_size, _analysis_frame_buffer_data, GL::BufferUsage::StaticDraw};
-    // then we can set the data
-    _analysis_frame->setSubImage(0, {}, buffer);
-  }
-  return *_analysis_frame;
+  return _frame_analyser.analysis_frame();
 }
 
 void CameraController::dispatch_analysis() {
-  if (!_config.frame_analysis.enabled)
-    return;
-  std::lock(_dispatch_analysis_mutex, _color_frame_mutex);
-  std::lock_guard lock_dispatch(_dispatch_analysis_mutex, std::adopt_lock);
-  std::lock_guard lock_color(_color_frame_mutex, std::adopt_lock);
-  // move the image onto the CPU for use in our analysis thread
-  _analysis_image = _color->image(0, Image2D{PixelFormat::RGBA8Unorm});
-  _analysis_config = _config.frame_analysis;
-  _analysis_condition_variable.notify_one();
-}
-
-void CameraController::frame_analysis(std::stop_token stop_token) {
-  while (!stop_token.stop_requested()) {
-
-    std::optional<Magnum::Image2D> image_opt;
-    std::optional<FrameAnalysisConfiguration> config_opt;
-
-    {
-      std::unique_lock dispatch_lock(_dispatch_analysis_mutex);
-
-      _analysis_condition_variable.wait(dispatch_lock, [&] {
-        auto values_filled =
-            (_analysis_image.has_value() && _analysis_config.has_value());
-        return stop_token.stop_requested() || values_filled;
-      });
-
-      if (stop_token.stop_requested())
-        break;
-
-      // start move the data onto this thread
-      image_opt = std::move(_analysis_image);
-      _analysis_image.reset();
-
-      config_opt = std::move(_analysis_config);
-      _analysis_config.reset();
-    }
-
-    // now we are free to process our image without holding the main thread
-    auto start_time = std::chrono::system_clock::now();
-
-    auto &image = *image_opt;
-    auto input_frame_size = image.size();
-    auto &analysis_config = *config_opt;
-
-    // create a new RGBA image initialised to fully transparent
-    cv::Mat output_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
-                       cv::Scalar(0, 0, 0, 0));
-
-    // start by wrapping the input image data in an opencv matrix type
-    cv::Mat input_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
-                      image.data());
-
-    // and scale to analysis size if changed
-    cv::Mat scaled_mat;
-    if (input_frame_size.x() != analysis_config.resolution[0] ||
-        input_frame_size.y() != analysis_config.resolution[1]) {
-      auto &resolution = analysis_config.resolution;
-      if (resolution[0] != 0 && resolution[1] != 0) {
-        cv::resize(input_mat, scaled_mat, {resolution[0], resolution[1]}, 0, 0,
-                   cv::INTER_LINEAR);
-      } else {
-        scaled_mat = input_mat;
-      }
-    } else {
-      scaled_mat = input_mat;
-    }
-
-    const cv::Point2f output_scale = {
-        static_cast<float>(input_mat.cols) / scaled_mat.cols,
-        static_cast<float>(input_mat.rows) / scaled_mat.rows};
-    const cv::Point2i output_resolution = {input_frame_size.x(),
-                                           input_frame_size.y()};
-
-    cv::Mat analysis_input(scaled_mat);
-    auto analysis_frame_size = analysis_input.size;
-
-    // convert the image to grayscale
-    cv::cvtColor(analysis_input, analysis_input, cv::COLOR_RGBA2GRAY);
-
-    // binary colour thresholding
-    cv::threshold(analysis_input, analysis_input,
-                  analysis_config.binary_threshold[0],
-                  analysis_config.binary_threshold[1], cv::THRESH_BINARY);
-
-    // blur the image
-    if (analysis_config.blur_size > 0)
-      cv::blur(analysis_input, analysis_input,
-               cv::Size(analysis_config.blur_size, analysis_config.blur_size));
-
-    // done manipulating our analysis input frame here
-
-    if (!_previous_analysis_image.has_value() ||
-        _previous_analysis_image.value().size != analysis_input.size) {
-      // initialise the previous frame if needed
-      _previous_analysis_image = analysis_input;
-    }
-
-    // onto analysis functions
-
-    // // perform canny edge detection
-    auto &canny = analysis_config.canny;
-    if (canny.enabled) {
-      cv::Canny(analysis_input, analysis_input, canny.min_threshold,
-                canny.max_threshold, canny.aperture_size);
-    }
-
-    // find the countours in the frame
-    auto &contours = analysis_config.contours;
-    std::vector<std::vector<cv::Point>> contour_list;
-    cv::findContours(analysis_input, contour_list, cv::RETR_EXTERNAL,
-                     cv::CHAIN_APPROX_SIMPLE);
-
-    // TODO use serializable types all the way through instead of
-    // doubling up with the opencv types and std library types
-
-    // normalise the contours
-    std::vector<std::vector<cv::Point2f>> contour_list_norm;
-    // keep a std copy to easily serialize for publishing
-    std::vector<std::vector<std::array<float, 2>>> contour_list_std;
-
-    std::vector<cv::Point2f> norm_contour;
-    for (auto &contour : contour_list) {
-      norm_contour.clear();
-
-      for (auto &point : contour) {
-        norm_contour.push_back(
-            {point.x / static_cast<float>(analysis_config.resolution[0]),
-             point.y / static_cast<float>(analysis_config.resolution[1])});
-      }
-
-      bool use_contour = true;
-
-      if (contours.simplify) {
-        // remove contours that are too small
-        const double area = cv::contourArea(norm_contour);
-        if (area < contours.simplify_min_area / 1000) {
-          use_contour = false;
-          continue;
-        }
-        // simplify remaining shapes
-        const double epsilon =
-            contours.simplify_arc_scale * cv::arcLength(norm_contour, false);
-        cv::approxPolyDP(norm_contour, norm_contour, epsilon, false);
-      }
-
-      if (use_contour) {
-        contour_list_norm.push_back(norm_contour);
-
-        if (contours.publish) {
-          // if we're publishing shapes we need to use std types
-          std::vector<std::array<float, 2>> contour_std;
-          for (auto &point : norm_contour) {
-            contour_std.push_back({point.x, 1 - point.y});
-          }
-          contour_list_std.push_back(contour_std);
-        }
-      }
-    }
-
-    if (contours.publish) {
-#if WITH_MQTT
-      MqttClient::instance()->publish("contours", contour_list_std);
-#endif
-    }
-
-    // create a version of the contours list scaled to the size
-    // of our output image
-    std::vector<std::vector<cv::Point>> contour_list_scaled;
-    std::vector<cv::Point> scaled_contour;
-    for (auto &contour : contour_list_norm) {
-      scaled_contour.clear();
-      for (auto &point : contour) {
-        scaled_contour.push_back(
-            {static_cast<int>(point.x * input_frame_size.x()),
-             static_cast<int>(point.y * input_frame_size.y())});
-      }
-      contour_list_scaled.push_back(scaled_contour);
-    }
-
-    // triangulation for building polygons from contours
-    auto &triangulate = analysis_config.contours.triangulate;
-
-    std::vector<std::array<cv::Point2f, 3>> triangles;
-    std::vector<std::array<float, 2>> vertices;
-
-    if (triangulate.enabled) {
-
-      for (auto &contour : contour_list_norm) {
-
-        std::vector<std::vector<std::pair<float, float>>> polygon(
-            contour.size());
-        for (auto &point : contour) {
-          polygon[0].push_back({point.x, point.y});
-        }
-        auto indices = mapbox::earcut<int>(polygon);
-
-        std::array<cv::Point2f, 3> triangle;
-
-        auto vertex = 0;
-        for (const auto &index : indices) {
-          auto point =
-              cv::Point2f(polygon[0][index].first, polygon[0][index].second);
-
-          triangle[vertex % 3] = {polygon[0][index].first,
-                                  polygon[0][index].second};
-
-          if (++vertex % 3 == 0) {
-
-            float a = cv::norm(triangle[1] - triangle[0]);
-            float b = cv::norm(triangle[2] - triangle[1]);
-            float c = cv::norm(triangle[2] - triangle[0]);
-            float s = (a + b + c) / 2.0f;
-            float area = std::sqrt(s * (s - a) * (s - b) * (s - c));
-
-            if (area >= triangulate.minimum_area) {
-
-              triangles.push_back(triangle);
-              vertices.push_back({triangle[0].x, 1 - triangle[0].y});
-              vertices.push_back({triangle[1].x, 1 - triangle[1].y});
-              vertices.push_back({triangle[2].x, 1 - triangle[2].y});
-
-              if (triangulate.draw) {
-                static const cv::Scalar triangle_fill(120, 120, 60, 120);
-                static const cv::Scalar triangle_border(255, 255, 0, 255);
-
-                std::array<cv::Point, 3> triangle_scaled;
-                std::transform(
-                    triangle.begin(), triangle.end(), triangle_scaled.begin(),
-                    [&](auto &point) {
-                      return cv::Point{
-                          static_cast<int>(point.x * input_frame_size.x()),
-                          static_cast<int>(point.y * input_frame_size.y())};
-                    });
-
-                cv::fillConvexPoly(output_mat, triangle_scaled.data(), 3,
-                                   triangle_fill);
-                cv::polylines(output_mat, triangle_scaled, true,
-                              triangle_border, 1, cv::LINE_AA);
-              }
-            }
-
-            vertex = 0;
-          }
-        }
-      }
-
-      if (triangulate.publish && !vertices.empty()) {
-        if (vertices.size() < 3) {
-          spdlog::warn("Invalid triangle vertex count: {}", vertices.size());
-        } else {
-#if WITH_MQTT
-          MqttClient::instance()->publish("triangles", vertices);
-#endif
-        }
-      }
-    }
-
-    if (contours.draw) {
-      const cv::Scalar line_colour{255, 0, 0, 255};
-      constexpr auto line_thickness = 2;
-      cv::drawContours(output_mat, contour_list_scaled, -1, line_colour,
-                       line_thickness, cv::LINE_AA);
-    }
-
-    // optical flow
-    const auto &optical_flow = analysis_config.optical_flow;
-    if (optical_flow.enabled) {
-
-      static const cv::Scalar line_colour{200, 200, 255, 200};
-
-      struct FlowVector {
-        std::array<float, 2> position;
-        std::array<float, 2> magnitude;
-        std::array<float, 4> array() const {
-          return {position[0], position[1], magnitude[0], magnitude[1]};
-        }
-        std::array<float, 4> flipped_array() const {
-          return {position[0], 1 - position[1], magnitude[0], magnitude[1]};
-        }
-      };
-
-      std::vector<FlowVector> flow_field;
-      // collect data as flattened layout as well
-      // (easier to serialize for publishing)
-      std::vector<std::array<float, 4>> flow_field_flattened;
-
-      // find acceptable feature points to track accross
-      // the previous frame
-      std::vector<cv::Point2f> feature_points;
-      cv::goodFeaturesToTrack(_previous_analysis_image.value(), feature_points,
-                              optical_flow.feature_point_count, 0.01,
-                              optical_flow.feature_point_distance);
-
-      // track the feature points' motion into the new frame
-      std::vector<cv::Point2f> new_feature_points;
-      std::vector<uchar> status;
-      if (feature_points.size() > 0) {
-        cv::calcOpticalFlowPyrLK(_previous_analysis_image.value(),
-                                 analysis_input, feature_points,
-                                 new_feature_points, status, cv::noArray());
-      }
-
-      for (size_t i = 0; i < feature_points.size(); ++i) {
-        if (status[i] == false)
-          continue;
-        cv::Point2f start = {feature_points[i].x, feature_points[i].y};
-        cv::Point2f end = {new_feature_points[i].x, new_feature_points[i].y};
-
-        cv::Point2f distance{end.x - start.x, end.y - start.y};
-        float magnitude =
-            std::sqrt(distance.x * distance.x + distance.y * distance.y);
-        float scaled_magnitude =
-            std::pow(magnitude, optical_flow.magnitude_exponent) *
-            optical_flow.magnitude_scale;
-
-        cv::Point2f scaled_distance{distance.x * scaled_magnitude / magnitude,
-                                    distance.y * scaled_magnitude / magnitude};
-
-        cv::Point2f normalised_position{start.x / analysis_frame_size[0],
-                                        start.y / analysis_frame_size[1]};
-        cv::Point2f normalised_distance{
-            scaled_distance.x / analysis_frame_size[0],
-            scaled_distance.y / analysis_frame_size[1]};
-
-        cv::Point2f absolute_distance{std::abs(normalised_distance.x),
-                                      std::abs(normalised_distance.y)};
-
-        if (absolute_distance.x > optical_flow.minimum_distance &&
-            absolute_distance.y > optical_flow.minimum_distance &&
-            absolute_distance.x < optical_flow.maximum_distance &&
-            absolute_distance.y < optical_flow.maximum_distance) {
-
-          FlowVector flow_vector;
-          flow_vector.position = {normalised_position.x, normalised_position.y};
-          flow_vector.magnitude = {normalised_distance.x,
-                                   normalised_distance.y};
-          flow_field.push_back(flow_vector);
-          flow_field_flattened.push_back(flow_vector.flipped_array());
-
-          if (optical_flow.draw) {
-            cv::Point2f scaled_end = {
-                normalised_position.x + normalised_distance.x,
-                normalised_position.y + normalised_distance.y};
-            cv::Point2f frame_start{normalised_position.x * output_resolution.x,
-                                    normalised_position.y *
-                                        output_resolution.y};
-            cv::Point2f frame_end{scaled_end.x * output_resolution.x,
-                                  scaled_end.y * output_resolution.y};
-            cv::line(output_mat, frame_start, frame_end, line_colour, 3,
-                     cv::LINE_AA);
-          }
-        }
-      }
-
-      if (flow_field.size() > 0 && optical_flow.publish) {
-#if WITH_MQTT
-        MqttClient::instance()->publish("flow", flow_field_flattened);
-#endif
-      }
-    }
-
-    // copy the resulting cv::Mat data into our buffer data container
-    auto element_count = output_mat.total() * output_mat.channels();
-    std::unique_lock lock(_analysis_frame_buffer_data_mutex);
-    _analysis_frame_buffer_data =
-        Containers::Array<uint8_t>(NoInit, element_count);
-
-    std::copy(output_mat.datastart, output_mat.dataend,
-              _analysis_frame_buffer_data.data());
-
-    _analysis_frame_buffer_updated = true;
-    _previous_analysis_image = analysis_input;
-
-    using namespace std::chrono;
-    auto end_time = system_clock::now();
-    _analysis_time = duration_cast<milliseconds>(end_time - start_time);
-  }
+  std::unique_lock lock(_color_frame_mutex);
+  _frame_analyser.dispatch_analysis(*_color.get(), _config.frame_analysis);
 }
 
 int CameraController::analysis_time() {
-  std::chrono::milliseconds time = _analysis_time;
-  if (time.count() > 0)
-    return time.count();
-  else
-    return 1;
+  return _frame_analyser.analysis_time();
 }
 
 // TODO
@@ -569,8 +191,8 @@ Matrix4 CameraController::make_projection_matrix() {
   const auto focal_point =
       unproject(_frame_size / 2, depth_at(_frame_size / 2));
   auto camera_location = _camera_parent->transformation().translation();
-  spdlog::info("camera_location: {}, {}, {}", camera_location.x(),
-               camera_location.y(), camera_location.z());
+  pc::logger->info("camera_location: {}, {}, {}", camera_location.x(),
+                   camera_location.y(), camera_location.z());
   const auto target_distance = (camera_location - focal_point).length();
 
   if (!_is_dz_started) {
@@ -737,65 +359,95 @@ Float CameraController::depth_at(const Vector2i &window_position) {
 
 void CameraController::draw_imgui_controls() {
 
-    using pc::gui::draw_slider;
-    using pc::gui::vector_table;
+  using pc::gui::draw_slider;
+  using pc::gui::vector_table;
 
-    if (ImGui::CollapsingHeader("Transform", _config.transform_open)) {
-        auto &translate = _config.translation;
-        if (vector_table("Translation", translate, -10.f, 10.f, 0.0f)) {
-            set_translation(Position{translate[0], translate[1], translate[2]});
-        }
-	auto &rotate = _config.rotation;
-	if (vector_table("Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
-	    set_rotation(
-		Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
-	}
+  ImGui::SetNextItemOpen(_config.transform_open);
+  if (ImGui::CollapsingHeader("Transform", _config.transform_open)) {
+    _config.transform_open = true;
+    auto &translate = _config.translation;
+    if (vector_table("Translation", translate, -10.f, 10.f, 0.0f)) {
+      set_translation(Position{translate[0], translate[1], translate[2]});
+    }
+    auto &rotate = _config.rotation;
+    if (vector_table("Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
+      set_rotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
+    }
+  } else {
+    _config.transform_open = false;
+  }
+
+  ImGui::SetNextItemOpen(_config.rendering_open);
+  if (ImGui::CollapsingHeader("Rendering")) {
+    _config.rendering_open = true;
+    auto &rendering = _config.rendering;
+
+    auto current_scale_mode = rendering.scale_mode;
+    if (current_scale_mode == ScaleMode::Letterbox) {
+      vector_table("Resolution", rendering.resolution, 2, 7680,
+                   {pc::camera::defaults::rendering_resolution[0],
+                    pc::camera::defaults::rendering_resolution[1]});
+    } else if (current_scale_mode == ScaleMode::Span) {
+      // disable setting y resolution manually in span mode,
+      // it's inferred from the x resolution and window size
+      vector_table("Resolution", rendering.resolution, 2, 7680,
+                   {pc::camera::defaults::rendering_resolution[0],
+                    pc::camera::defaults::rendering_resolution[1]},
+                   {false, true});
     }
 
-    if (ImGui::CollapsingHeader("Rendering", _config.rendering_open)) {
-        auto &rendering = _config.rendering;
-        ImGui::Checkbox("ground grid", &rendering.ground_grid);
-        ImGui::TextDisabled("Resolution");
-        ImGui::InputInt("render width", &rendering.resolution[0]);
-        ImGui::SameLine();
-        ImGui::InputInt("render height", &rendering.resolution[1]);
-        ImGui::Spacing();
-        draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
-                           0.0015f);
+    auto scale_mode_i = static_cast<int>(current_scale_mode);
+    const char *options[] = {"Span", "Letterbox"};
+    ImGui::Combo("Scale mode", &scale_mode_i, options,
+                 static_cast<int>(ScaleMode::Count));
+    rendering.scale_mode = static_cast<ScaleMode>(scale_mode_i);
+    if (rendering.scale_mode != current_scale_mode) {
+      const auto aspect_ratio_policy =
+          rendering.scale_mode == ScaleMode::Letterbox
+              ? SceneGraph::AspectRatioPolicy::NotPreserved
+              : SceneGraph::AspectRatioPolicy::Extend;
+      _camera->setAspectRatioPolicy(aspect_ratio_policy);
     }
 
-    if (ImGui::CollapsingHeader("Analysis", _config.analysis_open)) {
-        auto &frame_analysis = _config.frame_analysis;
-        ImGui::Checkbox("Enabled", &frame_analysis.enabled);
-        if (frame_analysis.enabled) {
+    ImGui::Spacing();
 
-            ImGui::TextDisabled("Resolution");
-            ImGui::InputInt("width", &frame_analysis.resolution[0]);
-            ImGui::SameLine();
-            ImGui::InputInt("height", &frame_analysis.resolution[1]);
-            ImGui::Spacing();
+    ImGui::Checkbox("ground grid", &rendering.ground_grid);
 
-            ImGui::TextDisabled("Binary threshold");
-            draw_slider<int>("min", &frame_analysis.binary_threshold[0], 1, 255,
-                             1);
-            draw_slider<int>("max", &frame_analysis.binary_threshold[1], 1, 255,
-                             255);
-            ImGui::Spacing();
+    draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
+                       0.0015f);
+  } else {
+    _config.rendering_open = false;
+  }
 
-            draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
+  ImGui::SetNextItemOpen(_config.analysis_open);
+  if (ImGui::CollapsingHeader("Analysis", _config.analysis_open)) {
+    _config.analysis_open = true;
+    auto &frame_analysis = _config.frame_analysis;
+    ImGui::Checkbox("Enabled", &frame_analysis.enabled);
+    if (frame_analysis.enabled) {
+      ImGui::SameLine();
+      ImGui::Checkbox("Use CUDA", &frame_analysis.use_cuda);
 
-            auto &canny = frame_analysis.canny;
-            ImGui::Checkbox("Canny edge detection", &canny.enabled);
-            if (canny.enabled) {
+      vector_table("Resolution", frame_analysis.resolution, 2, 3840,
+                   {pc::camera::defaults::analysis_resolution[0],
+                    pc::camera::defaults::analysis_resolution[1]},
+                   {}, {"width", "height"});
+      vector_table("Binary threshold", frame_analysis.binary_threshold, 1, 255,
+                   {50, 255}, {}, {"min", "max"});
+
+      draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
+
+      auto &canny = frame_analysis.canny;
+      ImGui::Checkbox("Canny edge detection", &canny.enabled);
+      if (canny.enabled) {
         draw_slider<int>("canny min", &canny.min_threshold, 0, 255, 100);
         draw_slider<int>("canny max", &canny.max_threshold, 0, 255, 255);
         int aperture_in = (canny.aperture_size - 1) / 2;
         draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
         canny.aperture_size = aperture_in * 2 + 1;
-            }
+      }
 
-            if (gui::begin_tree_node("Contours",
-                                     frame_analysis.contours_open)) {
+      if (gui::begin_tree_node("Contours", frame_analysis.contours_open)) {
         auto &contours = frame_analysis.contours;
 
         ImGui::Checkbox("Draw on viewport", &contours.draw);
@@ -803,7 +455,7 @@ void CameraController::draw_imgui_controls() {
         ImGui::Checkbox("Simplify", &contours.simplify);
         if (contours.simplify) {
           draw_slider<float>("arc scale", &contours.simplify_arc_scale,
-                             0.000001f, 0.015f, 0.001f);
+                             0.000001f, 0.15f, 0.01f);
           draw_slider<float>("min area", &contours.simplify_min_area, 0.0001f,
                              2.0f, 0.0001f);
         }
@@ -819,10 +471,10 @@ void CameraController::draw_imgui_controls() {
                              0.0f, 0.02f, 0.0f);
         }
         ImGui::TreePop();
-            }
+      }
 
-            if (gui::begin_tree_node("Optical Flow",
-                                     frame_analysis.optical_flow_open)) {
+      if (gui::begin_tree_node("Optical Flow",
+                               frame_analysis.optical_flow_open)) {
         auto &optical_flow = frame_analysis.optical_flow;
         ImGui::Checkbox("Enabled", &optical_flow.enabled);
         ImGui::Checkbox("Draw", &optical_flow.draw);
@@ -833,6 +485,14 @@ void CameraController::draw_imgui_controls() {
         draw_slider<float>("Points distance",
                            &optical_flow.feature_point_distance, 0.001f, 30.0f,
                            10.0f);
+        if (frame_analysis.use_cuda) {
+	  float quality_level =
+	      optical_flow.cuda_feature_detector_quality_cutoff * 10.0f;
+	  draw_slider<float>("Point quality cutoff", &quality_level, 0.01f,
+			     1.0f, 0.1f);
+	  optical_flow.cuda_feature_detector_quality_cutoff =
+	      quality_level / 10.0f;
+        }
         draw_slider<float>("Magnitude", &optical_flow.magnitude_scale, 0.1f,
                            5.0f, 1.0f);
         draw_slider<float>("Magnitude exponent",
@@ -844,9 +504,11 @@ void CameraController::draw_imgui_controls() {
                            0.0f, 0.8f, 0.8f);
 
         ImGui::TreePop();
-            }
-        }
+      }
     }
+  } else {
+    _config.analysis_open = false;
+  }
 }
 
 } // namespace pc::camera

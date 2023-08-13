@@ -2,15 +2,27 @@ cmake_minimum_required(VERSION 3.22.0)
 project(bob-pointcaster LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 17)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX TRUE)
 endif()
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_MQTT "Enable MQTT client support" ON)
+option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
+option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
+option(WITH_MEMORY_SANITIZER "Enable memory sanitizer on Debug configuration builds" OFF)
+
+find_program(MOLD_LINKER_FOUND mold)
+if (LINUX AND MOLD_LINKER_FOUND)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fuse-ld=mold")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fuse-ld=mold")
+endif()
+
 
 # ----- imgui lib -----
 
@@ -120,6 +132,9 @@ list(APPEND LINK_LIBS fmt::fmt)
 find_package(spdlog CONFIG REQUIRED)
 list(APPEND LINK_LIBS spdlog::spdlog_header_only)
 
+find_package(nlohmann_json CONFIG REQUIRED)
+list(APPEND LINK_LIBS nlohmann_json::nlohmann_json)
+
 find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
 list(APPEND INCLUDE_DIRS ${ZPP_BITS_INCLUDE_DIRS})
 
@@ -130,6 +145,7 @@ set(SOURCE_FILES
   src/devices/device.cc
   src/devices/usb.cc
   src/camera/camera_controller.cc
+  src/analysis/analyser_2d.cc
   src/radio.cc
   src/snapshots.cc
   src/point_cloud_renderer.cc
@@ -157,10 +173,15 @@ target_include_directories(pointcaster PRIVATE
 target_link_libraries(pointcaster PRIVATE 
     ${LINK_LIBS} ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
 
-if (LINUX)
-  # enable thread sanitizer for debug builds
-  # target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
-  # target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
+if (WITH_THREAD_SANITIZER)
+  target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
+  target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
+elseif(WITH_ADDRESS_SANITIZER)
+  target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
+  target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
+elseif(WITH_MEMORY_SANITIZER)
+  target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=memory>")
+  target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=memory>")
 endif()
 
 # ----- Post-build actions -----

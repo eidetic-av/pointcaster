@@ -14,10 +14,10 @@ namespace pc::skybridge {
 
 	void initConnection() {
 		std::thread skybridge_status_thread([&]() {
-			spdlog::info("Initialising Skybridge connection...");
+			pc::logger->info("Initialising Skybridge connection...");
 			initNetSystem();
 			ix::WebSocket socket;
-			spdlog::info("Connecting to server at '{}'", server_endpoint);
+			pc::logger->info("Connecting to server at '{}'", server_endpoint);
 			socket.setUrl(server_endpoint);
 			// send keep-alive message every 30s
 			socket.setPingInterval(30);

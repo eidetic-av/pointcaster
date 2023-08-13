@@ -6,6 +6,7 @@
 #include <optional>
 #include <vector>
 #include <functional>
+#include <thread>
 
 namespace pc {
 
@@ -33,6 +34,8 @@ getDeviceTypeFromUsbDescriptor(struct libusb_device_descriptor desc);
 class UsbMonitor {
 public:
   UsbMonitor();
+private:
+  std::jthread _usb_monitor_thread;
 };
 
 std::optional<std::shared_ptr<pc::sensors::Device>>
