@@ -104,7 +104,8 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
                                            input_frame_size.y()};
 
     cv::Mat analysis_input(scaled_mat);
-    auto analysis_frame_size = analysis_input.size;
+    cv::Point2i analysis_frame_size = {analysis_input.size[1],
+				       analysis_input.size[0]};
 
     // convert the image to grayscale
     cv::cvtColor(analysis_input, analysis_input, cv::COLOR_RGBA2GRAY);
@@ -351,11 +352,12 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
         cv::Point2f scaled_distance{distance.x * scaled_magnitude / magnitude,
                                     distance.y * scaled_magnitude / magnitude};
 
-        cv::Point2f normalised_position{start.x / analysis_frame_size[0],
-                                        start.y / analysis_frame_size[1]};
+        cv::Point2f normalised_position{start.x / analysis_frame_size.x,
+                                        start.y / analysis_frame_size.y};
+
         cv::Point2f normalised_distance{
-            scaled_distance.x / analysis_frame_size[0],
-            scaled_distance.y / analysis_frame_size[1]};
+            scaled_distance.x / analysis_frame_size.x,
+            scaled_distance.y / analysis_frame_size.y};
 
         cv::Point2f absolute_distance{std::abs(normalised_distance.x),
                                       std::abs(normalised_distance.y)};
@@ -367,21 +369,21 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
 
           FlowVector flow_vector;
           flow_vector.position = {normalised_position.x, normalised_position.y};
-          flow_vector.magnitude = {normalised_distance.x,
-                                   normalised_distance.y};
+
+          flow_vector.magnitude = {normalised_distance.x, normalised_distance.y};
+
           flow_field.push_back(flow_vector);
           flow_field_flattened.push_back(flow_vector.flipped_array());
 
           if (optical_flow.draw) {
-            cv::Point2f scaled_end = {
-                normalised_position.x + normalised_distance.x,
-                normalised_position.y + normalised_distance.y};
-            cv::Point2f frame_start{normalised_position.x * output_resolution.x,
-                                    normalised_position.y *
-                                        output_resolution.y};
-            cv::Point2f frame_end{scaled_end.x * output_resolution.x,
-                                  scaled_end.y * output_resolution.y};
-            cv::line(output_mat, frame_start, frame_end, line_colour, 3,
+	    cv::Point2f normalised_line_end = {
+		normalised_position.x + normalised_distance.x,
+		normalised_position.y + normalised_distance.y};
+	    cv::Point2f line_start{normalised_position.x * output_resolution.x,
+				   normalised_position.y * output_resolution.y};
+	    cv::Point2f line_end{normalised_line_end.x * output_resolution.x,
+				 normalised_line_end.y * output_resolution.y};
+            cv::line(output_mat, line_start, line_end, line_colour, 3,
                      cv::LINE_AA);
           }
         }
