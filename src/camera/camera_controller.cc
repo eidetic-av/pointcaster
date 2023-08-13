@@ -484,12 +484,12 @@ void CameraController::draw_imgui_controls() {
                            &optical_flow.feature_point_distance, 0.001f, 30.0f,
                            10.0f);
         if (frame_analysis.use_cuda) {
-	  float quality_level =
-	      optical_flow.cuda_feature_detector_quality_cutoff * 10.0f;
-	  draw_slider<float>("Point quality cutoff", &quality_level, 0.01f,
-			     1.0f, 0.1f);
-	  optical_flow.cuda_feature_detector_quality_cutoff =
-	      quality_level / 10.0f;
+          float quality_level =
+              optical_flow.cuda_feature_detector_quality_cutoff * 10.0f;
+          draw_slider<float>("Point quality cutoff", &quality_level, 0.01f,
+                             1.0f, 0.1f);
+          optical_flow.cuda_feature_detector_quality_cutoff =
+              quality_level / 10.0f;
         }
         draw_slider<float>("Magnitude", &optical_flow.magnitude_scale, 0.1f,
                            5.0f, 1.0f);
@@ -501,6 +501,12 @@ void CameraController::draw_imgui_controls() {
         draw_slider<float>("Maximum distance", &optical_flow.maximum_distance,
                            0.0f, 0.8f, 0.8f);
 
+        ImGui::TreePop();
+      }
+
+      if (gui::begin_tree_node("Output", frame_analysis.output_open)) {
+        vector_table("Scale", frame_analysis.output_scale, 0.0f, 2.0f, 1.0f);
+        vector_table("Offset", frame_analysis.output_offset, -1.0f, 1.0f, 0.0f);
         ImGui::TreePop();
       }
     }
