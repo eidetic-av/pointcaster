@@ -245,6 +245,9 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     const cv::Point2i analysis_frame_size = {analysis_config.resolution[0],
                                              analysis_config.resolution[1]};
 
+    const auto &output_scale = analysis_config.output_scale;
+    const auto &output_offset = analysis_config.output_offset;
+
     cv::Mat analysis_input;
     // TODO this try/catch could be replaced with better CUDA
     // synchronisation... it throws when k4a initialises it's CUDA pipeline
@@ -312,7 +315,10 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
           // if we're publishing shapes we need to use std types
           std::vector<std::array<float, 2>> contour_std;
           for (auto &point : norm_contour) {
-            contour_std.push_back({point.x, 1 - point.y});
+            auto output_x = point.x * output_scale[0] + output_offset[0];
+            auto output_y = output_scale[1] -
+                            (point.y * output_scale[1] - output_offset[1]);
+            contour_std.push_back({output_x, output_y});
           }
           contour_list_std.push_back(contour_std);
         }
@@ -378,9 +384,17 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
             if (area >= triangulate.minimum_area) {
 
               triangles.push_back(triangle);
-              vertices.push_back({triangle[0].x, 1 - triangle[0].y});
-              vertices.push_back({triangle[1].x, 1 - triangle[1].y});
-              vertices.push_back({triangle[2].x, 1 - triangle[2].y});
+
+              if (triangulate.publish) {
+                for (int i = 0; i < 3; i++) {
+                  auto output_x =
+                      triangle[i].x * output_scale[0] + output_offset[0];
+                  auto output_y =
+                      output_scale[1] -
+                      (triangle[i].y * output_scale[1] - output_offset[1]);
+                  vertices.push_back({output_x, output_y});
+                }
+              }
 
               if (triangulate.draw) {
                 static const cv::Scalar triangle_fill(120, 120, 60, 120);
@@ -493,6 +507,15 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
 
           flow_field.push_back(flow_vector);
 
+          if (optical_flow.publish) {
+            auto flat_vector = flow_vector.array();
+            flat_vector[0] =
+                flat_vector[0] * output_scale[0] + output_offset[0];
+            flat_vector[1] =
+                output_scale[1] -
+                (flat_vector[1] * output_scale[1] - output_offset[1]);
+            flow_field_flattened.push_back(flat_vector);
+          }
 
           if (optical_flow.draw) {
             cv::Point2f normalised_line_end = {
