@@ -1250,6 +1250,11 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   case KeyEvent::Key::G:
     _session.hide_ui = !_session.hide_ui;
     break;
+#if WITH_MQTT
+  case KeyEvent::Key::M:
+    _session.show_mqtt_window = !_session.show_mqtt_window;
+    break;
+#endif
   case KeyEvent::Key::Q:
     save_and_quit();
     break;
