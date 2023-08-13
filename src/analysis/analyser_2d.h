@@ -46,7 +46,18 @@ private:
 
   std::atomic<std::chrono::milliseconds> _analysis_time;
 
+  cv::Mat setup_input_frame(Magnum::Image2D &input,
+			    const pc::analysis::Analyser2DConfiguration &config);
+
+  std::tuple<std::vector<cv::Point2f>, std::vector<cv::Point2f>,
+             std::vector<uchar>>
+  calculate_optical_flow(const cv::Mat &input_frame_1,
+			 const cv::Mat &input_frame_2,
+			 const pc::analysis::OpticalFlowConfiguration &config,
+			 const bool use_cuda);
+
   void frame_analysis(std::stop_token stop_token);
+
 };
 
 } // namespace pc::analysis

@@ -47,6 +47,7 @@ struct OpticalFlowConfiguration {
   bool publish = false;
   int feature_point_count = 250;
   float feature_point_distance = 10.0f;
+  float cuda_feature_detector_quality_cutoff = 0.01f;
   float magnitude_scale = 1.0f;
   float magnitude_exponent = 1.0f;
   float minimum_distance = 0.0f;
@@ -59,10 +60,10 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(OpticalFlowConfiguration, enabled, draw,
                                    maximum_distance);
 
 struct Analyser2DConfiguration {
-  bool enabled;
+  bool enabled = false;
+  bool use_cuda = false;
   std::array<int, 2> resolution = {480, 270};
   std::array<int, 2> binary_threshold = {50, 255};
-  bool greyscale_conversion = true;
   int blur_size = 1;
 
   CannyEdgeConfiguration canny;
@@ -74,10 +75,9 @@ struct Analyser2DConfiguration {
   bool optical_flow_open;
 };
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Analyser2DConfiguration, enabled,
-                                   resolution, binary_threshold,
-                                   greyscale_conversion, blur_size, canny,
-                                   contours, contours_open, optical_flow,
-                                   optical_flow_open);
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Analyser2DConfiguration, enabled, resolution,
+				   binary_threshold, blur_size, canny, contours,
+				   contours_open, optical_flow,
+				   optical_flow_open);
 
 } // namespace pc::analysis

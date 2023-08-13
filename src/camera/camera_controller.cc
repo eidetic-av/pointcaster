@@ -425,6 +425,8 @@ void CameraController::draw_imgui_controls() {
     auto &frame_analysis = _config.frame_analysis;
     ImGui::Checkbox("Enabled", &frame_analysis.enabled);
     if (frame_analysis.enabled) {
+      ImGui::SameLine();
+      ImGui::Checkbox("Use CUDA", &frame_analysis.use_cuda);
 
       vector_table("Resolution", frame_analysis.resolution, 2, 3840,
                    {pc::camera::defaults::analysis_resolution[0],
@@ -483,6 +485,14 @@ void CameraController::draw_imgui_controls() {
         draw_slider<float>("Points distance",
                            &optical_flow.feature_point_distance, 0.001f, 30.0f,
                            10.0f);
+        if (frame_analysis.use_cuda) {
+	  float quality_level =
+	      optical_flow.cuda_feature_detector_quality_cutoff * 10.0f;
+	  draw_slider<float>("Point quality cutoff", &quality_level, 0.01f,
+			     1.0f, 0.1f);
+	  optical_flow.cuda_feature_detector_quality_cutoff =
+	      quality_level / 10.0f;
+        }
         draw_slider<float>("Magnitude", &optical_flow.magnitude_scale, 0.1f,
                            5.0f, 1.0f);
         draw_slider<float>("Magnitude exponent",
