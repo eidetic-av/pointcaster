@@ -54,10 +54,11 @@ struct OpticalFlowConfiguration {
   float maximum_distance = 0.5f;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(OpticalFlowConfiguration, enabled, draw,
-                                   publish, feature_point_count,
-                                   feature_point_distance, magnitude_scale,
-                                   magnitude_exponent, minimum_distance,
-                                   maximum_distance);
+				   publish, feature_point_count,
+				   feature_point_distance,
+				   cuda_feature_detector_quality_cutoff,
+				   magnitude_scale, magnitude_exponent,
+				   minimum_distance, maximum_distance);
 
 struct Analyser2DConfiguration {
   bool enabled = false;
@@ -75,9 +76,9 @@ struct Analyser2DConfiguration {
   bool optical_flow_open;
 };
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Analyser2DConfiguration, enabled, resolution,
-				   binary_threshold, blur_size, canny, contours,
-				   contours_open, optical_flow,
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Analyser2DConfiguration, enabled, use_cuda,
+				   resolution, binary_threshold, blur_size,
+				   canny, contours, contours_open, optical_flow,
 				   optical_flow_open);
 
 } // namespace pc::analysis
