@@ -78,9 +78,16 @@ cv::Mat Analyser2D::setup_input_frame(Magnum::Image2D &input,
 
     // blur the image
     if (config.blur_size > 0) {
+
+      // for cuda's guassian blurring, blur_size must be an odd number
+      auto blur_size = config.blur_size;
+      if (blur_size % 2 == 0) blur_size += 1;
+      // and a maximum of 31
+      if (blur_size > 31) blur_size = 31;
+
       auto filter = cv::cuda::createGaussianFilter(
 	  gpu_return_mat.type(), gpu_return_mat.type(),
-	  cv::Size(config.blur_size, config.blur_size), 0);
+	  cv::Size(blur_size, blur_size), 0);
       filter->apply(gpu_return_mat, gpu_return_mat);
     }
 
@@ -158,15 +165,19 @@ Analyser2D::calculate_optical_flow(
     feature_point_detector->detect(gpu_input_frame_2,
                                    gpu_feature_point_positions);
 
-    // track the feature points' motion into the new frame
-    auto optical_flow_filter = cv::cuda::SparsePyrLKOpticalFlow::create();
-    optical_flow_filter->calc(
-        gpu_input_frame_2, gpu_input_frame_1, gpu_feature_point_positions,
-        gpu_new_feature_point_positions, gpu_feature_point_status);
+    if (!gpu_feature_point_positions.empty()) {
 
-    gpu_feature_point_positions.download(feature_point_positions);
-    gpu_new_feature_point_positions.download(new_feature_point_positions);
-    gpu_feature_point_status.download(status);
+      // track the feature points' motion into the new frame
+      auto optical_flow_filter = cv::cuda::SparsePyrLKOpticalFlow::create();
+      optical_flow_filter->calc(
+          gpu_input_frame_2, gpu_input_frame_1, gpu_feature_point_positions,
+          gpu_new_feature_point_positions, gpu_feature_point_status);
+
+      gpu_feature_point_positions.download(feature_point_positions);
+      gpu_new_feature_point_positions.download(new_feature_point_positions);
+      gpu_feature_point_status.download(status);
+
+    }
 
   } else {
     // find acceptable feature points to track accross
