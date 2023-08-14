@@ -1,20 +1,26 @@
 #+title: PointCaster
 #+author: Matt Hughes
-* Building
+* Developing
 + ~pointcaster~ requires [[https://cmake.org/][CMake]] and [[https://vcpkg.io][vcpkg]] to build and manage dependencies. A working CUDA toolkit installation and ~nvcc~ on the path is also required.
-+ Linux builds use GCC 12.3.0
-+ Windows builds use Clang 15.0.1
-+ CUDA version for both OS is CUDA 12.2.r12
-*** Configure
++ Linux builds are using GCC 12.3.0
++ Windows builds use MSVC v143
++ CUDA version 12.2.r12
+** Configure
 #+begin_src fish
 cmake -B build \
   -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
   -DCMAKE_BUILD_TYPE=Debug \
   -DVCPKG_OVERLAY_PORTS=$(pwd)/ports
 #+end_src
-*** Build
+*** On Linux systems with multiple versions of GCC
+At least Arch is shipping with GCC 13 as default, so the `CMAKE_CXX_COMPILER` CMake option needs to be set:
 #+begin_src fish
-cmake --build build
+cmake -B build -DCMAKE_CXX_COMPILER=/usr/bin/gcc-12 ...
+#+end_src
+** Build
+#+begin_src fish
+cd build
+cmake --build .
 #+end_src
 * Pipeline
 ** Sensor Drivers
