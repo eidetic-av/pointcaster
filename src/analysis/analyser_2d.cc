@@ -33,17 +33,19 @@ void Analyser2D::set_frame_size(Magnum::Vector2i frame_size) {
 }
 
 void Analyser2D::dispatch_analysis(Magnum::GL::Texture2D &texture,
-				   Analyser2DConfiguration &config) {
-  if (!config.enabled) return;
+                                   Analyser2DConfiguration &config) {
+  if (!config.enabled)
+    return;
   std::lock_guard lock_dispatch(_dispatch_mutex);
   // move the image onto the CPU for use in our analysis thread
-  _input_image = texture.image(0, Magnum::Image2D{Magnum::PixelFormat::RGBA8Unorm});
+  _input_image =
+      texture.image(0, Magnum::Image2D{Magnum::PixelFormat::RGBA8Unorm});
   _input_config = config;
   _dispatch_condition_variable.notify_one();
 }
 
 cv::Mat Analyser2D::setup_input_frame(Magnum::Image2D &input,
-				      const Analyser2DConfiguration &config) {
+                                      const Analyser2DConfiguration &config) {
   auto input_frame_size = input.size();
   cv::Mat input_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
                     input.data());
@@ -55,14 +57,14 @@ cv::Mat Analyser2D::setup_input_frame(Magnum::Image2D &input,
 
     // scale to analysis size if different
     if (input_frame_size.x() != config.resolution[0] ||
-	input_frame_size.y() != config.resolution[1]) {
+        input_frame_size.y() != config.resolution[1]) {
       auto &resolution = config.resolution;
       if (resolution[0] != 0 && resolution[1] != 0) {
-	cv::cuda::resize(gpu_input_mat, gpu_return_mat,
-			 {resolution[0], resolution[1]}, 0, 0,
-			 cv::INTER_LINEAR);
+        cv::cuda::resize(gpu_input_mat, gpu_return_mat,
+                         {resolution[0], resolution[1]}, 0, 0,
+                         cv::INTER_LINEAR);
       } else {
-	gpu_return_mat = gpu_input_mat;
+        gpu_return_mat = gpu_input_mat;
       }
     } else {
       gpu_return_mat = gpu_input_mat;
@@ -78,17 +80,26 @@ cv::Mat Analyser2D::setup_input_frame(Magnum::Image2D &input,
 
     // blur the image
     if (config.blur_size > 0) {
+
+      // for cuda's guassian blurring, blur_size must be an odd number
+      auto blur_size = config.blur_size;
+      if (blur_size % 2 == 0)
+        blur_size += 1;
+      // and a maximum of 31
+      if (blur_size > 31)
+        blur_size = 31;
+
       auto filter = cv::cuda::createGaussianFilter(
-	  gpu_return_mat.type(), gpu_return_mat.type(),
-	  cv::Size(config.blur_size, config.blur_size), 0);
+          gpu_return_mat.type(), gpu_return_mat.type(),
+          cv::Size(blur_size, blur_size), 0);
       filter->apply(gpu_return_mat, gpu_return_mat);
     }
 
     // perform canny edge detection
     if (config.canny.enabled) {
       auto canny_detector = cv::cuda::createCannyEdgeDetector(
-	  config.canny.min_threshold, config.canny.max_threshold,
-	  config.canny.aperture_size);
+          config.canny.min_threshold, config.canny.max_threshold,
+          config.canny.aperture_size);
       canny_detector->detect(gpu_return_mat, gpu_return_mat);
     }
 
@@ -127,7 +138,6 @@ cv::Mat Analyser2D::setup_input_frame(Magnum::Image2D &input,
       cv::Canny(return_mat, return_mat, config.canny.min_threshold,
                 config.canny.max_threshold, config.canny.aperture_size);
     }
-
   }
 
   return std::move(return_mat);
@@ -147,39 +157,42 @@ Analyser2D::calculate_optical_flow(
     cv::cuda::GpuMat gpu_input_frame_1(input_frame_1);
     cv::cuda::GpuMat gpu_input_frame_2(input_frame_2);
     cv::cuda::GpuMat gpu_feature_point_positions,
-	gpu_new_feature_point_positions, gpu_feature_point_status;
+        gpu_new_feature_point_positions, gpu_feature_point_status;
 
     // find acceptable feature points to track accross
     // the previous frame
     auto feature_point_detector = cv::cuda::createGoodFeaturesToTrackDetector(
-	gpu_input_frame_2.type(), config.feature_point_count,
-	config.cuda_feature_detector_quality_cutoff,
-	config.feature_point_distance);
+        gpu_input_frame_2.type(), config.feature_point_count,
+        config.cuda_feature_detector_quality_cutoff,
+        config.feature_point_distance);
     feature_point_detector->detect(gpu_input_frame_2,
                                    gpu_feature_point_positions);
 
-    // track the feature points' motion into the new frame
-    auto optical_flow_filter = cv::cuda::SparsePyrLKOpticalFlow::create();
-    optical_flow_filter->calc(
-        gpu_input_frame_2, gpu_input_frame_1, gpu_feature_point_positions,
-        gpu_new_feature_point_positions, gpu_feature_point_status);
+    if (!gpu_feature_point_positions.empty()) {
 
-    gpu_feature_point_positions.download(feature_point_positions);
-    gpu_new_feature_point_positions.download(new_feature_point_positions);
-    gpu_feature_point_status.download(status);
+      // track the feature points' motion into the new frame
+      auto optical_flow_filter = cv::cuda::SparsePyrLKOpticalFlow::create();
+      optical_flow_filter->calc(
+          gpu_input_frame_2, gpu_input_frame_1, gpu_feature_point_positions,
+          gpu_new_feature_point_positions, gpu_feature_point_status);
+
+      gpu_feature_point_positions.download(feature_point_positions);
+      gpu_new_feature_point_positions.download(new_feature_point_positions);
+      gpu_feature_point_status.download(status);
+    }
 
   } else {
     // find acceptable feature points to track accross
     // the previous frame
     cv::goodFeaturesToTrack(input_frame_2, feature_point_positions,
-			    config.feature_point_count, 0.01,
-			    config.feature_point_distance);
+                            config.feature_point_count, 0.01,
+                            config.feature_point_distance);
 
     // track the feature points' motion into the new frame
     if (feature_point_positions.size() > 0) {
       cv::calcOpticalFlowPyrLK(
-	  input_frame_2, input_frame_1, feature_point_positions,
-	  new_feature_point_positions, status, cv::noArray());
+          input_frame_2, input_frame_1, feature_point_positions,
+          new_feature_point_positions, status, cv::noArray());
     }
   }
   return {std::move(feature_point_positions),
@@ -228,11 +241,23 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     }
 
     const cv::Point2i output_resolution = {input_frame_size.x(),
-					   input_frame_size.y()};
+                                           input_frame_size.y()};
     const cv::Point2i analysis_frame_size = {analysis_config.resolution[0],
-					     analysis_config.resolution[1]};
+                                             analysis_config.resolution[1]};
 
-    cv::Mat analysis_input = setup_input_frame(image, analysis_config);
+    const auto &output_scale = analysis_config.output_scale;
+    const auto &output_offset = analysis_config.output_offset;
+
+    cv::Mat analysis_input;
+    // TODO this try/catch could be replaced with better CUDA
+    // synchronisation... it throws when k4a initialises it's CUDA pipeline
+    // because it puts CUDA in a state where opencv cannot use it
+    try {
+      analysis_input = setup_input_frame(image, analysis_config);
+    } catch (cv::Exception e) {
+      pc::logger->error(e.what());
+      continue;
+    }
 
     // create a new RGBA image initialised to fully transparent
     cv::Mat output_mat(input_frame_size.y(), input_frame_size.x(), CV_8UC4,
@@ -290,7 +315,10 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
           // if we're publishing shapes we need to use std types
           std::vector<std::array<float, 2>> contour_std;
           for (auto &point : norm_contour) {
-            contour_std.push_back({point.x, 1 - point.y});
+            auto output_x = point.x * output_scale[0] + output_offset[0];
+            auto output_y = output_scale[1] -
+                            (point.y * output_scale[1] - output_offset[1]);
+            contour_std.push_back({output_x, output_y});
           }
           contour_list_std.push_back(contour_std);
         }
@@ -356,9 +384,17 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
             if (area >= triangulate.minimum_area) {
 
               triangles.push_back(triangle);
-              vertices.push_back({triangle[0].x, 1 - triangle[0].y});
-              vertices.push_back({triangle[1].x, 1 - triangle[1].y});
-              vertices.push_back({triangle[2].x, 1 - triangle[2].y});
+
+              if (triangulate.publish) {
+                for (int i = 0; i < 3; i++) {
+                  auto output_x =
+                      triangle[i].x * output_scale[0] + output_offset[0];
+                  auto output_y =
+                      output_scale[1] -
+                      (triangle[i].y * output_scale[1] - output_offset[1]);
+                  vertices.push_back({output_x, output_y});
+                }
+              }
 
               if (triangulate.draw) {
                 static const cv::Scalar triangle_fill(120, 120, 60, 120);
@@ -417,16 +453,13 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
         std::array<float, 4> array() const {
           return {position[0], position[1], magnitude[0], magnitude[1]};
         }
-        std::array<float, 4> flipped_array() const {
-          return {position[0], 1 - position[1], magnitude[0], magnitude[1]};
-        }
       };
 
       auto [feature_point_positions, new_feature_point_positions,
             feature_point_status] =
-	  calculate_optical_flow(
-	      analysis_input, _previous_analysis_image.value(),
-	      analysis_config.optical_flow, analysis_config.use_cuda);
+          calculate_optical_flow(
+              analysis_input, _previous_analysis_image.value(),
+              analysis_config.optical_flow, analysis_config.use_cuda);
 
       std::vector<FlowVector> flow_field;
       // collect data as flattened layout as well
@@ -434,11 +467,12 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
       std::vector<std::array<float, 4>> flow_field_flattened;
 
       for (size_t i = 0; i < feature_point_positions.size(); ++i) {
-	if (feature_point_status[i] == false) continue;
-	cv::Point2f start = {feature_point_positions[i].x,
-			     feature_point_positions[i].y};
-	cv::Point2f end = {new_feature_point_positions[i].x,
-			   new_feature_point_positions[i].y};
+        if (feature_point_status[i] == false)
+          continue;
+        cv::Point2f start = {feature_point_positions[i].x,
+                             feature_point_positions[i].y};
+        cv::Point2f end = {new_feature_point_positions[i].x,
+                           new_feature_point_positions[i].y};
 
         cv::Point2f distance{end.x - start.x, end.y - start.y};
         float magnitude =
@@ -468,19 +502,29 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
           FlowVector flow_vector;
           flow_vector.position = {normalised_position.x, normalised_position.y};
 
-          flow_vector.magnitude = {normalised_distance.x, normalised_distance.y};
+          flow_vector.magnitude = {normalised_distance.x,
+                                   normalised_distance.y};
 
           flow_field.push_back(flow_vector);
-          flow_field_flattened.push_back(flow_vector.flipped_array());
+
+          if (optical_flow.publish) {
+            auto flat_vector = flow_vector.array();
+            flat_vector[0] =
+                flat_vector[0] * output_scale[0] + output_offset[0];
+            flat_vector[1] =
+                output_scale[1] -
+                (flat_vector[1] * output_scale[1] - output_offset[1]);
+            flow_field_flattened.push_back(flat_vector);
+          }
 
           if (optical_flow.draw) {
-	    cv::Point2f normalised_line_end = {
-		normalised_position.x + normalised_distance.x,
-		normalised_position.y + normalised_distance.y};
-	    cv::Point2f line_start{normalised_position.x * output_resolution.x,
-				   normalised_position.y * output_resolution.y};
-	    cv::Point2f line_end{normalised_line_end.x * output_resolution.x,
-				 normalised_line_end.y * output_resolution.y};
+            cv::Point2f normalised_line_end = {
+                normalised_position.x + normalised_distance.x,
+                normalised_position.y + normalised_distance.y};
+            cv::Point2f line_start{normalised_position.x * output_resolution.x,
+                                   normalised_position.y * output_resolution.y};
+            cv::Point2f line_end{normalised_line_end.x * output_resolution.x,
+                                 normalised_line_end.y * output_resolution.y};
             cv::line(output_mat, line_start, line_end, line_colour, 3,
                      cv::LINE_AA);
           }
@@ -502,7 +546,7 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     auto element_count = output_mat.total() * output_mat.channels();
     std::unique_lock lock(_analysis_frame_buffer_data_mutex);
     _analysis_frame_buffer_data =
-	Corrade::Containers::Array<uint8_t>(Corrade::NoInit, element_count);
+        Corrade::Containers::Array<uint8_t>(Corrade::NoInit, element_count);
 
     std::copy(output_mat.datastart, output_mat.dataend,
               _analysis_frame_buffer_data.data());
@@ -522,13 +566,14 @@ Magnum::GL::Texture2D &Analyser2D::analysis_frame() {
     // move updated buffer data into our analysis frame Texture2D...
     // we first need to create an OpenGL Buffer for it
     if (_analysis_frame_buffer_data.size() !=
-	_frame_size.x() * _frame_size.y() * 4) {
+        _frame_size.x() * _frame_size.y() * 4) {
       pc::logger->warn("Analysis framebuffer size mismatch");
       return *_analysis_frame;
     }
-    Magnum::GL::BufferImage2D buffer{
-	Magnum::GL::PixelFormat::RGBA, Magnum::GL::PixelType::UnsignedByte,
-	_frame_size, _analysis_frame_buffer_data, Magnum::GL::BufferUsage::StaticDraw};
+    Magnum::GL::BufferImage2D buffer{Magnum::GL::PixelFormat::RGBA,
+                                     Magnum::GL::PixelType::UnsignedByte,
+                                     _frame_size, _analysis_frame_buffer_data,
+                                     Magnum::GL::BufferUsage::StaticDraw};
     // then we can set the data
     _analysis_frame->setSubImage(0, {}, buffer);
   }
@@ -537,8 +582,10 @@ Magnum::GL::Texture2D &Analyser2D::analysis_frame() {
 
 int Analyser2D::analysis_time() {
   std::chrono::milliseconds time = _analysis_time;
-  if (time.count() > 0) return time.count();
-  else return 1;
+  if (time.count() > 0)
+    return time.count();
+  else
+    return 1;
 }
 
 } // namespace pc::analysis

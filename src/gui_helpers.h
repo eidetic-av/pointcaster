@@ -161,7 +161,9 @@ bool vector_table(const std::string &label, std::array<T, N> &vec, T min, T max,
 template <typename T, std::size_t N>
 bool vector_table(const std::string &label, std::array<T, N> &vec, T min, T max,
 		  T reset_value) {
-    return vector_table(label, vec, min, max, std::array<T, N>{reset_value});
+  std::array<T, N> reset_values;
+  std::fill(reset_values.begin(), reset_values.end(), reset_value);
+  return vector_table(label, vec, min, max, reset_values);
 }
 
 // must be inline due to template above also satisfying this overload
