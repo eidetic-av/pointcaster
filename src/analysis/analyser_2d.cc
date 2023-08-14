@@ -23,7 +23,7 @@
 namespace pc::analysis {
 
 Analyser2D::Analyser2D()
-    : _analysis_thread(&Analyser2D::frame_analysis, this) {}
+  : _analysis_thread([this](auto stop_token) { frame_analysis(stop_token); }) {}
 
 void Analyser2D::set_frame_size(Magnum::Vector2i frame_size) {
   std::lock_guard lock(_analysis_frame_mutex);

@@ -50,8 +50,7 @@ namespace pc {
 
     for (const auto& msg : raw_msgs) {
       if (duration.has_value()) {
-	auto msg_timestamp = std::chrono::time_point<std::chrono::system_clock>{std::chrono::nanoseconds{msg.time.time_since_epoch().count()}};
-	if (now - msg_timestamp > duration.value()) continue; 
+	      if (now - msg.time > duration.value()) continue; 
       }
       log_entries.emplace_back(log_entry{msg.level, std::string(msg.payload.data(), msg.payload.size())});
     }
