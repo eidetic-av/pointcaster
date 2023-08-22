@@ -34,11 +34,11 @@ public:
 
   void set_paused(bool paused) override;
 
+  PointCloud point_cloud(const DeviceConfiguration &config) override;
+
   void start_alignment() override;
   bool is_aligning() override;
   bool is_aligned() override;
-
-  PointCloud point_cloud(const DeviceConfiguration &config) override;
 
   void set_exposure(const int new_exposure);
   int get_exposure() const;
@@ -50,6 +50,9 @@ public:
   int get_saturation() const;
   void set_gain(const int new_gain);
   int get_gain() const;
+
+  std::array<float, 3> accelerometer_sample();
+  void apply_auto_tilt(const bool apply);
 
 private:
   static constexpr uint incoming_point_count =
@@ -85,6 +88,8 @@ private:
   Eigen::Quaternion<float> _aligned_orientation_offset;
 
   void run_aligner(const k4a::capture &frame);
+
+  Eigen::Matrix3f _auto_tilt = Eigen::Matrix3f::Identity();
 
   PointCloud _point_cloud;
 

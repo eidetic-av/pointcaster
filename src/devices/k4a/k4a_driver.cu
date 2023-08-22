@@ -93,6 +93,16 @@ K4ADriver::K4ADriver() {
     return;
   }
 
+  log_info("k4a {} attempting to start IMU", device_index);
+  try {
+    _device.start_imu();
+    log_info("k4a {} started IMU", device_index);
+  } catch (std::exception e) {
+    log_error("k4a {} failed to start IMU", device_index);
+    log_error(e.what());
+    return;
+  }
+
   // need to store the calibration and transformation data, as they are used
   // later to transform colour camera to point cloud space
   _calibration =
@@ -270,15 +280,17 @@ struct point_transformer
   DeviceConfiguration config;
   Eigen::Vector3f alignment_center;
   Eigen::Vector3f aligned_position_offset;
+  Eigen::Matrix3f auto_tilt_rotation;
 
   point_transformer(const DeviceConfiguration &device_config,
-                    const position &aligned_center,
-                    const position &position_offset) {
-    config = device_config;
+		    const position &aligned_center,
+		    const position &position_offset,
+		    const Eigen::Matrix3f &auto_tilt)
+      : config(device_config), auto_tilt_rotation(auto_tilt) {
     alignment_center =
-        Eigen::Vector3f(aligned_center.x, aligned_center.y, aligned_center.z);
+	Eigen::Vector3f(aligned_center.x, aligned_center.y, aligned_center.z);
     aligned_position_offset = Eigen::Vector3f(
-        position_offset.x, position_offset.y, position_offset.z);
+	position_offset.x, position_offset.y, position_offset.z);
   }
 
   __device__ point_out_t operator()(point_in_t point) const {
@@ -294,15 +306,18 @@ struct point_transformer
     // orientation for our scene
     Vector3f pos_f(pos.x, -pos.y, -pos.z);
 
+    // perform any auto-tilt
+    pos_f = auto_tilt_rotation.inverse() * pos_f;
+
     // create the rotation around our center
-    AngleAxisf rot_z(rad(config.rotation_deg.z), Vector3f::UnitZ());
-    AngleAxisf rot_y(rad(config.rotation_deg.y), Vector3f::UnitY());
     AngleAxisf rot_x(rad(config.rotation_deg.x), Vector3f::UnitX());
+    AngleAxisf rot_y(rad(config.rotation_deg.y), Vector3f::UnitY());
+    AngleAxisf rot_z(rad(config.rotation_deg.z), Vector3f::UnitZ());
     Quaternionf q = rot_z * rot_y * rot_x;
     Affine3f rot_transform =
         Translation3f(-alignment_center) * q * Translation3f(alignment_center);
 
-    // perform our initial transform
+    // perform alignment transformation along with manual rotation
     pos_f =
         (rot_transform * pos_f) + alignment_center + aligned_position_offset;
 
@@ -487,7 +502,7 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config) {
                       filtered_points_begin, point_filter{config});
   thrust::transform(
       filtered_points_begin, filtered_points_end, output_points_begin,
-      point_transformer(config, _alignment_center, _aligned_position_offset));
+      point_transformer(config, _alignment_center, _aligned_position_offset, _auto_tilt));
 
   // we can determine the output count using the resulting output iterator
   // from running the kernels
@@ -597,6 +612,52 @@ int K4ADriver::get_gain() const {
   _device.get_color_control(K4A_COLOR_CONTROL_GAIN, &result_mode,
                             &result_value);
   return result_value;
+}
+
+std::array<float, 3> K4ADriver::accelerometer_sample() {
+  k4a_imu_sample_t imu_sample;
+
+  if (!_device.get_imu_sample(&imu_sample, 100ms))
+    return {0, 0, 0};
+
+  auto accel = imu_sample.acc_sample.v;
+  return {accel[0], accel[1], accel[2]};
+}
+
+void K4ADriver::apply_auto_tilt(const bool apply) {
+  if (!apply) {
+    _auto_tilt = Eigen::Matrix3f::Identity();
+    return;
+  }
+
+  using namespace std::chrono;
+
+  // sample 10 times every 10ms
+  constexpr auto sample_count = 10;
+  std::vector<std::array<float, 3>> accelerometer_samples;
+  for (int i = 0; i < sample_count; i++) {
+    if (i != 0) std::this_thread::sleep_for(10ms);
+    accelerometer_samples.push_back(accelerometer_sample());
+  }
+
+  // and get the average
+  std::array<float, 3> sum = std::accumulate(
+      accelerometer_samples.begin(), accelerometer_samples.end(),
+      std::array<float, 3>{0.0f, 0.0f, 0.0f}, [](const auto &a, const auto &b) {
+	return std::array<float, 3>{a[0] + b[0], a[1] + b[1], a[2] + b[2]};
+      });
+  std::array<float, 3> accel_average{
+      sum[0] / sample_count, sum[1] / sample_count, sum[2] / sample_count};
+
+  // and turn it into a rotation matrix we can apply
+
+    // Vector3f pos_f(pos.x, -pos.y, -pos.z);
+  Eigen::Quaternionf q;
+  q.setFromTwoVectors(
+      // Eigen::Vector3f(accel_average[1], -accel_average[2], -accel_average[0]),
+      Eigen::Vector3f(accel_average[1], -accel_average[2], -accel_average[0]),
+      Eigen::Vector3f(0.f, -1.f, 0.f));
+  _auto_tilt = q.toRotationMatrix();
 }
 
 } // namespace pc::sensors

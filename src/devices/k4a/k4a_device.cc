@@ -49,6 +49,12 @@ void K4ADevice::draw_device_controls() {
   
   auto driver = dynamic_cast<K4ADriver *>(_driver.get());
 
+  if (ImGui::Button("Apply auto tilt"))
+    driver->apply_auto_tilt(true);
+  ImGui::SameLine();
+  if (ImGui::Button("Clear"))
+    driver->apply_auto_tilt(false);
+
   int exposure = _exposure;
   draw_slider<int>("Exposure (us)", &exposure, 488, 1000000);
   update_device_control(&_exposure, exposure,
