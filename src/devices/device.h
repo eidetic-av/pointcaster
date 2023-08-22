@@ -29,17 +29,18 @@ public:
   bool is_sensor = true;
   bool paused = false;
 
-  DeviceConfiguration config {true, // flip_x
-                              false, // flip_y
-                              true, // flip_z
-                              {-10000, 10000}, // crop_x
-                              {-10000, 10000}, // crop_y
-                              {-10000, 10000}, // crop_z
-                                        {0, -930, 1520}, // offset
-                                        {-5, 0, 0}, // rotation_deg
-                                        1.2f, // scale
-                                        1 // sample
-  }; // 
+  DeviceConfiguration config{
+      false,            // flip_x
+      false,           // flip_y
+      false,            // flip_z
+      {-10000, 10000}, // crop_x
+      {-10000, 10000}, // crop_y
+      {-10000, 10000}, // crop_z
+      {0, 0, 0}, // offset
+      {-7, 0, 0},      // rotation_deg
+      1.0f,            // scale
+      1                // sample
+  };                   //
 
   virtual std::string get_broadcast_id() = 0;
 

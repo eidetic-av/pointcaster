@@ -302,12 +302,13 @@ struct point_transformer
 
     // we put our position into a float vector because it allows us to
     // transform it by other float types (e.g. matrices, quaternions)
-    // -- also flip the y value to move kinect coords into the right
-    // orientation for our scene
-    Vector3f pos_f(pos.x, -pos.y, -pos.z);
+    Vector3f pos_f(pos.x, pos.y, pos.z);
 
     // perform any auto-tilt
-    pos_f = auto_tilt_rotation.inverse() * pos_f;
+    pos_f = auto_tilt_rotation * pos_f;
+
+    // flip y and z axes for our world space
+    pos_f = Vector3f(pos_f[0], -pos_f[1], -pos_f[2]);
 
     // create the rotation around our center
     AngleAxisf rot_x(rad(config.rotation_deg.x), Vector3f::UnitX());
@@ -632,10 +633,10 @@ void K4ADriver::apply_auto_tilt(const bool apply) {
 
   using namespace std::chrono;
 
-  // sample 10 times every 10ms
-  constexpr auto sample_count = 10;
+  constexpr auto sample_count = 50;
   std::vector<std::array<float, 3>> accelerometer_samples;
   for (int i = 0; i < sample_count; i++) {
+    // sample every 10ms
     if (i != 0) std::this_thread::sleep_for(10ms);
     accelerometer_samples.push_back(accelerometer_sample());
   }
@@ -650,14 +651,15 @@ void K4ADriver::apply_auto_tilt(const bool apply) {
       sum[0] / sample_count, sum[1] / sample_count, sum[2] / sample_count};
 
   // and turn it into a rotation matrix we can apply
-
-    // Vector3f pos_f(pos.x, -pos.y, -pos.z);
   Eigen::Quaternionf q;
   q.setFromTwoVectors(
-      // Eigen::Vector3f(accel_average[1], -accel_average[2], -accel_average[0]),
-      Eigen::Vector3f(accel_average[1], -accel_average[2], -accel_average[0]),
+      Eigen::Vector3f(accel_average[1], accel_average[2], accel_average[0]),
       Eigen::Vector3f(0.f, -1.f, 0.f));
-  _auto_tilt = q.toRotationMatrix();
+
+  Eigen::Vector3f euler_angles = _auto_tilt.eulerAngles(2, 1, 0);
+  euler_angles *= 180.0f / M_PI; // in degrees
+
+  _auto_tilt = q.toRotationMatrix().transpose();
 }
 
 } // namespace pc::sensors
