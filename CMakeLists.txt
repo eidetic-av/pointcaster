@@ -24,12 +24,6 @@ if (LINUX AND MOLD_LINKER_FOUND)
 endif()
 
 
-# ----- imgui lib -----
-
-find_package(imgui CONFIG REQUIRED)
-add_library(ImGui::ImGui ALIAS imgui::imgui)
-list(APPEND LINK_LIBS imgui::imgui)
-
 # ----- Geometry -----
 
 find_package(Eigen3 CONFIG REQUIRED)
@@ -72,6 +66,11 @@ if (WITH_MQTT)
   add_compile_definitions(WITH_MQTT)
 endif()
 
+# ----- Dear ImGui lib -----
+
+find_package(imgui CONFIG REQUIRED)
+add_library(ImGui::ImGui ALIAS imgui::imgui)
+list(APPEND LINK_LIBS imgui::imgui)
 
 # ----- Magnum 3D engine -----
 
