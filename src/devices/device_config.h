@@ -28,9 +28,10 @@ struct DeviceConfiguration {
   BodyTrackingConfiguration body;
   bool body_open;
 
+  bool auto_tilt;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(DeviceConfiguration, flip_x, flip_y, flip_z,
 				   crop_x, crop_y, crop_z, offset, rotation_deg,
-				   scale, sample, body, body_open);
+				   scale, sample, body, body_open, auto_tilt);
 } // namespace pc::sensors

@@ -10,6 +10,7 @@
 #include <k4a/k4a.hpp>
 #include <k4abt.hpp>
 #include <thread>
+#include <atomic>
 
 namespace pc::sensors {
 
@@ -74,7 +75,7 @@ private:
   std::string _serial_number;
   DeviceConfiguration _last_config;
 
-  std::atomic<bool> _pause_sensor = false;
+  std::atomic_bool _pause_sensor{false};
   bool _stop_requested = false;
   std::thread _capture_loop;
   k4a::device _device;
@@ -107,6 +108,6 @@ private:
 
   PointCloud _point_cloud;
 
-  bool _open = false;
+  std::atomic_bool _open{false};
 };
 } // namespace pc::sensors

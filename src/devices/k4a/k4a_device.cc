@@ -57,8 +57,9 @@ void K4ADevice::draw_device_controls() {
     ImGui::TreePop();
   }
 
-  if (ImGui::Button("Apply auto tilt"))
-    driver->apply_auto_tilt(true);
+  ImGui::Checkbox("Auto tilt", &config.auto_tilt);
+  if (config.auto_tilt) driver->apply_auto_tilt(true);
+
   ImGui::SameLine();
   if (ImGui::Button("Clear"))
     driver->apply_auto_tilt(false);

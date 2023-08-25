@@ -10,6 +10,7 @@
 #include <numbers>
 #include <numeric>
 #include <system_error>
+#include <future>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -51,6 +52,7 @@ namespace pc::sensors {
 
 using namespace pc::types;
 using namespace pc::k4a_utils;
+using namespace std::chrono;
 using namespace std::chrono_literals;
 using namespace Magnum;
 using namespace Magnum::Math;
@@ -111,9 +113,7 @@ K4ADriver::K4ADriver() {
   _transformation = k4a::transformation(_calibration);
 
   // TODO tracker creation not working on WIN
-#ifndef _WIN32
   _tracker = k4abt::tracker::create(_calibration);
-#endif
 
   // start a thread that captures new frames and dumps them into raw buffers
   _capture_loop = std::thread([&]() {
@@ -155,6 +155,8 @@ K4ADriver::K4ADriver() {
   // reserve space for five skeletons
   _skeletons.reserve(5);
 
+  // and start a thread that dumps active skeleton transformations
+  // as they arrive
   _tracker_loop = std::thread([&]() {
 
     using namespace Eigen;
@@ -260,9 +262,7 @@ K4ADriver::~K4ADriver() {
   _open = false;
   _stop_requested = true;
   _capture_loop.join();
-#ifndef WIN32
   _tracker.destroy();
-#endif
   _device.stop_cameras();
   _device.close();
   log_info("k4a {} driver closed", device_index);
@@ -739,35 +739,52 @@ void K4ADriver::apply_auto_tilt(const bool apply) {
     return;
   }
 
-  using namespace std::chrono;
+  static std::future<void> auto_tilt_task;
 
-  constexpr auto sample_count = 50;
-  std::vector<std::array<float, 3>> accelerometer_samples;
-  for (int i = 0; i < sample_count; i++) {
-    // sample every 10ms
-    if (i != 0) std::this_thread::sleep_for(10ms);
-    accelerometer_samples.push_back(accelerometer_sample());
+  if (auto_tilt_task.valid() &&
+      auto_tilt_task.wait_for(0ms) != std::future_status::ready) {
+    // compute is still running
+    return;
   }
 
-  // and get the average
-  std::array<float, 3> sum = std::accumulate(
-      accelerometer_samples.begin(), accelerometer_samples.end(),
-      std::array<float, 3>{0.0f, 0.0f, 0.0f}, [](const auto &a, const auto &b) {
-	return std::array<float, 3>{a[0] + b[0], a[1] + b[1], a[2] + b[2]};
-      });
-  std::array<float, 3> accel_average{
-      sum[0] / sample_count, sum[1] / sample_count, sum[2] / sample_count};
 
-  // and turn it into a rotation matrix we can apply
-  Eigen::Quaternionf q;
-  q.setFromTwoVectors(
-      Eigen::Vector3f(accel_average[1], accel_average[2], accel_average[0]),
-      Eigen::Vector3f(0.f, -1.f, 0.f));
+  auto_tilt_task = std::async(std::launch::async, [&] {
+    constexpr auto sample_count = 50;
+    std::vector<std::array<float, 3>> accelerometer_samples;
+    for (int i = 0; i < sample_count; i++) {
+      if (i != 0) std::this_thread::sleep_for(100us);
+      accelerometer_samples.push_back(accelerometer_sample());
+    }
 
-  Eigen::Vector3f euler_angles = _auto_tilt.eulerAngles(2, 1, 0);
-  euler_angles *= 180.0f / M_PI; // in degrees
+    // and get the average
+    std::array<float, 3> sum = std::accumulate(
+        accelerometer_samples.begin(), accelerometer_samples.end(),
+        std::array<float, 3>{0.0f, 0.0f, 0.0f},
+        [](const auto &a, const auto &b) {
+          return std::array<float, 3>{a[0] + b[0], a[1] + b[1], a[2] + b[2]};
+        });
+    std::array<float, 3> accel_average{
+        sum[0] / sample_count, sum[1] / sample_count, sum[2] / sample_count};
 
-  _auto_tilt = q.toRotationMatrix().transpose();
+    // and turn it into a rotation matrix we can apply
+    Eigen::Quaternionf q;
+    q.setFromTwoVectors(
+        Eigen::Vector3f(accel_average[1], accel_average[2], accel_average[0]),
+        Eigen::Vector3f(0.f, -1.f, 0.f));
+
+    Eigen::Matrix3f last_tilt = _auto_tilt;
+    Eigen::Matrix3f new_tilt = q.toRotationMatrix().transpose();
+
+    float tilt_difference =
+        (new_tilt * last_tilt.transpose()).eulerAngles(2, 1, 0).norm();
+
+    constexpr float difference_threshold = M_PI / 180.0f * 0.25f; // degrees
+
+    if (tilt_difference > difference_threshold) {
+      _auto_tilt = new_tilt;
+    }
+
+  });
 }
 
 } // namespace pc::sensors
