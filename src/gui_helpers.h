@@ -54,7 +54,7 @@ void draw_slider(std::string_view label_text, T *value, T min, T max,
   if constexpr (std::is_integral<T>())
     ImGui::SliderInt(parameter(label_text).c_str(), value, min, max);
   else if constexpr (std::is_floating_point<T>())
-    ImGui::SliderFloat(parameter(label_text).c_str(), value, min, max);
+    ImGui::SliderFloat(parameter(label_text).c_str(), value, min, max, "%.5g");
 
   ImGui::SameLine();
   if (ImGui::Button("0"))

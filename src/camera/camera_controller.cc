@@ -412,7 +412,7 @@ void CameraController::draw_imgui_controls() {
     ImGui::Checkbox("Ground grid", &rendering.ground_grid);
     ImGui::Checkbox("Skeletons", &rendering.skeletons);
 
-    draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
+    draw_slider<float>("Point size", &rendering.point_size, 0.00001f, 0.008f,
                        0.0015f);
   } else {
     _config.rendering_open = false;
