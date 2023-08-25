@@ -49,6 +49,7 @@
 #include <Magnum/SceneGraph/Drawable.h>
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
+#include <Magnum/Primitives/Icosphere.h>
 
 #include "fonts/IconsFontAwesome6.h"
 #include <Magnum/ImGuiIntegration/Context.hpp>
@@ -102,6 +103,12 @@ using uint = unsigned int;
 using Object3D = Magnum::SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
 using Scene3D = Magnum::SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 
+struct SphereInstanceData {
+    Matrix4 transformationMatrix;
+    Matrix3x3 normalMatrix;
+    Color3 color;
+};
+
 class PointCaster : public Platform::Application {
 public:
   explicit PointCaster(const Arguments &args);
@@ -140,13 +147,18 @@ protected:
   ImFont *_font;
   ImFont *_mono_font;
 
+  /* Spheres rendering */
+  GL::Mesh _sphere_mesh{NoCreate};
+  GL::Buffer _sphere_instance_buffer{NoCreate};
+  Shaders::PhongGL _sphere_shader{NoCreate};
+  Containers::Array<SphereInstanceData> _sphere_instance_data;
+
   void save_session();
   void save_session(std::filesystem::path file_path);
   void load_session(std::filesystem::path file_path);
 
   void open_kinect_sensors();
 
-  void fill_point_renderer();
   void render_cameras();
 
   void draw_menu_bar();
@@ -330,7 +342,7 @@ PointCaster::PointCaster(const Arguments &args)
   // If there are no cameras in the scene, initialise at least one
   if (_camera_controllers.empty()) {
     auto _default_camera_controller =
-	std::make_unique<CameraController>(this, _scene.get());
+        std::make_unique<CameraController>(this, _scene.get());
     // TODO viewport size needs to be dynamic
     _default_camera_controller->camera().setViewport(
         GL::defaultFramebuffer.viewport().size());
@@ -348,6 +360,39 @@ PointCaster::PointCaster(const Arguments &args)
 
   _point_cloud_renderer = std::make_unique<PointCloudRenderer>();
   _sphere_renderer = std::make_unique<SphereRenderer>();
+
+  // set up the spheres that render skeleton joints
+  /* Setup points (render as spheres) */
+  {
+    const std::size_t total_joint_count = K4ABT_JOINT_COUNT * 5;
+    const Vector3 start_pos{-999, -999, -999};
+    const Vector3 joint_size{0.015};
+
+    _sphere_instance_data =
+	Containers::Array<SphereInstanceData>{NoInit, total_joint_count};
+
+    for (std::size_t i = 0; i < total_joint_count; i++) {
+      /* Fill in the instance data. Most of this stays the same, except
+         for the translation */
+      _sphere_instance_data[i].transformationMatrix =
+          Matrix4::translation(start_pos) * Matrix4::scaling(joint_size);
+      _sphere_instance_data[i].normalMatrix =
+          _sphere_instance_data[i].transformationMatrix.normalMatrix();
+      _sphere_instance_data[i].color = Color3{
+          Vector3(std::rand(), std::rand(), std::rand()) / Float(RAND_MAX)};
+    }
+
+    _sphere_shader =
+        Shaders::PhongGL{Shaders::PhongGL::Configuration{}.setFlags(
+            Shaders::PhongGL::Flag::VertexColor |
+            Shaders::PhongGL::Flag::InstancedTransformation)};
+    _sphere_instance_buffer = GL::Buffer{};
+    _sphere_mesh = MeshTools::compile(Primitives::icosphereSolid(2));
+    _sphere_mesh.addVertexBufferInstanced(
+        _sphere_instance_buffer, 1, 0, Shaders::PhongGL::TransformationMatrix{},
+        Shaders::PhongGL::NormalMatrix{}, Shaders::PhongGL::Color3{});
+    _sphere_mesh.setInstanceCount(_sphere_instance_data.size());
+  }
 
   // Start the timer, loop at 144 Hz max
   setSwapInterval(1);
@@ -495,6 +540,8 @@ void PointCaster::render_cameras() {
 
   PointCloud points;
 
+  std::vector<pc::sensors::K4ASkeleton> skeletons;
+
   for (auto &camera_controller : _camera_controllers) {
 
     auto& rendering_config = camera_controller->config().rendering;
@@ -522,9 +569,36 @@ void PointCaster::render_cameras() {
     _ground_grid->set_visible(rendering_config.ground_grid);
 
     // draw shaders
+
     _point_cloud_renderer->draw(camera_controller->camera(),
 				rendering_config);
-    _sphere_renderer->draw(camera_controller->camera());
+
+    if (rendering_config.skeletons) {
+      if (skeletons.empty()) {
+	skeletons = sensors::scene_skeletons();
+      }
+      if (!skeletons.empty()) {
+	int i = 0;
+	for (auto &skeleton : skeletons) {
+	  for (auto &joint : skeleton) {
+	    auto pos = joint.first;
+	    _sphere_instance_data[i].transformationMatrix.translation() = {
+		pos.x / 1000.0f, pos.y / 1000.0f, pos.z / 1000.0f};
+	    i++;
+          }
+        }
+      }
+      _sphere_instance_buffer.setData(_sphere_instance_data,
+				    GL::BufferUsage::DynamicDraw);
+      GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
+      _sphere_shader
+	  .setProjectionMatrix(camera_controller->camera().projectionMatrix())
+	  .setTransformationMatrix(camera_controller->camera().cameraMatrix())
+	  .setNormalMatrix(
+	      camera_controller->camera().cameraMatrix().normalMatrix())
+	  .draw(_sphere_mesh);
+      GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+    }
 
     // render camera
     camera_controller->camera().draw(*_drawable_group);

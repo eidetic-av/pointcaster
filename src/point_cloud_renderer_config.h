@@ -19,9 +19,10 @@ struct PointCloudRendererConfiguration {
   LetterboxMode letterbox_mode = LetterboxMode::Aspect16x9;
   float point_size = 0.0015f;
   bool ground_grid = true;
+  bool skeletons = true;
   bool snapshots = true;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(PointCloudRendererConfiguration, resolution,
                                    scale_mode, letterbox_mode, point_size,
-                                   ground_grid, snapshots);
+                                   ground_grid, skeletons, snapshots);

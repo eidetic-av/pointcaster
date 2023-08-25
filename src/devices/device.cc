@@ -3,6 +3,9 @@
 #include "../logger.h"
 #include <imgui.h>
 #include "../gui_helpers.h"
+#include <k4abttypes.h>
+
+#include "k4a/k4a_driver.h"
 
 #ifndef __CUDACC__
 #include <zpp_bits.h>
@@ -22,6 +25,19 @@ pc::types::PointCloud synthesized_point_cloud() {
   // std::lock_guard<std::mutex> lock(devices_access);
   for (auto &device : Device::attached_devices)
     result += device->point_cloud();
+  return result;
+}
+
+// TODO all of this skeleton stuff needs to be made generic accross multiple
+// camera types
+std::vector<K4ASkeleton> scene_skeletons() {
+  std::vector<K4ASkeleton> result;
+  for (auto &device : Device::attached_devices) {
+    auto driver = dynamic_cast<K4ADriver*>(device->_driver.get());
+    for (auto &skeleton : driver->skeletons()) {
+      result.push_back(skeleton);
+    }
+  }
   return result;
 }
 
@@ -155,10 +171,8 @@ void Device::draw_imgui_controls() {
 
     ImGui::TreePop();
   }
-  if (ImGui::TreeNode("Device options")) {
-    draw_device_controls();
-    ImGui::TreePop();
-  }
+
+  draw_device_controls();
 
   ImGui::PopID();
 };

@@ -7,6 +7,7 @@
 #include <Corrade/Containers/Pointer.h>
 #include <Magnum/SceneGraph/Camera.h>
 #include <Magnum/Math/Color.h>
+#include <vector>
 
 namespace pc {
 
@@ -22,7 +23,7 @@ namespace pc {
 
     SphereRenderer();
 
-    void draw(Magnum::SceneGraph::Camera3D &camera);
+    void draw(Magnum::SceneGraph::Camera3D &camera,
+              std::vector<pc::types::position> sphere_positions);
   };
-
 }

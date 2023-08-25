@@ -49,6 +49,14 @@ void K4ADevice::draw_device_controls() {
   
   auto driver = dynamic_cast<K4ADriver *>(_driver.get());
 
+  if (gui::begin_tree_node("Body tracking", config.body_open)) {
+    auto& body = config.body;
+    auto initially_enabled = body.enabled;
+    ImGui::Checkbox("Enabled", &body.enabled);
+    if (body.enabled != initially_enabled) driver->enable_body_tracking(body.enabled);
+    ImGui::TreePop();
+  }
+
   if (ImGui::Button("Apply auto tilt"))
     driver->apply_auto_tilt(true);
   ImGui::SameLine();

@@ -1,14 +1,15 @@
 #include "k4a_driver.h"
 #include "k4a_utils.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <k4a/k4a.h>
 #include <k4a/k4atypes.h>
+#include <k4abttypes.h>
 #include <limits>
 #include <numbers>
 #include <numeric>
 #include <system_error>
-
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -77,7 +78,7 @@ K4ADriver::K4ADriver() {
   _config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
   _config.color_resolution = K4A_COLOR_RESOLUTION_720P;
   /* _config.depth_mode = K4A_DEPTH_MODE_WFOV_2X2BINNED; */
-  _config.depth_mode = K4A_DEPTH_MODE_WFOV_2X2BINNED;
+  _config.depth_mode = K4A_DEPTH_MODE_NFOV_UNBINNED;
   _config.camera_fps = K4A_FRAMES_PER_SECOND_30;
   // _config.depth_mode = K4A_DEPTH_MODE_WFOV_UNBINNED;
   // _config.camera_fps = K4A_FRAMES_PER_SECOND_15;
@@ -110,9 +111,9 @@ K4ADriver::K4ADriver() {
   _transformation = k4a::transformation(_calibration);
 
   // TODO tracker creation not working on WIN
-  #ifndef _WIN32
+#ifndef _WIN32
   _tracker = k4abt::tracker::create(_calibration);
-  #endif
+#endif
 
   // start a thread that captures new frames and dumps them into raw buffers
   _capture_loop = std::thread([&]() {
@@ -128,8 +129,9 @@ K4ADriver::K4ADriver() {
       if (!result)
         continue;
 
-      if (is_aligning())
-        run_aligner(capture);
+      if (is_aligning()) run_aligner(capture);
+
+      if (_body_tracking_enabled) _tracker.enqueue_capture(capture);
 
       auto depth_image = capture.get_depth_image();
       auto color_image = capture.get_color_image();
@@ -150,6 +152,104 @@ K4ADriver::K4ADriver() {
     }
   });
 
+  // reserve space for five skeletons
+  _skeletons.reserve(5);
+
+  _tracker_loop = std::thread([&]() {
+
+    using namespace Eigen;
+
+    while (!_stop_requested) {
+
+
+      k4abt_frame_t body_frame_handle = nullptr;
+      k4abt::frame body_frame(body_frame_handle);
+      if (!_tracker.pop_result(&body_frame, 50ms)) continue;
+
+      const auto body_count = body_frame.get_num_bodies();
+      if (body_count == 0) continue;
+
+      auto config = _last_config;
+      // TODO make all the following serialize into the config
+      auto auto_tilt = _auto_tilt;
+      auto alignment_center = Eigen::Vector3f(
+	  _alignment_center.x, _alignment_center.y, _alignment_center.z);
+      auto aligned_position_offset = Eigen::Vector3f(
+	  _aligned_position_offset.x, _aligned_position_offset.y,
+	  _aligned_position_offset.z);
+
+      // transform the skeletons based on device config
+      // and place them into the _skeletons list
+      _skeletons.clear();
+      for (std::size_t body_num = 0; body_num < body_count; body_num++) {
+	const k4abt_skeleton_t raw_skeleton = body_frame.get_body_skeleton(0);
+	K4ASkeleton skeleton;
+	// parse each joint
+        for (std::size_t joint = 0; joint < K4ABT_JOINT_COUNT; joint++) {
+	  auto pos = raw_skeleton.joints[joint].position.xyz;
+	  auto orientation = raw_skeleton.joints[joint].orientation.wxyz;
+
+	  Vector3f pos_f(pos.x, pos.y, pos.z);
+	  Quaternionf ori_f(orientation.w, orientation.x, orientation.y, orientation.z);
+
+	  // perform any auto-tilt
+	  pos_f = auto_tilt * pos_f;
+	  ori_f = auto_tilt * ori_f;
+          // flip y and z axes for our world space
+          pos_f = Vector3f(pos_f[0], -pos_f[1], -pos_f[2]);
+
+	  static constexpr auto rad = [](float deg) {
+	    constexpr auto mult = 3.141592654f / 180.0f;
+	    return deg * mult;
+	  };
+
+          // create the rotation around our center
+	  AngleAxisf rot_x(rad(config.rotation_deg.x), Vector3f::UnitX());
+	  AngleAxisf rot_y(rad(config.rotation_deg.y), Vector3f::UnitY());
+	  AngleAxisf rot_z(rad(config.rotation_deg.z), Vector3f::UnitZ());
+	  Quaternionf q = rot_z * rot_y * rot_x;
+	  Affine3f rot_transform = Translation3f(-alignment_center) * q *
+				   Translation3f(alignment_center);
+
+          // perform manual rotation
+	  pos_f = rot_transform * pos_f;
+	  ori_f = q * ori_f;
+
+	  // then alignment translation
+	  pos_f += alignment_center + aligned_position_offset;
+
+          // perform our manual translation
+          pos_f += Vector3f(config.offset.x, config.offset.y, config.offset.z);
+
+          // specified axis flips
+          if (config.flip_x) {
+            pos_f.x() = -pos_f.x();
+	    ori_f *= Quaternionf(AngleAxisf(M_PI, Vector3f::UnitX()));
+          }
+          if (config.flip_y) {
+            pos_f.y() = -pos_f.y();
+	    ori_f *= Quaternionf(AngleAxisf(M_PI, Vector3f::UnitY()));
+          }
+          if (config.flip_z) {
+            pos_f.z() = -pos_f.z();
+	    ori_f *= Quaternionf(AngleAxisf(M_PI, Vector3f::UnitZ()));
+          }
+
+          // and scaling
+          pos_f *= config.scale;
+
+          position pos_out = {static_cast<short>(std::round(pos_f.x())),
+                              static_cast<short>(std::round(pos_f.y())),
+                              static_cast<short>(std::round(pos_f.z())), 0};
+
+          skeleton[joint].first = {pos_out.x, pos_out.y, pos_out.z};
+	  skeleton[joint].second = {ori_f.w(), ori_f.x(), ori_f.y(), ori_f.z()};
+        }
+        _skeletons.push_back(skeleton);
+      }
+    }
+  });
+
   _open = true;
 
   device_count++;
@@ -160,7 +260,9 @@ K4ADriver::~K4ADriver() {
   _open = false;
   _stop_requested = true;
   _capture_loop.join();
+#ifndef WIN32
   _tracker.destroy();
+#endif
   _device.stop_cameras();
   _device.close();
   log_info("k4a {} driver closed", device_index);
@@ -172,6 +274,10 @@ bool K4ADriver::is_open() const { return _open; }
 std::string K4ADriver::id() const { return _serial_number; }
 
 void K4ADriver::set_paused(bool paused) { _pause_sensor = paused; }
+
+void K4ADriver::enable_body_tracking(const bool enabled) {
+  _body_tracking_enabled = enabled;
+}
 
 void K4ADriver::start_alignment() {
   log_info("Beginning alignment for k4a {} ({})", device_index, id());
@@ -434,6 +540,8 @@ auto make_transform_pipeline(Iterator begin, size_t count,
 PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config) {
   if (!_buffers_updated || !is_open())
     return _point_cloud;
+
+  _last_config = config;
 
   std::lock_guard<std::mutex> lock(_buffer_mutex);
 

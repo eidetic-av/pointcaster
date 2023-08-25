@@ -16,6 +16,8 @@
 #include <variant>
 #include <vector>
 
+#include <k4abttypes.h>
+
 namespace pc::sensors {
 
 enum DeviceType { UnknownDevice, K4A, K4W2, Rs2 };
@@ -54,8 +56,8 @@ public:
   void deserialize_config_from_device_id(const std::string &device_id);
   void deserialize_config_from_this_device();
 
-protected:
   std::unique_ptr<Driver> _driver;
+protected:
   bool _enable_broadcast = true;
 
   // implement this to add device-specific options with imgui
@@ -70,6 +72,12 @@ protected:
 };
 
 extern pc::types::PointCloud synthesized_point_cloud();
+
+// TODO make all the k4a stuff more generic
+using pc::types::float4;
+using K4ASkeleton =
+    std::array<std::pair<pc::types::position, float4>, K4ABT_JOINT_COUNT>;
+extern std::vector<K4ASkeleton> scene_skeletons();
 
 extern pc::types::position global_translate;
 extern void draw_global_controls();

@@ -409,7 +409,8 @@ void CameraController::draw_imgui_controls() {
 
     ImGui::Spacing();
 
-    ImGui::Checkbox("ground grid", &rendering.ground_grid);
+    ImGui::Checkbox("Ground grid", &rendering.ground_grid);
+    ImGui::Checkbox("Skeletons", &rendering.skeletons);
 
     draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
                        0.0015f);

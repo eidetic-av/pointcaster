@@ -2,6 +2,7 @@
 
 #include "../device.h"
 #include "../driver.h"
+
 #include <Eigen/Geometry>
 #include <array>
 #include <exception>
@@ -17,6 +18,11 @@ using pc::types::PointCloud;
 using pc::types::position;
 using pc::types::short3;
 using pc::types::uint2;
+using pc::types::float3;
+using pc::types::float4;
+
+using K4ASkeleton =
+    std::array<std::pair<pc::types::position, float4>, K4ABT_JOINT_COUNT>;
 
 class K4ADriver : public Driver {
 
@@ -39,6 +45,9 @@ public:
   void start_alignment() override;
   bool is_aligning() override;
   bool is_aligned() override;
+
+  void enable_body_tracking(const bool enabled);
+  std::vector<K4ASkeleton> skeletons() { return _skeletons; };
 
   void set_exposure(const int new_exposure);
   int get_exposure() const;
@@ -63,6 +72,7 @@ private:
       incoming_point_count * sizeof(short3);
 
   std::string _serial_number;
+  DeviceConfiguration _last_config;
 
   std::atomic<bool> _pause_sensor = false;
   bool _stop_requested = false;
@@ -74,6 +84,10 @@ private:
 
   std::mutex _buffer_mutex;
   std::atomic<bool> _buffers_updated;
+
+  bool _body_tracking_enabled;
+  std::thread _tracker_loop;
+  std::vector<K4ASkeleton> _skeletons;
 
   std::array<short3, positions_buffer_size> _positions_buffer;
   std::array<color, color_buffer_size> _colors_buffer;

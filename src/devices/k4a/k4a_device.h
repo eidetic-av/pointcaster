@@ -2,6 +2,10 @@
 
 #include "../device.h"
 #include "k4a_driver.h"
+#include <vector>
+#include <array>
+#include <utility>
+#include <k4abt.hpp>
 
 namespace pc::sensors {
 
