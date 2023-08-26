@@ -150,13 +150,7 @@ void Device::draw_imgui_controls() {
     config.crop_z.min = crop_z_in.min;
     config.crop_z.max = crop_z_in.max;
 
-    pc::types::int3 offset_in{config.offset.x, config.offset.y,
-                               config.offset.z};
-    if (pc::gui::vector_table("Position", offset_in, -10000, 10000, 0)) {
-      config.offset.x = offset_in.x;
-      config.offset.y = offset_in.y;
-      config.offset.z = offset_in.z;
-    };
+    pc::gui::vector_table("Position", config.offset, -3000.0f, 3000.0f, 0.0f);
 
     pc::types::float3 rotation = config.rotation_deg;
     if (pc::gui::vector_table("Rotation", rotation, -180.0f, 180.0f, 0.0f)) {
