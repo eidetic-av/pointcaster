@@ -29,7 +29,7 @@ K4ADevice::K4ADevice() {
 
 K4ADevice::~K4ADevice() { pc::logger->info("Closing {}", name); }
 
-std::string K4ADevice::get_broadcast_id() { return _driver->id(); }
+std::string K4ADevice::id() { return _driver->id(); }
 
 void K4ADevice::update_device_control(int *target, int value,
                                       std::function<void(int)> set_func) {

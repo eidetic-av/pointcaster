@@ -14,7 +14,7 @@ public:
   K4ADevice();
   ~K4ADevice();
 
-  std::string get_broadcast_id() override;
+  std::string id() override;
 
   void draw_device_controls() override;
   void update_device_control(int *target, int value,

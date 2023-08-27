@@ -93,6 +93,7 @@ using namespace pc::sensors;
 using namespace pc::camera;
 using namespace pc::radio;
 using namespace pc::snapshots;
+using namespace pc::midi;
 using namespace Magnum;
 using namespace Math::Literals;
 
@@ -168,7 +169,6 @@ protected:
   void draw_viewport_controls(CameraController& selected_camera);
   void draw_camera_control_windows();
   void draw_devices_window();
-  void draw_controllers_window();
   void draw_onscreen_log();
 
   Vector2i _restore_window_size;
@@ -638,7 +638,6 @@ void PointCaster::draw_menu_bar() {
 
       window_item("Transform", "t", _session.show_global_transform_window);
       window_item("Devices", "d", _session.show_devices_window);
-      window_item("Controllers", "c", _session.show_controllers_window);
       window_item("RenderStats", "f", _session.show_stats);
       window_item("MQTT", "m", _session.show_mqtt_window);
 
@@ -1182,33 +1181,6 @@ void PointCaster::draw_stats() {
 
 // }
 
-
-void PointCaster::draw_controllers_window() {
-  ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowBgAlpha(0.8f);
-  ImGui::Begin("Controllers", nullptr);
-  ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
-  if (gui::midi_learn_mode)
-    ImGui::BeginDisabled();
-  if (ImGui::Button("Midi Learn")) {
-    gui::midi_learn_mode = true;
-    ImGui::BeginDisabled();
-  }
-  if (gui::midi_learn_mode) {
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel"))
-      gui::midi_learn_mode = false;
-  }
-  // for (auto device : *devices) {
-  //   if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
-  //     device->Device::drawImGuiControls();
-  // }
-  ImGui::PopItemWidth();
-  ImGui::End();
-}
-
 auto output_count = 0;
 
 void PointCaster::drawEvent() {
@@ -1238,8 +1210,6 @@ void PointCaster::drawEvent() {
     draw_camera_control_windows();
     if (_session.show_devices_window)
       draw_devices_window();
-    if (_session.show_controllers_window)
-      draw_controllers_window();
     if (_session.show_stats)
       draw_stats();
     if (_session.show_radio_window)
@@ -1334,11 +1304,6 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 
 void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
-  case KeyEvent::Key::C:
-    _session.show_controllers_window = !_session.show_controllers_window;
-    if (!_session.show_controllers_window)
-      gui::midi_learn_mode = false;
-    break;
   case KeyEvent::Key::D:
     _session.show_devices_window = !_session.show_devices_window;
     break;

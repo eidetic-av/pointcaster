@@ -364,11 +364,11 @@ void CameraController::draw_imgui_controls() {
   if (ImGui::CollapsingHeader("Transform", _config.transform_open)) {
     _config.transform_open = true;
     auto &translate = _config.translation;
-    if (vector_table("Translation", translate, -10.f, 10.f, 0.0f)) {
+    if (vector_table(name(), "Translation", translate, -10.f, 10.f, 0.0f)) {
       set_translation(Position{translate[0], translate[1], translate[2]});
     }
     auto &rotate = _config.rotation;
-    if (vector_table("Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
+    if (vector_table(name(), "Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
       set_rotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
     }
   } else {
@@ -382,13 +382,13 @@ void CameraController::draw_imgui_controls() {
 
     auto current_scale_mode = rendering.scale_mode;
     if (current_scale_mode == ScaleMode::Letterbox) {
-      vector_table("Resolution", rendering.resolution, 2, 7680,
+      vector_table(name(), "Resolution", rendering.resolution, 2, 7680,
                    {pc::camera::defaults::rendering_resolution[0],
                     pc::camera::defaults::rendering_resolution[1]});
     } else if (current_scale_mode == ScaleMode::Span) {
       // disable setting y resolution manually in span mode,
       // it's inferred from the x resolution and window size
-      vector_table("Resolution", rendering.resolution, 2, 7680,
+      vector_table(name(), "Resolution", rendering.resolution, 2, 7680,
                    {pc::camera::defaults::rendering_resolution[0],
                     pc::camera::defaults::rendering_resolution[1]},
                    {false, true});
@@ -427,11 +427,11 @@ void CameraController::draw_imgui_controls() {
       ImGui::SameLine();
       ImGui::Checkbox("Use CUDA", &frame_analysis.use_cuda);
 
-      vector_table("Resolution", frame_analysis.resolution, 2, 3840,
+      vector_table(name(), "Resolution", frame_analysis.resolution, 2, 3840,
                    {pc::camera::defaults::analysis_resolution[0],
                     pc::camera::defaults::analysis_resolution[1]},
                    {}, {"width", "height"});
-      vector_table("Binary threshold", frame_analysis.binary_threshold, 1, 255,
+      vector_table(name(), "Binary threshold", frame_analysis.binary_threshold, 1, 255,
                    {50, 255}, {}, {"min", "max"});
 
       draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
@@ -506,8 +506,8 @@ void CameraController::draw_imgui_controls() {
       }
 
       if (gui::begin_tree_node("Output", frame_analysis.output_open)) {
-        vector_table("Scale", frame_analysis.output_scale, 0.0f, 2.0f, 1.0f);
-        vector_table("Offset", frame_analysis.output_offset, -1.0f, 1.0f, 0.0f);
+        vector_table(name(), "Scale", frame_analysis.output_scale, 0.0f, 2.0f, 1.0f);
+        vector_table(name(), "Offset", frame_analysis.output_offset, -1.0f, 1.0f, 0.0f);
         ImGui::TreePop();
       }
     }

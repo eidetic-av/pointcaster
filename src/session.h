@@ -19,7 +19,6 @@ struct PointCasterSession {
   bool hide_ui = false;
   bool show_log = false;
   bool show_devices_window = true;
-  bool show_controllers_window = false;
   bool show_radio_window = false;
   bool show_snapshots_window = false;
   bool show_global_transform_window = false;
@@ -36,8 +35,8 @@ struct PointCasterSession {
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(PointCasterSession, id, auto_connect_sensors,
 				   imgui_layout, fullscreen, hide_ui, show_log,
-				   show_devices_window, show_controllers_window,
-				   show_radio_window, show_snapshots_window,
+				   show_devices_window, show_radio_window,
+				   show_snapshots_window,
 				   show_global_transform_window, show_stats,
 				   cameras, mqtt_config, show_mqtt_window,
 				   midi_config, show_midi_window);

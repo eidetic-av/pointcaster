@@ -3,14 +3,17 @@
 #include <Magnum/Math/Angle.h>
 #include <Magnum/Math/Vector3.h>
 #include <algorithm>
-#include <concepts>
 #include <limits>
 #include <numbers>
 
 namespace pc::math {
 
+#ifndef M_PI
+constexpr double M_PI = 3.14159265358979323846;
+#endif
+
 template <typename T>
-concept number = std::is_arithmetic_v<T>;
+using number = std::enable_if_t<std::is_arithmetic<T>::value, T>;
 
 /**
  * @brief Remap a value from one range to another.
@@ -27,46 +30,55 @@ concept number = std::is_arithmetic_v<T>;
  *
  * @note If old_min is equal to old_max, new_min is returned.
  */
-constexpr auto remap(number auto old_min, number auto old_max,
-                     number auto new_min, number auto new_max,
-                     std::floating_point auto value, bool clamp = false) {
+template <typename T, typename U>
+constexpr auto remap(T old_min, T old_max, U new_min, U new_max, U value,
+		     bool clamp = false)
+    -> std::enable_if_t<
+	std::is_arithmetic<T>::value && std::is_floating_point<U>::value, U> {
+  static_assert(std::is_arithmetic<T>::value, "T must be numeric");
+  static_assert(std::is_floating_point<U>::value, "U must be floating point");
+
   if (old_min == old_max)
     return new_min;
-  const auto denominator = std::max(
-      (old_max - old_min), std::numeric_limits<decltype(new_min)>::epsilon());
+
+  const auto denominator =
+      std::max((old_max - old_min), std::numeric_limits<U>::epsilon());
   const auto mapped_result =
       (value - old_min) / denominator * (new_max - new_min) + new_min;
+
   if (!clamp)
     return mapped_result;
-  return std::min(std::max(mapped_result, new_min), new_max);
-};
 
-constexpr auto degToRad(std::floating_point auto degrees) {
-  return degrees * (std::numbers::pi_v<decltype(degrees)> /
-                    static_cast<decltype(degrees)>(180));
+  return std::min(std::max(mapped_result, new_min), new_max);
 }
 
-constexpr Magnum::Math::Rad<float> degToRad(Magnum::Math::Deg<float> degrees) {
+template <typename T, std::enable_if_t<std::is_floating_point<T>::value, int> = 0>
+inline constexpr auto degToRad(T degrees) {
+  return degrees * (M_PI / static_cast<T>(180));
+}
+
+inline constexpr Magnum::Math::Rad<float> degToRad(Magnum::Math::Deg<float> degrees) {
   return Magnum::Math::Rad<float>{degrees};
 }
 
-Magnum::Math::Vector3<Magnum::Math::Rad<float>>
+inline Magnum::Math::Vector3<Magnum::Math::Rad<float>>
 degToRad(Magnum::Math::Vector3<Magnum::Math::Deg<float>> degrees) {
   return {Magnum::Math::Rad<float>{degrees.x()},
 	  Magnum::Math::Rad<float>{degrees.y()},
 	  Magnum::Math::Rad<float>{degrees.z()}};
 }
 
-constexpr auto radToDeg(std::floating_point auto radians) {
-  return radians * (static_cast<decltype(radians)>(180) /
-                    std::numbers::pi_v<decltype(radians)>);
+template <typename T,
+          std::enable_if_t<std::is_floating_point<T>::value, int> = 0>
+inline constexpr auto radToDeg(T radians) {
+  return radians * (static_cast<T>(180) / M_PI);
 }
 
-constexpr Magnum::Math::Deg<float> radToDeg(Magnum::Math::Rad<float> radians) {
+inline constexpr Magnum::Math::Deg<float> radToDeg(Magnum::Math::Rad<float> radians) {
   return Magnum::Math::Deg<float>{radians};
 }
 
-Magnum::Math::Vector3<Magnum::Math::Deg<float>>
+inline Magnum::Math::Vector3<Magnum::Math::Deg<float>>
 radToDeg(Magnum::Math::Vector3<Magnum::Math::Rad<float>> radians) {
   return {Magnum::Math::Deg<float>{radians.x()},
 	  Magnum::Math::Deg<float>{radians.y()},

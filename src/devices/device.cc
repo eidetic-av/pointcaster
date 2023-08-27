@@ -150,10 +150,10 @@ void Device::draw_imgui_controls() {
     config.crop_z.min = crop_z_in.min;
     config.crop_z.max = crop_z_in.max;
 
-    pc::gui::vector_table("Position", config.offset, -3000.0f, 3000.0f, 0.0f);
+    pc::gui::vector_table(id(), "Position", config.offset, -3000.0f, 3000.0f, 0.0f);
 
     pc::types::float3 rotation = config.rotation_deg;
-    if (pc::gui::vector_table("Rotation", rotation, -180.0f, 180.0f, 0.0f)) {
+    if (pc::gui::vector_table(id(), "Rotation", rotation, -180.0f, 180.0f, 0.0f)) {
       config.rotation_deg = rotation;
     };
 

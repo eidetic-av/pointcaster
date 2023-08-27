@@ -6,8 +6,10 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <map>
+#include "../gui_helpers.h"
 
-namespace pc {
+namespace pc::midi {
 
 std::shared_ptr<MidiClient> MidiClient::_instance;
 std::mutex MidiClient::_mutex;
@@ -80,12 +82,28 @@ void MidiClient::handle_message(const libremidi::message &msg) {
   if (msg_type == message_type::CONTROL_CHANGE) {
     auto control_num = msg[1];
     auto value = msg[2];
-    pc::logger->debug("received CC: {}.{}.{}", channel, control_num, value);
+    CCParameter cc{channel, control_num};
+    // pc::logger->debug("received CC: {}.{}.{}", channel, control_num, value);
+    if (gui::recording_slider) {
+      gui::recording_slider = false;
+      gui_slider_bindings[cc] = gui::load_recording_slider_id();
+      gui::recording_result = gui::SliderState::Bound;
+      return;
+    }
+    if (gui_slider_bindings.contains(cc)) {
+      auto slider_id = gui_slider_bindings[cc];
+      gui::set_slider_value(slider_id, value, 0, 127);
+    }
     return;
   }
   if (msg_type == message_type::PITCH_BEND) {
     unsigned int value = (msg[2] << 7) | msg[1];
-    pc::logger->debug("received PB: {}.{}", channel, value);
+    // pc::logger->debug("received PB: {}.{}", channel, value);
+    if (gui::recording_slider) {
+      gui::recording_slider = false;
+      gui::recording_result = gui::SliderState::Unbound;
+      return;
+    }
     return;
   }
 }

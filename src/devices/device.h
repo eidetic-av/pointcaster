@@ -44,7 +44,7 @@ public:
       1                // sample
   };                   //
 
-  virtual std::string get_broadcast_id() = 0;
+  virtual std::string id() = 0;
 
   bool broadcast_enabled() { return _enable_broadcast; }
   auto point_cloud() { return _driver->point_cloud(config); };
