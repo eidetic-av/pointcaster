@@ -74,7 +74,7 @@ endif()
 
 find_package(libremidi CONFIG REQUIRED)
 list(APPEND LINK_LIBS libremidi)
-list(APPEND FEATURE_SRC src/midi/midi_client.cc)
+list(APPEND POINTCASTER_SRC src/midi/midi_client.cc)
 
 # ----- Dear ImGui lib -----
 
@@ -164,7 +164,7 @@ set(SOURCE_FILES
   src/path.cc
   src/uuid.cc
   src/wtf/wtf.cc
-  ${FEATURE_SRC}
+  ${POINTCASTER_SRC}
   ${OPTIONAL_SRC})
 
 corrade_add_resource(RESOURCES resources.conf)

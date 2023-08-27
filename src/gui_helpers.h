@@ -1,5 +1,7 @@
 #pragma once
 
+#include <iostream>
+
 #include <imgui.h>
 #include <string>
 #include <string_view>
@@ -53,7 +55,14 @@ void draw_slider(std::string_view label_text, T *value, T min, T max,
 
 enum class SliderState { Unbound, Bound, Recording };
 inline std::unordered_map<std::string, SliderState> slider_states;
-inline std::unordered_map<std::string, float> slider_overrides;
+
+struct SliderBinding {
+  float value;
+  float min = 0.0f;
+  float max = 1.0f;
+};
+
+inline std::unordered_map<std::string, SliderBinding> slider_bindings;
 
 inline std::atomic_bool recording_slider;
 inline std::atomic<SliderState> recording_result;
@@ -70,10 +79,12 @@ inline std::string load_recording_slider_id() {
   return recording_slider_id;
 }
 
-inline void set_slider_value(std::string slider_id, int value, int min,
-			     int max) {
-  slider_overrides[slider_id] =
-      pc::math::remap((float)min, (float)max, 0.0f, 1.0f, (float)value);
+inline void set_slider_value(std::string slider_id, int value, int input_min,
+			     int input_max) {
+
+  auto &binding = slider_bindings[slider_id];
+  binding.value = pc::math::remap((float)input_min, (float)input_max,
+				  binding.min, binding.max, (float)value, true);
 }
 
 template <typename T>
@@ -84,11 +95,10 @@ void slider(const std::string& slider_id, std::size_t i, T &value, T min, T max,
 
   auto& state = slider_states[slider_id];
 
-  if (state == SliderState::Bound &&
-      slider_overrides.find(slider_id) != slider_overrides.end()) {
-    auto override_value = slider_overrides[slider_id];
+  if (state == SliderState::Bound) {
+    auto& binding = slider_bindings[slider_id];
     value = static_cast<T>(
-	pc::math::remap(0.0f, 1.0f, (float)min, (float)max, override_value));
+	pc::math::remap(0.0f, 1.0f, (float)min, (float)max, binding.value));
   }
 
   // if we were recording this slider and we're not anymore,
@@ -115,10 +125,18 @@ void slider(const std::string& slider_id, std::size_t i, T &value, T min, T max,
   // Slider Column
   ImGui::TableSetColumnIndex(1);
   ImGui::SetNextItemWidth(-1);
-  if constexpr (std::is_same_v<T, float>) {
-    ImGui::SliderFloat((base_label + "." + label_dimension).c_str(), &value, min, max);
-  } else if constexpr (std::is_same_v<T, int>) {
-    ImGui::SliderInt((base_label + "." + label_dimension).c_str(), &value, min, max);
+
+  if (state != SliderState::Bound) {
+    if constexpr (std::is_same_v<T, float>) {
+      ImGui::SliderFloat(slider_id.c_str(), &value, min, max);
+    } else if constexpr (std::is_same_v<T, int>) {
+      ImGui::SliderInt(slider_id.c_str(), &value, min, max);
+    }
+  } else {
+    ImGui::SetNextItemWidth(-1);
+    auto &binding = slider_bindings[slider_id];
+    ImGui::DragFloatRange2(("##" + slider_id + ".minmax").c_str(), &binding.min,
+                           &binding.max, 0.001f, 0.0f, 1.0f);
   }
 
   ImGui::PopStyleColor(state != SliderState::Unbound ? 4 : 0);
