@@ -15,6 +15,7 @@
     "spdlog",
     "cppzmq",
     "libusb",
+    "libremidi",
     "imgui",
     {
       "name": "opencv",

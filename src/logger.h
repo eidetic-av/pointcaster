@@ -26,6 +26,13 @@ namespace pc {
 
         // Create the logger
         instance = std::make_shared<spdlog::logger>("pc", sinks.begin(), sinks.end());
+
+#ifndef NDEBUG
+	instance->set_level(spdlog::level::debug);
+#else
+	instance->set_level(spdlog::level::info);
+#endif
+
       }
       return instance;
     }

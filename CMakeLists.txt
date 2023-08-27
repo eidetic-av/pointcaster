@@ -23,6 +23,10 @@ if (LINUX AND MOLD_LINKER_FOUND)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fuse-ld=mold")
 endif()
 
+if(LINUX)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive -Wfatal-errors")
+endif()
+
 
 # ----- Geometry -----
 
@@ -65,6 +69,12 @@ if (WITH_MQTT)
   list(APPEND OPTIONAL_SRC src/mqtt/mqtt_client.cc)
   add_compile_definitions(WITH_MQTT)
 endif()
+
+# ----- Control -----
+
+find_package(libremidi CONFIG REQUIRED)
+list(APPEND LINK_LIBS libremidi)
+list(APPEND FEATURE_SRC src/midi/midi_client.cc)
 
 # ----- Dear ImGui lib -----
 
@@ -154,6 +164,7 @@ set(SOURCE_FILES
   src/path.cc
   src/uuid.cc
   src/wtf/wtf.cc
+  ${FEATURE_SRC}
   ${OPTIONAL_SRC})
 
 corrade_add_resource(RESOURCES resources.conf)

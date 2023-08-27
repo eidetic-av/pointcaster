@@ -1,28 +1,30 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 60a6fb9..8ca1bee 100644
+index f15a3ec..079e6dc 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -150,19 +150,19 @@ endif()
+@@ -302,21 +302,21 @@ endif()
  ### Install  ###
  if(NOT LIBREMIDI_HEADER_ONLY)
    install(TARGETS libremidi
--          EXPORT libremidi-exports
+-          EXPORT libremidi-targets
 +          EXPORT libremidi-config
            ARCHIVE DESTINATION lib/static
            RUNTIME DESTINATION bin
            LIBRARY DESTINATION lib
-           )
+   )
  else()
-     install(TARGETS libremidi
--            EXPORT libremidi-exports
-+            EXPORT libremidi-config
-             )
+   install(TARGETS libremidi
+-          EXPORT libremidi-targets
++          EXPORT libremidi-config
+   )
  endif()
--install(EXPORT libremidi-exports
+-install(EXPORT libremidi-targets
 +install(EXPORT libremidi-config
          DESTINATION lib/cmake/libremidi)
--export(EXPORT libremidi-exports)
+ install(DIRECTORY include
+         DESTINATION .)
+-export(EXPORT libremidi-targets)
 +export(EXPORT libremidi-config)
  
- ### Examples ###
- if(LIBREMIDI_EXAMPLES)
+ include(CMakePackageConfigHelpers)
+ 
