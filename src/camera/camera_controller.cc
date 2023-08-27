@@ -369,7 +369,7 @@ void CameraController::draw_imgui_controls() {
     }
     auto &rotate = _config.rotation;
     if (vector_table(name(), "Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
-      set_rotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
+      set_rotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])}, true);
     }
   } else {
     _config.transform_open = false;
