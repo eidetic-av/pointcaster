@@ -79,7 +79,7 @@ private:
   bool _stop_requested = false;
   std::thread _capture_loop;
   k4a::device _device;
-  k4a_device_configuration_t _config;
+  k4a_device_configuration_t _k4a_config;
   k4a::calibration _calibration;
   k4a::transformation _transformation;
 

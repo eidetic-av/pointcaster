@@ -76,19 +76,19 @@ K4ADriver::K4ADriver() {
   }
 
   // TODO make config dynamic
-  _config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
-  _config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
-  _config.color_resolution = K4A_COLOR_RESOLUTION_720P;
-  /* _config.depth_mode = K4A_DEPTH_MODE_WFOV_2X2BINNED; */
-  _config.depth_mode = K4A_DEPTH_MODE_NFOV_UNBINNED;
-  _config.camera_fps = K4A_FRAMES_PER_SECOND_30;
-  // _config.depth_mode = K4A_DEPTH_MODE_WFOV_UNBINNED;
-  // _config.camera_fps = K4A_FRAMES_PER_SECOND_15;
-  _config.synchronized_images_only = true;
+  _k4a_config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
+  _k4a_config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
+  _k4a_config.color_resolution = K4A_COLOR_RESOLUTION_720P;
+  /* _k4a_config.depth_mode = K4A_DEPTH_MODE_WFOV_2X2BINNED; */
+  _k4a_config.depth_mode = K4A_DEPTH_MODE_NFOV_UNBINNED;
+  _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_30;
+  // _k4a_config.depth_mode = K4A_DEPTH_MODE_WFOV_UNBINNED;
+  // _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_15;
+  _k4a_config.synchronized_images_only = true;
 
   log_info("k4a {} attempting to start camera", device_index);
   try {
-    _device.start_cameras(&_config);
+    _device.start_cameras(&_k4a_config);
     log_info("k4a {} started camera", device_index);
   } catch (std::exception e) {
     log_error("k4a {} failed to start camera", device_index);
@@ -109,7 +109,7 @@ K4ADriver::K4ADriver() {
   // need to store the calibration and transformation data, as they are used
   // later to transform colour camera to point cloud space
   _calibration =
-      _device.get_calibration(_config.depth_mode, _config.color_resolution);
+      _device.get_calibration(_k4a_config.depth_mode, _k4a_config.color_resolution);
   _transformation = k4a::transformation(_calibration);
 
   // TODO tracker creation not working on WIN
