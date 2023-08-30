@@ -16,6 +16,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sequence.h>
+#include <thread>
+#include <mutex>
 
 // TODO fix spdlog for linux nvcc
 #ifdef _WIN32
@@ -59,7 +61,9 @@ using namespace Magnum::Math;
 
 uint K4ADriver::device_count = 0;
 
-K4ADriver::K4ADriver() {
+K4ADriver::K4ADriver(const DeviceConfiguration& config) {
+  static std::mutex serial_driver_construction;
+  std::lock_guard<std::mutex> lock(serial_driver_construction);
 
   device_index = device_count;
 
@@ -75,16 +79,18 @@ K4ADriver::K4ADriver() {
     return;
   }
 
-  // TODO make config dynamic
   _k4a_config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
   _k4a_config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
   _k4a_config.color_resolution = K4A_COLOR_RESOLUTION_720P;
-  /* _k4a_config.depth_mode = K4A_DEPTH_MODE_WFOV_2X2BINNED; */
-  _k4a_config.depth_mode = K4A_DEPTH_MODE_NFOV_UNBINNED;
-  _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_30;
-  // _k4a_config.depth_mode = K4A_DEPTH_MODE_WFOV_UNBINNED;
-  // _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_15;
   _k4a_config.synchronized_images_only = true;
+
+  _k4a_config.depth_mode = config.k4a.depth_mode;
+
+  if (config.k4a.depth_mode == K4A_DEPTH_MODE_WFOV_UNBINNED) {
+    _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_15;
+  } else {
+    _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_30;
+  }
 
   log_info("k4a {} attempting to start camera", device_index);
   try {
@@ -538,6 +544,7 @@ auto make_transform_pipeline(Iterator begin, size_t count,
 }
 
 PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config) {
+  
   if (!_buffers_updated || !is_open())
     return _point_cloud;
 

@@ -1,20 +1,19 @@
 #pragma once
 
 #include "camera/camera_config.h"
+#include "devices/device_config.h"
 #include "mqtt/mqtt_client_config.h"
 #include "midi/midi_client_config.h"
-#include <nlohmann/json.hpp>
+
+#include <serdepp/serde.hpp>
+
 #include <string>
 #include <vector>
+#include <map>
 
 namespace pc {
 
-struct PointCasterSession {
-  std::string id;
-  bool auto_connect_sensors = false;
-
-  // GUI
-  std::vector<char> imgui_layout;
+struct PointCasterSessionLayout {
   bool fullscreen = false;
   bool hide_ui = false;
   bool show_log = false;
@@ -24,21 +23,34 @@ struct PointCasterSession {
   bool show_global_transform_window = false;
   bool show_stats = false;
 
-  std::vector<camera::CameraConfiguration> cameras;
-
-  MqttClientConfiguration mqtt_config;
-  bool show_mqtt_window = false;
-
-  MidiClientConfiguration midi_config;
-  bool show_midi_window = false;
+  DERIVE_SERDE(PointCasterSessionLayout,
+               (&Self::fullscreen, "fullscreen")
+               (&Self::hide_ui, "hide_ui")
+               (&Self::show_log, "show_log")
+               (&Self::show_devices_window, "show_devices_window")
+               (&Self::show_radio_window, "show_radio_window")
+               (&Self::show_snapshots_window, "show_snapshots_window")
+               (&Self::show_global_transform_window, "show_global_transform_window")
+               (&Self::show_stats, "show_stats"))
 };
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(PointCasterSession, id, auto_connect_sensors,
-				   imgui_layout, fullscreen, hide_ui, show_log,
-				   show_devices_window, show_radio_window,
-				   show_snapshots_window,
-				   show_global_transform_window, show_stats,
-				   cameras, mqtt_config, show_mqtt_window,
-				   midi_config, show_midi_window);
+struct PointCasterSession {
+  std::string id;
+  bool load_devices_at_launch = true;
+  MqttClientConfiguration mqtt;
+  midi::MidiClientConfiguration midi;
+  std::map<std::string, sensors::DeviceConfiguration> devices;
+  std::map<std::string, camera::CameraConfiguration> cameras;
+  PointCasterSessionLayout layout;
+
+  DERIVE_SERDE(
+      PointCasterSession, (&Self::id, "id")
+      (&Self::mqtt, "mqtt")
+      (&Self::midi, "midi")
+      [attributes(make_optional)] (&Self::devices, "devices")
+      [attributes(make_optional)] (&Self::cameras, "cameras")
+      (&Self::load_devices_at_launch, "load_devices_at_launch")
+      (&Self::layout, "layout"))
+};
 
 } // namespace pc

@@ -2,13 +2,15 @@
 #include "../../logger.h"
 #include <functional>
 #include <imgui.h>
+#include <unordered_map>
+#include <string>
 
 namespace pc::sensors {
 
-K4ADevice::K4ADevice() {
+K4ADevice::K4ADevice(DeviceConfiguration config) : Device(config) {
   pc::logger->info("Initialising K4ADevice");
 
-  _driver = std::make_unique<K4ADriver>();
+  _driver = std::make_unique<K4ADriver>(config);
   if (attached_devices.size() == 0)
     _driver->primary_aligner = true;
   name = "k4a " + std::to_string(_driver->device_index);
@@ -23,8 +25,6 @@ K4ADevice::K4ADevice() {
     pc::logger->error(e.what());
   }
 
-  // load last saved configuration on startup
-  deserialize_config_from_this_device();
 }
 
 K4ADevice::~K4ADevice() { pc::logger->info("Closing {}", name); }
@@ -49,16 +49,49 @@ void K4ADevice::draw_device_controls() {
   
   auto driver = dynamic_cast<K4ADriver *>(_driver.get());
 
-  if (gui::begin_tree_node("Body tracking", config.body_open)) {
-    auto& body = config.body;
+  if (gui::begin_tree_node("K4A Configuration", _config.k4a.unfolded)) {
+
+    static const std::map<k4a_depth_mode_t, std::pair<int, std::string>>
+	depth_mode_to_combo_item = {
+	    {K4A_DEPTH_MODE_NFOV_2X2BINNED, {0, "NFOV Binned"}},
+	    {K4A_DEPTH_MODE_NFOV_UNBINNED, {1, "NFOV Unbinned"}},
+	    {K4A_DEPTH_MODE_WFOV_2X2BINNED, {2, "WFOV Binned"}},
+	    {K4A_DEPTH_MODE_WFOV_UNBINNED, {3, "WFOV Unbinned"}}};
+
+    static const std::string combo_item_string = [] {
+      std::string items;
+      for (const auto &[mode, item] : depth_mode_to_combo_item) {
+	items += item.second + '\0';
+      }
+      return items;
+    }();
+
+    auto [selected_item_index, label] =
+        depth_mode_to_combo_item.at(_config.k4a.depth_mode);
+
+    if (ImGui::Combo("Depth Mode", &selected_item_index,
+		     combo_item_string.c_str())) {
+      for (const auto &[mode, item] : depth_mode_to_combo_item) {
+	if (item.first == selected_item_index) {
+	  _config.k4a.depth_mode = mode;
+	  break;
+	}
+      }
+    }
+
+    ImGui::TreePop();
+  }
+
+  if (gui::begin_tree_node("Body tracking", _config.body.unfolded)) {
+    auto& body = _config.body;
     auto initially_enabled = body.enabled;
     ImGui::Checkbox("Enabled", &body.enabled);
     if (body.enabled != initially_enabled) driver->enable_body_tracking(body.enabled);
     ImGui::TreePop();
   }
 
-  ImGui::Checkbox("Auto tilt", &config.auto_tilt);
-  if (config.auto_tilt) driver->apply_auto_tilt(true);
+  ImGui::Checkbox("Auto tilt", &_config.k4a.auto_tilt);
+  if (_config.k4a.auto_tilt) driver->apply_auto_tilt(true);
 
   ImGui::SameLine();
   if (ImGui::Button("Clear"))

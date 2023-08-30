@@ -1,13 +1,13 @@
 #include "midi_client.h"
+#include "../gui_helpers.h"
 #include "../logger.h"
+#include "../string_utils.h"
 #include <imgui.h>
 #include <libremidi/client.hpp>
 #include <libremidi/libremidi.hpp>
 #include <map>
 #include <memory>
 #include <vector>
-#include <map>
-#include "../gui_helpers.h"
 
 namespace pc::midi {
 
@@ -17,7 +17,6 @@ std::mutex MidiClient::_mutex;
 MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
 
   for (auto api : libremidi::available_apis()) {
-
     std::string api_name(libremidi::get_api_display_name(api));
 
     if (_midi_observers.contains(api_name))
@@ -44,6 +43,14 @@ MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
                             libremidi::observer_configuration_for(api)});
   }
   pc::logger->info("Waiting for MIDI hotplug events");
+
+  // for any MIDI cc bindings to UI sliders saved in the config,
+  // notify the slider its been 'bound'
+  for (const auto& [_, bindings] : _config.cc_gui_bindings) {
+    for (const auto &[_, slider_id] : bindings) {
+      gui::slider_states[slider_id] = gui::SliderState::Bound;
+    }
+  }
 }
 
 MidiClient::~MidiClient() {}
@@ -52,8 +59,10 @@ void MidiClient::handle_input_added(const libremidi::input_port &port,
                                     const libremidi::API &api) {
   auto [iter, emplaced] = _midi_inputs.emplace(
       port.port_name,
-      libremidi::midi_in{{.on_message = std::bind(&MidiClient::handle_message,
-                                                  this, std::placeholders::_1)},
+      libremidi::midi_in{{.on_message =
+			      [&, port](const libremidi::message &msg) {
+				this->handle_message(port, msg);
+			      }},
                          libremidi::midi_in_configuration_for(api)});
   if (!emplaced)
     return;
@@ -75,23 +84,33 @@ void MidiClient::handle_input_removed(const libremidi::input_port &port) {
                    port.port_name);
 }
 
-void MidiClient::handle_message(const libremidi::message &msg) {
+void MidiClient::handle_message(const libremidi::input_port &port,
+                                const libremidi::message &msg) {
+
   using libremidi::message_type;
   auto channel = msg.get_channel();
   auto msg_type = msg.get_message_type();
   if (msg_type == message_type::CONTROL_CHANGE) {
     auto control_num = msg[1];
     auto value = msg[2];
-    CCParameter cc{channel, control_num};
+    auto cc = cc_string(channel, control_num);
     // pc::logger->debug("received CC: {}.{}.{}", channel, control_num, value);
+
+    static std::unordered_map<std::string, std::string> port_keys;
+    
     if (gui::recording_slider) {
       gui::recording_slider = false;
-      gui_slider_bindings[cc] = gui::load_recording_slider_id();
+      if (!port_keys.contains(port.port_name)) {
+	port_keys[port.port_name] = pc::strings::snake_case(port.port_name);
+      }
+      auto key = port_keys[port.port_name];
+      _config.cc_gui_bindings[key][cc] = gui::load_recording_slider_id();
       gui::recording_result = gui::SliderState::Bound;
       return;
     }
-    if (gui_slider_bindings.contains(cc)) {
-      auto slider_id = gui_slider_bindings[cc];
+    auto key = port_keys[port.port_name];
+    if (_config.cc_gui_bindings[key].contains(cc)) {
+      auto slider_id = _config.cc_gui_bindings[key][cc];
       gui::set_slider_value(slider_id, value, 0, 127);
     }
     return;

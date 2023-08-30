@@ -3,6 +3,7 @@
 #include <array>
 #include <string>
 #include <string_view>
+#include <cctype>
 
 namespace pc::strings {
 
@@ -34,6 +35,19 @@ constexpr std::string concat(const Args &...args) noexcept {
   std::string result;
   result.reserve((to_string(args).size() + ...));
   ((result.append(to_string(args))), ...);
+  return result;
+}
+
+std::string snake_case(const std::string &input) noexcept {
+  std::string result;
+  result.reserve(input.size());
+  for (auto c : input) {
+    if (std::isalnum(static_cast<unsigned char>(c))) {
+      result.push_back(std::tolower(static_cast<unsigned char>(c)));
+    } else if (std::isspace(static_cast<unsigned char>(c))) {
+      result.push_back('_');
+    }
+  }
   return result;
 }
 

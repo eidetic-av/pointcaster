@@ -11,7 +11,7 @@ namespace pc::sensors {
 
 class K4ADevice : public Device {
 public:
-  K4ADevice();
+  K4ADevice(DeviceConfiguration config);
   ~K4ADevice();
 
   std::string id() override;

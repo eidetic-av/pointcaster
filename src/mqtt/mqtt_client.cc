@@ -65,7 +65,7 @@ void MqttClient::connect(const std::string_view host_name, const int port) {
   pc::logger->info("Connecting to MQTT broker at {}", _config.broker_uri);
 
   _client = std::make_unique<mqtt::async_client>(_config.broker_uri.data(),
-						 _config.client_id.data());
+						 _config.id.data());
 
   auto options = mqtt::connect_options_builder()
 		     .clean_session()

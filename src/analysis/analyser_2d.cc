@@ -245,8 +245,8 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     const cv::Point2i analysis_frame_size = {analysis_config.resolution[0],
                                              analysis_config.resolution[1]};
 
-    const auto &output_scale = analysis_config.output_scale;
-    const auto &output_offset = analysis_config.output_offset;
+    const auto &output_scale = analysis_config.output.scale;
+    const auto &output_offset = analysis_config.output.offset;
 
     cv::Mat analysis_input;
     // TODO this try/catch could be replaced with better CUDA

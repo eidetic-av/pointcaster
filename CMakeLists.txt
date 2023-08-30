@@ -144,6 +144,12 @@ list(APPEND LINK_LIBS spdlog::spdlog_header_only)
 find_package(nlohmann_json CONFIG REQUIRED)
 list(APPEND LINK_LIBS nlohmann_json::nlohmann_json)
 
+find_package(serdepp CONFIG REQUIRED)
+list(APPEND LINK_LIBS serdepp::serdepp)
+
+find_package(toml11 CONFIG REQUIRED)
+list(APPEND LINK_LIBS toml11::toml11)
+
 find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
 list(APPEND INCLUDE_DIRS ${ZPP_BITS_INCLUDE_DIRS})
 

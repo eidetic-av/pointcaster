@@ -1,7 +1,10 @@
 #pragma once
 
 #include <array>
-#include <nlohmann/json.hpp>
+#include <serdepp/serde.hpp>
+#include "structs.h"
+
+using pc::types::int2;
 
 enum class ScaleMode {
   Span, Letterbox,
@@ -14,15 +17,23 @@ enum class LetterboxMode {
 };
 
 struct PointCloudRendererConfiguration {
-  std::array<int, 2> resolution{3840, 2160};
+  bool unfolded = false;
+  int2 resolution{3840, 2160};
   ScaleMode scale_mode = ScaleMode::Span;
   LetterboxMode letterbox_mode = LetterboxMode::Aspect16x9;
   float point_size = 0.0015f;
   bool ground_grid = true;
   bool skeletons = true;
   bool snapshots = true;
-};
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(PointCloudRendererConfiguration, resolution,
-                                   scale_mode, letterbox_mode, point_size,
-                                   ground_grid, skeletons, snapshots);
+  DERIVE_SERDE(PointCloudRendererConfiguration,
+	       (&Self::unfolded, "unfolded")
+	       (&Self::resolution, "resolution")
+	       (&Self::scale_mode, "scale_mode")
+	       (&Self::letterbox_mode, "letterbox_mode")
+	       (&Self::point_size, "point_size")
+	       (&Self::ground_grid, "ground_grid")
+	       (&Self::skeletons, "skeletons")
+	       (&Self::snapshots, "snapshots"))
+
+};

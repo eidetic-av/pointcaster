@@ -2,17 +2,17 @@
 
 #include <iostream>
 
+#include "fonts/IconsFontAwesome6.h"
+#include "math.h"
+#include "structs.h"
+#include <array>
+#include <atomic>
 #include <imgui.h>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <thread>
-#include <mutex>
 #include <vector>
-#include <array>
-#include <atomic>
-#include "structs.h"
-#include "math.h"
-#include "fonts/IconsFontAwesome6.h"
 
 using uint = unsigned int;
 
@@ -80,25 +80,25 @@ inline std::string load_recording_slider_id() {
 }
 
 inline void set_slider_value(std::string slider_id, int value, int input_min,
-			     int input_max) {
-
+                             int input_max) {
   auto &binding = slider_bindings[slider_id];
   binding.value = pc::math::remap((float)input_min, (float)input_max,
-				  binding.min, binding.max, (float)value, true);
+                                  binding.min, binding.max, (float)value, true);
 }
 
 template <typename T>
-void slider(const std::string& slider_id, std::size_t i, T &value, T min, T max, T reset_value,
-            bool is_disabled, const std::string &label_dimension,
+void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
+            T reset_value, bool is_disabled, const std::string &label_dimension,
             const std::string &base_label) {
-  if (is_disabled) ImGui::BeginDisabled();
+  if (is_disabled)
+    ImGui::BeginDisabled();
 
-  auto& state = slider_states[slider_id];
+  auto &state = slider_states[slider_id];
 
   if (state == SliderState::Bound) {
-    auto& binding = slider_bindings[slider_id];
+    auto &binding = slider_bindings[slider_id];
     value = static_cast<T>(
-	pc::math::remap(0.0f, 1.0f, (float)min, (float)max, binding.value));
+        pc::math::remap(0.0f, 1.0f, (float)min, (float)max, binding.value));
   }
 
   // if we were recording this slider and we're not anymore,
@@ -121,7 +121,7 @@ void slider(const std::string& slider_id, std::size_t i, T &value, T min, T max,
   // Label Column
   ImGui::TableSetColumnIndex(0);
   ImGui::Text(label_dimension.c_str());
-  
+
   // Slider Column
   ImGui::TableSetColumnIndex(1);
   ImGui::SetNextItemWidth(-1);
@@ -160,13 +160,14 @@ void slider(const std::string& slider_id, std::size_t i, T &value, T min, T max,
     value = reset_value;
   }
 
-  if (is_disabled) ImGui::EndDisabled();
+  if (is_disabled)
+    ImGui::EndDisabled();
 }
 
 template <typename T, std::size_t N>
 bool vector_table(
-    const std::string group_id, const std::string label,
-    std::array<T, N> &vec, T min, T max, std::array<T, N> reset_values,
+    const std::string group_id, const std::string label, std::array<T, N> &vec,
+    T min, T max, std::array<T, N> reset_values,
     std::array<bool, N> disabled = std::array<bool, N>{false},
     std::array<std::string, N> labels = std::array<std::string, N>{""}) {
   static_assert(N >= 2 && N <= 4, "Vector array must have 2, 3 or 4 elements");
@@ -210,7 +211,7 @@ bool vector_table(
     const auto &row_label = use_labels ? labels[i] : dimensions[i];
     ImGui::TableNextRow();
     slider(group_id + "." + label + "." + row_label, i, vec[i], min, max,
-	   reset_values[i], disabled[i], row_label, label);
+           reset_values[i], disabled[i], row_label, label);
   }
 
   ImGui::EndTable();
@@ -226,16 +227,17 @@ bool vector_table(
 }
 
 template <typename T, std::size_t N>
-bool vector_table(const std::string group_id, const std::string label, std::array<T, N> &vec, T min, T max,
-                  T reset_value) {
+bool vector_table(const std::string group_id, const std::string label,
+                  std::array<T, N> &vec, T min, T max, T reset_value) {
   std::array<T, N> reset_values;
   std::fill(reset_values.begin(), reset_values.end(), reset_value);
   return vector_table(group_id, label, vec, min, max, reset_values);
 }
 
 // must be inline due to template above also satisfying this overload
-  inline bool vector_table(const std::string group_id, const std::string label, pc::types::int3 &vec,
-                         int min, int max, int reset_value) {
+inline bool vector_table(const std::string group_id, const std::string label,
+                         pc::types::int3 &vec, int min, int max,
+                         int reset_value) {
   std::array<int, 3> array_vec = {vec.x, vec.y, vec.z};
   bool result = vector_table(group_id, label, array_vec, min, max, reset_value);
   vec.x = array_vec[0];
@@ -244,8 +246,47 @@ bool vector_table(const std::string group_id, const std::string label, std::arra
   return result;
 }
 
-  inline bool vector_table(const std::string group_id, const std::string label, pc::types::float3 &vec,
-                         float min, float max, float reset_value) {
+inline bool vector_table(const std::string group_id, const std::string label,
+                         pc::types::int2 &vec, int min, int max,
+                         pc::types::int2 reset_values,
+                         std::array<bool, 2> disabled = {false, false},
+                         std::array<std::string, 2> labels = {"x", "y"}) {
+  std::array<int, 2> array_vec = {vec.x, vec.y};
+  bool result =
+      vector_table(group_id, label, array_vec, min, max,
+                   {reset_values.x, reset_values.y}, disabled, labels);
+  vec.x = array_vec[0];
+  vec.y = array_vec[1];
+  return result;
+}
+
+inline bool vector_table(const std::string group_id, const std::string label,
+                         pc::types::float2 &vec, float min, float max,
+                         float reset_value) {
+  std::array<float, 2> array_vec = {vec.x, vec.y};
+  bool result = vector_table(group_id, label, array_vec, min, max, reset_value);
+  vec.x = array_vec[0];
+  vec.y = array_vec[1];
+  return result;
+}
+
+inline bool vector_table(const std::string group_id, const std::string label,
+                         pc::types::float2 &vec, float min, float max,
+                         pc::types::float2 reset_values,
+                         std::array<bool, 2> disabled = {false, false},
+                         std::array<std::string, 2> labels = {"x", "y"}) {
+  std::array<float, 2> array_vec = {vec.x, vec.y};
+  bool result =
+      vector_table(group_id, label, array_vec, min, max,
+                   {reset_values.x, reset_values.y}, disabled, labels);
+  vec.x = array_vec[0];
+  vec.y = array_vec[1];
+  return result;
+}
+
+inline bool vector_table(const std::string group_id, const std::string label,
+                         pc::types::float3 &vec, float min, float max,
+                         float reset_value) {
   std::array<float, 3> array_vec = {vec.x, vec.y, vec.z};
   bool result = vector_table(group_id, label, array_vec, min, max, reset_value);
   vec.x = array_vec[0];

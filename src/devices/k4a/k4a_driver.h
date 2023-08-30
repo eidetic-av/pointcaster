@@ -2,6 +2,7 @@
 
 #include "../device.h"
 #include "../driver.h"
+#include "../device_config.h"
 
 #include <Eigen/Geometry>
 #include <array>
@@ -33,7 +34,7 @@ public:
 
   static uint device_count;
 
-  K4ADriver();
+  K4ADriver(const DeviceConfiguration& config);
   ~K4ADriver();
 
   std::string id() const override;

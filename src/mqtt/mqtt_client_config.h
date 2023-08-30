@@ -1,13 +1,17 @@
 #pragma once
 
 #include <string>
-#include <nlohmann/json.hpp>
+
+#include <serdepp/serde.hpp>
 
 struct MqttClientConfiguration {
-  std::string client_id = "pointcaster";
+  bool show_window = false;
+  std::string id = "pointcaster";
   std::string broker_uri = "tcp://localhost:1884";
   bool auto_connect = false;
-};
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MqttClientConfiguration, client_id,
-                                   broker_uri, auto_connect);
+  DERIVE_SERDE(MqttClientConfiguration,
+	       (&Self::show_window, "show_window")
+	       (&Self::id, "id") (&Self::broker_uri, "broker_uri")
+	       (&Self::auto_connect, "auto_connect"))
+};

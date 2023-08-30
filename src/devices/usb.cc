@@ -97,9 +97,13 @@ getDeviceTypeFromUsbDescriptor(struct libusb_device_descriptor desc) {
 
 std::optional<std::shared_ptr<pc::sensors::Device>>
 createUsbDevice(pc::sensors::DeviceType sensor_type) {
+
 #if WITH_K4A
+
   if (sensor_type == pc::sensors::K4A)
-    return std::make_shared<sensors::K4ADevice>();
+    return std::make_shared<sensors::K4ADevice>(
+	pc::sensors::DeviceConfiguration{});
+
 #endif
 #if WITH_K4W2
   if (sensor_type == pc::sensors::K4W2)

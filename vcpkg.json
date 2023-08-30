@@ -8,6 +8,8 @@
     "paho-mqttpp3",
     "msgpack",
     "nlohmann-json",
+    "toml11",
+    "serdepp",
     "azure-kinect-sensor-sdk",
     "corrade",
     "eigen3",

@@ -16,20 +16,6 @@
 
 namespace pc::midi {
 
-struct CCParameter {
-  int channel;
-  int number;
-  bool operator==(const CCParameter &other) const {
-    return channel == other.channel && number == other.number;
-  }
-};
-
-struct CCParameterHash {
-  std::size_t operator()(const pc::midi::CCParameter &cc) const {
-    return (std::hash<int>()(cc.channel) ^ (std::hash<int>()(cc.number) << 1));
-  }
-};
-
 class MidiClient {
 public:
   static std::shared_ptr<MidiClient> &instance() {
@@ -70,9 +56,8 @@ private:
                           const libremidi::API &api);
   void handle_input_removed(const libremidi::input_port &port);
 
-  void handle_message(const libremidi::message &msg);
-
-  std::unordered_map<CCParameter, std::string, CCParameterHash> gui_slider_bindings;
+  void handle_message(const libremidi::input_port &port,
+                      const libremidi::message &msg);
 };
 
 } // namespace pc::midi

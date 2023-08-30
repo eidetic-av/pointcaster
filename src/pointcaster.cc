@@ -14,7 +14,11 @@
 
 #include <filesystem>
 #include <fstream>
-#include <nlohmann/json.hpp>
+
+#include <serdepp/serde.hpp>
+#include <serdepp/adaptor/toml11.hpp>
+#include <toml.hpp>
+
 #include <zpp_bits.h>
 
 #ifdef _WIN32
@@ -159,6 +163,7 @@ protected:
   void save_session(std::filesystem::path file_path);
   void load_session(std::filesystem::path file_path);
 
+  void load_device(const DeviceConfiguration& config);
   void open_kinect_sensors();
 
   void render_cameras();
@@ -317,7 +322,7 @@ PointCaster::PointCaster(const Arguments &args)
   std::filesystem::file_time_type last_write_time;
 
   for (const auto &entry : std::filesystem::directory_iterator(data_dir)) {
-    if (!entry.is_regular_file() || entry.path().extension() != ".json")
+    if (!entry.is_regular_file() || entry.path().extension() != ".toml")
       continue;
 
     auto write_time = std::filesystem::last_write_time(entry);
@@ -330,7 +335,7 @@ PointCaster::PointCaster(const Arguments &args)
   if (last_modified_session_file.empty()) {
     pc::logger->info("No previous session file found. Creating new session.");
     _session = {.id = pc::uuid::word()};
-    auto file_path = data_dir / (_session.id + ".json");
+    auto file_path = data_dir / (_session.id + ".toml");
     save_session(file_path);
   } else {
     pc::logger->info("Found previous session file");
@@ -400,16 +405,13 @@ PointCaster::PointCaster(const Arguments &args)
   _radio = std::make_unique<Radio>();
 
 #if WITH_MQTT
-  MqttClient::create(_session.mqtt_config);
+  MqttClient::create(_session.mqtt);
 #endif
 
-  MidiClient::create(_session.midi_config);
+  MidiClient::create(_session.midi);
 
   //
   _snapshots_context = std::make_unique<Snapshots>();
-
-  if (_session.auto_connect_sensors)
-    open_kinect_sensors();
 
   // Init our sensors
   // TODO the following should be moved into pc::sensors ns and outside this
@@ -420,9 +422,6 @@ PointCaster::PointCaster(const Arguments &args)
   // that will add new devices to our main sensor list
   registerUsbAttachCallback([&](auto attached_device) {
     pc::logger->debug("attached usb callback");
-    if (!_session.auto_connect_sensors)
-      return;
-
     // freeUsb();
     // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     // for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
@@ -452,7 +451,7 @@ void PointCaster::save_and_quit() {
 
 void PointCaster::save_session() {
   auto data_dir = path::get_or_create_data_directory();
-  auto file_path = data_dir / (_session.id + ".json");
+  auto file_path = data_dir / (_session.id + ".toml");
   save_session(file_path);
 }
 
@@ -469,22 +468,20 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   std::ofstream layout_file(layout_file_path, std::ios::binary);
   layout_file.write(layout_data.data(), layout_data.size());
 
+  // save device configurations
+  _session.devices.clear();
+  for (auto &device : Device::attached_devices) {
+    _session.devices.emplace(device->id(), device->config());
+  }
+
   // save camera configurations
   _session.cameras.clear();
   for (auto &camera : _camera_controllers) {
-    _session.cameras.push_back(camera->config());
+    _session.cameras.emplace(camera->name(), camera->config());
   }
 
-  // save device configurations
-  // TODO this saves to a separate file,
-  // move this save data into the _session object
-  for (auto &device : Device::attached_devices) {
-    device->serialize_config();
-  }
-
-  nlohmann::json session_json = _session;
-  std::ofstream file(file_path);
-  file << session_json.dump(2);
+  auto session_toml = serde::serialize<toml::value>(_session);
+  std::ofstream(file_path) << toml::format(session_toml);
 }
 
 void PointCaster::load_session(std::filesystem::path file_path) {
@@ -497,9 +494,8 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     return;
   }
 
-  nlohmann::json file_json;
-  file >> file_json;
-  _session = file_json.get<PointCasterSession>();
+  toml::value file_toml = toml::parse(file);
+  _session = serde::deserialize<PointCasterSession>(file_toml);
 
   // check if there is an adjacent .layout file
   // and load if so
@@ -512,22 +508,36 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     std::streamsize layout_size = layout_file.tellg();
     layout_file.seekg(0, std::ios::beg);
 
-    _session.imgui_layout.resize(layout_size);
-    layout_file.read(_session.imgui_layout.data(), layout_size);
+    std::vector<char> layout_data(layout_size);
+    layout_file.read(layout_data.data(), layout_size);
 
-    ImGui::LoadIniSettingsFromMemory(_session.imgui_layout.data(),
-                                     _session.imgui_layout.size());
+    ImGui::LoadIniSettingsFromMemory(layout_data.data(), layout_size);
+
   } else {
     pc::logger->info("Failed to open adjacent .layout file");
   }
 
-  // get saved camera configurations to populate the cams list
-  for (auto &saved_camera_config : _session.cameras) {
+  // get saved camera configurations and populate the cams list
+  for (auto &[_, saved_camera_config] : _session.cameras) {
     auto saved_camera =
       std::make_unique<CameraController>(this, _scene.get(), saved_camera_config);
     saved_camera->camera().setViewport(
         GL::defaultFramebuffer.viewport().size());
     _camera_controllers.push_back(std::move(saved_camera));
+  }
+
+  if (_session.load_devices_at_launch) {
+    if (_session.devices.empty()) {
+      // open all devices
+      open_kinect_sensors();
+    } else {
+      // get saved device configurations and populate the device list
+      run_async([this] {
+	for (auto &[_, device_config] : _session.devices) {
+	  load_device(device_config);
+	}
+      });
+    }
   }
 
   pc::logger->info("Loaded session '{}'", file_path.filename().string());
@@ -606,11 +616,16 @@ void PointCaster::render_cameras() {
   GL::defaultFramebuffer.bind();
 }
 
+void PointCaster::load_device(const DeviceConfiguration& config) {
+  auto p = std::make_shared<K4ADevice>(config);
+  Device::attached_devices.push_back(std::move(p));
+}
+
 void PointCaster::open_kinect_sensors() {
-  run_async([&] {
+  run_async([this] {
     for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
-      auto p = std::make_shared<K4ADevice>();
-      Device::attached_devices.push_back(std::move(p));
+      using namespace std::chrono_literals;
+      load_device({});
     }
   });
 }
@@ -636,10 +651,10 @@ void PointCaster::draw_menu_bar() {
           window_toggle = !window_toggle;
       };
 
-      window_item("Transform", "t", _session.show_global_transform_window);
-      window_item("Devices", "d", _session.show_devices_window);
-      window_item("RenderStats", "f", _session.show_stats);
-      window_item("MQTT", "m", _session.show_mqtt_window);
+      window_item("Transform", "t", _session.layout.show_global_transform_window);
+      window_item("Devices", "d", _session.layout.show_devices_window);
+      window_item("RenderStats", "f", _session.layout.show_stats);
+      window_item("MQTT", "m", _session.mqtt.show_window);
 
       ImGui::EndMenu();
     }
@@ -811,7 +826,7 @@ void PointCaster::draw_main_viewport() {
 	      (tab_bar->BarRect.Max.y - tab_bar->BarRect.Min.y) + 5;
 	  // TODO 5 pixels above? where's it come from
 
-          if (_session.hide_ui) {
+          if (_session.layout.hide_ui) {
 	    tab_bar_height = 0;
             ImGui::SetCursorPosY(0);
           }
@@ -828,7 +843,7 @@ void PointCaster::draw_main_viewport() {
             ImGuiIntegration::image(camera_controller->color_frame(),
                                     {frame_space.x(), frame_space.y()});
 
-            auto analysis = camera_config.frame_analysis;
+            auto analysis = camera_config.analysis;
 
             if (analysis.enabled && (analysis.contours.draw)) {
               ImGui::SetCursorPos(image_pos);
@@ -873,7 +888,7 @@ void PointCaster::draw_main_viewport() {
             ImGuiIntegration::image(camera_controller->color_frame(),
                                     {width, height});
 
-            auto &analysis = camera_controller->config().frame_analysis;
+            auto &analysis = camera_controller->config().analysis;
 
             if (analysis.enabled && (analysis.contours.draw)) {
               ImGui::SetCursorPos(image_pos);
@@ -890,11 +905,11 @@ void PointCaster::draw_main_viewport() {
             ImGui::Dummy({horizontal_offset, vertical_offset});
 	  }
 
-          if (!_session.hide_ui) {
+          if (!_session.layout.hide_ui) {
             draw_viewport_controls(*camera_controller);
           }
 
-          if (!_session.show_log) {
+          if (!_session.layout.show_log) {
 	    draw_onscreen_log();
           }
 
@@ -986,27 +1001,16 @@ void PointCaster::draw_devices_window() {
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Devices", nullptr);
 
-  ImGui::Checkbox("USB auto-connect", &_session.auto_connect_sensors);
-
-  if (ImGui::Button("Open"))
-    open_kinect_sensors();
-
+  ImGui::Checkbox("Open at launch", &_session.load_devices_at_launch);
+  if (ImGui::Button("Open")) open_kinect_sensors();
+  ImGui::SameLine();
   if (ImGui::Button("Close")) {
     run_async([] { Device::attached_devices.clear(); });
   }
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
-
   for (auto &device : Device::attached_devices) {
-    if (!device->is_sensor)
-      return;
-    if (ImGui::CollapsingHeader(device->name.c_str(), nullptr))
-      device->draw_imgui_controls();
-    ImGui::Spacing();
-    ImGui::Text(device->name.c_str());
     device->draw_imgui_controls();
-    ImGui::Spacing();
-    ImGui::Separator();
   }
   ImGui::PopItemWidth();
   ImGui::End();
@@ -1056,7 +1060,7 @@ void PointCaster::draw_stats() {
 
     for (auto &camera_controller : _camera_controllers) {
       if (ImGui::CollapsingHeader(camera_controller->name().c_str())) {
-	if (camera_controller->config().frame_analysis.enabled) {
+	if (camera_controller->config().analysis.enabled) {
 	  ImGui::Text("Analysis Duration");
 	  ImGui::BeginTable("analysis_duration", 2);
 	  ImGui::TableNextColumn();
@@ -1206,23 +1210,23 @@ void PointCaster::drawEvent() {
 
   draw_main_viewport();
 
-  if (!_session.hide_ui) {
+  if (!_session.layout.hide_ui) {
     draw_camera_control_windows();
-    if (_session.show_devices_window)
+    if (_session.layout.show_devices_window)
       draw_devices_window();
-    if (_session.show_stats)
+    if (_session.layout.show_stats)
       draw_stats();
-    if (_session.show_radio_window)
+    if (_session.layout.show_radio_window)
       _radio->draw_imgui_window();
-    if (_session.show_snapshots_window)
+    if (_session.layout.show_snapshots_window)
       _snapshots_context->draw_imgui_window();
-    if (_session.show_global_transform_window)
+    if (_session.layout.show_global_transform_window)
       pc::sensors::draw_global_controls();
 #if WITH_MQTT
-    if (_session.show_mqtt_window)
+    if (_session.mqtt.show_window)
       MqttClient::instance()->draw_imgui_window();
 #endif
-    if (_session.show_midi_window)
+    if (_session.midi.show_window)
       MidiClient::instance()->draw_imgui_window();
   }
 
@@ -1305,30 +1309,30 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
   case KeyEvent::Key::D:
-    _session.show_devices_window = !_session.show_devices_window;
+    _session.layout.show_devices_window = !_session.layout.show_devices_window;
     break;
   case KeyEvent::Key::F:
     set_full_screen(!_full_screen);
     break;
   case KeyEvent::Key::G:
-    _session.hide_ui = !_session.hide_ui;
+    _session.layout.hide_ui = !_session.layout.hide_ui;
     break;
 #if WITH_MQTT
   case KeyEvent::Key::M:
-    _session.show_mqtt_window = !_session.show_mqtt_window;
+    _session.mqtt.show_window = !_session.mqtt.show_window;
     break;
 #endif
   case KeyEvent::Key::Q:
     save_and_quit();
     break;
   case KeyEvent::Key::R:
-    _session.show_radio_window = !_session.show_radio_window;
+    _session.layout.show_radio_window = !_session.layout.show_radio_window;
     break;
   case KeyEvent::Key::S:
     save_session();
     break;
   case KeyEvent::Key::T:
-    _session.show_stats = !_session.show_stats;
+    _session.layout.show_stats = !_session.layout.show_stats;
     break;
   default:
     if (_imgui_context.handleKeyPressEvent(event))

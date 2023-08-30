@@ -27,37 +27,25 @@ public:
   static std::vector<std::shared_ptr<Device>> attached_devices;
   static std::mutex devices_access;
 
+  Device(DeviceConfiguration config) : _config(config){};
+
   std::string name = "";
   bool is_sensor = true;
   bool paused = false;
 
-  DeviceConfiguration config{
-      false,            // flip_x
-      false,           // flip_y
-      false,            // flip_z
-      {-10000, 10000}, // crop_x
-      {-10000, 10000}, // crop_y
-      {-10000, 10000}, // crop_z
-      {0, 0, 0}, // offset
-      {-7, 0, 0},      // rotation_deg
-      1.0f,            // scale
-      1                // sample
-  };                   //
-
   virtual std::string id() = 0;
 
   bool broadcast_enabled() { return _enable_broadcast; }
-  auto point_cloud() { return _driver->point_cloud(config); };
+  auto point_cloud() { return _driver->point_cloud(_config); };
+
+  const DeviceConfiguration config() { return _config; };
 
   void draw_imgui_controls();
 
-  void serialize_config() const;
-  void deserialize_config(std::vector<uint8_t> data);
-  void deserialize_config_from_device_id(const std::string &device_id);
-  void deserialize_config_from_this_device();
-
   std::unique_ptr<Driver> _driver;
+
 protected:
+  DeviceConfiguration _config;
   bool _enable_broadcast = true;
 
   // implement this to add device-specific options with imgui
