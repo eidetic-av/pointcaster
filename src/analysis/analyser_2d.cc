@@ -25,6 +25,11 @@ namespace pc::analysis {
 Analyser2D::Analyser2D()
   : _analysis_thread([this](auto stop_token) { frame_analysis(stop_token); }) {}
 
+Analyser2D::~Analyser2D() {
+  _analysis_thread.request_stop();
+  _dispatch_condition_variable.notify_one();
+}
+
 void Analyser2D::set_frame_size(Magnum::Vector2i frame_size) {
   std::lock_guard lock(_analysis_frame_mutex);
   _analysis_frame = std::make_unique<Magnum::GL::Texture2D>();
@@ -557,6 +562,7 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     auto end_time = system_clock::now();
     _analysis_time = duration_cast<milliseconds>(end_time - start_time);
   }
+
 }
 
 Magnum::GL::Texture2D &Analyser2D::analysis_frame() {

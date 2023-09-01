@@ -148,6 +148,8 @@ protected:
 
   std::unique_ptr<UsbMonitor> _usb_monitor;
 
+  
+
   ImGuiIntegration::Context _imgui_context{NoCreate};
 
   ImFont *_font;

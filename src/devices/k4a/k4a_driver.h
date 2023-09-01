@@ -87,6 +87,7 @@ private:
   std::mutex _buffer_mutex;
   std::atomic<bool> _buffers_updated;
 
+  k4abt::tracker _tracker;
   bool _body_tracking_enabled;
   std::thread _tracker_loop;
   std::vector<K4ASkeleton> _skeletons;
@@ -94,7 +95,6 @@ private:
   std::array<short3, positions_buffer_size> _positions_buffer;
   std::array<color, color_buffer_size> _colors_buffer;
 
-  k4abt::tracker _tracker;
   static constexpr uint _total_alignment_frames = 10;
   uint _alignment_frame_count = _total_alignment_frames;
   std::vector<k4abt_skeleton_t> _alignment_skeleton_frames;

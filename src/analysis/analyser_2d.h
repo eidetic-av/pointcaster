@@ -15,6 +15,7 @@ class Analyser2D {
 public:
 
   Analyser2D();
+  ~Analyser2D();
 
   Analyser2D(const Analyser2D&) = delete;
   Analyser2D& operator=(const Analyser2D&) = delete;

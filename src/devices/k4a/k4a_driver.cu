@@ -149,7 +149,6 @@ K4ADriver::K4ADriver(const DeviceConfiguration& config) {
 
     while (!_stop_requested) {
 
-
       k4abt_frame_t body_frame_handle = nullptr;
       k4abt::frame body_frame(body_frame_handle);
       if (!_tracker.pop_result(&body_frame, 50ms)) continue;
@@ -235,6 +234,7 @@ K4ADriver::K4ADriver(const DeviceConfiguration& config) {
         }
         _skeletons.push_back(skeleton);
       }
+      _tracker.destroy();
     }
   });
 
@@ -249,8 +249,8 @@ K4ADriver::~K4ADriver() {
   _stop_requested = true;
   _capture_loop.join();
   _tracker_loop.join();
-  _tracker.destroy();
   _device.stop_cameras();
+  _device.stop_imu();
   _device.close();
   device_count--;
 }

@@ -20,7 +20,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <thread>
 #include <opencv2/opencv.hpp>
 
 namespace pc::camera {
