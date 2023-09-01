@@ -69,15 +69,9 @@ K4ADriver::K4ADriver(const DeviceConfiguration& config) {
 
   log_info("Opening driver for k4a {} ({})\n", device_index, id());
 
-  try {
-    _device = k4a::device::open(device_index);
-    _serial_number = _device.get_serialnum();
-    log_info("k4a {} Open", device_index);
-  } catch (const std::system_error &e) {
-    log_error("Failed to open k4a::device");
-    log_error("{}", e.what());
-    return;
-  }
+  _device = k4a::device::open(device_index);
+  _serial_number = _device.get_serialnum();
+  log_info("k4a {} Open", device_index);
 
   _k4a_config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
   _k4a_config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
@@ -92,25 +86,11 @@ K4ADriver::K4ADriver(const DeviceConfiguration& config) {
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_30;
   }
 
-  log_info("k4a {} attempting to start camera", device_index);
-  try {
-    _device.start_cameras(&_k4a_config);
-    log_info("k4a {} started camera", device_index);
-  } catch (std::exception e) {
-    log_error("k4a {} failed to start camera", device_index);
-    log_error(e.what());
-    return;
-  }
+  _device.start_cameras(&_k4a_config);
+  log_info("k4a {} started camera", device_index);
 
-  log_info("k4a {} attempting to start IMU", device_index);
-  try {
-    _device.start_imu();
-    log_info("k4a {} started IMU", device_index);
-  } catch (std::exception e) {
-    log_error("k4a {} failed to start IMU", device_index);
-    log_error(e.what());
-    return;
-  }
+  _device.start_imu();
+  log_info("k4a {} started IMU", device_index);
 
   // need to store the calibration and transformation data, as they are used
   // later to transform colour camera to point cloud space
@@ -268,14 +248,14 @@ K4ADriver::~K4ADriver() {
   _open = false;
   _stop_requested = true;
   _capture_loop.join();
+  _tracker_loop.join();
   _tracker.destroy();
   _device.stop_cameras();
   _device.close();
-  log_info("k4a {} driver closed", device_index);
   device_count--;
 }
 
-bool K4ADriver::is_open() const { return _open; }
+const bool K4ADriver::is_open() const { return _open; }
 
 std::string K4ADriver::id() const { return _serial_number; }
 

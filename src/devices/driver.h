@@ -16,7 +16,7 @@ public:
 
   virtual ~Driver() = default;
 
-  virtual bool is_open() const = 0;
+  virtual const bool is_open() const = 0;
 
   virtual pc::types::PointCloud point_cloud(const DeviceConfiguration &config) = 0;
   virtual std::string id() const = 0;

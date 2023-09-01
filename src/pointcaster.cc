@@ -617,14 +617,21 @@ void PointCaster::render_cameras() {
 }
 
 void PointCaster::load_device(const DeviceConfiguration& config) {
-  auto p = std::make_shared<K4ADevice>(config);
-  Device::attached_devices.push_back(std::move(p));
+  try {
+    auto p = std::make_shared<K4ADevice>(config);
+    Device::attached_devices.push_back(std::move(p));
+  } catch (k4a::error e) {
+    pc::logger->error(e.what());
+  } catch (...) {
+    pc::logger->error("Failed to open device. (Unknown exception)");
+  }
 }
 
 void PointCaster::open_kinect_sensors() {
   run_async([this] {
-    for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
-      using namespace std::chrono_literals;
+    const auto open_device_count = Device::attached_devices.size();
+    const auto attached_device_count = k4a::device::get_installed_count();
+    for (std::size_t i = open_device_count; i < attached_device_count; i++) {
       load_device({});
     }
   });
@@ -1005,7 +1012,7 @@ void PointCaster::draw_devices_window() {
   if (ImGui::Button("Open")) open_kinect_sensors();
   ImGui::SameLine();
   if (ImGui::Button("Close")) {
-    run_async([] { Device::attached_devices.clear(); });
+    Device::attached_devices.clear();
   }
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);

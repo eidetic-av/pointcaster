@@ -16,18 +16,15 @@ K4ADevice::K4ADevice(DeviceConfiguration config) : Device(config) {
   name = "k4a " + std::to_string(_driver->device_index);
   // get any device specific controls needed from the driver
   auto driver = dynamic_cast<K4ADriver *>(_driver.get());
-  try {
-    _exposure = driver->get_exposure();
-    _brightness = driver->get_brightness();
-    _contrast = driver->get_contrast();
-    _gain = driver->get_gain();
-  } catch (::k4a::error &e) {
-    pc::logger->error(e.what());
-  }
-
+  _exposure = driver->get_exposure();
+  _brightness = driver->get_brightness();
+  _contrast = driver->get_contrast();
+  _gain = driver->get_gain();
 }
 
-K4ADevice::~K4ADevice() { pc::logger->info("Closing {}", name); }
+K4ADevice::~K4ADevice() {
+  pc::logger->info("Closing {}", name);
+}
 
 std::string K4ADevice::id() { return _driver->id(); }
 
@@ -37,7 +34,7 @@ void K4ADevice::update_device_control(int *target, int value,
     try {
       set_func(value);
       *target = value;
-    } catch (::k4a::error e) {
+    } catch (k4a::error e) {
       pc::logger->error(e.what());
     }
   }

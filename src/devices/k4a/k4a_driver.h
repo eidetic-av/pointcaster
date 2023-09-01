@@ -38,7 +38,7 @@ public:
   ~K4ADriver();
 
   std::string id() const override;
-  bool is_open() const override;
+  const bool is_open() const override;
 
   void set_paused(bool paused) override;
 
