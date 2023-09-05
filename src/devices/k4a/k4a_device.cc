@@ -71,6 +71,8 @@ void K4ADevice::draw_device_controls() {
       for (const auto &[mode, item] : depth_mode_to_combo_item) {
 	if (item.first == selected_item_index) {
 	  _config.k4a.depth_mode = mode;
+	  auto driver = dynamic_cast<K4ADriver *>(_driver.get());
+	  driver->set_depth_mode(mode);
 	  break;
 	}
       }

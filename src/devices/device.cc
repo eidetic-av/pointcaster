@@ -34,6 +34,7 @@ std::vector<K4ASkeleton> scene_skeletons() {
   std::vector<K4ASkeleton> result;
   for (auto &device : Device::attached_devices) {
     auto driver = dynamic_cast<K4ADriver *>(device->_driver.get());
+    if (!driver->tracking_bodies()) continue;
     for (auto &skeleton : driver->skeletons()) {
       result.push_back(skeleton);
     }
@@ -119,7 +120,7 @@ void Device::draw_imgui_controls() {
       draw_slider<float>("uniform", &_config.scale, 0.0f, 4.0f);
 
       ImGui::TextDisabled("Sample");
-      draw_slider<int>("s", &_config.sample, 1, 10);
+      draw_slider<int>("s", &_config.sample, 1, 50);
 
       ImGui::TreePop();
     }

@@ -173,9 +173,6 @@ bool vector_table(
   static_assert(N >= 2 && N <= 4, "Vector array must have 2, 3 or 4 elements");
 
   constexpr auto outer_horizontal_padding = 4;
-  constexpr auto label_padding_left = 3;
-  constexpr auto label_padding_right = 6;
-  constexpr auto label_padding_top = 0;
   constexpr auto table_background_color = IM_COL32(22, 27, 34, 255);
 
   const char *dimensions[] = {"x", "y", "z", "w"};

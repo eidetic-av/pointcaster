@@ -549,7 +549,7 @@ void PointCaster::render_cameras() {
 
   PointCloud points;
 
-  std::vector<pc::sensors::K4ASkeleton> skeletons;
+  auto skeletons = sensors::scene_skeletons();
 
   for (auto &camera_controller : _camera_controllers) {
 
@@ -583,9 +583,6 @@ void PointCaster::render_cameras() {
 				rendering_config);
 
     if (rendering_config.skeletons) {
-      if (skeletons.empty()) {
-	skeletons = sensors::scene_skeletons();
-      }
       if (!skeletons.empty()) {
 	int i = 0;
 	for (auto &skeleton : skeletons) {
@@ -596,17 +593,17 @@ void PointCaster::render_cameras() {
 	    i++;
           }
         }
+	_sphere_instance_buffer.setData(_sphere_instance_data,
+					GL::BufferUsage::DynamicDraw);
+	GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
+	_sphere_shader
+	    .setProjectionMatrix(camera_controller->camera().projectionMatrix())
+	    .setTransformationMatrix(camera_controller->camera().cameraMatrix())
+	    .setNormalMatrix(
+		camera_controller->camera().cameraMatrix().normalMatrix())
+	    .draw(_sphere_mesh);
+	GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
       }
-      _sphere_instance_buffer.setData(_sphere_instance_data,
-				    GL::BufferUsage::DynamicDraw);
-      GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
-      _sphere_shader
-	  .setProjectionMatrix(camera_controller->camera().projectionMatrix())
-	  .setTransformationMatrix(camera_controller->camera().cameraMatrix())
-	  .setNormalMatrix(
-	      camera_controller->camera().cameraMatrix().normalMatrix())
-	  .draw(_sphere_mesh);
-      GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
     }
 
     // render camera

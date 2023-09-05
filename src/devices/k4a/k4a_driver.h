@@ -40,6 +40,8 @@ public:
   std::string id() const override;
   const bool is_open() const override;
 
+  void reload();
+
   void set_paused(bool paused) override;
 
   PointCloud point_cloud(const DeviceConfiguration &config) override;
@@ -49,7 +51,10 @@ public:
   bool is_aligned() override;
 
   void enable_body_tracking(const bool enabled);
+  bool tracking_bodies() { return _body_tracking_enabled; };
   std::vector<K4ASkeleton> skeletons() { return _skeletons; };
+
+  void set_depth_mode(const k4a_depth_mode_t mode);
 
   void set_exposure(const int new_exposure);
   int get_exposure() const;
@@ -103,9 +108,11 @@ private:
   position _aligned_position_offset;
   Eigen::Quaternion<float> _aligned_orientation_offset;
 
-  void run_aligner(const k4a::capture &frame);
-
   Eigen::Matrix3f _auto_tilt = Eigen::Matrix3f::Identity();
+
+  void run_aligner(const k4a::capture &frame);
+  void track_bodies();
+  void capture_frames();
 
   PointCloud _point_cloud;
 
