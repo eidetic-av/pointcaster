@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../optional.h"
 #include "../structs.h"
 
 #include <serdepp/serde.hpp>
