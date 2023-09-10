@@ -189,7 +189,7 @@ protected:
 
   Timeline _timeline;
   std::vector<float> frame_durations;
-  void draw_stats();
+  void draw_stats(const float delta_time);
 
   void drawEvent() override;
   void viewportEvent(ViewportEvent &event) override;
@@ -408,9 +408,7 @@ PointCaster::PointCaster(const Arguments &args)
   // Initialise our networks
   _radio = std::make_unique<Radio>();
 
-#if WITH_MQTT
   MqttClient::create(_session.mqtt);
-#endif
 
   MidiClient::create(_session.midi);
 
@@ -1025,7 +1023,7 @@ void PointCaster::draw_devices_window() {
   ImGui::End();
 }
 
-void PointCaster::draw_stats() {
+void PointCaster::draw_stats(const float delta_time) {
   ImGui::PushID("FrameStats");
   ImGui::SetNextWindowPos({50.0f, 200.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize({200.0f, 100.0f}, ImGuiCond_FirstUseEver);
@@ -1034,8 +1032,7 @@ void PointCaster::draw_stats() {
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
 
   // calculate the mean, min and max frame times from our last 60 frames
-  const auto frame_duration = timeline.previousFrameDuration();
-  frame_durations.push_back(frame_duration);
+  frame_durations.push_back(delta_time);
   constexpr auto frames_to_average = 60 * 2; // 2 seconds
   if (frame_durations.size() < frames_to_average) {
     ImGui::Text("Gathering data...");
@@ -1228,7 +1225,7 @@ void PointCaster::drawEvent() {
     if (_session.layout.show_devices_window)
       draw_devices_window();
     if (_session.layout.show_stats)
-      draw_stats();
+      draw_stats(delta_time);
     if (_session.layout.show_radio_window)
       _radio->draw_imgui_window();
     if (_session.layout.show_snapshots_window)
@@ -1276,17 +1273,11 @@ void PointCaster::drawEvent() {
   if (error == GL::Renderer::Error::StackUnderflow)
     pc::logger->warn("StackUnderflow");
 
-  // TODO the timeline should not be linked to GUI drawing
-  // so this needs to be run elsewhere, but still needs to
-  // be locked to the same FPS
-  timeline.nextFrame();
-
   // The context is double-buffered, swap buffers
   swapBuffers();
-
   // Run the next frame immediately
   redraw();
-
+  _timeline.nextFrame();
 }
 
 void PointCaster::set_full_screen(bool full_screen) {
@@ -1330,11 +1321,13 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   case KeyEvent::Key::G:
     _session.layout.hide_ui = !_session.layout.hide_ui;
     break;
-#if WITH_MQTT
   case KeyEvent::Key::M:
-    _session.mqtt.show_window = !_session.mqtt.show_window;
+    if (event.modifiers() == InputEvent::Modifier::Shift) {
+      _session.mqtt.show_window = !_session.mqtt.show_window;
+    } else {
+      _session.midi.show_window = !_session.midi.show_window;
+    }
     break;
-#endif
   case KeyEvent::Key::Q:
     save_and_quit();
     break;
@@ -1342,7 +1335,11 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     _session.layout.show_radio_window = !_session.layout.show_radio_window;
     break;
   case KeyEvent::Key::S:
-    save_session();
+    if (event.modifiers() == InputEvent::Modifier::Shift) {
+      _session.layout.show_snapshots_window = !_session.layout.show_snapshots_window;
+    } else {
+      save_session();
+    }
     break;
   case KeyEvent::Key::T:
     _session.layout.show_stats = !_session.layout.show_stats;
