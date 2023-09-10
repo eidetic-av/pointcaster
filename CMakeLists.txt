@@ -153,6 +153,12 @@ list(APPEND LINK_LIBS toml11::toml11)
 find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
 list(APPEND INCLUDE_DIRS ${ZPP_BITS_INCLUDE_DIRS})
 
+find_package(Tweeny CONFIG REQUIRED)
+list(APPEND LINK_LIBS tweeny)
+
+find_package(unofficial-concurrentqueue CONFIG REQUIRED)
+list(APPEND LINK_LIBS unofficial::concurrentqueue::concurrentqueue)
+
 # ----- Application setup -----
 
 set(SOURCE_FILES

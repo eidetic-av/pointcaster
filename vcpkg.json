@@ -7,7 +7,6 @@
     "earcut-hpp",
     "paho-mqttpp3",
     "msgpack",
-    "nlohmann-json",
     "toml11",
     "serdepp",
     "azure-kinect-sensor-sdk",
@@ -63,6 +62,8 @@
       "features": ["imgui", "eigen"]
     },
     "sdl2",
-    "nativefiledialog"
+    "nativefiledialog",
+    "tweeny",
+    "concurrentqueue"
   ]
 }
