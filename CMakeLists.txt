@@ -176,6 +176,7 @@ set(SOURCE_FILES
   src/path.cc
   src/uuid.cc
   src/wtf/wtf.cc
+  src/tween/tween_manager.cc
   ${POINTCASTER_SRC}
   ${OPTIONAL_SRC})
 

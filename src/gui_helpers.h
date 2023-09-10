@@ -14,6 +14,8 @@
 #include <thread>
 #include <vector>
 
+#include "tween/tween_config.h"
+
 using uint = unsigned int;
 
 namespace pc::gui {
@@ -79,11 +81,22 @@ inline std::string load_recording_slider_id() {
   return recording_slider_id;
 }
 
+inline void set_slider_value(std::string slider_id, float value,
+                             float input_min, float input_max) {
+  auto &binding = slider_bindings[slider_id];
+  binding.value = pc::math::remap(input_min, input_max, binding.min,
+                                  binding.max, value, true);
+}
+
 inline void set_slider_value(std::string slider_id, int value, int input_min,
                              int input_max) {
-  auto &binding = slider_bindings[slider_id];
-  binding.value = pc::math::remap((float)input_min, (float)input_max,
-                                  binding.min, binding.max, (float)value, true);
+  set_slider_value(slider_id, static_cast<float>(value),
+                   static_cast<float>(input_min),
+                   static_cast<float>(input_max));
+}
+
+inline float get_slider_value(std::string slider_id) {
+  return slider_bindings[slider_id].value;
 }
 
 template <typename T>
@@ -293,4 +306,8 @@ inline bool vector_table(const std::string group_id, const std::string label,
 }
 
 bool begin_tree_node(std::string_view name, bool &open);
+
+void tween_config(std::string_view label,
+                  pc::tween::TweenConfiguration &config);
+
 } // namespace pc::gui
