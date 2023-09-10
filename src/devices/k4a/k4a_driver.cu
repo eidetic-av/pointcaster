@@ -97,11 +97,13 @@ K4ADriver::K4ADriver(const DeviceConfiguration& config) {
   _calibration =
       _device.get_calibration(_k4a_config.depth_mode, _k4a_config.color_resolution);
   _transformation = k4a::transformation(_calibration);
-  _tracker = k4abt::tracker::create(_calibration);
 
   // start a thread that captures new frames and dumps them into raw buffers
   _capture_loop = std::thread(&K4ADriver::capture_frames, this);
-  _tracker_loop = std::thread(&K4ADriver::track_bodies, this);
+
+  // _tracker = k4abt::tracker::create(_calibration);
+  // _tracker_loop = std::thread(&K4ADriver::track_bodies, this);
+  log_error("No Tracker!");
 
   _open = true;
 
@@ -134,7 +136,7 @@ void K4ADriver::capture_frames() {
 
     try {
       if (is_aligning()) run_aligner(capture);
-      if (_body_tracking_enabled) _tracker.enqueue_capture(capture);
+      // if (_body_tracking_enabled) _tracker.enqueue_capture(capture);
 
       auto depth_image = capture.get_depth_image();
       auto color_image = capture.get_color_image();
