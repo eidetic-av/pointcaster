@@ -56,7 +56,7 @@ private:
                           const libremidi::API &api);
   void handle_input_removed(const libremidi::input_port &port);
 
-  void handle_message(const libremidi::input_port &port,
+  void handle_message(const std::string &port_name,
                       const libremidi::message &msg);
 };
 

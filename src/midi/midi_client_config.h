@@ -1,24 +1,42 @@
 #pragma once
 
+#include "../tween/tween_config.h"
+#include <fmt/format.h>
 #include <map>
 #include <serdepp/serde.hpp>
 #include <serdepp/serializer.hpp>
 #include <string>
 #include <tuple>
-#include <fmt/format.h>
 
 namespace pc::midi {
+
+struct MidiBindingTarget {
+  std::string id;
+  int last_value;
+  int min = 0;
+  int max = 127;
+
+  DERIVE_SERDE(MidiBindingTarget,
+               (&Self::id, "id")
+	       (&Self::last_value, "last")
+	       (&Self::min, "min")
+	       (&Self::max, "max"))
+};
 
 struct MidiClientConfiguration {
   bool show_window = false;
   bool enable = true;
 
-  // a map of maps, top layer midi port name, then cc_string -> slider_id bindings
-  std::map<std::string, std::map<std::string, std::string>> cc_gui_bindings;
+  float input_lerp = 0.65f;
+
+  // a map of maps, top layer midi port name, then cc_string -> binding targets
+  std::map<std::string, std::map<std::string, MidiBindingTarget>>
+      cc_gui_bindings;
 
   DERIVE_SERDE(MidiClientConfiguration,
-               (&Self::show_window, "show_window")(&Self::enable, "enable")
-	       [attributes(make_optional)](&Self::cc_gui_bindings, "bindings"))
+               (&Self::show_window, "show_window")(&Self::enable, "enable")(
+                   &Self::input_lerp, "input_lerp")(&Self::cc_gui_bindings,
+                                                    "bindings", make_optional))
 };
 
 inline std::string cc_string(int32_t channel, int32_t control_num) {
