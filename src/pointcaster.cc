@@ -70,6 +70,7 @@
 #include "point_cloud_renderer.h"
 #include "radio.h"
 #include "snapshots.h"
+#include "tween/tween_manager.h"
 #include "sphere_renderer.h"
 #include "uuid.h"
 #include "wireframe_objects.h"
@@ -98,6 +99,7 @@ using namespace pc::camera;
 using namespace pc::radio;
 using namespace pc::snapshots;
 using namespace pc::midi;
+using namespace pc::tween;
 using namespace Magnum;
 using namespace Math::Literals;
 
@@ -185,7 +187,7 @@ protected:
 
   void save_and_quit();
 
-  Timeline timeline;
+  Timeline _timeline;
   std::vector<float> frame_durations;
   void draw_stats();
 
@@ -442,7 +444,8 @@ PointCaster::PointCaster(const Arguments &args)
   // init libusb and any attached devices
   _usb_monitor = std::make_unique<UsbMonitor>();
 
-  timeline.start();
+  TweenManager::create();
+  _timeline.start();
 }
 
 void PointCaster::save_and_quit() {
@@ -1194,6 +1197,10 @@ void PointCaster::draw_stats() {
 auto output_count = 0;
 
 void PointCaster::drawEvent() {
+
+  const auto delta_time = _timeline.previousFrameDuration();
+  const auto delta_ms = static_cast<int>(delta_time * 1000);
+  TweenManager::instance()->tick(delta_ms);
 
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
 			       GL::FramebufferClear::Depth);
