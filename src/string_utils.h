@@ -51,4 +51,22 @@ std::string snake_case(const std::string &input) noexcept {
   return result;
 }
 
+std::string title_case(const std::string &input) noexcept {
+  std::string result;
+  result.reserve(input.size());
+  bool capitalize = true; 
+  for (auto c : input) {
+    if (c == '_') {
+      result.push_back(' '); // Replace underscore with space
+      capitalize = true;
+    } else if (capitalize) {
+      result.push_back(std::toupper(static_cast<unsigned char>(c)));
+      capitalize = false;
+    } else {
+      result.push_back(c);
+    }
+  }
+  return result;
+}
+
 } // namespace pc::strings
