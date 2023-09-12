@@ -65,6 +65,7 @@ struct CameraConfiguration {
   std::string name;
   bool show_window;
   float fov = defaults::fov;
+  int scroll_precision = 1;
 
   TransformConfiguration transform;
 
@@ -75,6 +76,7 @@ struct CameraConfiguration {
 	       (&Self::name, "name")
 	       (&Self::show_window, "show_window")
 	       (&Self::fov, "fov")
+	       (&Self::scroll_precision, "scroll_precision")
 	       (&Self::transform, "transform")
 	       (&Self::rendering, "rendering")
 	       (&Self::analysis, "analysis"))

@@ -266,7 +266,8 @@ void CameraController::set_translation(
 
 void CameraController::dolly(
     Magnum::Platform::Sdl2Application::MouseScrollEvent &event) {
-  const auto delta = event.offset().y();
+  const auto delta =
+      event.offset().y() / static_cast<float>(_config.scroll_precision);
   const auto frame_centre = _frame_size / 2;
   const auto centre_depth = depth_at(frame_centre);
   const auto focal_point = unproject(frame_centre, centre_depth);
@@ -377,6 +378,7 @@ void CameraController::draw_imgui_controls() {
     if (vector_table(name(), "Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
       set_rotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])}, true);
     }
+    draw_slider<int>("Scroll precision", &_config.scroll_precision, 1, 30, 1);
   } else {
     _config.transform.unfolded = false;
   }
