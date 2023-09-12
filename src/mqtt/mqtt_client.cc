@@ -16,7 +16,7 @@ using namespace std::chrono_literals;
 static const std::regex uri_pattern(R"(^([a-zA-Z]+):\/\/([^:\/]+):(\d+)$)");
 
 std::shared_ptr<MqttClient> MqttClient::_instance;
-std::mutex MqttClient::_mutex;
+std::once_flag MqttClient::_instantiated;
 std::atomic_bool MqttClient::_connected = false;
 
 std::string input_hostname;

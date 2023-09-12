@@ -136,21 +136,19 @@ void MidiClient::handle_message(const std::string &port_name,
     if (port_bindings.contains(cc)) {
       auto &binding = port_bindings[cc];
 
-      // just a simple linear interpolation between current and new values...
-      // set using the TweenManager as a way to update the value every frame
-      // until it's complete
-
+      // just a simple linear interpolation between current and new midi
+      // values... set using the TweenManager as a way to update the value every
+      // frame until it's complete
       const auto set_value = [this, port_name, cc, binding,
-                              target_value = value](auto _, auto __) {
-        auto current_value = gui::get_slider_value(binding.id);
-
+			      target_midi_value =
+				  static_cast<float>(value)](auto _, auto __) {
+	auto current_midi_value = math::remap(binding.min, binding.max, 0.0f, 127.0f,
+					 gui::get_slider_value(binding.id));
         auto lerp_time = std::pow(std::min(_config.input_lerp, 0.9999f), 0.15f);
-        auto new_value =
-            std::lerp(current_value, target_value, 1.0f - lerp_time);
-
-	gui::set_slider_value(binding.id, new_value, 0.0f, 127.0f);
-
-        if (std::abs(new_value - target_value) < 0.001f) {
+        auto new_midi_value =
+            std::lerp(current_midi_value, target_midi_value, 1.0f - lerp_time);
+	gui::set_slider_value(binding.id, new_midi_value, 0.0f, 127.0f);
+        if (std::abs(new_midi_value - target_midi_value) < 0.001f) {
           TweenManager::instance()->remove(binding.id);
         }
         return false;
