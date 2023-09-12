@@ -17,7 +17,7 @@ namespace pc::midi {
 using pc::tween::TweenManager;
 
 std::shared_ptr<MidiClient> MidiClient::_instance;
-std::mutex MidiClient::_mutex;
+std::once_flag MidiClient::_instantiated;
 
 static std::unordered_map<std::string, std::string> _port_keys;
 
@@ -26,14 +26,12 @@ MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
   for (auto api : libremidi::available_apis()) {
     std::string api_name(libremidi::get_api_display_name(api));
 
-    if (_midi_observers.contains(api_name))
-      continue;
+    if (_midi_observers.contains(api_name)) continue;
+
     // ignore sequencer inputs
-    if (api_name.find("sequencer") != std::string::npos)
-      continue;
+    if (api_name.find("sequencer") != std::string::npos) continue;
     // ignore JACK for now
-    if (api_name.find("JACK") != std::string::npos)
-      continue;
+    if (api_name.find("JACK") != std::string::npos) continue;
 
     pc::logger->info("MIDI: Initiliasing {} MIDI API", api_name);
 
@@ -63,7 +61,6 @@ MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
           cc_binding.id, [&cc_binding](const auto &slider_binding) {
 	    cc_binding.min = slider_binding.min;
 	    cc_binding.max = slider_binding.max;
-	    std::cout << "set " << cc_binding.min << "to " << slider_binding.min << "\n";
           });
       gui::set_slider_minmax(cc_binding.id, cc_binding.min, cc_binding.max);
       gui::set_slider_value(cc_binding.id, cc_binding.last_value,
@@ -71,8 +68,6 @@ MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
     }
   }
 }
-
-MidiClient::~MidiClient() {}
 
 void MidiClient::handle_input_added(const libremidi::input_port &port,
                                     const libremidi::API &api) {
@@ -112,6 +107,7 @@ void MidiClient::handle_message(const std::string &port_name,
   using libremidi::message_type;
   auto channel = msg.get_channel();
   auto msg_type = msg.get_message_type();
+  auto& port_bindings = _config.cc_gui_bindings[port_name];
 
   if (msg_type == message_type::CONTROL_CHANGE) {
     auto control_num = msg[1];
@@ -121,7 +117,7 @@ void MidiClient::handle_message(const std::string &port_name,
 
     if (gui::recording_slider) {
       gui::recording_slider = false;
-      auto& cc_binding = _config.cc_gui_bindings[port_name][cc];
+      auto& cc_binding = port_bindings[cc];
       cc_binding.id = gui::load_recording_slider_id();
       gui::add_slider_update_callback(
 	  cc_binding.id, [&cc_binding](const auto &slider_binding) {
@@ -131,16 +127,14 @@ void MidiClient::handle_message(const std::string &port_name,
           cc_binding.id, [&cc_binding](const auto &slider_binding) {
 	    cc_binding.min = slider_binding.min;
 	    cc_binding.max = slider_binding.max;
-	    std::cout << "set " << cc_binding.min << "to " << slider_binding.min << "\n";
           });
       gui::set_slider_value(cc_binding.id, static_cast<float>(value), 0.0f,
 			    127.0f);
       gui::recording_result = gui::SliderState::Bound;
       return;
     }
-    if (_config.cc_gui_bindings[port_name].contains(cc)) {
-
-      auto &binding = _config.cc_gui_bindings[port_name][cc];
+    if (port_bindings.contains(cc)) {
+      auto &binding = port_bindings[cc];
 
       // just a simple linear interpolation between current and new values...
       // set using the TweenManager as a way to update the value every frame

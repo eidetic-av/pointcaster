@@ -11,8 +11,8 @@
 #include <memory>
 #include <mqtt/async_client.h>
 #include <msgpack.hpp>
-#include <mutex>
 #include <string_view>
+#include <mutex>
 
 namespace pc::midi {
 
@@ -26,25 +26,19 @@ public:
   }
 
   static void create(MidiClientConfiguration &config) {
-    std::lock_guard lock(_mutex);
-    _instance = make_instance(config);
+    std::call_once(_instantiated, [&config]() {
+      _instance = std::shared_ptr<MidiClient>(new MidiClient(config));
+    });
   }
 
   MidiClient(const MidiClient &) = delete;
   MidiClient &operator=(const MidiClient &) = delete;
 
-  ~MidiClient();
-
   void draw_imgui_window();
 
 private:
   static std::shared_ptr<MidiClient> _instance;
-  static std::mutex _mutex;
-
-  static std::shared_ptr<MidiClient>
-  make_instance(MidiClientConfiguration &config) {
-    return std::shared_ptr<MidiClient>(new MidiClient(config));
-  }
+  static std::once_flag _instantiated;
 
   explicit MidiClient(MidiClientConfiguration &config);
 

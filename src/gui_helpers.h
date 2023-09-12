@@ -166,11 +166,13 @@ void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, {0.7f, 0.4f, 0.7f, 0.35f});
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, {0.7f, 0.4f, 0.7f, 0.9f});
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, {0.7f, 0.4f, 0.7f, 1.0f});
+    ImGui::PushStyleColor(ImGuiCol_Button, {0.7f, 0.4f, 0.7f, 0.25f});
   } else if (state == SliderState::Recording) {
     ImGui::PushStyleColor(ImGuiCol_FrameBg, {0.7f, 0.4f, 0.4f, 0.25f});
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, {0.7f, 0.4f, 0.4f, 0.35f});
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, {0.7f, 0.4f, 0.4f, 0.9f});
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, {0.7f, 0.4f, 0.4f, 1.0f});
+    ImGui::PushStyleColor(ImGuiCol_Button, {0.7f, 0.4f, 0.4f, 0.25f});
   }
 
   // Label Column
@@ -200,16 +202,15 @@ void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
     }
   }
 
-  ImGui::PopStyleColor(state != SliderState::Unbound ? 4 : 0);
-
+  auto new_state = state;
   if (!recording_slider && ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
     // Right click toggles controller learning
     if (state == SliderState::Unbound || state == SliderState::Bound) {
-      state = SliderState::Recording;
+      new_state = SliderState::Recording;
       recording_slider = true;
       store_recording_slider_id(slider_id);
     } else if (state == SliderState::Recording) {
-      state = SliderState::Unbound;
+      new_state = SliderState::Unbound;
       recording_slider = false;
       store_recording_slider_id("");
     }
@@ -217,12 +218,17 @@ void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
 
   // Reset Button Column
   ImGui::TableSetColumnIndex(2);
+  if (state == SliderState::Bound) ImGui::BeginDisabled();
   if (ImGui::Button("·", {15, 18})) {
     value = reset_value;
   }
+  if (state == SliderState::Bound) ImGui::EndDisabled();
 
-  if (is_disabled)
-    ImGui::EndDisabled();
+  ImGui::PopStyleColor(state != SliderState::Unbound ? 5 : 0);
+
+  if (is_disabled) ImGui::EndDisabled();
+
+  state = new_state;
 }
 
 template <typename T, std::size_t N>

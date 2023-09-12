@@ -23,8 +23,9 @@ public:
   }
 
   static void create(MqttClientConfiguration &config) {
-    std::lock_guard lock(_mutex);
-    _instance = make_instance(config);
+    std::call_once(_instantiated, [&config]() {
+      _instance = std::shared_ptr<MqttClient>(new MqttClient(config));
+    });
   }
 
   static bool connected() { return _connected; };
@@ -58,14 +59,10 @@ public:
   void draw_imgui_window();
 
 private:
-  static std::mutex _mutex;
   static std::shared_ptr<MqttClient> _instance;
-  static std::atomic_bool _connected;
+  static std::once_flag _instantiated;
 
-  static std::shared_ptr<MqttClient>
-  make_instance(MqttClientConfiguration &config) {
-    return std::shared_ptr<MqttClient>(new MqttClient(config));
-  }
+  static std::atomic_bool _connected;
 
   explicit MqttClient(MqttClientConfiguration &config);
 
