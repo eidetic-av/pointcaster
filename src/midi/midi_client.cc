@@ -54,17 +54,21 @@ MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
     for (auto &[_, cc_binding] : cc_bindings) {
       gui::slider_states[cc_binding.id] = gui::SliderState::Bound;
       gui::add_slider_update_callback(
-	  cc_binding.id, [&cc_binding](const auto &slider_binding) {
-	    cc_binding.last_value = slider_binding.value;
-	  });
+          cc_binding.id, [&cc_binding](auto, const auto &new_binding) {
+            cc_binding.last_value = new_binding.value;
+          });
       gui::add_slider_minmax_update_callback(
-          cc_binding.id, [&cc_binding](const auto &slider_binding) {
-	    cc_binding.min = slider_binding.min;
-	    cc_binding.max = slider_binding.max;
+          cc_binding.id,
+          [&cc_binding](const auto &old_binding, auto &new_binding) {
+            cc_binding.min = new_binding.min;
+            cc_binding.max = new_binding.max;
+            new_binding.value =
+                math::remap(old_binding.min, old_binding.max, new_binding.min,
+                            new_binding.max, old_binding.value);
           });
       gui::set_slider_minmax(cc_binding.id, cc_binding.min, cc_binding.max);
       gui::set_slider_value(cc_binding.id, cc_binding.last_value,
-			    cc_binding.min, cc_binding.max);
+                            cc_binding.min, cc_binding.max);
     }
   }
 }
@@ -93,8 +97,7 @@ void MidiClient::handle_input_added(const libremidi::input_port &port,
 }
 
 void MidiClient::handle_input_removed(const libremidi::input_port &port) {
-  if (!_midi_inputs.contains(port.port_name))
-    return;
+  if (!_midi_inputs.contains(port.port_name)) return;
   _midi_inputs.at(port.port_name).close_port();
   _midi_inputs.erase(port.port_name);
   pc::logger->info("{}: removed input port {}", port.device_name,
@@ -107,7 +110,7 @@ void MidiClient::handle_message(const std::string &port_name,
   using libremidi::message_type;
   auto channel = msg.get_channel();
   auto msg_type = msg.get_message_type();
-  auto& port_bindings = _config.cc_gui_bindings[port_name];
+  auto &port_bindings = _config.cc_gui_bindings[port_name];
 
   if (msg_type == message_type::CONTROL_CHANGE) {
     auto control_num = msg[1];
@@ -117,19 +120,23 @@ void MidiClient::handle_message(const std::string &port_name,
 
     if (gui::recording_slider) {
       gui::recording_slider = false;
-      auto& cc_binding = port_bindings[cc];
+      auto &cc_binding = port_bindings[cc];
       cc_binding.id = gui::load_recording_slider_id();
       gui::add_slider_update_callback(
-	  cc_binding.id, [&cc_binding](const auto &slider_binding) {
-	    cc_binding.last_value = slider_binding.value;
-	  });
+          cc_binding.id, [&cc_binding](auto, auto &new_binding) {
+            cc_binding.last_value = new_binding.value;
+          });
       gui::add_slider_minmax_update_callback(
-          cc_binding.id, [&cc_binding](const auto &slider_binding) {
-	    cc_binding.min = slider_binding.min;
-	    cc_binding.max = slider_binding.max;
+          cc_binding.id,
+          [&cc_binding](const auto &old_binding, auto &new_binding) {
+            cc_binding.min = new_binding.min;
+            cc_binding.max = new_binding.max;
+            new_binding.value =
+                math::remap(old_binding.min, old_binding.max, new_binding.min,
+                            new_binding.max, old_binding.value);
           });
       gui::set_slider_value(cc_binding.id, static_cast<float>(value), 0.0f,
-			    127.0f);
+                            127.0f);
       gui::recording_result = gui::SliderState::Bound;
       return;
     }
@@ -140,14 +147,15 @@ void MidiClient::handle_message(const std::string &port_name,
       // values... set using the TweenManager as a way to update the value every
       // frame until it's complete
       const auto set_value = [this, port_name, cc, binding,
-			      target_midi_value =
-				  static_cast<float>(value)](auto _, auto __) {
-	auto current_midi_value = math::remap(binding.min, binding.max, 0.0f, 127.0f,
-					 gui::get_slider_value(binding.id));
+                              target_midi_value =
+                                  static_cast<float>(value)](auto, auto) {
+        auto current_midi_value =
+            math::remap(binding.min, binding.max, 0.0f, 127.0f,
+                        gui::get_slider_value(binding.id));
         auto lerp_time = std::pow(std::min(_config.input_lerp, 0.9999f), 0.15f);
         auto new_midi_value =
             std::lerp(current_midi_value, target_midi_value, 1.0f - lerp_time);
-	gui::set_slider_value(binding.id, new_midi_value, 0.0f, 127.0f);
+        gui::set_slider_value(binding.id, new_midi_value, 0.0f, 127.0f);
         if (std::abs(new_midi_value - target_midi_value) < 0.001f) {
           TweenManager::instance()->remove(binding.id);
         }

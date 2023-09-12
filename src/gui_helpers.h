@@ -61,7 +61,8 @@ void draw_slider(std::string_view label_text, T *value, T min, T max,
 
 struct SliderBinding;
 
-using SliderUpdateCallback = std::function<void(const SliderBinding&)>;
+using SliderUpdateCallback =
+    std::function<void(const SliderBinding &, SliderBinding &)>;
 
 enum class SliderState { Unbound, Bound, Recording };
 
@@ -109,10 +110,13 @@ add_slider_minmax_update_callback(const std::string &slider_id,
 inline void set_slider_value(const std::string &slider_id, float value,
                              float input_min, float input_max) {
   auto &binding = slider_bindings[slider_id];
+  auto old_binding = binding;
+
   binding.value = pc::math::remap(input_min, input_max, binding.min,
                                   binding.max, value, true);
+
   for (const auto &cb : binding.update_callbacks) {
-    cb(binding);
+    cb(old_binding, binding);
   }
 }
 
@@ -193,11 +197,12 @@ void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
     // if the slider is bound, draw a range slider to set the min and max values
     ImGui::SetNextItemWidth(-1);
     auto &binding = slider_bindings[slider_id];
+    auto old_binding = binding;
     if (ImGui::RangeSliderFloat(("##" + slider_id + ".minmax").c_str(),
                                 &binding.min, &binding.max, min, max)) {
       // and if the range is updated, make sure to trigger update callbacks
       for (const auto &cb : binding.minmax_update_callbacks) {
-        cb(binding);
+        cb(old_binding, binding);
       }
     }
   }
