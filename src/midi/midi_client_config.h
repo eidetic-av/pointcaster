@@ -12,9 +12,9 @@ namespace pc::midi {
 
 struct MidiBindingTarget {
   std::string id;
-  int last_value;
-  int min = 0;
-  int max = 127;
+  float last_value;
+  float min;
+  float max;
 
   DERIVE_SERDE(MidiBindingTarget,
                (&Self::id, "id")

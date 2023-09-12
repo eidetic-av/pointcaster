@@ -89,6 +89,9 @@ K4ADriver::K4ADriver(const DeviceConfiguration& config) {
   _device.start_cameras(&_k4a_config);
   log_info("k4a {} started camera", device_index);
 
+  _device.set_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
+                            K4A_COLOR_CONTROL_MODE_AUTO, 100000);
+
   _device.start_imu();
   log_info("k4a {} started IMU", device_index);
 
@@ -267,7 +270,7 @@ K4ADriver::~K4ADriver() {
   _open = false;
   _stop_requested = true;
   _capture_loop.join();
-  _tracker_loop.join();
+  // _tracker_loop.join();
   _device.stop_cameras();
   _device.stop_imu();
   _device.close();

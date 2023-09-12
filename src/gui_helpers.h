@@ -7,6 +7,7 @@
 #include "structs.h"
 #include <array>
 #include <atomic>
+#include <functional>
 #include <imgui.h>
 #include <mutex>
 #include <string>
@@ -14,6 +15,7 @@
 #include <thread>
 #include <vector>
 
+#include "gui/range_slider.h"
 #include "tween/tween_config.h"
 
 using uint = unsigned int;
@@ -33,6 +35,8 @@ struct GuiParameter {
   float range_min;
   float range_max;
 };
+
+constexpr float ParamUndeclared = -99.99f;
 
 template <typename T>
 void draw_slider(std::string_view label_text, T *value, T min, T max,
@@ -55,13 +59,21 @@ void draw_slider(std::string_view label_text, T *value, T min, T max,
   ImGui::PopID();
 }
 
+struct SliderBinding;
+
+using SliderUpdateCallback = std::function<void(const SliderBinding&)>;
+
 enum class SliderState { Unbound, Bound, Recording };
+
 inline std::unordered_map<std::string, SliderState> slider_states;
 
 struct SliderBinding {
-  float value;
-  float min = 0.0f;
-  float max = 1.0f;
+  float value = ParamUndeclared;
+  float min = ParamUndeclared;
+  float max = ParamUndeclared;
+
+  std::vector<SliderUpdateCallback> update_callbacks;
+  std::vector<SliderUpdateCallback> minmax_update_callbacks;
 };
 
 inline std::unordered_map<std::string, SliderBinding> slider_bindings;
@@ -81,22 +93,45 @@ inline std::string load_recording_slider_id() {
   return recording_slider_id;
 }
 
-inline void set_slider_value(std::string slider_id, float value,
+inline void add_slider_update_callback(const std::string &slider_id,
+                                       SliderUpdateCallback callback) {
+  auto &binding = slider_bindings[slider_id];
+  binding.update_callbacks.push_back(std::move(callback));
+}
+
+inline void
+add_slider_minmax_update_callback(const std::string &slider_id,
+                                  SliderUpdateCallback callback) {
+  auto &binding = slider_bindings[slider_id];
+  binding.minmax_update_callbacks.push_back(std::move(callback));
+}
+
+inline void set_slider_value(const std::string &slider_id, float value,
                              float input_min, float input_max) {
   auto &binding = slider_bindings[slider_id];
   binding.value = pc::math::remap(input_min, input_max, binding.min,
                                   binding.max, value, true);
+  for (const auto &cb : binding.update_callbacks) {
+    cb(binding);
+  }
 }
 
-inline void set_slider_value(std::string slider_id, int value, int input_min,
+inline void set_slider_value(const std::string &slider_id, int value, int input_min,
                              int input_max) {
   set_slider_value(slider_id, static_cast<float>(value),
                    static_cast<float>(input_min),
                    static_cast<float>(input_max));
 }
 
-inline float get_slider_value(std::string slider_id) {
+inline float get_slider_value(const std::string &slider_id) {
   return slider_bindings[slider_id].value;
+}
+
+inline void set_slider_minmax(const std::string &slider_id, float min,
+			      float max) {
+  auto &binding = slider_bindings[slider_id];
+  binding.min = min;
+  binding.max = max;
 }
 
 template <typename T>
@@ -110,8 +145,15 @@ void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
 
   if (state == SliderState::Bound) {
     auto &binding = slider_bindings[slider_id];
-    value = static_cast<T>(
-        pc::math::remap(0.0f, 1.0f, (float)min, (float)max, binding.value));
+    if (binding.min == ParamUndeclared) {
+      binding.min = min;
+      binding.max = max;
+    }
+    if (binding.value < binding.min)
+      binding.value = binding.min;
+    else if (binding.value > binding.max)
+      binding.value = binding.max;
+    value = binding.value;
   }
 
   // if we were recording this slider and we're not anymore,
@@ -146,10 +188,16 @@ void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
       ImGui::SliderInt(slider_id.c_str(), &value, min, max);
     }
   } else {
+    // if the slider is bound, draw a range slider to set the min and max values
     ImGui::SetNextItemWidth(-1);
     auto &binding = slider_bindings[slider_id];
-    ImGui::DragFloatRange2(("##" + slider_id + ".minmax").c_str(), &binding.min,
-                           &binding.max, 0.001f, 0.0f, 1.0f);
+    if (ImGui::RangeSliderFloat(("##" + slider_id + ".minmax").c_str(),
+                                &binding.min, &binding.max, min, max)) {
+      // and if the range is updated, make sure to trigger update callbacks
+      for (const auto &cb : binding.minmax_update_callbacks) {
+        cb(binding);
+      }
+    }
   }
 
   ImGui::PopStyleColor(state != SliderState::Unbound ? 4 : 0);

@@ -52,12 +52,22 @@ MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
 
   // for any MIDI cc bindings to UI sliders saved in the config,
   // notify the slider its been 'bound'
-  for (const auto &[_, bindings] : _config.cc_gui_bindings) {
-    for (const auto &[_, binding] : bindings) {
-      gui::slider_states[binding.id] = gui::SliderState::Bound;
-      gui::set_slider_value(binding.id, static_cast<float>(binding.last_value),
-                            static_cast<float>(binding.min),
-                            static_cast<float>(binding.max));
+  for (auto &[_, cc_bindings] : _config.cc_gui_bindings) {
+    for (auto &[_, cc_binding] : cc_bindings) {
+      gui::slider_states[cc_binding.id] = gui::SliderState::Bound;
+      gui::add_slider_update_callback(
+	  cc_binding.id, [&cc_binding](const auto &slider_binding) {
+	    cc_binding.last_value = slider_binding.value;
+	  });
+      gui::add_slider_minmax_update_callback(
+          cc_binding.id, [&cc_binding](const auto &slider_binding) {
+	    cc_binding.min = slider_binding.min;
+	    cc_binding.max = slider_binding.max;
+	    std::cout << "set " << cc_binding.min << "to " << slider_binding.min << "\n";
+          });
+      gui::set_slider_minmax(cc_binding.id, cc_binding.min, cc_binding.max);
+      gui::set_slider_value(cc_binding.id, cc_binding.last_value,
+			    cc_binding.min, cc_binding.max);
     }
   }
 }
@@ -111,8 +121,20 @@ void MidiClient::handle_message(const std::string &port_name,
 
     if (gui::recording_slider) {
       gui::recording_slider = false;
-      _config.cc_gui_bindings[port_name][cc] = {gui::load_recording_slider_id(),
-                                                value};
+      auto& cc_binding = _config.cc_gui_bindings[port_name][cc];
+      cc_binding.id = gui::load_recording_slider_id();
+      gui::add_slider_update_callback(
+	  cc_binding.id, [&cc_binding](const auto &slider_binding) {
+	    cc_binding.last_value = slider_binding.value;
+	  });
+      gui::add_slider_minmax_update_callback(
+          cc_binding.id, [&cc_binding](const auto &slider_binding) {
+	    cc_binding.min = slider_binding.min;
+	    cc_binding.max = slider_binding.max;
+	    std::cout << "set " << cc_binding.min << "to " << slider_binding.min << "\n";
+          });
+      gui::set_slider_value(cc_binding.id, static_cast<float>(value), 0.0f,
+			    127.0f);
       gui::recording_result = gui::SliderState::Bound;
       return;
     }
@@ -126,17 +148,13 @@ void MidiClient::handle_message(const std::string &port_name,
 
       const auto set_value = [this, port_name, cc, binding,
                               target_value = value](auto _, auto __) {
-        auto current_value = gui::get_slider_value(binding.id) * 127.0f;
+        auto current_value = gui::get_slider_value(binding.id);
 
         auto lerp_time = std::pow(std::min(_config.input_lerp, 0.9999f), 0.15f);
         auto new_value =
             std::lerp(current_value, target_value, 1.0f - lerp_time);
 
-        gui::set_slider_value(binding.id, new_value,
-                              static_cast<float>(binding.min),
-                              static_cast<float>(binding.max));
-        _config.cc_gui_bindings[port_name][cc].last_value =
-            static_cast<int>(new_value);
+	gui::set_slider_value(binding.id, new_value, 0.0f, 127.0f);
 
         if (std::abs(new_value - target_value) < 0.001f) {
           TweenManager::instance()->remove(binding.id);

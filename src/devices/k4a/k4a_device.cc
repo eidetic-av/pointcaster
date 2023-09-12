@@ -97,7 +97,8 @@ void K4ADevice::draw_device_controls() {
     driver->apply_auto_tilt(false);
 
   int exposure = _exposure;
-  draw_slider<int>("Exposure (us)", &exposure, 488, 1000000);
+  // draw_slider<int>("Exposure (us)", &exposure, 488, 1000000);
+  draw_slider<int>("Exposure (us)", &exposure, 0, 1000000, 10000);
   update_device_control(&_exposure, exposure,
                         [&](auto exposure) { driver->set_exposure(exposure); });
 

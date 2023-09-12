@@ -81,6 +81,7 @@ list(APPEND POINTCASTER_SRC src/midi/midi_client.cc)
 find_package(imgui CONFIG REQUIRED)
 add_library(ImGui::ImGui ALIAS imgui::imgui)
 list(APPEND LINK_LIBS imgui::imgui)
+add_definitions(-DIMGUI_DEFINE_MATH_OPERATORS)
 
 # ----- Magnum 3D engine -----
 
@@ -173,6 +174,7 @@ set(SOURCE_FILES
   src/sphere_renderer.cc
   src/shaders/particle_sphere.cc
   src/gui_helpers.cc
+  src/gui/range_slider.cc
   src/path.cc
   src/uuid.cc
   src/wtf/wtf.cc
