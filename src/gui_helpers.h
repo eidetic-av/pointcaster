@@ -82,16 +82,19 @@ inline std::unordered_map<std::string, SliderBinding> slider_bindings;
 inline std::atomic_bool recording_slider;
 inline std::atomic<SliderState> recording_result;
 inline std::string recording_slider_id;
-inline std::mutex recording_slider_id_mutex;
+inline std::pair<float, float> recording_slider_minmax;
+inline std::mutex recording_slider_mutex;
 
-inline void store_recording_slider_id(const std::string &id) {
-  std::lock_guard<std::mutex> lock(recording_slider_id_mutex);
+inline void store_recording_slider_info(const std::string &id, float min,
+				   float max) {
+  std::lock_guard<std::mutex> lock(recording_slider_mutex);
   recording_slider_id = id;
+  recording_slider_minmax = {min, max};
 }
 
-inline std::string load_recording_slider_id() {
-  std::lock_guard<std::mutex> lock(recording_slider_id_mutex);
-  return recording_slider_id;
+inline std::pair<std::string, std::pair<float, float>> load_recording_slider_info() {
+  std::lock_guard<std::mutex> lock(recording_slider_mutex);
+  return {recording_slider_id, recording_slider_minmax};
 }
 
 inline void add_slider_update_callback(const std::string &slider_id,
@@ -213,11 +216,13 @@ void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
     if (state == SliderState::Unbound || state == SliderState::Bound) {
       new_state = SliderState::Recording;
       recording_slider = true;
-      store_recording_slider_id(slider_id);
+      if (slider_bindings.find(slider_id) != slider_bindings.end()) {
+        slider_bindings.erase(slider_id);
+      }
+      store_recording_slider_info(slider_id, min, max);
     } else if (state == SliderState::Recording) {
       new_state = SliderState::Unbound;
       recording_slider = false;
-      store_recording_slider_id("");
     }
   }
 

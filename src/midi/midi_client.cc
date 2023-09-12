@@ -120,8 +120,40 @@ void MidiClient::handle_message(const std::string &port_name,
 
     if (gui::recording_slider) {
       gui::recording_slider = false;
+      auto [slider_id, slider_minmax] = gui::load_recording_slider_info();
+
+      // if this slider is already bound to MIDI,
+      // get rid of it before rebinding...
+      struct ExistingBinding {
+	std::string port_name;
+	std::string cc_string;
+	MidiBindingTarget midi_binding;
+      };
+
+      std::optional<ExistingBinding> existing_binding;
+      for (auto &[port_name, cc_bindings] : _config.cc_gui_bindings) {
+	for (auto &[cc_string, cc_binding] : cc_bindings) {
+	  if (cc_binding.id == slider_id) {
+	    existing_binding = {port_name, cc_string, cc_binding};
+	    break;
+          }
+        }
+	if (existing_binding.has_value()) break;
+      }
+      if (existing_binding.has_value()) {
+        _config.cc_gui_bindings[existing_binding->port_name].erase(
+	    existing_binding->cc_string);
+	// transfer the old minmax values to the new binding
+	slider_minmax = {existing_binding->midi_binding.min,
+			 existing_binding->midi_binding.max};
+      }
+
+      // now create the new binding
       auto &cc_binding = port_bindings[cc];
-      cc_binding.id = gui::load_recording_slider_id();
+      cc_binding.id = slider_id;
+      cc_binding.min = slider_minmax.first;
+      cc_binding.max = slider_minmax.second;
+
       gui::add_slider_update_callback(
           cc_binding.id, [&cc_binding](auto, auto &new_binding) {
             cc_binding.last_value = new_binding.value;
@@ -135,6 +167,7 @@ void MidiClient::handle_message(const std::string &port_name,
                 math::remap(old_binding.min, old_binding.max, new_binding.min,
                             new_binding.max, old_binding.value);
           });
+      gui::set_slider_minmax(cc_binding.id, slider_minmax.first, slider_minmax.second);
       gui::set_slider_value(cc_binding.id, static_cast<float>(value), 0.0f,
                             127.0f);
       gui::recording_result = gui::SliderState::Bound;

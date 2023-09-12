@@ -40,7 +40,7 @@ struct MidiClientConfiguration {
 };
 
 inline std::string cc_string(int32_t channel, int32_t control_num) {
-  return fmt::format("{}:{}", channel, control_num);
+  return fmt::format("{}_{}", channel, control_num);
 }
 
 } // namespace pc::midi
