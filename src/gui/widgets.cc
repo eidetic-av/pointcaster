@@ -34,44 +34,35 @@ template void draw_slider<float>(std::string_view, float *, float, float,
                                  float);
 
 template <typename T>
-void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
+void slider(const std::string &parameter_id, std::size_t i, T &value, T min, T max,
             T reset_value, bool is_disabled, const std::string &label_dimension,
             const std::string &base_label) {
   if (is_disabled)
     ImGui::BeginDisabled();
 
-  auto &state = slider_states[slider_id];
+  auto &state = parameter_states[parameter_id];
+  auto new_state = state;
 
-  if (state == SliderState::Bound) {
-    auto &binding = slider_bindings[slider_id];
-    if (binding.min == ParamUndeclared) {
-      binding.min = min;
-      binding.max = max;
-    }
-    if (binding.value < binding.min)
-      binding.value = binding.min;
-    else if (binding.value > binding.max)
-      binding.value = binding.max;
-    value = binding.value;
-  }
-
-  // if we were recording this slider and we're not anymore,
-  // set its status
-  if (state == SliderState::Recording && !recording_slider)
-    state = recording_result;
-
-  if (state == SliderState::Bound) {
+  // set the slider value by it's binding value if it exists
+  if (state == ParameterState::Bound) {
+    value = parameter_bindings[parameter_id].value;
+    // and colour it purple
     ImGui::PushStyleColor(ImGuiCol_FrameBg, {0.7f, 0.4f, 0.7f, 0.25f});
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, {0.7f, 0.4f, 0.7f, 0.35f});
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, {0.7f, 0.4f, 0.7f, 0.9f});
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, {0.7f, 0.4f, 0.7f, 1.0f});
     ImGui::PushStyleColor(ImGuiCol_Button, {0.7f, 0.4f, 0.7f, 0.25f});
-  } else if (state == SliderState::Recording) {
+  }
+  else if (state == ParameterState::Recording) {
+    // colour it red for recording
     ImGui::PushStyleColor(ImGuiCol_FrameBg, {0.7f, 0.4f, 0.4f, 0.25f});
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, {0.7f, 0.4f, 0.4f, 0.35f});
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, {0.7f, 0.4f, 0.4f, 0.9f});
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, {0.7f, 0.4f, 0.4f, 1.0f});
     ImGui::PushStyleColor(ImGuiCol_Button, {0.7f, 0.4f, 0.4f, 0.25f});
+    // if we *were* recording this slider and we're not anymore,
+    // set its status
+    if (!recording_parameter) new_state = recording_result;
   }
 
   // Label Column
@@ -82,18 +73,18 @@ void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
   ImGui::TableSetColumnIndex(1);
   ImGui::SetNextItemWidth(-1);
 
-  if (state != SliderState::Bound) {
+  if (state != ParameterState::Bound) {
     if constexpr (std::is_same_v<T, float>) {
-      ImGui::SliderFloat(slider_id.c_str(), &value, min, max);
+      ImGui::SliderFloat(parameter_id.c_str(), &value, min, max);
     } else if constexpr (std::is_same_v<T, int>) {
-      ImGui::SliderInt(slider_id.c_str(), &value, min, max);
+      ImGui::SliderInt(parameter_id.c_str(), &value, min, max);
     }
   } else {
     // if the slider is bound, draw a range slider to set the min and max values
     ImGui::SetNextItemWidth(-1);
-    auto &binding = slider_bindings[slider_id];
+    auto &binding = parameter_bindings[parameter_id];
     auto old_binding = binding;
-    if (ImGui::RangeSliderFloat(("##" + slider_id + ".minmax").c_str(),
+    if (ImGui::RangeSliderFloat(("##" + parameter_id + ".minmax").c_str(),
                                 &binding.min, &binding.max, min, max)) {
       // and if the range is updated, make sure to trigger update callbacks
       for (const auto &cb : binding.minmax_update_callbacks) {
@@ -102,49 +93,45 @@ void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
     }
   }
 
-  auto new_state = state;
   // Right click toggles controller learning
   if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-    if (!recording_slider) {
+    if (!recording_parameter) {
       // if we were not recording, set it to record
-      new_state = SliderState::Recording;
-      recording_slider = true;
-      store_recording_slider_info(slider_id, min, max);
+      new_state = ParameterState::Recording;
+      recording_parameter = true;
+      store_recording_parameter_info(parameter_id, min, max);
     } else {
       // if we were recording, return the slider to an unbound state
-      new_state = SliderState::Unbound;
-      recording_slider = false;
+      new_state = ParameterState::Unbound;
+      recording_parameter = false;
     }
     // in both cases we remove any existing binding
-    if (slider_bindings.find(slider_id) != slider_bindings.end()) {
-      slider_bindings.erase(slider_id);
+    if (parameter_bindings.find(parameter_id) != parameter_bindings.end()) {
+      parameter_bindings.erase(parameter_id);
     }
   }
 
   // Reset Button Column
   ImGui::TableSetColumnIndex(2);
-  if (state == SliderState::Bound)
-    ImGui::BeginDisabled();
+  if (state == ParameterState::Bound) ImGui::BeginDisabled();
   if (ImGui::Button("·", {15, 18})) {
     value = reset_value;
   }
-  if (state == SliderState::Bound)
-    ImGui::EndDisabled();
+  if (state == ParameterState::Bound) ImGui::EndDisabled();
 
-  ImGui::PopStyleColor(state != SliderState::Unbound ? 5 : 0);
+  ImGui::PopStyleColor(state != ParameterState::Unbound ? 5 : 0);
 
-  if (is_disabled)
-    ImGui::EndDisabled();
+  if (is_disabled) ImGui::EndDisabled();
 
   state = new_state;
 }
 
-template void slider(const std::string &slider_id, std::size_t i, float &value,
+template void slider(const std::string &parameter_id, std::size_t i, float &value,
                      float min, float max, float reset_value, bool is_disabled,
                      const std::string &label_dimension,
                      const std::string &base_label);
 
-template void slider(const std::string &slider_id, std::size_t i, int &value,
+template void slider(const std::string &parameter_id, std::size_t i, int &value,
                      int min, int max, int reset_value, bool is_disabled,
                      const std::string &label_dimension,
                      const std::string &base_label);

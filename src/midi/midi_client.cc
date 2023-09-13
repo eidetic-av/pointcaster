@@ -48,16 +48,16 @@ MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
   }
   pc::logger->info("MIDI: Waiting for MIDI hotplug events");
 
-  // for any MIDI cc bindings to UI sliders saved in the config,
-  // notify the slider its been 'bound'
+  // for any MIDI cc bindings to UI parameters saved in the config,
+  // notify the parameter its been 'bound'
   for (auto &[_, cc_bindings] : _config.cc_gui_bindings) {
     for (auto &[_, cc_binding] : cc_bindings) {
-      gui::slider_states[cc_binding.id] = gui::SliderState::Bound;
-      gui::add_slider_update_callback(
+      gui::parameter_states[cc_binding.id] = gui::ParameterState::Bound;
+      gui::add_parameter_update_callback(
           cc_binding.id, [&cc_binding](auto, const auto &new_binding) {
             cc_binding.last_value = new_binding.value;
           });
-      gui::add_slider_minmax_update_callback(
+      gui::add_parameter_minmax_update_callback(
           cc_binding.id,
           [&cc_binding](const auto &old_binding, auto &new_binding) {
             cc_binding.min = new_binding.min;
@@ -66,8 +66,8 @@ MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
                 math::remap(old_binding.min, old_binding.max, new_binding.min,
                             new_binding.max, old_binding.value);
           });
-      gui::set_slider_minmax(cc_binding.id, cc_binding.min, cc_binding.max);
-      gui::set_slider_value(cc_binding.id, cc_binding.last_value,
+      gui::set_parameter_minmax(cc_binding.id, cc_binding.min, cc_binding.max);
+      gui::set_parameter_value(cc_binding.id, cc_binding.last_value,
                             cc_binding.min, cc_binding.max);
     }
   }
@@ -118,11 +118,11 @@ void MidiClient::handle_message(const std::string &port_name,
     auto cc = cc_string(channel, control_num);
     // pc::logger->debug("received CC: {}.{}.{}", channel, control_num, value);
 
-    if (gui::recording_slider) {
-      gui::recording_slider = false;
-      auto [slider_id, slider_minmax] = gui::load_recording_slider_info();
+    if (gui::recording_parameter) {
+      gui::recording_parameter = false;
+      auto [parameter_id, parameter_minmax] = gui::load_recording_parameter_info();
 
-      // if this slider is already bound to MIDI,
+      // if this parameter is already bound to MIDI,
       // get rid of it before rebinding...
       struct ExistingBinding {
 	std::string port_name;
@@ -133,7 +133,7 @@ void MidiClient::handle_message(const std::string &port_name,
       std::optional<ExistingBinding> existing_binding;
       for (auto &[port_name, cc_bindings] : _config.cc_gui_bindings) {
 	for (auto &[cc_string, cc_binding] : cc_bindings) {
-	  if (cc_binding.id == slider_id) {
+	  if (cc_binding.id == parameter_id) {
 	    existing_binding = {port_name, cc_string, cc_binding};
 	    break;
           }
@@ -144,21 +144,21 @@ void MidiClient::handle_message(const std::string &port_name,
 	_config.cc_gui_bindings[existing_binding->port_name].erase(
 	    existing_binding->cc_string);
 	// transfer the old minmax values to the new binding
-        slider_minmax = {existing_binding->midi_binding.min,
+        parameter_minmax = {existing_binding->midi_binding.min,
 			 existing_binding->midi_binding.max};
       }
 
       // now create the new binding
       auto &cc_binding = port_bindings[cc];
-      cc_binding.id = slider_id;
-      cc_binding.min = slider_minmax.first;
-      cc_binding.max = slider_minmax.second;
+      cc_binding.id = parameter_id;
+      cc_binding.min = parameter_minmax.first;
+      cc_binding.max = parameter_minmax.second;
 
-      gui::add_slider_update_callback(
+      gui::add_parameter_update_callback(
           cc_binding.id, [&cc_binding](auto, auto &new_binding) {
             cc_binding.last_value = new_binding.value;
           });
-      gui::add_slider_minmax_update_callback(
+      gui::add_parameter_minmax_update_callback(
           cc_binding.id,
           [&cc_binding](const auto &old_binding, auto &new_binding) {
             cc_binding.min = new_binding.min;
@@ -167,10 +167,10 @@ void MidiClient::handle_message(const std::string &port_name,
                 math::remap(old_binding.min, old_binding.max, new_binding.min,
                             new_binding.max, old_binding.value);
           });
-      gui::set_slider_minmax(cc_binding.id, slider_minmax.first, slider_minmax.second);
-      gui::set_slider_value(cc_binding.id, static_cast<float>(value), 0.0f,
+      gui::set_parameter_minmax(cc_binding.id, parameter_minmax.first, parameter_minmax.second);
+      gui::set_parameter_value(cc_binding.id, static_cast<float>(value), 0.0f,
                             127.0f);
-      gui::recording_result = gui::SliderState::Bound;
+      gui::recording_result = gui::ParameterState::Bound;
       return;
     }
     if (port_bindings.contains(cc)) {
@@ -184,11 +184,11 @@ void MidiClient::handle_message(const std::string &port_name,
                                   static_cast<float>(value)](auto, auto) {
         auto current_midi_value =
             math::remap(binding.min, binding.max, 0.0f, 127.0f,
-                        gui::get_slider_value(binding.id));
+                        gui::get_parameter_value(binding.id));
         auto lerp_time = std::pow(std::min(_config.input_lerp, 0.9999f), 0.15f);
         auto new_midi_value =
             std::lerp(current_midi_value, target_midi_value, 1.0f - lerp_time);
-        gui::set_slider_value(binding.id, new_midi_value, 0.0f, 127.0f);
+        gui::set_parameter_value(binding.id, new_midi_value, 0.0f, 127.0f);
         if (std::abs(new_midi_value - target_midi_value) < 0.001f) {
           TweenManager::instance()->remove(binding.id);
         }
@@ -207,9 +207,9 @@ void MidiClient::handle_message(const std::string &port_name,
   if (msg_type == message_type::PITCH_BEND) {
     unsigned int value = (msg[2] << 7) | msg[1];
     // pc::logger->debug("received PB: {}.{}", channel, value);
-    if (gui::recording_slider) {
-      gui::recording_slider = false;
-      gui::recording_result = gui::SliderState::Unbound;
+    if (gui::recording_parameter) {
+      gui::recording_parameter = false;
+      gui::recording_result = gui::ParameterState::Unbound;
       return;
     }
     return;

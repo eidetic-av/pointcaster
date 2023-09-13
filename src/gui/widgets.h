@@ -39,60 +39,60 @@ template <typename T>
 void draw_slider(std::string_view label_text, T *value, T min, T max,
                  T default_value = 0);
 
-struct SliderBinding;
+struct ParameterBinding;
 
-using SliderUpdateCallback =
-    std::function<void(const SliderBinding &, SliderBinding &)>;
+using ParameterUpdateCallback =
+    std::function<void(const ParameterBinding &, ParameterBinding &)>;
 
-enum class SliderState { Unbound, Bound, Recording };
+enum class ParameterState { Unbound, Bound, Recording };
 
-inline std::unordered_map<std::string, SliderState> slider_states;
+inline std::unordered_map<std::string, ParameterState> parameter_states;
 
-struct SliderBinding {
+struct ParameterBinding {
   float value = ParamUndeclared;
   float min = ParamUndeclared;
   float max = ParamUndeclared;
 
-  std::vector<SliderUpdateCallback> update_callbacks;
-  std::vector<SliderUpdateCallback> minmax_update_callbacks;
+  std::vector<ParameterUpdateCallback> update_callbacks;
+  std::vector<ParameterUpdateCallback> minmax_update_callbacks;
 };
 
-inline std::unordered_map<std::string, SliderBinding> slider_bindings;
+inline std::unordered_map<std::string, ParameterBinding> parameter_bindings;
 
-inline std::atomic_bool recording_slider;
-inline std::atomic<SliderState> recording_result;
-inline std::string recording_slider_id;
-inline std::pair<float, float> recording_slider_minmax;
-inline std::mutex recording_slider_mutex;
+inline std::atomic_bool recording_parameter;
+inline std::atomic<ParameterState> recording_result;
+inline std::string recording_parameter_id;
+inline std::pair<float, float> recording_parameter_minmax;
+inline std::mutex recording_parameter_mutex;
 
-inline void store_recording_slider_info(const std::string &id, float min,
+inline void store_recording_parameter_info(const std::string &id, float min,
                                         float max) {
-  std::lock_guard<std::mutex> lock(recording_slider_mutex);
-  recording_slider_id = id;
-  recording_slider_minmax = {min, max};
+  std::lock_guard<std::mutex> lock(recording_parameter_mutex);
+  recording_parameter_id = id;
+  recording_parameter_minmax = {min, max};
 }
 
 inline std::pair<std::string, std::pair<float, float>>
-load_recording_slider_info() {
-  std::lock_guard<std::mutex> lock(recording_slider_mutex);
-  return {recording_slider_id, recording_slider_minmax};
+load_recording_parameter_info() {
+  std::lock_guard<std::mutex> lock(recording_parameter_mutex);
+  return {recording_parameter_id, recording_parameter_minmax};
 }
 
-inline void add_slider_update_callback(const std::string &slider_id,
-                                       SliderUpdateCallback callback) {
-  auto &binding = slider_bindings[slider_id];
+inline void add_parameter_update_callback(const std::string &parameter_id,
+                                       ParameterUpdateCallback callback) {
+  auto &binding = parameter_bindings[parameter_id];
   binding.update_callbacks.push_back(std::move(callback));
 }
 
-inline void add_slider_minmax_update_callback(const std::string &slider_id,
-                                              SliderUpdateCallback callback) {
-  auto &binding = slider_bindings[slider_id];
+inline void add_parameter_minmax_update_callback(const std::string &parameter_id,
+                                              ParameterUpdateCallback callback) {
+  auto &binding = parameter_bindings[parameter_id];
   binding.minmax_update_callbacks.push_back(std::move(callback));
 }
 
-inline void set_slider_value(const std::string &slider_id, float value,
+inline void set_parameter_value(const std::string &parameter_id, float value,
                              float input_min, float input_max) {
-  auto &binding = slider_bindings[slider_id];
+  auto &binding = parameter_bindings[parameter_id];
   auto old_binding = binding;
 
   binding.value = pc::math::remap(input_min, input_max, binding.min,
@@ -103,26 +103,26 @@ inline void set_slider_value(const std::string &slider_id, float value,
   }
 }
 
-inline void set_slider_value(const std::string &slider_id, int value,
+inline void set_parameter_value(const std::string &parameter_id, int value,
                              int input_min, int input_max) {
-  set_slider_value(slider_id, static_cast<float>(value),
+  set_parameter_value(parameter_id, static_cast<float>(value),
                    static_cast<float>(input_min),
                    static_cast<float>(input_max));
 }
 
-inline float get_slider_value(const std::string &slider_id) {
-  return slider_bindings[slider_id].value;
+inline float get_parameter_value(const std::string &parameter_id) {
+  return parameter_bindings[parameter_id].value;
 }
 
-inline void set_slider_minmax(const std::string &slider_id, float min,
+inline void set_parameter_minmax(const std::string &parameter_id, float min,
                               float max) {
-  auto &binding = slider_bindings[slider_id];
+  auto &binding = parameter_bindings[parameter_id];
   binding.min = min;
   binding.max = max;
 }
 
 template <typename T>
-void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
+void parameter(const std::string &parameter_id, std::size_t i, T &value, T min, T max,
             T reset_value, bool is_disabled, const std::string &label_dimension,
             const std::string &base_label);
 
