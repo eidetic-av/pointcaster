@@ -103,18 +103,21 @@ void slider(const std::string &slider_id, std::size_t i, T &value, T min, T max,
   }
 
   auto new_state = state;
-  if (!recording_slider && ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-    // Right click toggles controller learning
-    if (state == SliderState::Unbound || state == SliderState::Bound) {
+  // Right click toggles controller learning
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+    if (!recording_slider) {
+      // if we were not recording, set it to record
       new_state = SliderState::Recording;
       recording_slider = true;
-      if (slider_bindings.find(slider_id) != slider_bindings.end()) {
-        slider_bindings.erase(slider_id);
-      }
       store_recording_slider_info(slider_id, min, max);
-    } else if (state == SliderState::Recording) {
+    } else {
+      // if we were recording, return the slider to an unbound state
       new_state = SliderState::Unbound;
       recording_slider = false;
+    }
+    // in both cases we remove any existing binding
+    if (slider_bindings.find(slider_id) != slider_bindings.end()) {
+      slider_bindings.erase(slider_id);
     }
   }
 
