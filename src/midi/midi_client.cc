@@ -1,5 +1,5 @@
 #include "midi_client.h"
-#include "../gui_helpers.h"
+#include "../gui/widgets.h"
 #include "../logger.h"
 #include "../string_utils.h"
 #include "../tween/tween_manager.h"
@@ -141,10 +141,10 @@ void MidiClient::handle_message(const std::string &port_name,
 	if (existing_binding.has_value()) break;
       }
       if (existing_binding.has_value()) {
-        _config.cc_gui_bindings[existing_binding->port_name].erase(
+	_config.cc_gui_bindings[existing_binding->port_name].erase(
 	    existing_binding->cc_string);
 	// transfer the old minmax values to the new binding
-	slider_minmax = {existing_binding->midi_binding.min,
+        slider_minmax = {existing_binding->midi_binding.min,
 			 existing_binding->midi_binding.max};
       }
 

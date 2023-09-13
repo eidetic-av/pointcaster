@@ -173,7 +173,7 @@ set(SOURCE_FILES
   src/point_cloud_renderer.cc
   src/sphere_renderer.cc
   src/shaders/particle_sphere.cc
-  src/gui_helpers.cc
+  src/gui/widgets.cc
   src/gui/range_slider.cc
   src/path.cc
   src/uuid.cc

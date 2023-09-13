@@ -2,7 +2,6 @@
 #include "../path.h"
 #include "../logger.h"
 #include <imgui.h>
-#include "../gui_helpers.h"
 #include <k4abttypes.h>
 
 #include "k4a/k4a_driver.h"

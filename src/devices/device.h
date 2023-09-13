@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../gui_helpers.h"
 #include "../pointer.h"
+#include "../gui/widgets.h"
 #include "driver.h"
 #include "device_config.h"
 #include <Corrade/Containers/Pointer.h>

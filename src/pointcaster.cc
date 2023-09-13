@@ -66,7 +66,7 @@
 #include "camera/camera_controller.h"
 #include "devices/device.h"
 #include "devices/usb.h"
-#include "gui_helpers.h"
+#include "gui/widgets.h"
 #include "point_cloud_renderer.h"
 #include "radio.h"
 #include "snapshots.h"

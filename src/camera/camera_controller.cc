@@ -1,6 +1,6 @@
 #include "camera_controller.h"
 #include "../analysis/analyser_2d_config.h"
-#include "../gui_helpers.h"
+#include "../gui/widgets.h"
 #include "../logger.h"
 #include "../math.h"
 #include "../uuid.h"
