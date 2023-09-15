@@ -1,10 +1,11 @@
 #pragma once
 
 #include <serdepp/serde.hpp>
+#include <tuple>
 
 namespace pc::reflect {
 
-// define a list that can hold an arbitrary list of types
+// define a struct that can hold an arbitrary list of types as template args
 template <typename... Types> struct type_list {};
 
 // forward declare the type_at struct for getting type at a given index in a type list
@@ -26,6 +27,7 @@ struct type_at<type_list<Head, Tail...>, Index> {
 template <typename TypeList, size_t Index>
 using type_at_t = typename type_at<TypeList, Index>::type;
 
+#ifndef __CUDACC__
 // concept to check if a type is serializable... it must contain a MemberTypes
 // declaration, and a MemberCount member
 template <typename T>
@@ -33,5 +35,6 @@ concept IsSerializable = requires {
   typename T::MemberTypes;
   { T::MemberCount } -> std::convertible_to<std::size_t>;
 };
+#endif
 
 } // namespace pc::reflect

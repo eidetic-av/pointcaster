@@ -378,7 +378,6 @@ Float CameraController::depth_at(const Vector2i &window_position) {
 
 void CameraController::draw_imgui_controls() {
 
-  using pc::gui::draw_slider;
   using pc::gui::slider;
   using pc::gui::vector_table;
 
@@ -434,8 +433,10 @@ void CameraController::draw_imgui_controls() {
     ImGui::Checkbox("rendering.ground_grid", &rendering.ground_grid);
     ImGui::Checkbox("rendering.skeletons", &rendering.skeletons);
 
-    draw_slider<float>("rendering.point_size", &rendering.point_size, 0.00001f,
-                       0.008f, 0.0015f);
+    // ** >>>> TODO HERet
+    slider(name(), "rendering.point_size", rendering.point_size, 0.0f, 0.01f,
+	   0.0015f);
+
   } else {
     _config.rendering.unfolded = false;
   }
@@ -458,18 +459,18 @@ void CameraController::draw_imgui_controls() {
                    analysis.binary_threshold, 1, 255, int2{50, 255}, {},
                    {"min", "max"});
 
-      draw_slider<int>("Blur size", &analysis.blur_size, 0, 40, 3);
+      slider(name(), "analysis.blur_size", analysis.blur_size, 0, 40, 1);
 
       auto &canny = analysis.canny;
       ImGui::Checkbox("Canny edge detection", &canny.enabled);
       if (canny.enabled) {
-        draw_slider<int>("analysis.canny.min_threshold", &canny.min_threshold,
-                         0, 255, 100);
-        draw_slider<int>("analysis.canny.max_threshold", &canny.max_threshold,
-                         0, 255, 255);
-        int aperture_in = (canny.aperture_size - 1) / 2;
-        draw_slider<int>("analysis.canny.aperture_size", &aperture_in, 1, 3, 1);
-        canny.aperture_size = aperture_in * 2 + 1;
+	slider(name(), "analysis.canny.min_threshold", canny.min_threshold, 0,
+	       255, 100);
+	slider(name(), "analysis.canny.max_threshold", canny.max_threshold, 0,
+	       255, 255);
+	int aperture_in = (canny.aperture_size - 1) / 2;
+	slider(name(), "analysis.canny.aperture_size", aperture_in, 1, 3, 1);
+	canny.aperture_size = aperture_in * 2 + 1;
       }
 
       if (gui::begin_tree_node("Contours", analysis.contours.unfolded)) {
@@ -479,12 +480,10 @@ void CameraController::draw_imgui_controls() {
 
         ImGui::Checkbox("analysis.contours.simplify", &contours.simplify);
         if (contours.simplify) {
-          draw_slider<float>("analysis.contours.simplify_arc_scale",
-                             &contours.simplify_arc_scale, 0.000001f, 0.15f,
-                             0.01f);
-          draw_slider<float>("analysis.contours.simplify_min_area",
-                             &contours.simplify_min_area, 0.0001f, 2.0f,
-                             0.0001f);
+	  slider(name(), "analysis.contours.simplify_arc_scale",
+		 contours.simplify_arc_scale, 0.000001f, 0.15f, 0.01f);
+	  slider(name(), "analysis.contours.simplify_min_area",
+		 contours.simplify_min_area, 0.0001f, 2.0f, 0.0001f);
         }
 
         ImGui::Checkbox("Publish", &contours.publish);
@@ -496,9 +495,8 @@ void CameraController::draw_imgui_controls() {
                           &contours.triangulate.draw);
           ImGui::Checkbox("analysis.contours.triangulate.publish",
                           &contours.triangulate.publish);
-          draw_slider<float>("analysis.contours.triangulate.minimum_area",
-                             &contours.triangulate.minimum_area, 0.0f, 0.02f,
-                             0.0f);
+	  slider(name(), "analysis.contours.triangulate.minimum_area",
+		 contours.triangulate.minimum_area, 0.0f, 0.02f, 0.0f);
         }
         ImGui::TreePop();
       }
@@ -510,28 +508,26 @@ void CameraController::draw_imgui_controls() {
         ImGui::Checkbox("analysis.optical_flow.draw", &optical_flow.draw);
         ImGui::Checkbox("analysis.optical_flow.publish", &optical_flow.publish);
 
-        draw_slider<int>("analysis.optical_flow.feature_point_count",
-                         &optical_flow.feature_point_count, 25, 1000, 250);
-        draw_slider<float>("analysis.optical_flow.feature_point_distance",
-                           &optical_flow.feature_point_distance, 0.001f, 30.0f,
-                           10.0f);
+	slider(name(), "analysis.optical_flow.feature_point_count",
+	       optical_flow.feature_point_count, 25, 1000, 250);
+	slider(name(), "analysis.optical_flow.feature_point_distance",
+	       optical_flow.feature_point_distance, 0.001f, 30.0f, 10.0f);
         if (analysis.use_cuda) {
           float quality_level =
               optical_flow.cuda_feature_detector_quality_cutoff * 10.0f;
-          draw_slider<float>("analysis.optical_flow.quality_level",
-                             &quality_level, 0.01f, 1.0f, 0.1f);
+	  slider(name(), "analysis.optical_flow.quality_level", quality_level,
+		 0.01f, 1.0f, 0.1f);
           optical_flow.cuda_feature_detector_quality_cutoff =
               quality_level / 10.0f;
         }
-        draw_slider<float>("analysis.optical_flow.magnitude_scale",
-                           &optical_flow.magnitude_scale, 0.1f, 5.0f, 1.0f);
-        draw_slider<float>("analysis.optical_flow.magnitude_exponent",
-                           &optical_flow.magnitude_exponent, 0.001f, 2.5f,
-                           1.0f);
-        draw_slider<float>("analysis.optical_flow.minimum_distance",
-                           &optical_flow.minimum_distance, 0.0f, 0.2f, 0.0f);
-        draw_slider<float>("analysis.optical_flow.maximum_distance",
-                           &optical_flow.maximum_distance, 0.0f, 0.8f, 0.8f);
+	slider(name(), "analysis.optical_flow.magnitude_scale",
+	       optical_flow.magnitude_scale, 0.1f, 5.0f, 1.0f);
+	slider(name(), "analysis.optical_flow.magnitude_exponent",
+	       optical_flow.magnitude_exponent, 0.001f, 2.5f, 1.0f);
+	slider(name(), "analysis.optical_flow.minimum_distance",
+	       optical_flow.minimum_distance, 0.0f, 0.2f, 0.0f);
+	slider(name(), "analysis.optical_flow.maximum_distance",
+	       optical_flow.maximum_distance, 0.0f, 0.8f, 0.8f);
 
         ImGui::TreePop();
       }

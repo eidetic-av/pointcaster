@@ -32,10 +32,6 @@ void begin_gui_helpers();
 /* Used for generating unique ids for imgui parameters */
 extern unsigned int _parameter_index;
 
-template <typename T>
-void draw_slider(std::string_view label_text, T *value, T min, T max,
-                 T default_value = 0);
-
 inline std::atomic_bool recording_parameter;
 inline std::atomic<ParameterState> recording_result;
 inline std::string recording_parameter_id;
@@ -57,24 +53,21 @@ load_recording_parameter_info() {
 }
 
 template <typename T>
-void slider(std::string_view parameter_id, T &value, T min, T max,
+bool slider(std::string_view parameter_id, T &value, T min, T max,
 	    T reset_value, bool is_disabled = false,
-	    std::string_view label_dimension = "",
-	    std::string_view base_label = "");
+	    std::string_view label = "");
 
 template <typename T>
-void slider(std::string_view group_id, std::string_view parameter_id, T &value,
-            T min, T max, T reset_value, bool is_disabled = false,
-            std::string_view label_dimension = "",
-	    std::string_view base_label = "") {
+bool slider(std::string_view group_id, std::string_view parameter_id, T &value,
+	    T min, T max, T reset_value, bool is_disabled = false) {
   auto nested_id = fmt::format("{}.{}", group_id, parameter_id);
-  slider(std::string_view(nested_id), value, min, max, reset_value, is_disabled,
-	 label_dimension, base_label);
+  return slider(std::string_view(nested_id), value, min, max, reset_value,
+		is_disabled);
 }
 
 template <typename T>
 bool vector_table(
-    std::string_view group_id, std::string_view parameter_label, T &vec,
+    std::string_view group_id, std::string_view parameter_id, T &vec,
     typename T::vector_type min, typename T::vector_type max,
     std::array<typename T::vector_type, types::VectorSize<T>::value>
 	reset_values,
@@ -83,7 +76,7 @@ bool vector_table(
 
 template <typename T>
 bool vector_table(
-    std::string_view group_id, std::string_view parameter_label, T &vec,
+    std::string_view group_id, std::string_view parameter_id, T &vec,
     typename T::vector_type min, typename T::vector_type max, T reset_value,
     std::array<bool, types::VectorSize<T>::value> disabled = {},
     std::array<std::string, types::VectorSize<T>::value> labels = {}) {
@@ -95,13 +88,13 @@ bool vector_table(
     reset_values[i] = reset_value[i];
   }
 
-  return vector_table(group_id, parameter_label, vec, min, max, reset_values,
-                      disabled, labels);
+  return vector_table(group_id, parameter_id, vec, min, max, reset_values,
+		      disabled, labels);
 }
 
 template <typename T>
-bool vector_table(std::string_view group_id, std::string_view parameter_label,
-		  T &vec, typename T::vector_type min,
+bool vector_table(std::string_view group_id, std::string_view parameter_id,
+                  T &vec, typename T::vector_type min,
                   typename T::vector_type max,
                   typename T::vector_type reset_value,
                   bool disabled_value = false) {
@@ -114,7 +107,7 @@ bool vector_table(std::string_view group_id, std::string_view parameter_label,
   std::array<bool, vector_size> disabled_array;
   disabled_array.fill(disabled_value);
 
-  return vector_table(group_id, parameter_label, vec, min, max, reset_values,
+  return vector_table(group_id, parameter_id, vec, min, max, reset_values,
                       disabled_array);
 }
 

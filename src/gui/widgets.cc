@@ -11,38 +11,76 @@ unsigned int _parameter_index;
 
 void begin_gui_helpers() { _parameter_index = 0; }
 
-template <typename T>
-void draw_slider(std::string_view label_text, T *value, T min, T max,
-                 T default_value) {
-  ImGui::PushID(_parameter_index++);
-  ImGui::Text("%s", label_text.data());
-  ImGui::SameLine();
+constexpr std::string format_label(std::string_view label) {
+  return strings::sentence_case(strings::last_element(label));
+};
 
-  constexpr auto parameter = [](auto text) constexpr {
-    return std::string("##") + std::string(text);
-  };
-  if constexpr (std::is_integral<T>())
-    ImGui::SliderInt(parameter(label_text).c_str(), value, min, max);
-  else if constexpr (std::is_floating_point<T>())
-    ImGui::SliderFloat(parameter(label_text).c_str(), value, min, max, "%.5g");
+static bool inside_widget_container = false;
 
-  ImGui::SameLine();
-  if (ImGui::Button("0"))
-    *value = default_value;
-  ImGui::PopID();
+void begin_widget_container(std::string_view widget_label = "",
+			    std::size_t row_count = 0) {
+  constexpr auto outer_horizontal_padding = 4;
+  constexpr auto table_background_color = IM_COL32(22, 27, 34, 255);
+
+  const auto parameter_index_string = std::to_string(_parameter_index);
+
+  const auto row_height = ImGui::GetTextLineHeightWithSpacing() * 1.33f;
+  const auto table_height = (row_height * (row_count + 1)) + 14;
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+		      {outer_horizontal_padding, 0});
+  ImGui::PushStyleColor(ImGuiCol_ChildBg, table_background_color);
+
+  const auto child_id = "##widget_container_border." + parameter_index_string;
+  ImGui::BeginChild(child_id.data(), {0, table_height}, true,
+		    ImGuiWindowFlags_AlwaysAutoResize |
+			ImGuiWindowFlags_NoScrollbar);
+
+  ImGui::Dummy({0, outer_horizontal_padding});
+  ImGui::Dummy({outer_horizontal_padding, 0});
+  ImGui::SameLine(0, 0);
+
+  if (!widget_label.empty()) {
+    ImGui::Text("%s", format_label(widget_label).data());
+    ImGui::Dummy({0, 0});
+  }
+
+  ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {0, 2});
+
+  const auto table_id = "##table." + std::to_string(_parameter_index);
+  ImGui::BeginTable(table_id.c_str(), 3, ImGuiTableFlags_SizingFixedFit);
+
+  ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed);
+  ImGui::TableSetupColumn("##slider", ImGuiTableColumnFlags_WidthStretch);
+  ImGui::TableSetupColumn("##reset_button", ImGuiTableColumnFlags_WidthFixed);
+
+  inside_widget_container = true;
 }
 
-template void draw_slider<int>(std::string_view, int *, int, int, int);
-template void draw_slider<float>(std::string_view, float *, float, float,
-                                 float);
+void end_widget_container() {
+  ImGui::EndTable();
+  ImGui::PopStyleVar();
+  ImGui::EndChild();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
+
+  inside_widget_container = false;
+}
 
 template <typename T>
-void slider(std::string_view parameter_id, T &value, T min, T max,
-	    T reset_value, bool is_disabled, std::string_view label_dimension,
-	    std::string_view base_label) {
+bool slider(std::string_view parameter_id, T &value, T min, T max,
+	    T reset_value, bool is_disabled, std::string_view label) {
 
-  if (is_disabled)
-    ImGui::BeginDisabled();
+  bool standalone_widget = !inside_widget_container;
+  if (standalone_widget) {
+    begin_widget_container();
+  }
+
+  ImGui::TableNextRow();
+
+  ImGui::PushID(_parameter_index++);
+
+  if (is_disabled) ImGui::BeginDisabled();
 
   auto &state = parameter_states[parameter_id];
   auto new_state = state;
@@ -69,17 +107,23 @@ void slider(std::string_view parameter_id, T &value, T min, T max,
 
   // Label Column
   ImGui::TableSetColumnIndex(0);
-  ImGui::Text("%s", label_dimension.data());
+  if (label.empty()) {
+    ImGui::Text("%s", format_label(parameter_id).data());
+  } else {
+    ImGui::Text("%s", label.data());
+  }
 
   // Slider Column
   ImGui::TableSetColumnIndex(1);
   ImGui::SetNextItemWidth(-1);
 
+  bool updated = false;
+
   if (state != ParameterState::Bound) {
     if constexpr (std::is_same_v<T, float>) {
-      ImGui::SliderFloat(parameter_id.data(), &value, min, max);
+      updated = ImGui::SliderFloat(parameter_id.data(), &value, min, max, "%.5g");
     } else if constexpr (std::is_same_v<T, int>) {
-      ImGui::SliderInt(parameter_id.data(), &value, min, max);
+      updated = ImGui::SliderInt(parameter_id.data(), &value, min, max);
     }
   } else {
     // if the slider is bound, draw a range slider to set the min and max values
@@ -132,6 +176,7 @@ void slider(std::string_view parameter_id, T &value, T min, T max,
   if (state == ParameterState::Bound) ImGui::BeginDisabled();
   if (ImGui::Button("·", {15, 18})) {
     value = reset_value;
+    updated = true;
   }
   if (state == ParameterState::Bound) ImGui::EndDisabled();
 
@@ -142,21 +187,25 @@ void slider(std::string_view parameter_id, T &value, T min, T max,
   state = new_state;
 
   if (unbind_current) unbind_parameter(parameter_id);
+
+  ImGui::PopID();
+
+  if (standalone_widget) end_widget_container();
+
+  return updated;
 }
 
-template void slider(std::string_view parameter_id, float &value, float min,
+template bool slider(std::string_view parameter_id, float &value, float min,
 		     float max, float reset_value, bool is_disabled,
-		     std::string_view label_dimension,
-		     std::string_view base_label);
+		     std::string_view label);
 
-template void slider(std::string_view parameter_id, int &value, int min,
+template bool slider(std::string_view parameter_id, int &value, int min,
                      int max, int reset_value, bool is_disabled,
-                     std::string_view label_dimension,
-                     std::string_view base_label);
+                     std::string_view label);
 
 template <typename T>
 bool vector_table(
-    std::string_view group_id, std::string_view parameter_label, T &vec,
+    std::string_view group_id, std::string_view parameter_id, T &vec,
     typename T::vector_type min, typename T::vector_type max,
     std::array<typename T::vector_type, types::VectorSize<T>::value>
         reset_values,
@@ -165,36 +214,9 @@ bool vector_table(
 
   constexpr auto vector_size = types::VectorSize<T>::value;
 
-  constexpr auto outer_horizontal_padding = 4;
-  constexpr auto table_background_color = IM_COL32(22, 27, 34, 255);
-
-  auto row_height = ImGui::GetTextLineHeightWithSpacing() * 1.33f;
-  auto table_height = (row_height * (vector_size + 1)) + 14;
-
   ImGui::PushID(_parameter_index++);
 
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                      {outer_horizontal_padding, 0});
-  ImGui::PushStyleColor(ImGuiCol_ChildBg, table_background_color);
-  ImGui::BeginChild("##vector_table_border", {0, table_height}, true,
-                    ImGuiWindowFlags_AlwaysAutoResize |
-                        ImGuiWindowFlags_NoScrollbar);
-  ImGui::Dummy({0, outer_horizontal_padding});
-  ImGui::Dummy({outer_horizontal_padding, 0});
-  ImGui::SameLine(0, 0);
-
-  constexpr auto format_label = [](std::string_view label) -> std::string {
-    return strings::title_case(strings::last_element(label));
-  };
-  ImGui::Text("%s", format_label(parameter_label).data());
-
-  ImGui::Dummy({0, 0});
-
-  ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {0, 2});
-  ImGui::BeginTable(parameter_label.data(), 3, ImGuiTableFlags_SizingFixedFit);
-  ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed);
-  ImGui::TableSetupColumn("##slider", ImGuiTableColumnFlags_WidthStretch);
-  ImGui::TableSetupColumn("##reset_button", ImGuiTableColumnFlags_WidthFixed);
+  begin_widget_container(parameter_id, vector_size);
 
   auto original_vec = vec;
 
@@ -204,19 +226,13 @@ bool vector_table(
 
   for (std::size_t i = 0; i < vector_size; ++i) {
     const auto &row_label = use_labels ? labels[i] : elements[i];
-    ImGui::TableNextRow();
-    auto parameter_id =
-        fmt::format("{}.{}.{}", group_id, parameter_label, elements[i]);
-    slider(parameter_id, vec[i], min, max, reset_values[i], disabled[i],
-           row_label, parameter_label);
+    auto vector_parameter_id =
+	fmt::format("{}.{}.{}", group_id, parameter_id, elements[i]);
+    slider(vector_parameter_id, vec[i], min, max, reset_values[i], disabled[i],
+	   row_label);
   }
 
-  ImGui::EndTable();
-  ImGui::PopStyleVar();
-
-  ImGui::EndChild();
-  ImGui::PopStyleColor();
-  ImGui::PopStyleVar();
+  end_widget_container();
 
   ImGui::PopID();
 
@@ -224,33 +240,33 @@ bool vector_table(
 }
 
 template bool vector_table(std::string_view group_id,
-                           std::string_view parameter_label, int2 &vec, int min,
+                           std::string_view parameter_id, int2 &vec, int min,
                            int max, std::array<int, 2> reset_values,
                            std::array<bool, 2> disabled,
                            std::array<std::string, 2> labels);
 
 template bool vector_table(std::string_view group_id,
-                           std::string_view parameter_label, int3 &vec, int min,
+                           std::string_view parameter_id, int3 &vec, int min,
                            int max, std::array<int, 3> reset_values,
                            std::array<bool, 3> disabled,
                            std::array<std::string, 3> labels);
 
 template bool vector_table(std::string_view group_id,
-                           std::string_view parameter_label, float2 &vec,
+                           std::string_view parameter_id, float2 &vec,
                            float min, float max,
                            std::array<float, 2> reset_values,
                            std::array<bool, 2> disabled,
                            std::array<std::string, 2> labels);
 
 template bool vector_table(std::string_view group_id,
-                           std::string_view parameter_label, float3 &vec,
+                           std::string_view parameter_id, float3 &vec,
                            float min, float max,
                            std::array<float, 3> reset_values,
                            std::array<bool, 3> disabled,
                            std::array<std::string, 3> labels);
 
 template bool vector_table(std::string_view group_id,
-                           std::string_view parameter_label, float4 &vec,
+                           std::string_view parameter_id, float4 &vec,
                            float min, float max,
                            std::array<float, 4> reset_values,
                            std::array<bool, 4> disabled,
@@ -266,11 +282,11 @@ bool begin_tree_node(std::string_view name, bool &open) {
   return open;
 }
 
-void tween_config(std::string_view label,
-                  pc::tween::TweenConfiguration &config) {
+void tween_config(std::string_view group_id, std::string_view parameter_id,
+		  pc::tween::TweenConfiguration &config) {
   ImGui::PushID(_parameter_index++);
 
-  gui::draw_slider("Duration (ms)", &config.duration_ms, 0, 2000, 300);
+  slider(parameter_id, config.duration_ms, 0, 2000, 300);
 
   static const std::map<tweeny::easing::enumerated, std::pair<int, std::string>>
       ease_function_to_combo_item = {

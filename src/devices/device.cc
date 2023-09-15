@@ -12,7 +12,7 @@
 
 namespace pc::devices {
 
-using pc::gui::draw_slider;
+using pc::gui::slider;
 
 std::mutex Device::devices_access;
 std::vector<std::shared_ptr<Device>> Device::attached_devices;
@@ -116,10 +116,10 @@ void Device::draw_imgui_controls() {
       };
 
       ImGui::TextDisabled("Scale Output");
-      draw_slider<float>("uniform", &_config.scale, 0.0f, 4.0f);
+      slider(id(), "scale", _config.scale, 0.0f, 4.0f, 1.0f);
 
       ImGui::TextDisabled("Sample");
-      draw_slider<int>("s", &_config.sample, 1, 50);
+      slider(id(), "sample", _config.sample, 1, 50, 1);
 
       ImGui::TreePop();
     }

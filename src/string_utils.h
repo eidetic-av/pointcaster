@@ -70,6 +70,23 @@ constexpr std::string title_case(std::string_view input) noexcept {
   return result;
 }
 
+constexpr std::string sentence_case(std::string_view input) noexcept {
+  std::string result;
+  result.reserve(input.size());
+  bool capitalize = true;
+  for (auto c : input) {
+    if (c == '_') {
+      result.push_back(' '); // replace underscore with space
+    } else if (capitalize) {
+      result.push_back(std::toupper(static_cast<unsigned char>(c)));
+      capitalize = false;
+    } else {
+      result.push_back(c);
+    }
+  }
+  return result;
+}
+
 constexpr std::string_view last_element(std::string_view str,
 				     char delimiter = '.') noexcept {
   if (auto pos = str.rfind(delimiter); pos != std::string_view::npos) {

@@ -14,12 +14,14 @@ K4ADevice::K4ADevice(DeviceConfiguration config) : Device(config) {
   if (attached_devices.size() == 0)
     _driver->primary_aligner = true;
   name = "k4a " + std::to_string(_driver->device_index);
-  // get any device specific controls needed from the driver
+
+  // TODO set these parameters from config instead of the reverse
   auto driver = dynamic_cast<K4ADriver *>(_driver.get());
-  _exposure = driver->get_exposure();
-  _brightness = driver->get_brightness();
-  _contrast = driver->get_contrast();
-  _gain = driver->get_gain();
+  _config.k4a.exposure = driver->get_exposure();
+  _config.k4a.brightness = driver->get_brightness();
+  _config.k4a.contrast = driver->get_contrast();
+  _config.k4a.saturation = driver->get_saturation();
+  _config.k4a.gain = driver->get_gain();
 }
 
 K4ADevice::~K4ADevice() {
@@ -42,7 +44,7 @@ void K4ADevice::update_device_control(int *target, int value,
 
 void K4ADevice::draw_device_controls() {
 
-  using pc::gui::draw_slider;
+  using pc::gui::slider;
   
   auto driver = dynamic_cast<K4ADriver *>(_driver.get());
 
@@ -78,14 +80,31 @@ void K4ADevice::draw_device_controls() {
       }
     }
 
+    if (slider(id(), "k4a.exposure", _config.k4a.exposure, 0, 1000000, 10000)) {
+      driver->set_exposure(_config.k4a.exposure);
+    }
+    if (slider(id(), "k4a.brightness", _config.k4a.brightness, 0, 255, 128)) {
+      driver->set_brightness(_config.k4a.brightness);
+    }
+    if (slider(id(), "k4a.contrast", _config.k4a.contrast, 0, 10, 5)) {
+      driver->set_contrast(_config.k4a.contrast);
+    }
+    if (slider(id(), "k4a.saturation", _config.k4a.saturation, 0, 63, 31)) {
+      driver->set_saturation(_config.k4a.saturation);
+    }
+    if (slider(id(), "k4a.gain", _config.k4a.gain, 0, 255, 128)) {
+      driver->set_gain(_config.k4a.gain);
+    }
+
     ImGui::TreePop();
   }
 
   if (gui::begin_tree_node("Body tracking", _config.body.unfolded)) {
-    auto& body = _config.body;
+    auto &body = _config.body;
     auto initially_enabled = body.enabled;
     ImGui::Checkbox("Enabled", &body.enabled);
-    if (body.enabled != initially_enabled) driver->enable_body_tracking(body.enabled);
+    if (body.enabled != initially_enabled)
+      driver->enable_body_tracking(body.enabled);
     ImGui::TreePop();
   }
 
@@ -95,34 +114,6 @@ void K4ADevice::draw_device_controls() {
   ImGui::SameLine();
   if (ImGui::Button("Clear"))
     driver->apply_auto_tilt(false);
-
-  int exposure = _exposure;
-  // draw_slider<int>("Exposure (us)", &exposure, 488, 1000000);
-  draw_slider<int>("Exposure (us)", &exposure, 0, 1000000, 10000);
-  update_device_control(&_exposure, exposure,
-                        [&](auto exposure) { driver->set_exposure(exposure); });
-
-  int brightness = _brightness;
-  draw_slider<int>("Brightness", &brightness, 0, 255);
-  update_device_control(&_brightness, brightness, [&](auto brightness) {
-    driver->set_brightness(brightness);
-  });
-
-  int contrast = _contrast;
-  draw_slider<int>("Contrast", &contrast, 0, 10);
-  update_device_control(&_contrast, contrast,
-                        [&](auto contrast) { driver->set_contrast(contrast); });
-
-  int saturation = _saturation;
-  draw_slider<int>("Saturation", &saturation, 0, 63);
-  update_device_control(&_saturation, saturation, [&](auto saturation) {
-    driver->set_saturation(saturation);
-  });
-
-  int gain = _gain;
-  draw_slider<int>("Gain", &gain, 0, 255);
-  update_device_control(&_gain, gain,
-                        [&](auto gain) { driver->set_gain(gain); });
 }
 
 } // namespace pc::devices

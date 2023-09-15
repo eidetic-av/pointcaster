@@ -59,7 +59,6 @@ struct TransformConfiguration {
 	       (&Self::translation, "translation"))
 
   using MemberTypes = pc::reflect::type_list<bool, float3, float3>;
-
   static const std::size_t MemberCount = 3;
 };
 
@@ -73,7 +72,7 @@ struct CameraConfiguration {
   TransformConfiguration transform;
 
   PointCloudRendererConfiguration rendering;
-  pc::analysis::Analyser2DConfiguration analysis;
+  analysis::Analyser2DConfiguration analysis;
 
   DERIVE_SERDE(CameraConfiguration,
 	       (&Self::id, "id")

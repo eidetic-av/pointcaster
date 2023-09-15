@@ -254,10 +254,13 @@ void MidiClient::handle_message(const std::string &port_name,
 }
 
 void MidiClient::draw_imgui_window() {
+
+  using pc::gui::slider;
+  
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("MIDI", nullptr);
 
-  gui::draw_slider("Input Lerp", &_config.input_lerp, 0.0f, 1.0f, 0.65f);
+  slider("midi", "input_lerp", _config.input_lerp, 0.0f, 1.0f, 0.65f);
 
   ImGui::End();
 }
