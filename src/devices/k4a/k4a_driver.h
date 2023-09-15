@@ -13,7 +13,7 @@
 #include <thread>
 #include <atomic>
 
-namespace pc::sensors {
+namespace pc::devices {
 
 using pc::types::color;
 using pc::types::PointCloud;
@@ -38,7 +38,7 @@ public:
   ~K4ADriver();
 
   std::string id() const override;
-  const bool is_open() const override;
+  bool is_open() const override;
 
   void reload();
 
@@ -118,4 +118,4 @@ private:
 
   std::atomic_bool _open{false};
 };
-} // namespace pc::sensors
+} // namespace pc::devices

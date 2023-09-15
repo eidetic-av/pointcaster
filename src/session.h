@@ -16,7 +16,7 @@ namespace pc {
 struct PointCasterSessionLayout {
   bool fullscreen = false;
   bool hide_ui = false;
-  bool show_log = false;
+  bool show_log = true;
   bool show_devices_window = true;
   bool show_radio_window = false;
   bool show_snapshots_window = false;
@@ -39,7 +39,7 @@ struct PointCasterSession {
   bool load_devices_at_launch = true;
   MqttClientConfiguration mqtt;
   midi::MidiClientConfiguration midi;
-  std::map<std::string, sensors::DeviceConfiguration> devices;
+  std::map<std::string, devices::DeviceConfiguration> devices;
   std::map<std::string, camera::CameraConfiguration> cameras;
   PointCasterSessionLayout layout;
 

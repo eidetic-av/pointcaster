@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <string>
 
-namespace pc::sensors {
+namespace pc::devices {
 
 K4ADevice::K4ADevice(DeviceConfiguration config) : Device(config) {
   pc::logger->info("Initialising K4ADevice");
@@ -125,4 +125,4 @@ void K4ADevice::draw_device_controls() {
                         [&](auto gain) { driver->set_gain(gain); });
 }
 
-} // namespace pc::sensors
+} // namespace pc::devices

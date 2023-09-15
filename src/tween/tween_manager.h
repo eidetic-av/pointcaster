@@ -17,16 +17,16 @@ using TweenVariant = std::variant<tweeny::tween<int>, tweeny::tween<float>>;
 class TweenManager {
 public:
   static std::shared_ptr<TweenManager> &instance() {
-    if (!_instance)
-      throw std::logic_error("No TweenManager instance created. Call "
-                             "TweenManager::create() first.");
+    if (!_instance) create();
     return _instance;
   }
 
   static void create() {
-    std::lock_guard lock(_mutex);
-    _instance = std::unique_ptr<TweenManager>(new TweenManager);
+    std::call_once(_instantiated, []() {
+      _instance = std::shared_ptr<TweenManager>(new TweenManager());
+    });
   }
+
   TweenManager(const TweenManager &) = delete;
   TweenManager &operator=(const TweenManager &) = delete;
 
@@ -47,7 +47,7 @@ public:
 
 private:
   static std::shared_ptr<TweenManager> _instance;
-  static std::mutex _mutex;
+  static std::once_flag _instantiated;
 
   explicit TweenManager();
 

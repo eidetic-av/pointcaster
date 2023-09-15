@@ -1,5 +1,8 @@
 #include "widgets.h"
-#include <spdlog/spdlog.h>
+#include "../logger.h"
+#include "../string_utils.h"
+#include <array>
+#include <cmath>
 #include <tweeny/easing.h>
 
 namespace pc::gui {
@@ -34,26 +37,24 @@ template void draw_slider<float>(std::string_view, float *, float, float,
                                  float);
 
 template <typename T>
-void slider(const std::string &parameter_id, std::size_t i, T &value, T min, T max,
-            T reset_value, bool is_disabled, const std::string &label_dimension,
-            const std::string &base_label) {
+void slider(std::string_view parameter_id, T &value, T min, T max,
+	    T reset_value, bool is_disabled, std::string_view label_dimension,
+	    std::string_view base_label) {
+
   if (is_disabled)
     ImGui::BeginDisabled();
 
   auto &state = parameter_states[parameter_id];
   auto new_state = state;
 
-  // set the slider value by it's binding value if it exists
   if (state == ParameterState::Bound) {
-    value = parameter_bindings[parameter_id].value;
-    // and colour it purple
+    // colour purple if the slider is a bound parameter
     ImGui::PushStyleColor(ImGuiCol_FrameBg, {0.7f, 0.4f, 0.7f, 0.25f});
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, {0.7f, 0.4f, 0.7f, 0.35f});
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, {0.7f, 0.4f, 0.7f, 0.9f});
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, {0.7f, 0.4f, 0.7f, 1.0f});
     ImGui::PushStyleColor(ImGuiCol_Button, {0.7f, 0.4f, 0.7f, 0.25f});
-  }
-  else if (state == ParameterState::Recording) {
+  } else if (state == ParameterState::Recording) {
     // colour it red for recording
     ImGui::PushStyleColor(ImGuiCol_FrameBg, {0.7f, 0.4f, 0.4f, 0.25f});
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, {0.7f, 0.4f, 0.4f, 0.35f});
@@ -62,12 +63,13 @@ void slider(const std::string &parameter_id, std::size_t i, T &value, T min, T m
     ImGui::PushStyleColor(ImGuiCol_Button, {0.7f, 0.4f, 0.4f, 0.25f});
     // if we *were* recording this slider and we're not anymore,
     // set its status
-    if (!recording_parameter) new_state = recording_result;
+    if (!recording_parameter)
+      new_state = recording_result;
   }
 
   // Label Column
   ImGui::TableSetColumnIndex(0);
-  ImGui::Text(label_dimension.c_str());
+  ImGui::Text("%s", label_dimension.data());
 
   // Slider Column
   ImGui::TableSetColumnIndex(1);
@@ -75,23 +77,40 @@ void slider(const std::string &parameter_id, std::size_t i, T &value, T min, T m
 
   if (state != ParameterState::Bound) {
     if constexpr (std::is_same_v<T, float>) {
-      ImGui::SliderFloat(parameter_id.c_str(), &value, min, max);
+      ImGui::SliderFloat(parameter_id.data(), &value, min, max);
     } else if constexpr (std::is_same_v<T, int>) {
-      ImGui::SliderInt(parameter_id.c_str(), &value, min, max);
+      ImGui::SliderInt(parameter_id.data(), &value, min, max);
     }
   } else {
     // if the slider is bound, draw a range slider to set the min and max values
     ImGui::SetNextItemWidth(-1);
-    auto &binding = parameter_bindings[parameter_id];
+    auto &binding = parameter_bindings.at(parameter_id);
     auto old_binding = binding;
-    if (ImGui::RangeSliderFloat(("##" + parameter_id + ".minmax").c_str(),
+    if (ImGui::RangeSliderFloat(("##" + std::string(parameter_id) + ".minmax").data(),
                                 &binding.min, &binding.max, min, max)) {
-      // and if the range is updated, make sure to trigger update callbacks
+      // if the mapping range is updated, update the value itself to the new
+      // range
+      if (std::holds_alternative<FloatReference>(binding.value)) {
+        float &value = std::get<FloatReference>(binding.value).get();
+        float &old_value = std::get<FloatReference>(old_binding.value).get();
+        value = math::remap(old_binding.min, old_binding.max, binding.min,
+                            binding.max, old_value);
+      } else {
+        int &value = std::get<IntReference>(binding.value).get();
+        int &old_value = std::get<IntReference>(old_binding.value).get();
+        auto float_value =
+            math::remap(old_binding.min, old_binding.max, binding.min,
+                        binding.max, static_cast<float>(old_value));
+        value = static_cast<int>(std::round(float_value));
+      }
+      // and trigger any update callbacks
       for (const auto &cb : binding.minmax_update_callbacks) {
         cb(old_binding, binding);
       }
     }
   }
+
+  bool unbind_current = false;
 
   // Right click toggles controller learning
   if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
@@ -99,15 +118,12 @@ void slider(const std::string &parameter_id, std::size_t i, T &value, T min, T m
       // if we were not recording, set it to record
       new_state = ParameterState::Recording;
       recording_parameter = true;
-      store_recording_parameter_info(parameter_id, min, max);
+      store_recording_parameter_info(parameter_id, min, max, value);
     } else {
       // if we were recording, return the slider to an unbound state
       new_state = ParameterState::Unbound;
       recording_parameter = false;
-    }
-    // in both cases we remove any existing binding
-    if (parameter_bindings.find(parameter_id) != parameter_bindings.end()) {
-      parameter_bindings.erase(parameter_id);
+      unbind_current = true;
     }
   }
 
@@ -124,33 +140,36 @@ void slider(const std::string &parameter_id, std::size_t i, T &value, T min, T m
   if (is_disabled) ImGui::EndDisabled();
 
   state = new_state;
+
+  if (unbind_current) unbind_parameter(parameter_id);
 }
 
-template void slider(const std::string &parameter_id, std::size_t i, float &value,
-                     float min, float max, float reset_value, bool is_disabled,
-                     const std::string &label_dimension,
-                     const std::string &base_label);
+template void slider(std::string_view parameter_id, float &value, float min,
+		     float max, float reset_value, bool is_disabled,
+		     std::string_view label_dimension,
+		     std::string_view base_label);
 
-template void slider(const std::string &parameter_id, std::size_t i, int &value,
-                     int min, int max, int reset_value, bool is_disabled,
-                     const std::string &label_dimension,
-                     const std::string &base_label);
+template void slider(std::string_view parameter_id, int &value, int min,
+                     int max, int reset_value, bool is_disabled,
+                     std::string_view label_dimension,
+                     std::string_view base_label);
 
-template <typename T, std::size_t N>
-bool vector_table(const std::string group_id, const std::string label,
-                  std::array<T, N> &vec, T min, T max,
-                  std::array<T, N> reset_values, std::array<bool, N> disabled,
-                  std::array<std::string, N> labels) {
+template <typename T>
+bool vector_table(
+    std::string_view group_id, std::string_view parameter_label, T &vec,
+    typename T::vector_type min, typename T::vector_type max,
+    std::array<typename T::vector_type, types::VectorSize<T>::value>
+        reset_values,
+    std::array<bool, types::VectorSize<T>::value> disabled,
+    std::array<std::string, types::VectorSize<T>::value> labels) {
 
-  static_assert(N >= 2 && N <= 4, "Vector array must have 2, 3 or 4 elements");
+  constexpr auto vector_size = types::VectorSize<T>::value;
 
   constexpr auto outer_horizontal_padding = 4;
   constexpr auto table_background_color = IM_COL32(22, 27, 34, 255);
 
-  const char *dimensions[] = {"x", "y", "z", "w"};
-
   auto row_height = ImGui::GetTextLineHeightWithSpacing() * 1.33f;
-  auto table_height = (row_height * (N + 1)) + 14;
+  auto table_height = (row_height * (vector_size + 1)) + 14;
 
   ImGui::PushID(_parameter_index++);
 
@@ -163,24 +182,33 @@ bool vector_table(const std::string group_id, const std::string label,
   ImGui::Dummy({0, outer_horizontal_padding});
   ImGui::Dummy({outer_horizontal_padding, 0});
   ImGui::SameLine(0, 0);
-  ImGui::Text(label.c_str());
+
+  constexpr auto format_label = [](std::string_view label) -> std::string {
+    return strings::title_case(strings::last_element(label));
+  };
+  ImGui::Text("%s", format_label(parameter_label).data());
+
   ImGui::Dummy({0, 0});
 
   ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {0, 2});
-  ImGui::BeginTable(label.c_str(), 3, ImGuiTableFlags_SizingFixedFit);
+  ImGui::BeginTable(parameter_label.data(), 3, ImGuiTableFlags_SizingFixedFit);
   ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed);
   ImGui::TableSetupColumn("##slider", ImGuiTableColumnFlags_WidthStretch);
   ImGui::TableSetupColumn("##reset_button", ImGuiTableColumnFlags_WidthFixed);
 
   auto original_vec = vec;
 
+  constexpr std::array<const char *, 4> elements = {"x", "y", "z", "w"};
+
   auto use_labels = !labels.at(0).empty();
 
-  for (std::size_t i = 0; i < N; ++i) {
-    const auto &row_label = use_labels ? labels[i] : dimensions[i];
+  for (std::size_t i = 0; i < vector_size; ++i) {
+    const auto &row_label = use_labels ? labels[i] : elements[i];
     ImGui::TableNextRow();
-    slider(group_id + "." + label + "." + row_label, i, vec[i], min, max,
-           reset_values[i], disabled[i], row_label, label);
+    auto parameter_id =
+        fmt::format("{}.{}.{}", group_id, parameter_label, elements[i]);
+    slider(parameter_id, vec[i], min, max, reset_values[i], disabled[i],
+           row_label, parameter_label);
   }
 
   ImGui::EndTable();
@@ -195,39 +223,36 @@ bool vector_table(const std::string group_id, const std::string label,
   return vec != original_vec;
 }
 
-template bool vector_table(const std::string group_id, const std::string label,
-                           std::array<float, 2> &vec, float min, float max,
+template bool vector_table(std::string_view group_id,
+                           std::string_view parameter_label, int2 &vec, int min,
+                           int max, std::array<int, 2> reset_values,
+                           std::array<bool, 2> disabled,
+                           std::array<std::string, 2> labels);
+
+template bool vector_table(std::string_view group_id,
+                           std::string_view parameter_label, int3 &vec, int min,
+                           int max, std::array<int, 3> reset_values,
+                           std::array<bool, 3> disabled,
+                           std::array<std::string, 3> labels);
+
+template bool vector_table(std::string_view group_id,
+                           std::string_view parameter_label, float2 &vec,
+                           float min, float max,
                            std::array<float, 2> reset_values,
                            std::array<bool, 2> disabled,
                            std::array<std::string, 2> labels);
 
-template bool vector_table(const std::string group_id, const std::string label,
-                           std::array<float, 3> &vec, float min, float max,
+template bool vector_table(std::string_view group_id,
+                           std::string_view parameter_label, float3 &vec,
+                           float min, float max,
                            std::array<float, 3> reset_values,
                            std::array<bool, 3> disabled,
                            std::array<std::string, 3> labels);
 
-template bool vector_table(const std::string group_id, const std::string label,
-                           std::array<float, 4> &vec, float min, float max,
+template bool vector_table(std::string_view group_id,
+                           std::string_view parameter_label, float4 &vec,
+                           float min, float max,
                            std::array<float, 4> reset_values,
-                           std::array<bool, 4> disabled,
-                           std::array<std::string, 4> labels);
-
-template bool vector_table(const std::string group_id, const std::string label,
-                           std::array<int, 2> &vec, int min, int max,
-                           std::array<int, 2> reset_values,
-                           std::array<bool, 2> disabled,
-                           std::array<std::string, 2> labels);
-
-template bool vector_table(const std::string group_id, const std::string label,
-                           std::array<int, 3> &vec, int min, int max,
-                           std::array<int, 3> reset_values,
-                           std::array<bool, 3> disabled,
-                           std::array<std::string, 3> labels);
-
-template bool vector_table(const std::string group_id, const std::string label,
-                           std::array<int, 4> &vec, int min, int max,
-                           std::array<int, 4> reset_values,
                            std::array<bool, 4> disabled,
                            std::array<std::string, 4> labels);
 

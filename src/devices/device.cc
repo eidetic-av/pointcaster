@@ -10,7 +10,7 @@
 #include <zpp_bits.h>
 #endif
 
-namespace pc::sensors {
+namespace pc::devices {
 
 using pc::gui::draw_slider;
 
@@ -143,4 +143,4 @@ void draw_global_controls() {
   ImGui::PopID();
 }
 
-} // namespace pc::sensors
+} // namespace pc::devices

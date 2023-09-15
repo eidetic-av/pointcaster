@@ -4,7 +4,7 @@
 namespace pc::tween {
 
 std::shared_ptr<TweenManager> TweenManager::_instance;
-std::mutex TweenManager::_mutex;
+std::once_flag TweenManager::_instantiated;
 
 TweenManager::TweenManager() {}
 

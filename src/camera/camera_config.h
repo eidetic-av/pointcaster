@@ -2,14 +2,13 @@
 
 #include "../analysis/analyser_2d_config.h"
 #include "../point_cloud_renderer_config.h"
+#include "../serialization.h"
 #include "../structs.h"
 #include <Magnum/Math/Angle.h>
 #include <Magnum/Math/Vector3.h>
 #include <array>
 #include <string>
 #include <zpp_bits.h>
-
-#include <serdepp/serde.hpp>
 
 namespace pc::camera {
 
@@ -58,6 +57,10 @@ struct TransformConfiguration {
 	       (&Self::unfolded, "unfolded")
 	       (&Self::rotation, "rotation")
 	       (&Self::translation, "translation"))
+
+  using MemberTypes = pc::reflect::type_list<bool, float3, float3>;
+
+  static const std::size_t MemberCount = 3;
 };
 
 struct CameraConfiguration {
@@ -72,14 +75,26 @@ struct CameraConfiguration {
   PointCloudRendererConfiguration rendering;
   pc::analysis::Analyser2DConfiguration analysis;
 
-  DERIVE_SERDE(CameraConfiguration, (&Self::id, "id")
+  DERIVE_SERDE(CameraConfiguration,
+	       (&Self::id, "id")
 	       (&Self::name, "name")
 	       (&Self::show_window, "show_window")
 	       (&Self::fov, "fov")
 	       (&Self::scroll_precision, "scroll_precision")
 	       (&Self::transform, "transform")
 	       (&Self::rendering, "rendering")
-	       (&Self::analysis, "analysis"))
+
+	       // (&Self::analysis, "analysis")
+
+	       )
+
+  using MemberTypes = pc::reflect::type_list<
+      std::string, std::string, bool, float, int, TransformConfiguration,
+      PointCloudRendererConfiguration>;
+      // PointCloudRendererConfiguration, pc::analysis::Analyser2DConfiguration>;
+
+  // static const std::size_t MemberCount = 8;
+  static const std::size_t MemberCount = 7;
 };
 
 } // namespace pc::camera

@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace pc::sensors {
+namespace pc::devices {
 
 class Driver {
 public:
@@ -16,7 +16,7 @@ public:
 
   virtual ~Driver() = default;
 
-  virtual const bool is_open() const = 0;
+  virtual bool is_open() const = 0;
 
   virtual pc::types::PointCloud point_cloud(const DeviceConfiguration &config) = 0;
   virtual std::string id() const = 0;
@@ -28,4 +28,4 @@ public:
   virtual bool is_aligned() = 0;
 };
 
-} // namespace pc::sensors
+} // namespace pc::devices

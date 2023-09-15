@@ -1,14 +1,18 @@
 #pragma once
 
-#include "../pointer.h"
+#ifndef __CUDACC__
 #include "../gui/widgets.h"
-#include "driver.h"
+#endif
+
+#include "../pointer.h"
 #include "device_config.h"
+#include "driver.h"
 #include <Corrade/Containers/Pointer.h>
 #include <filesystem>
 #include <fstream>
 #include <imgui.h>
 #include <iterator>
+#include <k4abttypes.h>
 #include <memory>
 #include <mutex>
 #include <pointclouds.h>
@@ -16,9 +20,7 @@
 #include <variant>
 #include <vector>
 
-#include <k4abttypes.h>
-
-namespace pc::sensors {
+namespace pc::devices {
 
 enum DeviceType { UnknownDevice, K4A, K4W2, Rs2 };
 
@@ -70,4 +72,4 @@ extern std::vector<K4ASkeleton> scene_skeletons();
 extern pc::types::position global_translate;
 extern void draw_global_controls();
 
-} // namespace pc::sensors
+} // namespace pc::devices

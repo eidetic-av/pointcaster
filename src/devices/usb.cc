@@ -24,7 +24,7 @@ namespace pc {
 UsbMonitor::UsbMonitor() {
   libusb_init(nullptr);
 
-  // std::lock_guard<std::mutex> lock(pc::sensors::Device::devices_access);
+  // std::lock_guard<std::mutex> lock(pc::devices::Device::devices_access);
   // // get attached USB devices and check if any are sensors we have
   // // drivers for
 
@@ -36,7 +36,7 @@ UsbMonitor::UsbMonitor() {
   //   libusb_get_device_descriptor(device, &desc);
   //   auto sensor_type = getDeviceTypeFromUsbDescriptor(desc);
   //   auto attached_device = createUsbDevice(sensor_type);
-  //   // pc::sensors::attached_devices.push_back(std::move(attached_device));
+  //   // pc::devices::attached_devices.push_back(std::move(attached_device));
   //   // if (attached_device != nullptr) {
   //   //   for (auto cb : _usb_attach_callbacks) cb(attached_device);
   //   // }
@@ -81,7 +81,7 @@ UsbMonitor::UsbMonitor() {
   });
 }
 
-pc::sensors::DeviceType
+pc::devices::DeviceType
 getDeviceTypeFromUsbDescriptor(struct libusb_device_descriptor desc) {
   // then with info from the descriptor, generate the product string
   // (ids come from descriptor in hex format)
@@ -92,26 +92,26 @@ getDeviceTypeFromUsbDescriptor(struct libusb_device_descriptor desc) {
   if (UsbDeviceTypeFromProductString.contains(product_string))
     return UsbDeviceTypeFromProductString.at(product_string);
   else
-    return pc::sensors::UnknownDevice;
+    return pc::devices::UnknownDevice;
 }
 
-std::optional<std::shared_ptr<pc::sensors::Device>>
-createUsbDevice(pc::sensors::DeviceType sensor_type) {
+std::optional<std::shared_ptr<pc::devices::Device>>
+createUsbDevice(pc::devices::DeviceType sensor_type) {
 
 #if WITH_K4A
 
-  if (sensor_type == pc::sensors::K4A)
-    return std::make_shared<sensors::K4ADevice>(
-	pc::sensors::DeviceConfiguration{});
+  if (sensor_type == pc::devices::K4A)
+    return std::make_shared<devices::K4ADevice>(
+	pc::devices::DeviceConfiguration{});
 
 #endif
 #if WITH_K4W2
-  if (sensor_type == pc::sensors::K4W2)
-    return std::make_shared<sensors::K4W2Device>();
+  if (sensor_type == pc::devices::K4W2)
+    return std::make_shared<devices::K4W2Device>();
 #endif
 #if WITH_RS2
-  if (sensor_type == pc::sensors::RS2)
-    return std::make_shared<sensors::RS2>();
+  if (sensor_type == pc::devices::RS2)
+    return std::make_shared<devices::RS2>();
 #endif
   else
     return std::nullopt;
@@ -128,7 +128,7 @@ int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,
     auto attached_device = createUsbDevice(sensor_type);
     if (!attached_device)
       return 1;
-    pc::sensors::Device::attached_devices.push_back(attached_device.value());
+    pc::devices::Device::attached_devices.push_back(attached_device.value());
 
     // if we were able to initialise a new device, run any attach event
     // callbacks
@@ -145,12 +145,12 @@ int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,
 }
 
 void registerUsbAttachCallback(
-    std::function<void(std::shared_ptr<pc::sensors::Device>)> cb) {
+    std::function<void(std::shared_ptr<pc::devices::Device>)> cb) {
   _usb_attach_callbacks.push_back(cb);
 }
 
 void registerUsbDetachCallback(
-    std::function<void(std::shared_ptr<pc::sensors::Device>)> cb) {
+    std::function<void(std::shared_ptr<pc::devices::Device>)> cb) {
   _usb_detach_callbacks.push_back(cb);
 }
 

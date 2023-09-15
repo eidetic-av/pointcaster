@@ -94,7 +94,7 @@ namespace pc {
 
 using namespace pc;
 using namespace pc::types;
-using namespace pc::sensors;
+using namespace pc::devices;
 using namespace pc::camera;
 using namespace pc::radio;
 using namespace pc::snapshots;
@@ -103,8 +103,8 @@ using namespace pc::tween;
 using namespace Magnum;
 using namespace Math::Literals;
 
-using pc::sensors::Device;
-using pc::sensors::K4ADevice;
+using pc::devices::Device;
+using pc::devices::K4ADevice;
 
 using uint = unsigned int;
 
@@ -416,10 +416,10 @@ PointCaster::PointCaster(const Arguments &args)
   _snapshots_context = std::make_unique<Snapshots>();
 
   // Init our sensors
-  // TODO the following should be moved into pc::sensors ns and outside this
+  // TODO the following should be moved into pc::devices ns and outside this
   // source file
-  // std::lock_guard<std::mutex> lock(pc::sensors::devices_access);
-  // pc::sensors::attached_devices.reset(new std::vector<pointer<Device>>);
+  // std::lock_guard<std::mutex> lock(pc::devices::devices_access);
+  // pc::devices::attached_devices.reset(new std::vector<pointer<Device>>);
   // create a callback for the USB handler thread
   // that will add new devices to our main sensor list
   registerUsbAttachCallback([&](auto attached_device) {
@@ -427,9 +427,9 @@ PointCaster::PointCaster(const Arguments &args)
     // freeUsb();
     // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     // for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
-    //   pointer<pc::sensors::Device> p;
-    //   p.reset(new pc::sensors::K4ADevice());
-    //   pc::sensors::attached_devices.push_back(std::move(p));
+    //   pointer<pc::devices::Device> p;
+    //   p.reset(new pc::devices::K4ADevice());
+    //   pc::devices::attached_devices.push_back(std::move(p));
     // }
     // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     // initUsb();
@@ -550,7 +550,7 @@ void PointCaster::render_cameras() {
 
   PointCloud points;
 
-  auto skeletons = sensors::scene_skeletons();
+  auto skeletons = devices::scene_skeletons();
 
   for (auto &camera_controller : _camera_controllers) {
 
@@ -562,13 +562,13 @@ void PointCaster::render_cameras() {
 
     if (frame_size.x() < 1 || frame_size.y() < 1) continue;
 
-    camera_controller->setup_framebuffer(frame_size);
+    camera_controller->setup_frame(frame_size);
 
     // TODO: pass selected physical cameras into the
     // synthesise_point_cloud function 
     // - make sure to cache already synthesised configurations
     if (points.empty()) {
-      points = sensors::synthesized_point_cloud();
+      points = devices::synthesized_point_cloud();
       if (rendering_config.snapshots)
         points += snapshots::point_cloud();
       _point_cloud_renderer->points = points;
@@ -823,10 +823,10 @@ void PointCaster::draw_main_viewport() {
         if (new_camera_index == i)
           tab_item_flags |= ImGuiTabItemFlags_SetSelected;
 
-        if (ImGui::BeginTabItem(camera_controller->name().c_str(), nullptr,
-                                tab_item_flags)) {
+	if (ImGui::BeginTabItem(camera_controller->name().data(), nullptr,
+				tab_item_flags)) {
 
-	  const auto window_size = ImGui::GetWindowSize();
+          const auto window_size = ImGui::GetWindowSize();
 
 	  auto *tab_bar = ImGui::GetCurrentTabBar();
 	  float tab_bar_height =
@@ -914,10 +914,9 @@ void PointCaster::draw_main_viewport() {
 
           if (!_session.layout.hide_ui) {
             draw_viewport_controls(*camera_controller);
-          }
-
-          if (!_session.layout.show_log) {
-	    draw_onscreen_log();
+	    if (_session.layout.show_log) {
+	      draw_onscreen_log();
+	    }
           }
 
           if (ImGui::IsWindowHovered(
@@ -996,7 +995,7 @@ void PointCaster::draw_camera_control_windows() {
     if (!camera_controller->config().show_window)
       continue;
     ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
-    ImGui::Begin(camera_controller->name().c_str());
+    ImGui::Begin(camera_controller->name().data());
     camera_controller->draw_imgui_controls();
     ImGui::End();
   }
@@ -1065,7 +1064,7 @@ void PointCaster::draw_stats(const float delta_time) {
     }
 
     for (auto &camera_controller : _camera_controllers) {
-      if (ImGui::CollapsingHeader(camera_controller->name().c_str())) {
+      if (ImGui::CollapsingHeader(camera_controller->name().data())) {
 	if (camera_controller->config().analysis.enabled) {
 	  ImGui::Text("Analysis Duration");
 	  ImGui::BeginTable("analysis_duration", 2);
@@ -1231,7 +1230,7 @@ void PointCaster::drawEvent() {
     if (_session.layout.show_snapshots_window)
       _snapshots_context->draw_imgui_window();
     if (_session.layout.show_global_transform_window)
-      pc::sensors::draw_global_controls();
+      pc::devices::draw_global_controls();
 #if WITH_MQTT
     if (_session.mqtt.show_window)
       MqttClient::instance()->draw_imgui_window();

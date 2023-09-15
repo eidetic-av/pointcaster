@@ -8,7 +8,10 @@
 
 namespace pc::k4a_utils {
 
-std::array<float3, 32>
+using pc::types::float3;
+using pc::types::float4;
+
+inline std::array<float3, 32>
 calculateAverageJointPositions(const std::vector<k4abt_skeleton_t> &skeletons) {
   std::array<float3, 32> averages;
   for (int joint_id = 0; joint_id < 32; joint_id++) {
@@ -27,7 +30,7 @@ calculateAverageJointPositions(const std::vector<k4abt_skeleton_t> &skeletons) {
   return averages;
 }
 
-std::array<float4, 32> calculateAverageJointOrientations(
+inline std::array<float4, 32> calculateAverageJointOrientations(
     const std::vector<k4abt_skeleton_t> &skeletons) {
   std::array<float4, 32> averages;
   for (int joint_id = 0; joint_id < 32; joint_id++) {

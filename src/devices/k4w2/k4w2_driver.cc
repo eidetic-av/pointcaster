@@ -1,6 +1,6 @@
 #include "k4w2_driver.h"
 
-namespace pc::sensors {
+namespace pc::devices {
 
 using namespace pc::types;
 using namespace Magnum; 
@@ -115,4 +115,4 @@ PointCloud K4W2Driver::getPointCloud(const DeviceConfiguration& config) {
   return _point_cloud;
 }
 
-} // namespace pc::sensors
+} // namespace pc::devices

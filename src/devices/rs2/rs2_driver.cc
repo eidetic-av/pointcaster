@@ -4,7 +4,7 @@
 #include <limits>
 #include <spdlog/spdlog.h>
 
-namespace pc::sensors {
+namespace pc::devices {
 
 using namespace pc::types;
 using namespace Magnum;
@@ -158,4 +158,4 @@ PointCloud Rs2Driver::getPointCloud(const DeviceConfiguration &config) {
   return _point_cloud;
 }
 
-} // namespace pc::sensors
+} // namespace pc::devices

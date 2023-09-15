@@ -1,6 +1,7 @@
 #include "midi_client.h"
 #include "../gui/widgets.h"
 #include "../logger.h"
+#include "../parameters.h"
 #include "../string_utils.h"
 #include "../tween/tween_manager.h"
 #include <cmath>
@@ -52,23 +53,20 @@ MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
   // notify the parameter its been 'bound'
   for (auto &[_, cc_bindings] : _config.cc_gui_bindings) {
     for (auto &[_, cc_binding] : cc_bindings) {
-      gui::parameter_states[cc_binding.id] = gui::ParameterState::Bound;
-      gui::add_parameter_update_callback(
-          cc_binding.id, [&cc_binding](auto, const auto &new_binding) {
-            cc_binding.last_value = new_binding.value;
-          });
-      gui::add_parameter_minmax_update_callback(
-          cc_binding.id,
-          [&cc_binding](const auto &old_binding, auto &new_binding) {
-            cc_binding.min = new_binding.min;
-            cc_binding.max = new_binding.max;
-            new_binding.value =
-                math::remap(old_binding.min, old_binding.max, new_binding.min,
-                            new_binding.max, old_binding.value);
-          });
-      gui::set_parameter_minmax(cc_binding.id, cc_binding.min, cc_binding.max);
-      gui::set_parameter_value(cc_binding.id, cc_binding.last_value,
-                            cc_binding.min, cc_binding.max);
+      parameter_states[cc_binding.id] = ParameterState::Bound;
+      add_parameter_update_callback(
+	  cc_binding.id, [&cc_binding](auto, const auto &new_binding) {
+	    cc_binding.last_value = new_binding.current();
+	  });
+      add_parameter_minmax_update_callback(
+	  cc_binding.id,
+	  [&cc_binding](const auto &old_binding, auto &new_binding) {
+	    cc_binding.min = new_binding.min;
+	    cc_binding.max = new_binding.max;
+	  });
+      set_parameter_minmax(cc_binding.id, cc_binding.min, cc_binding.max);
+      set_parameter_value(cc_binding.id, cc_binding.last_value, cc_binding.min,
+                          cc_binding.max);
     }
   }
 }
@@ -120,57 +118,92 @@ void MidiClient::handle_message(const std::string &port_name,
 
     if (gui::recording_parameter) {
       gui::recording_parameter = false;
-      auto [parameter_id, parameter_minmax] = gui::load_recording_parameter_info();
+      auto [parameter_id, parameter_info] = gui::load_recording_parameter_info();
 
-      // if this parameter is already bound to MIDI,
-      // get rid of it before rebinding...
       struct ExistingBinding {
 	std::string port_name;
 	std::string cc_string;
 	MidiBindingTarget midi_binding;
       };
 
-      std::optional<ExistingBinding> existing_binding;
+      // first find out if we're either overwriting a controller binding,
+      // or the control we're binding with is already bound to another parameter
+
+      std::optional<ExistingBinding> overwrite_binding;
+      std::optional<std::string> old_parameter_binding_id;
+
       for (auto &[port_name, cc_bindings] : _config.cc_gui_bindings) {
 	for (auto &[cc_string, cc_binding] : cc_bindings) {
 	  if (cc_binding.id == parameter_id) {
-	    existing_binding = {port_name, cc_string, cc_binding};
-	    break;
+	    overwrite_binding = {port_name, cc_string, cc_binding};
           }
-        }
-	if (existing_binding.has_value()) break;
+	  if (cc_string == cc) {
+	    old_parameter_binding_id = cc_binding.id;
+	  }
+	}
       }
-      if (existing_binding.has_value()) {
-	_config.cc_gui_bindings[existing_binding->port_name].erase(
-	    existing_binding->cc_string);
+
+      // if we're setting the same parameter to the same control, just revert
+      // and exit here
+      if (overwrite_binding.has_value() &&
+          old_parameter_binding_id.has_value()) {
+        auto new_id = overwrite_binding->midi_binding.id;
+	auto old_id = old_parameter_binding_id.value();
+	if (new_id == old_id) {
+	  parameter_states[old_id] = ParameterState::Bound;
+	  return;
+	}
+      }
+
+      // if this parameter is already bound to MIDI,
+      // overwrite it with the new MIDI control
+      if (overwrite_binding.has_value()) {
 	// transfer the old minmax values to the new binding
-        parameter_minmax = {existing_binding->midi_binding.min,
-			 existing_binding->midi_binding.max};
+        parameter_info.min = overwrite_binding->midi_binding.min;
+        parameter_info.max = overwrite_binding->midi_binding.max;
+	// remove the callbacks for the old binding
+	clear_parameter_callbacks(parameter_id);
+	// and finally remove our cc mapping
+	_config.cc_gui_bindings[overwrite_binding->port_name].erase(
+	    overwrite_binding->cc_string);
+      }
+
+      // and if this MIDI control is already bound to a different parameter,
+      // erase that binding because it can't control more than one parameter
+      // (for now)
+      if (old_parameter_binding_id.has_value()) {
+	unbind_parameter(old_parameter_binding_id.value());
       }
 
       // now create the new binding
       auto &cc_binding = port_bindings[cc];
       cc_binding.id = parameter_id;
-      cc_binding.min = parameter_minmax.first;
-      cc_binding.max = parameter_minmax.second;
+      cc_binding.min = parameter_info.min;
+      cc_binding.max = parameter_info.max;
 
-      gui::add_parameter_update_callback(
-          cc_binding.id, [&cc_binding](auto, auto &new_binding) {
-            cc_binding.last_value = new_binding.value;
-          });
-      gui::add_parameter_minmax_update_callback(
+      bind_parameter(cc_binding.id, parameter_info);
+
+      add_parameter_update_callback(
+	  cc_binding.id, [&cc_binding](auto, const auto &new_binding) {
+	    cc_binding.last_value = new_binding.current();
+	  });
+      add_parameter_minmax_update_callback(
           cc_binding.id,
           [&cc_binding](const auto &old_binding, auto &new_binding) {
-            cc_binding.min = new_binding.min;
-            cc_binding.max = new_binding.max;
-            new_binding.value =
-                math::remap(old_binding.min, old_binding.max, new_binding.min,
-                            new_binding.max, old_binding.value);
+	    cc_binding.min = new_binding.min;
+	    cc_binding.max = new_binding.max;
           });
-      gui::set_parameter_minmax(cc_binding.id, parameter_minmax.first, parameter_minmax.second);
-      gui::set_parameter_value(cc_binding.id, static_cast<float>(value), 0.0f,
-                            127.0f);
-      gui::recording_result = gui::ParameterState::Bound;
+      set_parameter_minmax(cc_binding.id, parameter_info.min,
+			   parameter_info.max);
+      set_parameter_value(cc_binding.id, static_cast<float>(value), 0.0f,
+			  127.0f);
+
+      add_parameter_erase_callback(cc_binding.id, [id = cc_binding.id] {
+	TweenManager::instance()->remove(id);
+      });
+
+      gui::recording_result = ParameterState::Bound;
+
       return;
     }
     if (port_bindings.contains(cc)) {
@@ -179,19 +212,22 @@ void MidiClient::handle_message(const std::string &port_name,
       // just a simple linear interpolation between current and new midi
       // values... set using the TweenManager as a way to update the value every
       // frame until it's complete
+
       const auto set_value = [this, port_name, cc, binding,
-                              target_midi_value =
-                                  static_cast<float>(value)](auto, auto) {
-        auto current_midi_value =
-            math::remap(binding.min, binding.max, 0.0f, 127.0f,
-                        gui::get_parameter_value(binding.id));
-        auto lerp_time = std::pow(std::min(_config.input_lerp, 0.9999f), 0.15f);
-        auto new_midi_value =
-            std::lerp(current_midi_value, target_midi_value, 1.0f - lerp_time);
-        gui::set_parameter_value(binding.id, new_midi_value, 0.0f, 127.0f);
+			      target_midi_value =
+				  static_cast<float>(value)](auto, auto) {
+	auto current_midi_value =
+	    math::remap(binding.min, binding.max, 0.0f, 127.0f,
+			get_parameter_value(binding.id));
+	auto lerp_time = std::pow(std::min(_config.input_lerp, 0.9999f), 0.15f);
+	auto new_midi_value =
+	    std::lerp(current_midi_value, target_midi_value, 1.0f - lerp_time);
+	set_parameter_value(binding.id, new_midi_value, 0.0f, 127.0f);
+
         if (std::abs(new_midi_value - target_midi_value) < 0.001f) {
           TweenManager::instance()->remove(binding.id);
         }
+
         return false;
       };
 
@@ -201,6 +237,7 @@ void MidiClient::handle_message(const std::string &port_name,
                        .during(120000) // 120 seconds max
                        .via(tweeny::easing::linear);
       TweenManager::instance()->add(binding.id, tween);
+
     }
     return;
   }
@@ -209,7 +246,7 @@ void MidiClient::handle_message(const std::string &port_name,
     // pc::logger->debug("received PB: {}.{}", channel, value);
     if (gui::recording_parameter) {
       gui::recording_parameter = false;
-      gui::recording_result = gui::ParameterState::Unbound;
+      gui::recording_result = ParameterState::Unbound;
       return;
     }
     return;

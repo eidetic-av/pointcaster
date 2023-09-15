@@ -115,8 +115,9 @@ if (WITH_K4A)
   list(APPEND OPTIONAL_LIBS k4a::k4a)
 
   list(APPEND OPTIONAL_SRC
-    src/devices/k4a/k4a_driver.cu
-    src/devices/k4a/k4a_device.cc)
+    src/devices/k4a/k4a_device.cc
+    src/devices/k4a/k4a_driver.cc
+    src/devices/k4a/k4a_driver.cu)
 
   find_package(k4abt REQUIRED)
   list(APPEND OPTIONAL_LIBS k4a::k4abt)
@@ -175,6 +176,7 @@ set(SOURCE_FILES
   src/shaders/particle_sphere.cc
   src/gui/widgets.cc
   src/gui/range_slider.cc
+  src/parameters.cc
   src/path.cc
   src/uuid.cc
   src/wtf/wtf.cc

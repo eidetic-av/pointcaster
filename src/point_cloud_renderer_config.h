@@ -1,8 +1,8 @@
 #pragma once
 
-#include <array>
-#include <serdepp/serde.hpp>
+#include "serialization.h"
 #include "structs.h"
+#include <array>
 
 using pc::types::int2;
 
@@ -29,11 +29,20 @@ struct PointCloudRendererConfiguration {
   DERIVE_SERDE(PointCloudRendererConfiguration,
 	       (&Self::unfolded, "unfolded")
 	       (&Self::resolution, "resolution")
-	       (&Self::scale_mode, "scale_mode")
-	       (&Self::letterbox_mode, "letterbox_mode")
+	       // (&Self::scale_mode, "scale_mode")
+	       // (&Self::letterbox_mode, "letterbox_mode")
 	       (&Self::point_size, "point_size")
 	       (&Self::ground_grid, "ground_grid")
 	       (&Self::skeletons, "skeletons")
 	       (&Self::snapshots, "snapshots"))
+
+  // using MemberTypes =
+  //     pc::reflect::type_list<bool, int2, ScaleMode, LetterboxMode, float, bool,
+  //                            bool, bool>;
+  using MemberTypes =
+      pc::reflect::type_list<bool, int2, float, bool, bool, bool>;
+
+  // static const std::size_t MemberCount = 8;
+  static const std::size_t MemberCount = 6;
 
 };

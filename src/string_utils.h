@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <cctype>
+#include <unordered_map>
 
 namespace pc::strings {
 
@@ -38,7 +39,7 @@ constexpr std::string concat(const Args &...args) noexcept {
   return result;
 }
 
-std::string snake_case(const std::string &input) noexcept {
+constexpr std::string snake_case(std::string_view input) noexcept {
   std::string result;
   result.reserve(input.size());
   for (auto c : input) {
@@ -51,13 +52,13 @@ std::string snake_case(const std::string &input) noexcept {
   return result;
 }
 
-std::string title_case(const std::string &input) noexcept {
+constexpr std::string title_case(std::string_view input) noexcept {
   std::string result;
   result.reserve(input.size());
-  bool capitalize = true; 
+  bool capitalize = true;
   for (auto c : input) {
     if (c == '_') {
-      result.push_back(' '); // Replace underscore with space
+      result.push_back(' '); // replace underscore with space
       capitalize = true;
     } else if (capitalize) {
       result.push_back(std::toupper(static_cast<unsigned char>(c)));
@@ -67,6 +68,14 @@ std::string title_case(const std::string &input) noexcept {
     }
   }
   return result;
+}
+
+constexpr std::string_view last_element(std::string_view str,
+				     char delimiter = '.') noexcept {
+  if (auto pos = str.rfind(delimiter); pos != std::string_view::npos) {
+    return str.substr(pos + 1);
+  }
+  return str;
 }
 
 } // namespace pc::strings

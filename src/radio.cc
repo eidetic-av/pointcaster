@@ -86,7 +86,7 @@ Radio::Radio() {
            broadcast_snapshot_frame_count = snapshots::frames.size();
          }
 
-           auto live_point_cloud = pc::sensors::synthesized_point_cloud();
+           auto live_point_cloud = pc::devices::synthesized_point_cloud();
            if (live_point_cloud.size() > 0) {
              auto bytes = live_point_cloud.serialize(config.compress_frames);
              zmq::message_t point_cloud_msg(bytes);

@@ -7,7 +7,7 @@
 #include <utility>
 #include <k4abt.hpp>
 
-namespace pc::sensors {
+namespace pc::devices {
 
 class K4ADevice : public Device {
 public:
@@ -27,4 +27,4 @@ private:
   int _saturation = 32;
   int _gain = 128;
 };
-} // namespace pc::sensors
+} // namespace pc::devices

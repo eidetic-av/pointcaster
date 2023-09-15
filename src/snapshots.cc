@@ -57,7 +57,7 @@ void Snapshots::draw_imgui_window() {
 
 void Snapshots::capture() {
   pc::logger->info("Capturing frame");
-  frames.push_back({pc::sensors::synthesized_point_cloud()});
+  frames.push_back({pc::devices::synthesized_point_cloud()});
 }
 
 } // namespace pc::snapshots

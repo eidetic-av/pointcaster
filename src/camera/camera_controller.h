@@ -1,13 +1,13 @@
 #pragma once
 
-#include "camera_config.h"
 #include "../analysis/analyser_2d.h"
-#include <Magnum/Image.h>
+#include "camera_config.h"
 #include <Magnum/GL/Framebuffer.h>
 #include <Magnum/GL/Renderbuffer.h>
 #include <Magnum/GL/RenderbufferFormat.h>
 #include <Magnum/GL/Texture.h>
 #include <Magnum/GL/TextureFormat.h>
+#include <Magnum/Image.h>
 #include <Magnum/Math/Angle.h>
 #include <Magnum/Math/Vector3.h>
 #include <Magnum/Platform/Sdl2Application.h>
@@ -15,12 +15,13 @@
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
 #include <atomic>
-#include <condition_variable>
 #include <chrono>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <opencv2/opencv.hpp>
+#include <optional>
+#include <string_view>
 
 namespace pc::camera {
 
@@ -43,7 +44,7 @@ public:
   ~CameraController();
 
   CameraConfiguration &config() { return _config; };
-  const std::string name() const { return _config.name; };
+  std::string_view name() const { return _config.name; };
   Camera3D &camera() const { return *_camera; }
 
   void set_rotation(const Magnum::Math::Vector3<Magnum::Math::Rad<float>>& rotation, bool force = false);
@@ -57,7 +58,7 @@ public:
   CameraController &set_perspective(const Magnum::Float &value);
   CameraController &zoom_perspective(Magnum::Platform::Sdl2Application::MouseScrollEvent &event);
 
-  void setup_framebuffer(Magnum::Vector2i frame_size);
+  void setup_frame(Magnum::Vector2i frame_size);
 
   Magnum::GL::Texture2D& color_frame();
   Magnum::GL::Texture2D& analysis_frame();

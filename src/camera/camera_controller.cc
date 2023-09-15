@@ -3,6 +3,7 @@
 #include "../gui/widgets.h"
 #include "../logger.h"
 #include "../math.h"
+#include "../parameters.h"
 #include "../uuid.h"
 #include "camera_config.h"
 #include <Corrade/Containers/Array.h>
@@ -69,8 +70,8 @@ CameraController::CameraController(Magnum::Platform::Application *app,
 
   // deserialize our camera configuration into Magnum types
   Euler rotation{Deg_f(_config.transform.rotation[0]),
-		 Deg_f(_config.transform.rotation[1]),
-		 Deg_f(_config.transform.rotation[2])};
+                 Deg_f(_config.transform.rotation[1]),
+                 Deg_f(_config.transform.rotation[2])};
   Position translation{_config.transform.translation[0],
                        _config.transform.translation[1],
                        _config.transform.translation[2]};
@@ -93,17 +94,17 @@ CameraController::CameraController(Magnum::Platform::Application *app,
 
   pc::logger->info("{}x{}", resolution[0], resolution[1]);
 
-  setup_framebuffer({resolution[0], resolution[1]});
+  setup_frame({resolution[0], resolution[1]});
 
   pc::logger->info("Initialised Camera Controller {} with id {}", _config.name,
                    _config.id);
+
+  declare_parameters(name(), _config);
 }
 
-CameraController::~CameraController() {
-  CameraController::count--;
-}
+CameraController::~CameraController() { CameraController::count--; }
 
-void CameraController::setup_framebuffer(Vector2i frame_size) {
+void CameraController::setup_frame(Vector2i frame_size) {
 
   Vector2i scaled_size{
       static_cast<int>(frame_size.x() / _app->dpiScaling().x()),
@@ -119,10 +120,20 @@ void CameraController::setup_framebuffer(Vector2i frame_size) {
         _config.rendering.resolution[0] / aspect_ratio;
   }
 
+  // update transform parameters
+  auto &translate = _config.transform.translation;
+  set_translation(Position{translate[0], translate[1], translate[2]});
+  auto &rotate = _config.transform.rotation;
+  set_rotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])},
+               true);
+
+  // if no change in frame size, bind the framebuffer and finish here
   if (scaled_size == _frame_size) {
     bind_framebuffer();
     return;
   }
+
+  // otherwise recreate containers with new frame size
 
   _frame_size = scaled_size;
 
@@ -233,15 +244,16 @@ void CameraController::set_rotation(
 
   std::array<float, 3> input_deg = {float(Deg_f(rotation.x())),
                                     float(Deg_f(rotation.y())),
-				    float(Deg_f(rotation.z()))};
+                                    float(Deg_f(rotation.z()))};
   if (!force && _config.transform.rotation[0] == input_deg[0] &&
       _config.transform.rotation[1] == input_deg[1] &&
       _config.transform.rotation[2] == input_deg[2]) {
     return;
   }
 
-  _config.transform.rotation = {float(Deg_f(rotation.x())), float(Deg_f(rotation.y())),
-                      float(Deg_f(rotation.z()))};
+  _config.transform.rotation = {float(Deg_f(rotation.x())),
+                                float(Deg_f(rotation.y())),
+                                float(Deg_f(rotation.z()))};
 
   _yaw_parent->resetTransformation();
   auto y_rotation = rotation.y() - defaults::magnum::rotation.y();
@@ -258,7 +270,8 @@ void CameraController::set_rotation(
 
 void CameraController::set_translation(
     const Magnum::Math::Vector3<float> &translation) {
-  _config.transform.translation = {translation.x(), translation.y(), translation.z()};
+  _config.transform.translation = {translation.x(), translation.y(),
+                                   translation.z()};
   auto transform = _camera_parent->transformationMatrix();
   transform.translation() = {translation.z(), translation.y(), translation.x()};
   _camera_parent->setTransformation(transform);
@@ -274,7 +287,8 @@ void CameraController::dolly(
   constexpr auto speed = 0.01f;
   _camera_parent->translateLocal(focal_point * delta * speed);
   auto translation = _camera_parent->transformationMatrix().translation();
-  _config.transform.translation = {translation.z(), translation.y(), translation.x()};
+  _config.transform.translation = {translation.z(), translation.y(),
+                                   translation.x()};
 }
 
 void CameraController::mouse_rotate(
@@ -289,8 +303,8 @@ void CameraController::mouse_rotate(
     rotation_amount.y() = Rad(delta.x());
   }
   Euler rotation{Deg_f(_config.transform.rotation[0]),
-		 Deg_f(_config.transform.rotation[1]),
-		 Deg_f(_config.transform.rotation[2])};
+                 Deg_f(_config.transform.rotation[1]),
+                 Deg_f(_config.transform.rotation[2])};
   set_rotation(rotation + rotation_amount);
 }
 
@@ -301,10 +315,10 @@ void CameraController::mouse_translate(
   const Vector3 p = unproject(event.position(), centre_depth);
   const auto delta =
       Vector3{(float)event.relativePosition().x() * _move_speed.x(),
-	      (float)event.relativePosition().y() * _move_speed.y(), 0};
+              (float)event.relativePosition().y() * _move_speed.y(), 0};
   Position translation{_config.transform.translation[0],
-		       _config.transform.translation[1],
-		       _config.transform.translation[2]};
+                       _config.transform.translation[1],
+                       _config.transform.translation[2]};
   set_translation(translation + delta);
 }
 
@@ -365,20 +379,20 @@ Float CameraController::depth_at(const Vector2i &window_position) {
 void CameraController::draw_imgui_controls() {
 
   using pc::gui::draw_slider;
+  using pc::gui::slider;
   using pc::gui::vector_table;
 
   ImGui::SetNextItemOpen(_config.transform.unfolded);
   if (ImGui::CollapsingHeader("Transform", _config.transform.unfolded)) {
     _config.transform.unfolded = true;
-    auto &translate = _config.transform.translation;
-    if (vector_table(name(), "Translation", translate, -10.f, 10.f, 0.0f)) {
-      set_translation(Position{translate[0], translate[1], translate[2]});
-    }
-    auto &rotate = _config.transform.rotation;
-    if (vector_table(name(), "Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
-      set_rotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])}, true);
-    }
-    draw_slider<int>("Scroll precision", &_config.scroll_precision, 1, 30, 1);
+
+    vector_table(name(), "transform.translation", _config.transform.translation,
+                 -10.f, 10.f, 0.0f);
+    vector_table(name(), "transform.rotation", _config.transform.rotation,
+                 -360.0f, 360.0f, 0.0f);
+
+    slider(name(), "scroll_precision", _config.scroll_precision, 1, 30, 1);
+
   } else {
     _config.transform.unfolded = false;
   }
@@ -391,14 +405,15 @@ void CameraController::draw_imgui_controls() {
     auto current_scale_mode = rendering.scale_mode;
     if (current_scale_mode == ScaleMode::Letterbox) {
 
-      vector_table(name(), "Resolution", rendering.resolution, 2, 7680,
-                   pc::camera::defaults::rendering_resolution);
+      vector_table(name(), "rendering.resolution", rendering.resolution, 2,
+                   7680, pc::camera::defaults::rendering_resolution);
 
     } else if (current_scale_mode == ScaleMode::Span) {
       // disable setting y resolution manually in span mode,
       // it's inferred from the x resolution and window size
-      vector_table(name(), "Resolution", rendering.resolution, 2, 7680,
-		   pc::camera::defaults::rendering_resolution, {false, true});
+      vector_table(name(), "rendering.resolution", rendering.resolution, 2,
+                   7680, pc::camera::defaults::rendering_resolution,
+                   {false, true});
     }
 
     auto scale_mode_i = static_cast<int>(current_scale_mode);
@@ -416,11 +431,11 @@ void CameraController::draw_imgui_controls() {
 
     ImGui::Spacing();
 
-    ImGui::Checkbox("Ground grid", &rendering.ground_grid);
-    ImGui::Checkbox("Skeletons", &rendering.skeletons);
+    ImGui::Checkbox("rendering.ground_grid", &rendering.ground_grid);
+    ImGui::Checkbox("rendering.skeletons", &rendering.skeletons);
 
-    draw_slider<float>("Point size", &rendering.point_size, 0.00001f, 0.008f,
-                       0.0015f);
+    draw_slider<float>("rendering.point_size", &rendering.point_size, 0.00001f,
+                       0.008f, 0.0015f);
   } else {
     _config.rendering.unfolded = false;
   }
@@ -433,38 +448,43 @@ void CameraController::draw_imgui_controls() {
     ImGui::Checkbox("Enabled", &analysis.enabled);
     if (analysis.enabled) {
       ImGui::SameLine();
-      ImGui::Checkbox("Use CUDA", &analysis.use_cuda);
+      ImGui::Checkbox("analysis.use_cuda", &analysis.use_cuda);
 
-      vector_table(name(), "Resolution", analysis.resolution, 2, 3840,
-                   {pc::camera::defaults::analysis_resolution[0],
-                    pc::camera::defaults::analysis_resolution[1]},
-                   {}, {"width", "height"});
-      vector_table(name(), "Binary threshold", analysis.binary_threshold, 1, 255,
-                   {50, 255}, {}, {"min", "max"});
+      vector_table(name(), "analysis.resolution", analysis.resolution, 2, 3840,
+                   pc::camera::defaults::analysis_resolution, {},
+                   {"width", "height"});
+
+      vector_table(name(), "analysis.binary_threshold",
+                   analysis.binary_threshold, 1, 255, int2{50, 255}, {},
+                   {"min", "max"});
 
       draw_slider<int>("Blur size", &analysis.blur_size, 0, 40, 3);
 
       auto &canny = analysis.canny;
       ImGui::Checkbox("Canny edge detection", &canny.enabled);
       if (canny.enabled) {
-        draw_slider<int>("canny min", &canny.min_threshold, 0, 255, 100);
-        draw_slider<int>("canny max", &canny.max_threshold, 0, 255, 255);
+        draw_slider<int>("analysis.canny.min_threshold", &canny.min_threshold,
+                         0, 255, 100);
+        draw_slider<int>("analysis.canny.max_threshold", &canny.max_threshold,
+                         0, 255, 255);
         int aperture_in = (canny.aperture_size - 1) / 2;
-        draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
+        draw_slider<int>("analysis.canny.aperture_size", &aperture_in, 1, 3, 1);
         canny.aperture_size = aperture_in * 2 + 1;
       }
 
       if (gui::begin_tree_node("Contours", analysis.contours.unfolded)) {
         auto &contours = analysis.contours;
 
-        ImGui::Checkbox("Draw on viewport", &contours.draw);
+        ImGui::Checkbox("analysis.contours.draw", &contours.draw);
 
-        ImGui::Checkbox("Simplify", &contours.simplify);
+        ImGui::Checkbox("analysis.contours.simplify", &contours.simplify);
         if (contours.simplify) {
-          draw_slider<float>("arc scale", &contours.simplify_arc_scale,
-                             0.000001f, 0.15f, 0.01f);
-          draw_slider<float>("min area", &contours.simplify_min_area, 0.0001f,
-                             2.0f, 0.0001f);
+          draw_slider<float>("analysis.contours.simplify_arc_scale",
+                             &contours.simplify_arc_scale, 0.000001f, 0.15f,
+                             0.01f);
+          draw_slider<float>("analysis.contours.simplify_min_area",
+                             &contours.simplify_min_area, 0.0001f, 2.0f,
+                             0.0001f);
         }
 
         ImGui::Checkbox("Publish", &contours.publish);
@@ -472,10 +492,13 @@ void CameraController::draw_imgui_controls() {
 
         ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
         if (contours.triangulate.enabled) {
-          ImGui::Checkbox("Draw triangles", &contours.triangulate.draw);
-          ImGui::Checkbox("Publish triangles", &contours.triangulate.publish);
-          draw_slider<float>("Min tri area", &contours.triangulate.minimum_area,
-                             0.0f, 0.02f, 0.0f);
+          ImGui::Checkbox("analysis.contours.triangulate.draw",
+                          &contours.triangulate.draw);
+          ImGui::Checkbox("analysis.contours.triangulate.publish",
+                          &contours.triangulate.publish);
+          draw_slider<float>("analysis.contours.triangulate.minimum_area",
+                             &contours.triangulate.minimum_area, 0.0f, 0.02f,
+                             0.0f);
         }
         ImGui::TreePop();
       }
@@ -483,39 +506,41 @@ void CameraController::draw_imgui_controls() {
       if (gui::begin_tree_node("Optical Flow",
                                analysis.optical_flow.unfolded)) {
         auto &optical_flow = analysis.optical_flow;
-        ImGui::Checkbox("Enabled", &optical_flow.enabled);
-        ImGui::Checkbox("Draw", &optical_flow.draw);
-        ImGui::Checkbox("Publish", &optical_flow.publish);
+        ImGui::Checkbox("analysis.optical_flow.enabled", &optical_flow.enabled);
+        ImGui::Checkbox("analysis.optical_flow.draw", &optical_flow.draw);
+        ImGui::Checkbox("analysis.optical_flow.publish", &optical_flow.publish);
 
-        draw_slider<int>("Feature points", &optical_flow.feature_point_count,
-                         25, 1000, 250);
-        draw_slider<float>("Points distance",
+        draw_slider<int>("analysis.optical_flow.feature_point_count",
+                         &optical_flow.feature_point_count, 25, 1000, 250);
+        draw_slider<float>("analysis.optical_flow.feature_point_distance",
                            &optical_flow.feature_point_distance, 0.001f, 30.0f,
                            10.0f);
         if (analysis.use_cuda) {
           float quality_level =
               optical_flow.cuda_feature_detector_quality_cutoff * 10.0f;
-          draw_slider<float>("Point quality cutoff", &quality_level, 0.01f,
-                             1.0f, 0.1f);
+          draw_slider<float>("analysis.optical_flow.quality_level",
+                             &quality_level, 0.01f, 1.0f, 0.1f);
           optical_flow.cuda_feature_detector_quality_cutoff =
               quality_level / 10.0f;
         }
-        draw_slider<float>("Magnitude", &optical_flow.magnitude_scale, 0.1f,
-                           5.0f, 1.0f);
-        draw_slider<float>("Magnitude exponent",
+        draw_slider<float>("analysis.optical_flow.magnitude_scale",
+                           &optical_flow.magnitude_scale, 0.1f, 5.0f, 1.0f);
+        draw_slider<float>("analysis.optical_flow.magnitude_exponent",
                            &optical_flow.magnitude_exponent, 0.001f, 2.5f,
                            1.0f);
-        draw_slider<float>("Minimum distance", &optical_flow.minimum_distance,
-                           0.0f, 0.2f, 0.0f);
-        draw_slider<float>("Maximum distance", &optical_flow.maximum_distance,
-                           0.0f, 0.8f, 0.8f);
+        draw_slider<float>("analysis.optical_flow.minimum_distance",
+                           &optical_flow.minimum_distance, 0.0f, 0.2f, 0.0f);
+        draw_slider<float>("analysis.optical_flow.maximum_distance",
+                           &optical_flow.maximum_distance, 0.0f, 0.8f, 0.8f);
 
         ImGui::TreePop();
       }
 
       if (gui::begin_tree_node("Output", analysis.output.unfolded)) {
-        vector_table(name(), "Scale", analysis.output.scale, 0.0f, 2.0f, 1.0f);
-        vector_table(name(), "Offset", analysis.output.offset, -1.0f, 1.0f, 0.0f);
+        vector_table(name(), "analysis.output.scale", analysis.output.scale,
+                     0.0f, 2.0f, 1.0f);
+        vector_table(name(), "analysis.output.offset", analysis.output.offset,
+                     -1.0f, 1.0f, 0.0f);
         ImGui::TreePop();
       }
     }

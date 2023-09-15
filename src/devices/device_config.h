@@ -6,7 +6,7 @@
 
 #include <k4a/k4atypes.h>
 
-namespace pc::sensors {
+namespace pc::devices {
 
 using pc::types::float3;
 using pc::types::minMax;
@@ -55,4 +55,4 @@ struct DeviceConfiguration {
 	       (&Self::sample, "sample") (&Self::body, "body") (&Self::k4a, "k4a"))
 };
 
-} // namespace pc::sensors
+} // namespace pc::devices
