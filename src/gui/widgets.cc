@@ -50,8 +50,8 @@ void begin_widget_container(std::string_view widget_label = "",
   const auto table_id = "##table." + std::to_string(_parameter_index);
   ImGui::BeginTable(table_id.c_str(), 3, ImGuiTableFlags_SizingFixedFit);
 
-  ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed);
-  ImGui::TableSetupColumn("##slider", ImGuiTableColumnFlags_WidthStretch);
+  ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthStretch, 0.3f);
+  ImGui::TableSetupColumn("##slider", ImGuiTableColumnFlags_WidthStretch, 0.7f);
   ImGui::TableSetupColumn("##reset_button", ImGuiTableColumnFlags_WidthFixed);
 
   inside_widget_container = true;
@@ -101,17 +101,25 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
     ImGui::PushStyleColor(ImGuiCol_Button, {0.7f, 0.4f, 0.4f, 0.25f});
     // if we *were* recording this slider and we're not anymore,
     // set its status
-    if (!recording_parameter)
-      new_state = recording_result;
+    if (!recording_parameter) new_state = recording_result;
   }
 
   // Label Column
   ImGui::TableSetColumnIndex(0);
+  std::string label_text;
   if (label.empty()) {
-    ImGui::Text("%s", format_label(parameter_id).data());
+    label_text = format_label(parameter_id).data();
   } else {
-    ImGui::Text("%s", label.data());
+    label_text = label;
   }
+
+  // align text right
+  auto pos_x = (ImGui::GetCursorPosX() + ImGui::GetColumnWidth() -
+		ImGui::CalcTextSize(label_text.c_str()).x -
+		ImGui::GetScrollX() - 2 * ImGui::GetStyle().ItemSpacing.x);
+  if (pos_x > ImGui::GetCursorPosX()) ImGui::SetCursorPosX(pos_x);
+
+  ImGui::Text("%s", label_text.data());
 
   // Slider Column
   ImGui::TableSetColumnIndex(1);
