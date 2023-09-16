@@ -116,9 +116,9 @@ void MidiClient::handle_message(const std::string &port_name,
     auto cc = cc_string(channel, control_num);
     // pc::logger->debug("received CC: {}.{}.{}", channel, control_num, value);
 
-    if (gui::recording_parameter) {
-      gui::recording_parameter = false;
-      auto [parameter_id, parameter_info] = gui::load_recording_parameter_info();
+    if (gui::learning_parameter) {
+      gui::learning_parameter = false;
+      auto [parameter_id, parameter_info] = gui::load_learning_parameter_info();
 
       struct ExistingBinding {
 	std::string port_name;
@@ -244,8 +244,8 @@ void MidiClient::handle_message(const std::string &port_name,
   if (msg_type == message_type::PITCH_BEND) {
     unsigned int value = (msg[2] << 7) | msg[1];
     // pc::logger->debug("received PB: {}.{}", channel, value);
-    if (gui::recording_parameter) {
-      gui::recording_parameter = false;
+    if (gui::learning_parameter) {
+      gui::learning_parameter = false;
       gui::recording_result = ParameterState::Unbound;
       return;
     }

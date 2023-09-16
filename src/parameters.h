@@ -60,7 +60,7 @@ struct ParameterBinding {
   }
 };
 
-enum class ParameterState { Unbound, Bound, Recording };
+enum class ParameterState { Unbound, Bound, Learning };
 
 inline pc::string_map<ParameterBinding> parameter_bindings;
 inline pc::string_map<ParameterState> parameter_states;
@@ -78,7 +78,7 @@ void declare_parameter(std::string_view parameter_id,
 template <typename T>
 void declare_parameters(std::string_view parameter_id,
                         T &basic_value) {
-  // ignore strings -- they can't be externally controlled
+  // ignore strings -- they can't be externally updated
   if constexpr (std::is_same_v<T, std::string>) return;
 
   // TODO we should probably handle bools and enums, but ignore them for now

@@ -92,7 +92,7 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, {0.7f, 0.4f, 0.7f, 0.9f});
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, {0.7f, 0.4f, 0.7f, 1.0f});
     ImGui::PushStyleColor(ImGuiCol_Button, {0.7f, 0.4f, 0.7f, 0.25f});
-  } else if (state == ParameterState::Recording) {
+  } else if (state == ParameterState::Learning) {
     // colour it red for recording
     ImGui::PushStyleColor(ImGuiCol_FrameBg, {0.7f, 0.4f, 0.4f, 0.25f});
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, {0.7f, 0.4f, 0.4f, 0.35f});
@@ -101,7 +101,7 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
     ImGui::PushStyleColor(ImGuiCol_Button, {0.7f, 0.4f, 0.4f, 0.25f});
     // if we *were* recording this slider and we're not anymore,
     // set its status
-    if (!recording_parameter) new_state = recording_result;
+    if (!learning_parameter) new_state = recording_result;
   }
 
   // Label Column
@@ -166,15 +166,15 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
 
   // Right click toggles controller learning
   if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-    if (!recording_parameter) {
+    if (!learning_parameter) {
       // if we were not recording, set it to record
-      new_state = ParameterState::Recording;
-      recording_parameter = true;
-      store_recording_parameter_info(parameter_id, min, max, value);
+      new_state = ParameterState::Learning;
+      learning_parameter = true;
+      store_learning_parameter_info(parameter_id, min, max, value);
     } else {
       // if we were recording, return the slider to an unbound state
       new_state = ParameterState::Unbound;
-      recording_parameter = false;
+      learning_parameter = false;
       unbind_current = true;
     }
   }

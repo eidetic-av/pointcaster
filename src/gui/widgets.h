@@ -32,24 +32,24 @@ void begin_gui_helpers();
 /* Used for generating unique ids for imgui parameters */
 extern unsigned int _parameter_index;
 
-inline std::atomic_bool recording_parameter;
+inline std::atomic_bool learning_parameter;
 inline std::atomic<ParameterState> recording_result;
-inline std::string recording_parameter_id;
-inline std::optional<ParameterBinding> recording_parameter_info;
-inline std::mutex recording_parameter_mutex;
+inline std::string learning_parameter_id;
+inline std::optional<ParameterBinding> learning_parameter_info;
+inline std::mutex learning_parameter_mutex;
 
 template <typename T>
-void store_recording_parameter_info(std::string_view id, float min, float max,
+void store_learning_parameter_info(std::string_view id, float min, float max,
                                     T &value) {
-  std::lock_guard<std::mutex> lock(recording_parameter_mutex);
-  recording_parameter_id = id;
-  recording_parameter_info = ParameterBinding(value, min, max);
+  std::lock_guard<std::mutex> lock(learning_parameter_mutex);
+  learning_parameter_id = id;
+  learning_parameter_info = ParameterBinding(value, min, max);
 }
 
 inline std::pair<std::string, ParameterBinding>
-load_recording_parameter_info() {
-  std::lock_guard<std::mutex> lock(recording_parameter_mutex);
-  return {recording_parameter_id, recording_parameter_info.value()};
+load_learning_parameter_info() {
+  std::lock_guard<std::mutex> lock(learning_parameter_mutex);
+  return {learning_parameter_id, learning_parameter_info.value()};
 }
 
 template <typename T>
