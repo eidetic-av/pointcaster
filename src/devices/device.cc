@@ -46,8 +46,10 @@ void Device::draw_imgui_controls() {
 
   // &_config.unfolded
   ImGui::SetNextItemOpen(_config.unfolded);
-  if (ImGui::CollapsingHeader(_driver->id().c_str(), _config.unfolded)) {
+  if (ImGui::CollapsingHeader(name.c_str(), _config.unfolded)) {
     _config.unfolded = true;
+
+    ImGui::TextDisabled("%s", _driver->id().c_str());
 
     // ImGui::Checkbox("Enable Broadcast", &_enable_broadcast);
 

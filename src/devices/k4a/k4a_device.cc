@@ -13,7 +13,7 @@ K4ADevice::K4ADevice(DeviceConfiguration config) : Device(config) {
   _driver = std::make_unique<K4ADriver>(config);
   if (attached_devices.size() == 0)
     _driver->primary_aligner = true;
-  name = "k4a " + std::to_string(_driver->device_index);
+  name = "Azure Kinect " + std::to_string(_driver->device_index + 1);
 
   // TODO set these parameters from config instead of the reverse
   auto driver = dynamic_cast<K4ADriver *>(_driver.get());
