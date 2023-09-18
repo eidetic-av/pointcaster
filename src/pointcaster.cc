@@ -838,6 +838,19 @@ void PointCaster::draw_main_viewport() {
             ImGui::SetCursorPosY(0);
           }
 
+	  const auto draw_frame_labels =
+	      [&camera_controller](ImVec2 viewport_offset) {
+		ImGui::PushStyleColor(ImGuiCol_Text, {1.0f, 1.0f, 0.0f, 1.0f});
+		for (auto label : camera_controller->labels()) {
+		  auto &pos = label.position;
+		  auto x = static_cast<float>(viewport_offset.x + pos.x);
+		  auto y = static_cast<float>(viewport_offset.y + pos.y);
+		  ImGui::SetCursorPos({x, y});
+		  ImGui::Text("%s", label.text.data());
+		}
+		ImGui::PopStyleColor();
+	      };
+
           auto rendering = camera_config.rendering;
           auto scale_mode = rendering.scale_mode;
 	  const Vector2 frame_space{window_size.x,
@@ -846,7 +859,7 @@ void PointCaster::draw_main_viewport() {
 
           if (scale_mode == ScaleMode::Span) {
 
-            const auto image_pos = ImGui::GetCursorPos();
+            auto image_pos = ImGui::GetCursorPos();
             ImGuiIntegration::image(camera_controller->color_frame(),
                                     {frame_space.x(), frame_space.y()});
 
@@ -856,6 +869,7 @@ void PointCaster::draw_main_viewport() {
               ImGui::SetCursorPos(image_pos);
               ImGuiIntegration::image(camera_controller->analysis_frame(),
                                       {frame_space.x(), frame_space.y()});
+	      draw_frame_labels(image_pos);
             }
 	  } else if (scale_mode == ScaleMode::Letterbox) {
 
@@ -891,7 +905,7 @@ void PointCaster::draw_main_viewport() {
 	    ImGui::BeginChildFrame(ImGui::GetID("letterboxed"),
 				   {width, height});
 
-            const auto image_pos = ImGui::GetCursorPos();
+            auto image_pos = ImGui::GetCursorPos();
             ImGuiIntegration::image(camera_controller->color_frame(),
                                     {width, height});
 
@@ -901,6 +915,7 @@ void PointCaster::draw_main_viewport() {
               ImGui::SetCursorPos(image_pos);
               ImGuiIntegration::image(camera_controller->analysis_frame(),
                                       {width, height});
+	      draw_frame_labels(image_pos);
             }
 
             ImGui::EndChildFrame();

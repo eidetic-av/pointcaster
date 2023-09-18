@@ -5,6 +5,7 @@
 #include <array>
 
 using pc::types::int2;
+using pc::types::float2;
 
 enum class ScaleMode {
   Span, Letterbox,
@@ -21,6 +22,8 @@ struct PointCloudRendererConfiguration {
   int2 resolution{3840, 2160};
   ScaleMode scale_mode = ScaleMode::Span;
   LetterboxMode letterbox_mode = LetterboxMode::Aspect16x9;
+  bool orthographic = false;
+  float2 orthographic_size = {5, 5};
   float point_size = 0.0015f;
   bool ground_grid = true;
   bool skeletons = true;
@@ -29,20 +32,17 @@ struct PointCloudRendererConfiguration {
   DERIVE_SERDE(PointCloudRendererConfiguration,
 	       (&Self::unfolded, "unfolded")
 	       (&Self::resolution, "resolution")
-	       // (&Self::scale_mode, "scale_mode")
-	       // (&Self::letterbox_mode, "letterbox_mode")
+	       (&Self::scale_mode, "scale_mode")
+	       (&Self::letterbox_mode, "letterbox_mode")
+	       (&Self::orthographic, "orthographic")
+	       (&Self::orthographic_size, "orthographic_size")
 	       (&Self::point_size, "point_size")
 	       (&Self::ground_grid, "ground_grid")
 	       (&Self::skeletons, "skeletons")
 	       (&Self::snapshots, "snapshots"))
 
-  // using MemberTypes =
-  //     pc::reflect::type_list<bool, int2, ScaleMode, LetterboxMode, float, bool,
-  //                            bool, bool>;
   using MemberTypes =
-      pc::reflect::type_list<bool, int2, float, bool, bool, bool>;
-
-  // static const std::size_t MemberCount = 8;
-  static const std::size_t MemberCount = 6;
-
+      pc::reflect::type_list<bool, int2, ScaleMode, LetterboxMode, bool, float2,
+			     float, bool, bool, bool>;
+  static const std::size_t MemberCount = 10;
 };

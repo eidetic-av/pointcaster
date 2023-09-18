@@ -68,6 +68,8 @@ public:
 
   void draw_imgui_controls();
 
+  std::vector<gui::OverlayText> labels();
+
 private:
   Magnum::Platform::Application* _app;
   CameraConfiguration _config;

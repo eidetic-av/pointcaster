@@ -44,7 +44,9 @@ struct ContourDetectionConfiguration {
   bool unfolded = false;
   bool enabled = false;
   bool draw = false;
+  bool label = false;
   bool publish = false;
+  bool publish_centroids = false;
   bool simplify = false;
   float simplify_arc_scale = 0.001f;
   float simplify_min_area = 0.0001f;
@@ -54,7 +56,9 @@ struct ContourDetectionConfiguration {
                (&Self::unfolded, "unfolded")
                (&Self::enabled, "enabled")
                (&Self::draw, "draw")
+               (&Self::label, "label")
                (&Self::publish, "publish")
+               (&Self::publish_centroids, "publish_centroids")
                (&Self::simplify, "simplify")
                (&Self::simplify_arc_scale, "simplify_arc_scale")
                (&Self::simplify_min_area, "simplify_min_area")

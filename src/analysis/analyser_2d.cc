@@ -219,8 +219,7 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
         return stop_token.stop_requested() || values_filled;
       });
 
-      if (stop_token.stop_requested())
-        break;
+      if (stop_token.stop_requested()) break;
 
       // move the data onto this thread
       image_opt = std::move(_input_image);
@@ -274,19 +273,31 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
       _previous_analysis_image = analysis_input;
     }
 
+    std::vector<gui::OverlayText> frame_labels;
+
     // find the countours in the frame
-    auto &contours = analysis_config.contours;
+    const auto &contours = analysis_config.contours;
     std::vector<std::vector<cv::Point>> contour_list;
     cv::findContours(analysis_input, contour_list, cv::RETR_EXTERNAL,
                      cv::CHAIN_APPROX_SIMPLE);
+
+    const auto raw_contour_count = contour_list.size();
 
     // TODO use serializable types all the way through instead of
     // doubling up with the opencv types and std library types
 
     // normalise the contours
     std::vector<std::vector<cv::Point2f>> contour_list_norm;
+    contour_list_norm.reserve(raw_contour_count);
     // keep a std copy to easily serialize for publishing
     std::vector<std::vector<std::array<float, 2>>> contour_list_std;
+    if (contours.publish) {
+      contour_list_std.reserve(raw_contour_count);
+    }
+
+    auto calculate_centroids = contours.publish_centroids || contours.label;
+    std::list<std::array<float, 2>> centroids;
+    std::list<double> centroid_contour_areas;
 
     std::vector<cv::Point2f> norm_contour;
     for (auto &contour : contour_list) {
@@ -300,9 +311,10 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
 
       bool use_contour = true;
 
+      const double area = cv::contourArea(norm_contour);
+
       if (contours.simplify) {
         // remove contours that are too small
-        const double area = cv::contourArea(norm_contour);
         if (area < contours.simplify_min_area / 1000) {
           use_contour = false;
           continue;
@@ -313,42 +325,86 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
         cv::approxPolyDP(norm_contour, norm_contour, epsilon, false);
       }
 
-      if (use_contour) {
-        contour_list_norm.push_back(norm_contour);
+      if (!use_contour)
+        continue;
 
-        if (contours.publish) {
-          // if we're publishing shapes we need to use std types
-          std::vector<std::array<float, 2>> contour_std;
-          for (auto &point : norm_contour) {
-            auto output_x = point.x * output_scale[0] + output_offset[0];
-            auto output_y = output_scale[1] -
-                            (point.y * output_scale[1] - output_offset[1]);
-            contour_std.push_back({output_x, output_y});
-          }
-          contour_list_std.push_back(contour_std);
+      contour_list_norm.push_back(norm_contour);
+
+      if (contours.publish) {
+        // if we're publishing shapes we need to use std types
+        std::vector<std::array<float, 2>> contour_std;
+        for (auto &point : norm_contour) {
+          auto output_x = point.x * output_scale[0] + output_offset[0];
+          auto output_y =
+              output_scale[1] - (point.y * output_scale[1] - output_offset[1]);
+          contour_std.push_back({output_x, output_y});
         }
+        contour_list_std.push_back(contour_std);
+      }
+
+      if (calculate_centroids) {
+        // get the centroid
+        auto m = cv::moments(norm_contour);
+        std::array<float, 2> centroid{static_cast<float>(m.m10 / m.m00),
+                                      1 - static_cast<float>(m.m01 / m.m00)};
+        // and insert it into our centroids list based on descending contour
+        // area size
+        auto &a = centroid_contour_areas;
+        auto it = std::lower_bound(a.begin(), a.end(), area, std::greater<>());
+        auto index = std::distance(a.begin(), it);
+        a.insert(it, area);
+        // so the biggest contours are first in the centroid list
+	auto list_it = centroids.begin();
+	std::advance(list_it, index);
+        centroids.insert(list_it, centroid);
       }
     }
+
+    if (stop_token.stop_requested()) break;
 
     if (contours.publish) {
 #if WITH_MQTT
-      if (!stop_token.stop_requested())
-        MqttClient::instance()->publish("contours", contour_list_std);
+      MqttClient::instance()->publish("contours", contour_list_std);
 #endif
     }
 
-    // create a version of the contours list scaled to the size
-    // of our output image
+    if (contours.publish_centroids) {
+#if WITH_MQTT
+      MqttClient::instance()->publish("centroids", centroids);
+#endif
+    }
+
+    // Scale our contours to the output image size if we intend to draw them
     std::vector<std::vector<cv::Point>> contour_list_scaled;
     std::vector<cv::Point> scaled_contour;
-    for (auto &contour : contour_list_norm) {
-      scaled_contour.clear();
-      for (auto &point : contour) {
-        scaled_contour.push_back(
-            {static_cast<int>(point.x * output_resolution.x),
-             static_cast<int>(point.y * output_resolution.y)});
+    if (contours.draw) {
+      contour_list_scaled.reserve(contour_list_norm.size());
+      for (auto &contour : contour_list_norm) {
+	scaled_contour.clear();
+	scaled_contour.reserve(contour.size());
+	for (auto &point : contour) {
+	  scaled_contour.emplace_back(
+	      static_cast<int>(point.x * output_resolution.x),
+	      static_cast<int>(point.y * output_resolution.y));
+	}
+        contour_list_scaled.push_back(scaled_contour);
       }
-      contour_list_scaled.push_back(scaled_contour);
+    }
+    // Scale our centroids if we need them for drawing
+    auto scale_centroids = contours.label;
+    std::vector<cv::Point> centroids_scaled;
+    if (scale_centroids) {
+      centroids_scaled.reserve(centroids.size());
+      std::size_t i = 0;
+      for (const auto &centroid : centroids) {
+	auto x = static_cast<int>(centroid[0] * output_resolution.x);
+	auto y = static_cast<int>(centroid[1] * output_resolution.y);
+	centroids_scaled.emplace_back(x, y);
+	if (contours.label) {
+	  frame_labels.push_back({fmt::format("c_{}", i), {x, y}});
+        }
+        i++;
+      }
     }
 
     // triangulation for building polygons from contours
@@ -544,8 +600,7 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
       }
     }
 
-    if (stop_token.stop_requested())
-      break;
+    if (stop_token.stop_requested()) break;
 
     // copy the resulting cv::Mat data into our buffer data container
     auto element_count = output_mat.total() * output_mat.channels();
@@ -556,11 +611,16 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     std::copy(output_mat.datastart, output_mat.dataend,
               _analysis_frame_buffer_data.data());
 
-    _analysis_frame_buffer_updated = true;
     _previous_analysis_image = analysis_input;
+
+    // copy any frame text labels
+    std::lock_guard<std::mutex> labels_lock(_analysis_labels_mutex);
+    _analysis_labels = std::move(frame_labels);
 
     auto end_time = system_clock::now();
     _analysis_time = duration_cast<milliseconds>(end_time - start_time);
+
+    _analysis_frame_buffer_updated = true;
   }
 
 }
@@ -592,6 +652,11 @@ int Analyser2D::analysis_time() {
     return time.count();
   else
     return 1;
+}
+
+std::vector<gui::OverlayText> Analyser2D::analysis_labels() {
+  std::lock_guard<std::mutex> lock(_analysis_labels_mutex);
+  return _analysis_labels;
 }
 
 } // namespace pc::analysis

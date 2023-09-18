@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../gui/overlay_text.h"
 #include "analyser_2d_config.h"
 #include <Magnum/GL/Texture.h>
 #include <Magnum/Image.h>
@@ -27,6 +28,7 @@ public:
   Magnum::GL::Texture2D& analysis_frame();
 
   int analysis_time();
+  std::vector<gui::OverlayText> analysis_labels();
 
 private:
   std::optional<Magnum::Image2D> _input_image;
@@ -46,6 +48,9 @@ private:
   std::optional<cv::Mat> _previous_analysis_image;
 
   std::atomic<std::chrono::milliseconds> _analysis_time;
+
+  std::vector<gui::OverlayText> _analysis_labels;
+  std::mutex _analysis_labels_mutex;
 
   cv::Mat setup_input_frame(Magnum::Image2D &input,
 			    const pc::analysis::Analyser2DConfiguration &config);

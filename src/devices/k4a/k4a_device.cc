@@ -22,6 +22,8 @@ K4ADevice::K4ADevice(DeviceConfiguration config) : Device(config) {
   _config.k4a.contrast = driver->get_contrast();
   _config.k4a.saturation = driver->get_saturation();
   _config.k4a.gain = driver->get_gain();
+
+  // declare_parameters(_driver->id(), _config);
 }
 
 K4ADevice::~K4ADevice() {

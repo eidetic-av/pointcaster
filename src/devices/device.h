@@ -29,7 +29,7 @@ public:
   static std::vector<std::shared_ptr<Device>> attached_devices;
   static std::mutex devices_access;
 
-  Device(DeviceConfiguration config) : _config(config){};
+  Device(DeviceConfiguration config);
 
   std::string name = "";
   bool is_sensor = true;

@@ -500,6 +500,9 @@ void CameraController::draw_imgui_controls() {
 
         ImGui::Checkbox("analysis.contours.draw", &contours.draw);
 
+        ImGui::Checkbox("analysis.contours.label", &contours.label);
+        ImGui::Spacing();
+
         ImGui::Checkbox("analysis.contours.simplify", &contours.simplify);
         if (contours.simplify) {
 	  slider(name(), "analysis.contours.simplify_arc_scale",
@@ -507,8 +510,10 @@ void CameraController::draw_imgui_controls() {
 	  slider(name(), "analysis.contours.simplify_min_area",
 		 contours.simplify_min_area, 0.0001f, 2.0f, 0.0001f);
         }
+        ImGui::Spacing();
 
-        ImGui::Checkbox("Publish", &contours.publish);
+        ImGui::Checkbox("analysis.contours.publish", &contours.publish);
+        ImGui::Checkbox("analysis.contours.publish_centroids", &contours.publish_centroids);
         ImGui::Spacing();
 
         ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
@@ -565,6 +570,10 @@ void CameraController::draw_imgui_controls() {
   } else {
     _config.analysis.unfolded = false;
   }
+}
+
+std::vector<gui::OverlayText> CameraController::labels() {
+  return _frame_analyser.analysis_labels();
 }
 
 } // namespace pc::camera

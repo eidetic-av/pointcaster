@@ -17,6 +17,8 @@ using pc::gui::slider;
 std::mutex Device::devices_access;
 std::vector<std::shared_ptr<Device>> Device::attached_devices;
 
+Device::Device(DeviceConfiguration config) : _config(config){};
+
 pc::types::PointCloud synthesized_point_cloud() {
   auto result = pc::types::PointCloud{};
   if (Device::attached_devices.size() == 0)

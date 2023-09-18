@@ -1,9 +1,10 @@
 #pragma once
 
+#include "logger.h"
 #include "math.h"
 #include "serialization.h"
-#include "structs.h"
 #include "string_map.h"
+#include "structs.h"
 #include <any>
 #include <cmath>
 #include <concepts>
@@ -86,8 +87,10 @@ void declare_parameters(std::string_view parameter_id,
 
   // Handle floats and integers
   if constexpr (std::is_same_v<T, float>) {
+    pc::logger->debug("declare float: {}", parameter_id);
     declare_parameter(parameter_id, ParameterBinding(basic_value));
   } else if constexpr (std::is_same_v<T, int>) {
+    pc::logger->debug("declare int: {}", parameter_id);
     declare_parameter(parameter_id, ParameterBinding(basic_value));
   }
 }
@@ -103,6 +106,7 @@ void declare_parameters(std::string_view parameter_id, T &vector_value) {
   // to the basic_value overload as a float or int
   for (int i = 0; i < vector_size; i++) {
     auto element_id = fmt::format("{}.{}", parameter_id, element[i]);
+    pc::logger->debug("declare vector: {}", element_id);
     declare_parameters(element_id, vector_value[i]);
   }
 }
@@ -135,6 +139,7 @@ void declare_parameters(std::string_view parameter_id, T &complex_value) {
     // recursively call declare_parameters for each member, delegating to the
     // appropriate overload based on type
     auto member_parameter_id = fmt::format("{}.{}", parameter_id, member_name);
+    pc::logger->debug("declare: {}", member_parameter_id);
     declare_parameters(member_parameter_id, member_ref);
   };
 

@@ -85,18 +85,13 @@ struct CameraConfiguration {
 	       (&Self::scroll_precision, "scroll_precision")
 	       (&Self::transform, "transform")
 	       (&Self::rendering, "rendering")
-
-	       // (&Self::analysis, "analysis")
-
-	       )
+	       (&Self::analysis, "analysis"))
 
   using MemberTypes = pc::reflect::type_list<
       std::string, std::string, bool, float, int, TransformConfiguration,
-      PointCloudRendererConfiguration>;
-      // PointCloudRendererConfiguration, pc::analysis::Analyser2DConfiguration>;
+      PointCloudRendererConfiguration, pc::analysis::Analyser2DConfiguration>;
 
-  // static const std::size_t MemberCount = 8;
-  static const std::size_t MemberCount = 7;
+  static const std::size_t MemberCount = 8;
 };
 
 } // namespace pc::camera
