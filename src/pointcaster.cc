@@ -137,7 +137,7 @@ protected:
   std::optional<Vector2i> _display_resolution;
 
   std::vector<std::unique_ptr<CameraController>> _camera_controllers;
-  int _hovering_camera_index = -1;
+  std::optional<std::reference_wrapper<CameraController>> _interacting_camera_controller;
 
   std::unique_ptr<PointCloudRenderer> _point_cloud_renderer;
   std::unique_ptr<SphereRenderer> _sphere_renderer;
@@ -536,9 +536,10 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     } else {
       // get saved device configurations and populate the device list
       run_async([this] {
-	for (auto &[_, device_config] : _session.devices) {
+	for (auto &[device_id, device_config] : _session.devices) {
+	  pc::logger->info("Loading device '{}' from config file", device_id);
 	  load_device(device_config);
-	}
+        }
       });
     }
   }
@@ -618,8 +619,7 @@ void PointCaster::render_cameras() {
 
 void PointCaster::load_device(const DeviceConfiguration& config) {
   try {
-    auto p = std::make_shared<K4ADevice>(config);
-    Device::attached_devices.push_back(std::move(p));
+    Device::attached_devices.push_back(std::make_shared<K4ADevice>(config));
   } catch (k4a::error e) {
     pc::logger->error(e.what());
   } catch (...) {
@@ -780,7 +780,7 @@ void PointCaster::draw_onscreen_log() {
 
 void PointCaster::draw_main_viewport() {
 
-  _hovering_camera_index = -1;
+  _interacting_camera_controller = std::nullopt;
 
   ImGuiWindowClass docking_viewport_class = {};
 
@@ -816,7 +816,7 @@ void PointCaster::draw_main_viewport() {
       }
 
       for (int i = 0; i < _camera_controllers.size(); i++) {
-        const auto &camera_controller = _camera_controllers.at(i);
+        auto &camera_controller = _camera_controllers.at(i);
 	const auto camera_config = camera_controller->config();
 
         ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
@@ -919,10 +919,9 @@ void PointCaster::draw_main_viewport() {
 	    }
           }
 
-          if (ImGui::IsWindowHovered(
-                  ImGuiHoveredFlags_RootAndChildWindows
-                  ))
-            _hovering_camera_index = i;
+          if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows)) {
+	    _interacting_camera_controller = *camera_controller;
+          }
 
           ImGui::EndTabItem();
         }
@@ -992,8 +991,7 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
 
 void PointCaster::draw_camera_control_windows() {
   for (const auto &camera_controller : _camera_controllers) {
-    if (!camera_controller->config().show_window)
-      continue;
+    if (!camera_controller->config().show_window) continue;
     ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
     ImGui::Begin(camera_controller->name().data());
     camera_controller->draw_imgui_controls();
@@ -1378,28 +1376,34 @@ void PointCaster::mouseReleaseEvent(MouseEvent &event) {
 
 void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
   if (_imgui_context.handleMouseMoveEvent(event) &&
-      _hovering_camera_index == -1) {
+      !_interacting_camera_controller) {
     event.setAccepted(true);
     return;
   }
 
+  auto& camera_controller = _interacting_camera_controller->get();
+
   // rotate
-  if (event.buttons() == MouseMoveEvent::Button::Left)
-    _camera_controllers.at(_hovering_camera_index)->mouse_rotate(event);
+  if (event.buttons() == MouseMoveEvent::Button::Left) {
+    camera_controller.mouse_rotate(event);
+  }
   // translate
-  else if (event.buttons() == MouseMoveEvent::Button::Right)
-    _camera_controllers.at(_hovering_camera_index)->mouse_translate(event);
+  else if (event.buttons() == MouseMoveEvent::Button::Right) {
+    camera_controller.mouse_translate(event);
+  }
 
   event.setAccepted();
 }
 
 void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
   if (_imgui_context.handleMouseScrollEvent(event) &&
-      _hovering_camera_index == -1) {
+      !_interacting_camera_controller) {
     /* Prevent scrolling the page */
     event.setAccepted(true);
     return;
   }
+
+  auto& camera_controller = _interacting_camera_controller->get();
 
   const Float delta = event.offset().y();
   if (Math::abs(delta) < 1.0e-2f)
@@ -1407,10 +1411,9 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
 
   if (event.modifiers() ==
       Magnum::Platform::Sdl2Application::InputEvent::Modifier::Alt) {
-    _camera_controllers.at(_hovering_camera_index)->zoom_perspective(event);
-
+    camera_controller.zoom_perspective(event);
   } else {
-    _camera_controllers.at(_hovering_camera_index)->dolly(event);
+    camera_controller.dolly(event);
   }
 }
 
