@@ -1309,41 +1309,59 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 
 void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
-  case KeyEvent::Key::D:
+  case KeyEvent::Key::C: {
+    if (!_interacting_camera_controller)
+      break;
+    auto &camera_controller = _interacting_camera_controller->get();
+    auto showing_window = camera_controller.config().show_window;
+    camera_controller.config().show_window = !showing_window;
+    break;
+  }
+  case KeyEvent::Key::D: {
     _session.layout.show_devices_window = !_session.layout.show_devices_window;
     break;
-  case KeyEvent::Key::F:
+  }
+  case KeyEvent::Key::F: {
     set_full_screen(!_full_screen);
     break;
-  case KeyEvent::Key::G:
+  }
+  case KeyEvent::Key::G: {
     _session.layout.hide_ui = !_session.layout.hide_ui;
     break;
-  case KeyEvent::Key::M:
+  }
+  case KeyEvent::Key::M: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
       _session.mqtt.show_window = !_session.mqtt.show_window;
     } else {
       _session.midi.show_window = !_session.midi.show_window;
     }
     break;
-  case KeyEvent::Key::Q:
+  }
+  case KeyEvent::Key::Q: {
     save_and_quit();
     break;
-  case KeyEvent::Key::R:
+  }
+  case KeyEvent::Key::R: {
     _session.layout.show_radio_window = !_session.layout.show_radio_window;
     break;
-  case KeyEvent::Key::S:
+  }
+  case KeyEvent::Key::S: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
-      _session.layout.show_snapshots_window = !_session.layout.show_snapshots_window;
+      _session.layout.show_snapshots_window =
+	  !_session.layout.show_snapshots_window;
     } else {
       save_session();
     }
     break;
-  case KeyEvent::Key::T:
+  }
+  case KeyEvent::Key::T: {
     _session.layout.show_stats = !_session.layout.show_stats;
     break;
-  default:
+  }
+  default: {
     if (_imgui_context.handleKeyPressEvent(event))
       event.setAccepted(true);
+  }
   }
 }
 
