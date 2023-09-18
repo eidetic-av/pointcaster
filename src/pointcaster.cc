@@ -1338,7 +1338,8 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     break;
   }
   case KeyEvent::Key::Q: {
-    save_and_quit();
+    // save_and_quit();
+    exit(0);
     break;
   }
   case KeyEvent::Key::R: {

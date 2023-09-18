@@ -95,6 +95,8 @@ private:
 
   void bind_framebuffer();
 
+  void reset_projection_matrix();
+
   Magnum::Matrix4 make_projection_matrix();
 
   Magnum::Vector3 unproject(const Magnum::Vector2i &window_position,

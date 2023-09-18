@@ -84,13 +84,11 @@ CameraController::CameraController(Magnum::Platform::Application *app,
   }
   _config.name = "camera_" + std::to_string(++CameraController::count);
 
-  auto resolution = _config.rendering.resolution;
-  _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
-      Deg_f(_config.fov), static_cast<float>(resolution[0]) / resolution[1],
-      0.001f, 200.0f));
+  reset_projection_matrix();
 
+  auto &resolution = _config.rendering.resolution;
   if (resolution[0] == 0 || resolution[1] == 0)
-    _config.rendering.resolution = pc::camera::defaults::rendering_resolution;
+    resolution = defaults::rendering_resolution;
 
   pc::logger->info("{}x{}", resolution[0], resolution[1]);
 
@@ -99,7 +97,7 @@ CameraController::CameraController(Magnum::Platform::Application *app,
   pc::logger->info("Initialised Camera Controller {} with id {}", _config.name,
                    _config.id);
 
-  declare_parameters(name(), _config);
+  // declare_parameters(name(), _config);
 }
 
 CameraController::~CameraController() { CameraController::count--; }
@@ -139,10 +137,7 @@ void CameraController::setup_frame(Vector2i frame_size) {
 
   _frame_analyser.set_frame_size(_frame_size);
 
-  // TODO replace the aspect ratio fix here when we have
-  // a more solid handle over fov control
-  _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
-      Deg_f(_config.fov), aspect_ratio, 0.001f, 200.0f));
+  reset_projection_matrix();
 
   std::lock_guard lock_color(_color_frame_mutex);
 
@@ -166,6 +161,22 @@ void CameraController::setup_frame(Vector2i frame_size) {
 void CameraController::bind_framebuffer() {
   _framebuffer->clear(GL::FramebufferClear::Color | GL::FramebufferClear::Depth)
       .bind();
+}
+
+void CameraController::reset_projection_matrix() {
+  auto resolution = _config.rendering.resolution;
+  auto aspect_ratio = static_cast<float>(resolution[0]) / resolution[1];
+  auto clipping = defaults::clipping;
+
+  if (_config.rendering.orthographic) {
+    auto &ortho_size = _config.rendering.orthographic_size;
+    _camera->setProjectionMatrix(Matrix4::orthographicProjection(
+	{ortho_size.x * aspect_ratio, ortho_size.y}, clipping.min,
+	clipping.max));
+  } else {
+    _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
+	Deg_f(_config.fov), aspect_ratio, clipping.min, clipping.max));
+  }
 }
 
 GL::Texture2D &CameraController::color_frame() {
@@ -281,14 +292,20 @@ void CameraController::dolly(
     Magnum::Platform::Sdl2Application::MouseScrollEvent &event) {
   const auto delta =
       event.offset().y() / static_cast<float>(_config.scroll_precision);
-  const auto frame_centre = _frame_size / 2;
-  const auto centre_depth = depth_at(frame_centre);
-  const auto focal_point = unproject(frame_centre, centre_depth);
-  constexpr auto speed = 0.01f;
-  _camera_parent->translateLocal(focal_point * delta * speed);
-  auto translation = _camera_parent->transformationMatrix().translation();
-  _config.transform.translation = {translation.z(), translation.y(),
-                                   translation.x()};
+  if (!_config.rendering.orthographic) {
+    const auto frame_centre = _frame_size / 2;
+    const auto centre_depth = depth_at(frame_centre);
+    const auto focal_point = unproject(frame_centre, centre_depth);
+    constexpr auto speed = 0.01f;
+    _camera_parent->translateLocal(focal_point * delta * speed);
+    auto translation = _camera_parent->transformationMatrix().translation();
+    _config.transform.translation = {translation.z(), translation.y(),
+				     translation.x()};
+  } else {
+    auto &ortho_size = _config.rendering.orthographic_size;
+    ortho_size = {ortho_size.x - delta, ortho_size.y - delta};
+    reset_projection_matrix();
+  }
 }
 
 void CameraController::mouse_rotate(
@@ -326,14 +343,14 @@ CameraController &
 CameraController::set_perspective(const Magnum::Float &perspective_value) {
   _perspective_value = Math::max(Math::min(perspective_value, 1.0f),
                                  std::numeric_limits<float>::min());
-  _camera->setProjectionMatrix(make_projection_matrix());
+  // _camera->setProjectionMatrix(make_projection_matrix());
   return *this;
 }
 
 CameraController &CameraController::zoom_perspective(
     Magnum::Platform::Sdl2Application::MouseScrollEvent &event) {
   auto delta = event.offset().y();
-  set_perspective(_perspective_value - delta / 10);
+  // set_perspective(_perspective_value - delta / 10);
   return *this;
 }
 
@@ -426,6 +443,11 @@ void CameraController::draw_imgui_controls() {
               ? SceneGraph::AspectRatioPolicy::NotPreserved
               : SceneGraph::AspectRatioPolicy::Extend;
       _camera->setAspectRatioPolicy(aspect_ratio_policy);
+    }
+    ImGui::Spacing();
+
+    if (ImGui::Checkbox("rendering.orthographic", &rendering.orthographic)) {
+      reset_projection_matrix();
     }
 
     ImGui::Spacing();

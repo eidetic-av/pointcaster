@@ -14,6 +14,7 @@ namespace pc::camera {
 
 using pc::types::float3;
 using pc::types::int2;
+using pc::types::minMax;
 
 using Euler = Magnum::Math::Vector3<Magnum::Math::Rad<float>>;
 using Position = Magnum::Math::Vector3<float>;
@@ -32,6 +33,8 @@ static constexpr float fov = 45;
 
 static constexpr int2 rendering_resolution{3840, 2160};
 static constexpr int2 analysis_resolution{480, 270};
+
+static constexpr minMax<float> clipping = {0.001f, 200};
 
 namespace magnum {
 
