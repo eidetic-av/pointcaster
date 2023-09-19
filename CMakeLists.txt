@@ -177,6 +177,7 @@ set(SOURCE_FILES
   src/gui/widgets.cc
   src/gui/range_slider.cc
   src/parameters.cc
+  src/publisher.cc
   src/path.cc
   src/uuid.cc
   src/wtf/wtf.cc

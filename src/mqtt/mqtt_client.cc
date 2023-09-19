@@ -1,13 +1,14 @@
 #include "mqtt_client.h"
+#include "../logger.h"
+#include "../publisher.h"
+#include <chrono>
+#include <fmt/format.h>
+#include <future>
 #include <imgui.h>
 #include <imgui_stdlib.h>
-#include <regex>
-#include <fmt/format.h>
-#include <chrono>
-#include <future>
-#include <stdexcept>
 #include <msgpack.hpp>
-#include "../logger.h"
+#include <regex>
+#include <stdexcept>
 
 namespace pc {
 
@@ -21,6 +22,13 @@ std::atomic_bool MqttClient::_connected = false;
 
 std::string input_hostname;
 int input_port;
+
+void MqttClient::create(MqttClientConfiguration &config) {
+  std::call_once(_instantiated, [&config]() {
+    _instance = std::shared_ptr<MqttClient>(new MqttClient(config));
+    publisher::add(_instance);
+  });
+}
 
 MqttClient::MqttClient(MqttClientConfiguration &config) : _config(config) {
   set_uri(config.broker_uri);
@@ -156,6 +164,10 @@ void MqttClient::draw_imgui_window() {
   }
 
   ImGui::Checkbox("Auto connect", &_config.auto_connect);
+  ImGui::Spacing();
+
+  ImGui::Checkbox("Publish empty data", &_config.publish_empty_data);
+
   ImGui::End();
 }
 

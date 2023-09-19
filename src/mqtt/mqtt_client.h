@@ -6,9 +6,9 @@
 #include <future>
 #include <memory>
 #include <mqtt/async_client.h>
+#include <msgpack.hpp>
 #include <mutex>
 #include <string_view>
-#include <msgpack.hpp>
 
 namespace pc {
 
@@ -22,11 +22,7 @@ public:
     return _instance;
   }
 
-  static void create(MqttClientConfiguration &config) {
-    std::call_once(_instantiated, [&config]() {
-      _instance = std::shared_ptr<MqttClient>(new MqttClient(config));
-    });
-  }
+  static void create(MqttClientConfiguration &config);
 
   static bool connected() { return _connected; };
 
@@ -55,6 +51,8 @@ public:
     msgpack::pack(send_buffer, data);
     publish(topic, send_buffer.data(), send_buffer.size());
   }
+
+  bool publish_empty() { return _config.publish_empty_data; }
 
   void draw_imgui_window();
 

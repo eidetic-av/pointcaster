@@ -1,12 +1,12 @@
 #include "analyser_2d.h"
 #include "../logger.h"
+#include "../publisher.h"
 #include <Corrade/Containers/Array.h>
 #include <Magnum/GL/BufferImage.h>
 #include <Magnum/GL/PixelFormat.h>
 #include <Magnum/GL/TextureFormat.h>
 #include <Magnum/PixelFormat.h>
 #include <mapbox/earcut.hpp>
-
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/cudaarithm.hpp>
@@ -16,14 +16,11 @@
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/imgproc.hpp>
 
-#if WITH_MQTT
-#include "../mqtt/mqtt_client.h"
-#endif
-
 namespace pc::analysis {
 
 Analyser2D::Analyser2D()
-  : _analysis_thread([this](auto stop_token) { frame_analysis(stop_token); }) {}
+    : _analysis_thread(
+          [this](auto stop_token) { frame_analysis(stop_token); }) {}
 
 Analyser2D::~Analyser2D() {
   _analysis_thread.request_stop();
@@ -205,6 +202,7 @@ Analyser2D::calculate_optical_flow(
 }
 
 void Analyser2D::frame_analysis(std::stop_token stop_token) {
+
   while (!stop_token.stop_requested()) {
 
     std::optional<Magnum::Image2D> image_opt;
@@ -219,7 +217,8 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
         return stop_token.stop_requested() || values_filled;
       });
 
-      if (stop_token.stop_requested()) break;
+      if (stop_token.stop_requested())
+        break;
 
       // move the data onto this thread
       image_opt = std::move(_input_image);
@@ -354,24 +353,21 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
         auto index = std::distance(a.begin(), it);
         a.insert(it, area);
         // so the biggest contours are first in the centroid list
-	auto list_it = centroids.begin();
-	std::advance(list_it, index);
+        auto list_it = centroids.begin();
+        std::advance(list_it, index);
         centroids.insert(list_it, centroid);
       }
     }
 
-    if (stop_token.stop_requested()) break;
+    if (stop_token.stop_requested())
+      break;
 
     if (contours.publish) {
-#if WITH_MQTT
-      MqttClient::instance()->publish("contours", contour_list_std);
-#endif
+      publisher::publish_all("contours", contour_list_std);
     }
 
     if (contours.publish_centroids) {
-#if WITH_MQTT
-      MqttClient::instance()->publish("centroids", centroids);
-#endif
+      publisher::publish_all("centroids", centroids);
     }
 
     // Scale our contours to the output image size if we intend to draw them
@@ -380,13 +376,13 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     if (contours.draw) {
       contour_list_scaled.reserve(contour_list_norm.size());
       for (auto &contour : contour_list_norm) {
-	scaled_contour.clear();
-	scaled_contour.reserve(contour.size());
-	for (auto &point : contour) {
-	  scaled_contour.emplace_back(
-	      static_cast<int>(point.x * output_resolution.x),
-	      static_cast<int>(point.y * output_resolution.y));
-	}
+        scaled_contour.clear();
+        scaled_contour.reserve(contour.size());
+        for (auto &point : contour) {
+          scaled_contour.emplace_back(
+              static_cast<int>(point.x * output_resolution.x),
+              static_cast<int>(point.y * output_resolution.y));
+        }
         contour_list_scaled.push_back(scaled_contour);
       }
     }
@@ -397,11 +393,11 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
       centroids_scaled.reserve(centroids.size());
       std::size_t i = 0;
       for (const auto &centroid : centroids) {
-	auto x = static_cast<int>(centroid[0] * output_resolution.x);
-	auto y = static_cast<int>(centroid[1] * output_resolution.y);
-	centroids_scaled.emplace_back(x, y);
-	if (contours.label) {
-	  frame_labels.push_back({fmt::format("c_{}", i), {x, y}});
+        auto x = static_cast<int>(centroid[0] * output_resolution.x);
+        auto y = static_cast<int>(centroid[1] * output_resolution.y);
+        centroids_scaled.emplace_back(x, y);
+        if (contours.label) {
+          frame_labels.push_back({fmt::format("c_{}", i), {x, y}});
         }
         i++;
       }
@@ -487,10 +483,7 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
           pc::logger->warn("Invalid triangle vertex count: {}",
                            vertices.size());
         } else {
-#if WITH_MQTT
-          if (!stop_token.stop_requested())
-            MqttClient::instance()->publish("triangles", vertices);
-#endif
+	  publisher::publish_all("triangles", vertices);
         }
       }
     }
@@ -592,15 +585,13 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
         }
       }
 
-      if (flow_field.size() > 0 && optical_flow.publish) {
-#if WITH_MQTT
-        if (!stop_token.stop_requested())
-          MqttClient::instance()->publish("flow", flow_field_flattened);
-#endif
+      if (optical_flow.publish) {
+	publisher::publish_all("flow", flow_field_flattened);
       }
     }
 
-    if (stop_token.stop_requested()) break;
+    if (stop_token.stop_requested())
+      break;
 
     // copy the resulting cv::Mat data into our buffer data container
     auto element_count = output_mat.total() * output_mat.channels();
@@ -622,7 +613,6 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
 
     _analysis_frame_buffer_updated = true;
   }
-
 }
 
 Magnum::GL::Texture2D &Analyser2D::analysis_frame() {
