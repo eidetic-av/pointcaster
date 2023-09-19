@@ -5,10 +5,12 @@
 #include <expected>
 #include <future>
 #include <memory>
-#include <mqtt/async_client.h>
+#include <mqtt/client.h>
 #include <msgpack.hpp>
 #include <mutex>
 #include <string_view>
+#include <concurrentqueue/concurrentqueue.h>
+#include <span>
 
 namespace pc {
 
@@ -24,8 +26,6 @@ public:
 
   static void create(MqttClientConfiguration &config);
 
-  static bool connected() { return _connected; };
-
   MqttClient(const MqttClient &) = delete;
   MqttClient &operator=(const MqttClient &) = delete;
 
@@ -36,6 +36,8 @@ public:
   void connect(const std::string_view host_name, const int port);
 
   void disconnect();
+
+  bool connecting() { return _connecting; };
 
   void set_uri(const std::string_view uri);
   void set_uri(const std::string_view hostname, int port);
@@ -60,15 +62,23 @@ private:
   static std::shared_ptr<MqttClient> _instance;
   static std::once_flag _instantiated;
 
-  static std::atomic_bool _connected;
-
   explicit MqttClient(MqttClientConfiguration &config);
 
   MqttClientConfiguration &_config;
   std::future<void> _connection_future;
-  std::unique_ptr<mqtt::async_client> _client;
+  std::atomic_bool _connecting;
+  std::unique_ptr<mqtt::client> _client;
 
-  bool check_connected();
+  struct MqttMessage {
+    std::string topic;
+    std::vector<std::byte> buffer;
+  };
+
+  std::jthread _sender_thread;
+  moodycamel::ConcurrentQueue<const MqttMessage> _messages_to_publish;
+  std::unique_ptr<moodycamel::ProducerToken> _queue_producer_token;
+
+  void send_messages(std::stop_token st);
 };
 
 } // namespace pc

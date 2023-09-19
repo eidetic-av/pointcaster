@@ -18,7 +18,6 @@ static const std::regex uri_pattern(R"(^([a-zA-Z]+):\/\/([^:\/]+):(\d+)$)");
 
 std::shared_ptr<MqttClient> MqttClient::_instance;
 std::once_flag MqttClient::_instantiated;
-std::atomic_bool MqttClient::_connected = false;
 
 std::string input_hostname;
 int input_port;
@@ -33,11 +32,16 @@ void MqttClient::create(MqttClientConfiguration &config) {
 MqttClient::MqttClient(MqttClientConfiguration &config) : _config(config) {
   set_uri(config.broker_uri);
   if (_config.auto_connect) connect();
+  _queue_producer_token =
+      std::make_unique<moodycamel::ProducerToken>(_messages_to_publish);
+  _sender_thread = std::jthread([this](auto st) { send_messages(st); });
 }
 
 MqttClient::~MqttClient() {
   if (!_client) return;
-  _client->disconnect()->wait();
+  _sender_thread.request_stop();
+  _sender_thread.join();
+  _client->disconnect();
 }
 
 void MqttClient::connect() {
@@ -72,42 +76,43 @@ void MqttClient::connect(const std::string_view host_name, const int port) {
 
   pc::logger->info("Connecting to MQTT broker at {}", _config.broker_uri);
 
-  _client = std::make_unique<mqtt::async_client>(_config.broker_uri.data(),
+  _client = std::make_unique<mqtt::client>(_config.broker_uri.data(),
 						 _config.id.data());
 
   auto options = mqtt::connect_options_builder()
+		     .connect_timeout(5ms)
 		     .clean_session()
 		     .automatic_reconnect()
 		     .finalize();
 
   _connection_future = std::async(std::launch::async, [this, options]() {
-    if (_client->connect(options)->wait_for(10s)) {
-      MqttClient::_connected = true;
+    _connecting = true;
+    try {
+      _client->connect(options);
       pc::logger->info("MQTT connection active");
-    } else {
-      pc::logger->warn("MQTT connection failed");
-      MqttClient::_connected = false;
+    } catch (const mqtt::exception &e) {
+      pc::logger->error(e.what());
     }
+    _connecting = false;
   });
 }
 
 void MqttClient::disconnect() {
   if (!_client) return;
-  try {
-    _client->disconnect()->wait();
-    _client.reset();
-    MqttClient::_connected = false;
-    pc::logger->info("Disconnected from MQTT broker");
-  } catch (mqtt::exception &e) {
-    pc::logger->error(e.what());
-  }
+  _connection_future = std::async(std::launch::async, [this]() {
+    try {
+      _client->disconnect();
+      pc::logger->info("Disconnected from MQTT broker");
+      _client.reset();
+    } catch (mqtt::exception &e) {
+      pc::logger->error(e.what());
+    }
+  });
 }
 
 void MqttClient::publish(const std::string_view topic,
                          const std::string_view message) {
-  if (!_connected) return;
-  mqtt::topic t(*_client.get(), topic.data());
-  t.publish(message.data());
+  publish(topic, message.data(), message.size());
 }
 
 void MqttClient::publish(const std::string_view topic,
@@ -117,9 +122,10 @@ void MqttClient::publish(const std::string_view topic,
 
 void MqttClient::publish(const std::string_view topic, const void *payload,
                          const std::size_t size) {
-  if (!_connected) return;
-  mqtt::topic t(*_client.get(), topic.data());
-  t.publish(payload, size);
+  auto data = static_cast<const std::byte *>(payload);
+  std::vector<std::byte> buffer(data, data + size);
+  _messages_to_publish.enqueue(*_queue_producer_token,
+			       {std::string(topic), std::move(buffer)});
 }
 
 void MqttClient::set_uri(const std::string_view uri) {
@@ -138,6 +144,35 @@ void MqttClient::set_uri(const std::string_view hostname, int port) {
   set_uri(fmt::format("tcp://{}:{}", hostname, port));
 }
 
+void MqttClient::send_messages(std::stop_token st) {
+  using namespace std::chrono_literals;
+
+  while (!st.stop_requested()) {
+
+    auto message_count = _messages_to_publish.size_approx();
+    if (message_count == 0) continue;
+
+    std::vector<MqttMessage> messages;
+    messages.reserve(message_count);
+
+    _messages_to_publish.try_dequeue_bulk_from_producer(
+	*_queue_producer_token, std::back_inserter(messages), message_count);
+
+    if (!_client || !_client->is_connected()) {
+      continue;
+    }
+
+    for (auto &message : messages) {
+      auto &payload = message.buffer;
+      try {
+	_client->publish(message.topic, payload.data(), payload.size());
+      } catch (const mqtt::exception &e) {
+	pc::logger->error(e.what());
+      }
+    }
+  }
+}
+
 void MqttClient::draw_imgui_window() {
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("MQTT", nullptr);
@@ -145,22 +180,22 @@ void MqttClient::draw_imgui_window() {
   ImGui::InputInt("Broker port", &input_port);
   ImGui::Spacing();
 
-  const auto draw_connect_buttons = [this]() {
+  const auto draw_connect_buttons = [this](bool connected) {
+    if (connected) ImGui::BeginDisabled();
     if (ImGui::Button("Connect"))
       connect(input_hostname, input_port);
+    if (connected) ImGui::EndDisabled();
     ImGui::SameLine();
     if (ImGui::Button("Disconnect"))
       disconnect();
   };
 
-  if (!_connection_future.valid()) {
-    draw_connect_buttons();
-  } else if (_connection_future.wait_for(0s) == std::future_status::ready) {
-    draw_connect_buttons();
-  } else {
+  if (_connecting) {
     ImGui::BeginDisabled();
-    draw_connect_buttons();
+    draw_connect_buttons(false);
     ImGui::EndDisabled();
+  } else {
+    draw_connect_buttons(_client && _client->is_connected());
   }
 
   ImGui::Checkbox("Auto connect", &_config.auto_connect);

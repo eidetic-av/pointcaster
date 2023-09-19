@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <list>
 #include <type_traits>
 #include <variant>
 #include <vector>
@@ -29,6 +30,9 @@ template <typename> struct is_publishable_container : std::false_type {};
 
 template <typename T, typename Alloc>
 struct is_publishable_container<std::vector<T, Alloc>> : std::true_type {};
+
+template <typename T, typename Alloc>
+struct is_publishable_container<std::list<T, Alloc>> : std::true_type {};
 
 template <typename T, std::size_t N>
 struct is_publishable_container<std::array<T, N>> : std::true_type {};
@@ -62,12 +66,8 @@ template <typename T>
 std::enable_if_t<!is_publishable_container_v<T>, void>
 publish_all(const std::string_view topic, const T &data) {
   for (auto &publisher : _instances) {
-    std::visit(
-        [&topic, &data](auto &p) {
-          std::cout << "publish a base\n";
-          // actual publishing logic for non-containers
-        },
-        publisher);
+    std::visit([&topic, &data](auto &p) { p->publish(topic, data); },
+	       publisher);
   }
 }
 
