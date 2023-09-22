@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <initializer_list>
 #include <list>
 #include <type_traits>
 #include <variant>
@@ -44,20 +45,21 @@ inline constexpr bool is_publishable_container_v =
 // Publish a container of data on a specific topic through all publishers
 template <typename T>
 std::enable_if_t<is_publishable_container_v<T>, void>
-publish_all(const std::string_view topic, const T &data) {
+publish_all(const std::string_view topic, const T &data,
+	    std::initializer_list<std::string_view> topic_nodes = {}) {
   for (auto &publisher : _instances) {
     std::visit(
-	[&topic, &data](auto &p) {
+	[&topic, &data, &topic_nodes](auto &p) {
 	  // if the container isn't empty, call publish
 	  if (!data.empty()) {
-	    p->publish(topic, data);
-	  } else if (p->publish_empty()) {
-	    // if the container is empty, we check if the publisher is set to
+            p->publish(topic, data, topic_nodes);
+          } else if (p->publish_empty()) {
+            // if the container is empty, we check if the publisher is set to
 	    // publish empty containers or not
-	    p->publish(topic, data);
-	  }
-	},
-	publisher);
+	    p->publish(topic, data, topic_nodes);
+          }
+        },
+        publisher);
   }
 }
 

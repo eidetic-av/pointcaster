@@ -50,7 +50,7 @@ CameraController::CameraController(Magnum::Platform::Application *app,
 
 CameraController::CameraController(Magnum::Platform::Application *app,
                                    Scene3D *scene, CameraConfiguration config)
-    : _app(app), _config(config) {
+  : _app(app), _config(config) {
 
   // rotations are manipulated by individual parent objects...
   // this makes rotations easier to reason about and serialize,
@@ -91,6 +91,8 @@ CameraController::CameraController(Magnum::Platform::Application *app,
     resolution = defaults::rendering_resolution;
 
   pc::logger->info("{}x{}", resolution[0], resolution[1]);
+
+  _frame_analyser = std::make_unique<analysis::Analyser2D>(this);
 
   setup_frame({resolution[0], resolution[1]});
 
@@ -135,7 +137,7 @@ void CameraController::setup_frame(Vector2i frame_size) {
 
   _frame_size = scaled_size;
 
-  _frame_analyser.set_frame_size(_frame_size);
+  _frame_analyser->set_frame_size(_frame_size);
 
   reset_projection_matrix();
 
@@ -185,16 +187,16 @@ GL::Texture2D &CameraController::color_frame() {
 }
 
 GL::Texture2D &CameraController::analysis_frame() {
-  return _frame_analyser.analysis_frame();
+  return _frame_analyser->analysis_frame();
 }
 
 void CameraController::dispatch_analysis() {
   std::unique_lock lock(_color_frame_mutex);
-  _frame_analyser.dispatch_analysis(*_color.get(), _config.analysis);
+  _frame_analyser->dispatch_analysis(*_color.get(), _config.analysis);
 }
 
 int CameraController::analysis_time() {
-  return _frame_analyser.analysis_time();
+  return _frame_analyser->analysis_time();
 }
 
 // TODO
@@ -573,7 +575,7 @@ void CameraController::draw_imgui_controls() {
 }
 
 std::vector<gui::OverlayText> CameraController::labels() {
-  return _frame_analyser.analysis_labels();
+  return _frame_analyser->analysis_labels();
 }
 
 } // namespace pc::camera

@@ -42,16 +42,20 @@ public:
   void set_uri(const std::string_view uri);
   void set_uri(const std::string_view hostname, int port);
 
-  void publish(const std::string_view topic, const std::string_view message);
-  void publish(const std::string_view topic, const std::vector<uint8_t> &bytes);
+  void publish(const std::string_view topic, const std::string_view message,
+	       std::initializer_list<std::string_view> topic_nodes = {});
+  void publish(const std::string_view topic, const std::vector<uint8_t> &bytes,
+	       std::initializer_list<std::string_view> topic_nodes = {});
   void publish(const std::string_view topic, const void *payload,
-	       const std::size_t size);
+	       const std::size_t size,
+	       std::initializer_list<std::string_view> topic_nodes = {});
 
   template <typename T>
-  void publish(const std::string_view topic, const T &data) {
+  void publish(const std::string_view topic, const T &data,
+	       std::initializer_list<std::string_view> topic_nodes = {}) {
     msgpack::sbuffer send_buffer;
     msgpack::pack(send_buffer, data);
-    publish(topic, send_buffer.data(), send_buffer.size());
+    publish(topic, send_buffer.data(), send_buffer.size(), topic_nodes);
   }
 
   bool publish_empty() { return _config.publish_empty_data; }
@@ -79,6 +83,10 @@ private:
   std::unique_ptr<moodycamel::ProducerToken> _queue_producer_token;
 
   void send_messages(std::stop_token st);
+
+  std::string
+  construct_topic_string(const std::string_view topic_name,
+			 std::initializer_list<std::string_view> topic_nodes);
 };
 
 } // namespace pc

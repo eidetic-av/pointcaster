@@ -18,10 +18,6 @@
 
 namespace pc::analysis {
 
-Analyser2D::Analyser2D()
-    : _analysis_thread(
-          [this](auto stop_token) { frame_analysis(stop_token); }) {}
-
 Analyser2D::~Analyser2D() {
   _analysis_thread.request_stop();
   _dispatch_condition_variable.notify_one();
@@ -362,12 +358,15 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     if (stop_token.stop_requested())
       break;
 
+    std::initializer_list<std::string_view> address_nodes = {_host->name(),
+                                                             "analyser_2d"};
+
     if (contours.publish) {
-      publisher::publish_all("contours", contour_list_std);
+      publisher::publish_all("contours", contour_list_std, address_nodes);
     }
 
     if (contours.publish_centroids) {
-      publisher::publish_all("centroids", centroids);
+      publisher::publish_all("centroids", centroids, address_nodes);
     }
 
     // Scale our contours to the output image size if we intend to draw them
@@ -483,7 +482,7 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
           pc::logger->warn("Invalid triangle vertex count: {}",
                            vertices.size());
         } else {
-	  publisher::publish_all("triangles", vertices);
+	  publisher::publish_all("triangles", vertices, address_nodes);
         }
       }
     }
@@ -586,7 +585,7 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
       }
 
       if (optical_flow.publish) {
-	publisher::publish_all("flow", flow_field_flattened);
+	publisher::publish_all("flow", flow_field_flattened, address_nodes);
       }
     }
 

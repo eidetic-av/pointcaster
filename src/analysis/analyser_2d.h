@@ -12,14 +12,24 @@
 
 namespace pc::analysis {
 
-class Analyser2D {
-public:
+struct Analyser2DHost {
+  virtual std::string_view name() const = 0;
+};
 
-  Analyser2D();
+class Analyser2D {
+
+public:
+  Analyser2D(const Analyser2DHost *host)
+      : _host(host), _analysis_thread([this](auto stop_token) {
+	  frame_analysis(stop_token);
+	}) {}
+
   ~Analyser2D();
 
   Analyser2D(const Analyser2D&) = delete;
   Analyser2D& operator=(const Analyser2D&) = delete;
+
+  std::string_view id();
   
   void set_frame_size(Magnum::Vector2i frame_size);
   void dispatch_analysis(Magnum::GL::Texture2D &texture,
@@ -31,6 +41,8 @@ public:
   std::vector<gui::OverlayText> analysis_labels();
 
 private:
+  const Analyser2DHost* _host;
+  
   std::optional<Magnum::Image2D> _input_image;
   std::optional<pc::analysis::Analyser2DConfiguration> _input_config;
   Magnum::Vector2i _frame_size;
@@ -63,7 +75,6 @@ private:
 			 const bool use_cuda);
 
   void frame_analysis(std::stop_token stop_token);
-
 };
 
 } // namespace pc::analysis

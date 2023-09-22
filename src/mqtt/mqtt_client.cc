@@ -6,9 +6,12 @@
 #include <future>
 #include <imgui.h>
 #include <imgui_stdlib.h>
+#include <initializer_list>
 #include <msgpack.hpp>
+#include <mutex>
 #include <regex>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace pc {
 
@@ -111,21 +114,24 @@ void MqttClient::disconnect() {
 }
 
 void MqttClient::publish(const std::string_view topic,
-                         const std::string_view message) {
-  publish(topic, message.data(), message.size());
+			 const std::string_view message,
+			 std::initializer_list<std::string_view> topic_nodes) {
+  publish(topic, message.data(), message.size(), topic_nodes);
 }
 
 void MqttClient::publish(const std::string_view topic,
-			 const std::vector<uint8_t> &payload) {
-  publish(topic, payload.data(), payload.size());
+                         const std::vector<uint8_t> &payload,
+                         std::initializer_list<std::string_view> topic_nodes) {
+  publish(topic, payload.data(), payload.size(), topic_nodes);
 }
 
 void MqttClient::publish(const std::string_view topic, const void *payload,
-                         const std::size_t size) {
+                         const std::size_t size, std::initializer_list<std::string_view> topic_nodes) {
   auto data = static_cast<const std::byte *>(payload);
   std::vector<std::byte> buffer(data, data + size);
+  auto topic_string = construct_topic_string(topic, topic_nodes);
   _messages_to_publish.enqueue(*_queue_producer_token,
-			       {std::string(topic), std::move(buffer)});
+			       {std::move(topic_string), std::move(buffer)});
 }
 
 void MqttClient::set_uri(const std::string_view uri) {
@@ -171,6 +177,57 @@ void MqttClient::send_messages(std::stop_token st) {
       }
     }
   }
+}
+
+std::string MqttClient::construct_topic_string(
+    const std::string_view topic_name,
+    std::initializer_list<std::string_view> topic_nodes) {
+
+  // a map to cache pre-constructed topic strings avoiding reconstruction
+  static std::unordered_map<std::size_t, std::string> cache;
+  static std::mutex cache_mutex;
+
+  // compute the hash of the arguments
+  std::hash<std::string_view> hasher;
+  std::size_t hash = hasher(topic_name);
+  for (const auto &node : topic_nodes) {
+    // mix hash bits with each topic node
+    hash ^= hasher(node) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+  }
+
+  // check and return if our result is already cached
+  {
+    std::lock_guard lock(cache_mutex);
+    auto it = cache.find(hash);
+    if (it != cache.end()) {
+      return it->second;
+    }
+  }
+
+  // if it's not cached we construct the string
+
+  // allocate the memory
+  std::size_t result_string_length = topic_name.size();
+  for (const auto &node : topic_nodes) {
+    result_string_length += node.size() + 1; // (+1 for the delimiter character)
+  }
+
+  // concatenate the string with a '/' as delimiter
+  std::string result;
+  result.reserve(result_string_length);
+  for (const auto &node : topic_nodes) {
+    result.append(node);
+    result.push_back('/');
+  }
+  result.append(topic_name);
+
+  // add the new string to our cache
+  {
+    std::lock_guard lock(cache_mutex);
+    cache[hash] = result;
+  }
+
+  return result;
 }
 
 void MqttClient::draw_imgui_window() {
