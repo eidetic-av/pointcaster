@@ -23,6 +23,7 @@ using Publisher = std::variant<
 // A list of all publishers in the application
 extern std::vector<Publisher> _instances;
 void add(Publisher publisher);
+void remove(Publisher publisher);
 
 // Checks to determine whether the data being published is a publishable
 // container type
