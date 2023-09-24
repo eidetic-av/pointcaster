@@ -74,7 +74,7 @@ private:
   Magnum::Platform::Application* _app;
   CameraConfiguration _config;
 
-  std::unique_ptr<pc::analysis::Analyser2D> _frame_analyser;
+  pc::analysis::Analyser2D _frame_analyser;
 
   std::unique_ptr<Object3D> _yaw_parent;
   std::unique_ptr<Object3D> _pitch_parent;

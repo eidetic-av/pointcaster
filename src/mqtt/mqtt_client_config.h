@@ -13,7 +13,8 @@ struct MqttClientConfiguration {
 
   DERIVE_SERDE(MqttClientConfiguration,
 	       (&Self::show_window, "show_window")
-	       (&Self::id, "id") (&Self::broker_uri, "broker_uri")
+	       (&Self::id, "id")
+	       (&Self::broker_uri, "broker_uri")
 	       (&Self::auto_connect, "auto_connect")
 	       (&Self::publish_empty_data, "publish_empty_data"))
 };

@@ -29,21 +29,22 @@ void MqttClient::create(MqttClientConfiguration &config) {
   std::call_once(_instantiated, [&config]() {
     _instance = std::shared_ptr<MqttClient>(new MqttClient(config));
     publisher::add(_instance);
+    std::atexit([] {
+      publisher::remove(_instance);
+      _instance.reset();
+    });
   });
 }
 
 MqttClient::MqttClient(MqttClientConfiguration &config) : _config(config) {
   set_uri(config.broker_uri);
   if (_config.auto_connect) connect();
-  _queue_producer_token =
-      std::make_unique<moodycamel::ProducerToken>(_messages_to_publish);
   _sender_thread = std::jthread([this](auto st) { send_messages(st); });
 }
 
 MqttClient::~MqttClient() {
   if (!_client) return;
   _sender_thread.request_stop();
-  _sender_thread.join();
   _client->disconnect();
 }
 
@@ -130,8 +131,7 @@ void MqttClient::publish(const std::string_view topic, const void *payload,
   auto data = static_cast<const std::byte *>(payload);
   std::vector<std::byte> buffer(data, data + size);
   auto topic_string = construct_topic_string(topic, topic_nodes);
-  _messages_to_publish.enqueue(*_queue_producer_token,
-			       {std::move(topic_string), std::move(buffer)});
+  _messages_to_publish.enqueue({std::move(topic_string), std::move(buffer)});
 }
 
 void MqttClient::set_uri(const std::string_view uri) {
@@ -161,8 +161,8 @@ void MqttClient::send_messages(std::stop_token st) {
     std::vector<MqttMessage> messages;
     messages.reserve(message_count);
 
-    _messages_to_publish.try_dequeue_bulk_from_producer(
-	*_queue_producer_token, std::back_inserter(messages), message_count);
+    _messages_to_publish.try_dequeue_bulk(std::back_inserter(messages),
+					  message_count);
 
     if (!_client || !_client->is_connected()) {
       continue;
@@ -177,6 +177,8 @@ void MqttClient::send_messages(std::stop_token st) {
       }
     }
   }
+
+  pc::logger->info("Ended MQTT sender thread");
 }
 
 std::string MqttClient::construct_topic_string(

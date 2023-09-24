@@ -80,7 +80,6 @@ private:
 
   std::jthread _sender_thread;
   moodycamel::ConcurrentQueue<const MqttMessage> _messages_to_publish;
-  std::unique_ptr<moodycamel::ProducerToken> _queue_producer_token;
 
   void send_messages(std::stop_token st);
 
