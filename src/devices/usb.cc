@@ -8,6 +8,8 @@
 #include <optional>
 #include <sstream>
 #include <thread>
+#include <chrono>
+#include <memory>
 
 #if WITH_K4A
 #include "k4a/k4a_device.h"
@@ -19,139 +21,201 @@
 #include "rs2/rs2_device.h"
 #endif
 
-namespace pc {
+namespace pc::devices {
 
-UsbMonitor::UsbMonitor() {
-  libusb_init(nullptr);
+struct HotplugCallbackData {
+  std::function<UsbConfiguration()> fetch_session_config;
+  std::function<std::map<std::string, devices::DeviceConfiguration>()>
+      fetch_session_devices;
+  std::atomic<int> running_callback_count{0};
+};
 
-  // std::lock_guard<std::mutex> lock(pc::devices::Device::devices_access);
-  // // get attached USB devices and check if any are sensors we have
-  // // drivers for
+UsbMonitor::UsbMonitor(
+    std::function<UsbConfiguration()> fetch_session_config,
+    std::function<std::map<std::string, devices::DeviceConfiguration>()>
+        fetch_session_devices)
 
-  // struct libusb_device **device_list;
-  // int device_count = libusb_get_device_list(nullptr, &device_list);
-  // for (int i = 0; i < device_count; i++) {
-  //   struct libusb_device *device = device_list[i];
-  //   struct libusb_device_descriptor desc;
-  //   libusb_get_device_descriptor(device, &desc);
-  //   auto sensor_type = getDeviceTypeFromUsbDescriptor(desc);
-  //   auto attached_device = createUsbDevice(sensor_type);
-  //   // pc::devices::attached_devices.push_back(std::move(attached_device));
-  //   // if (attached_device != nullptr) {
-  //   //   for (auto cb : _usb_attach_callbacks) cb(attached_device);
-  //   // }
-  // }
-  // libusb_free_device_list(device_list, 1);
+    : _usb_monitor_thread([this, fetch_session_config,
+                           fetch_session_devices](auto stop_token) {
+	pc::logger->info("Started USB monitor thread");
 
-  // // if we were able to initialise a new device, run any attach event
-  // // callbacks
-  // for (auto cb : _usb_attach_callbacks) cb(attached_device);
+        libusb_context *libusb_ctx;
+        libusb_init(&libusb_ctx);
 
-  // register a callback for hotplug access
-  auto libusb_rc_result = libusb_hotplug_register_callback(
-      nullptr,
-      LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED | LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT, 0,
-      LIBUSB_HOTPLUG_MATCH_ANY, LIBUSB_HOTPLUG_MATCH_ANY,
-      LIBUSB_HOTPLUG_MATCH_ANY, usbHotplugEvent, nullptr,
-      &_usb_hotplug_callback_handle);
+        libusb_hotplug_callback_handle hotplug_handle;
 
-  if (libusb_rc_result != LIBUSB_SUCCESS) {
-    pc::logger->error("USB initialisation error {}", libusb_rc_result);
-    return;
-  }
+        auto hotplug_callback_data = std::make_unique<HotplugCallbackData>();
+        hotplug_callback_data->fetch_session_config = fetch_session_config;
+	hotplug_callback_data->fetch_session_devices = fetch_session_devices;
 
-  // start a thread that waits for libusb events and runs them
-  _usb_monitor_thread = std::jthread([&](auto stop_token) {
-    pc::logger->info("Started USB monitor thread");
-    while (!stop_token.stop_requested()) {
-      struct timeval usb_event_timeout = {1, 0}; // 1 second
-      int result = libusb_handle_events_timeout_completed(
-          nullptr, &usb_event_timeout, nullptr);
-      if (result == LIBUSB_ERROR_TIMEOUT)
-        continue;
-      if (result < 0) {
-        pc::logger->warn("libusb event error: {}", result);
-      }
-    }
-    // when run_usb_handler is false, finalise the thread
-    // by freeing all libusb resources
-    libusb_hotplug_deregister_callback(nullptr, _usb_hotplug_callback_handle);
-    libusb_exit(nullptr);
-    pc::logger->info("Closed USB monitor thread");
+        libusb_hotplug_register_callback(
+            libusb_ctx,
+            LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED |
+                LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT,
+            LIBUSB_HOTPLUG_NO_FLAGS, LIBUSB_HOTPLUG_MATCH_ANY,
+            LIBUSB_HOTPLUG_MATCH_ANY, LIBUSB_HOTPLUG_MATCH_ANY,
+            UsbMonitor::handle_hotplug_event, hotplug_callback_data.get(),
+            &hotplug_handle);
+
+        while (!stop_token.stop_requested()) {
+          struct timeval usb_event_timeout = {1, 0}; // 1 second
+          int result = libusb_handle_events_timeout_completed(
+              libusb_ctx, &usb_event_timeout, nullptr);
+          if (result == LIBUSB_ERROR_TIMEOUT)
+            continue;
+          if (result < 0) {
+            pc::logger->warn("libusb event error: {}", result);
+          }
+        }
+
+	// make sure we don't have any running hotplug event callbacks
+        while (hotplug_callback_data->running_callback_count.load() != 0) {
+	  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+	// and clean up
+        libusb_hotplug_deregister_callback(libusb_ctx, hotplug_handle);
+        libusb_exit(libusb_ctx);
+
+        pc::logger->info("Closed USB monitor thread");
+      }) {}
+
+int UsbMonitor::handle_hotplug_event(struct libusb_context *ctx,
+				     struct libusb_device *dev,
+				     libusb_hotplug_event event,
+				     void *user_data) {
+  auto *callback_data = static_cast<HotplugCallbackData*>(user_data);
+
+  // keep track of running callbacks...
+  // increment the running callback counter
+  callback_data->running_callback_count.fetch_add(1);
+  auto defer = std::shared_ptr<void>(nullptr, [&](auto) {
+    // and decrement when we go out of scope
+    callback_data->running_callback_count.fetch_sub(1);
   });
-}
 
-pc::devices::DeviceType
-getDeviceTypeFromUsbDescriptor(struct libusb_device_descriptor desc) {
-  // then with info from the descriptor, generate the product string
-  // (ids come from descriptor in hex format)
+  UsbConfiguration session_config = callback_data->fetch_session_config();
+  if (!session_config.open_on_hotplug) return 0;
+
+  struct libusb_device_descriptor desc;
+  (void)libusb_get_device_descriptor(dev, &desc);
+
   auto product_string =
       fmt::format("{:#06x}:{:#06x}", desc.idVendor, desc.idProduct);
-  // with the product string we can determine what device type we need to
-  // initialise
-  if (UsbDeviceTypeFromProductString.contains(product_string))
-    return UsbDeviceTypeFromProductString.at(product_string);
-  else
-    return pc::devices::UnknownDevice;
-}
 
-std::optional<std::shared_ptr<pc::devices::Device>>
-createUsbDevice(pc::devices::DeviceType sensor_type) {
+  auto it = usb_product_string_to_device_type.find(product_string);
+  if (it == usb_product_string_to_device_type.end()) {
+    return 0;
+  }
 
-#if WITH_K4A
+  using pc::devices::DeviceType;
+  using pc::devices::DeviceConfiguration;
+  using pc::devices::K4ADevice;
 
-  if (sensor_type == pc::devices::K4A)
-    return std::make_shared<devices::K4ADevice>(
-	pc::devices::DeviceConfiguration{});
+  auto device_type = it->second;
 
-#endif
-#if WITH_K4W2
-  if (sensor_type == pc::devices::K4W2)
-    return std::make_shared<devices::K4W2Device>();
-#endif
-#if WITH_RS2
-  if (sensor_type == pc::devices::RS2)
-    return std::make_shared<devices::RS2>();
-#endif
-  else
-    return std::nullopt;
-}
-
-int usbHotplugEvent(struct libusb_context *ctx, struct libusb_device *dev,
-                    libusb_hotplug_event event, void *user_data) {
   if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
-    // when a device is plugged in, get the device descriptor
 
-    struct libusb_device_descriptor desc;
-    (void)libusb_get_device_descriptor(dev, &desc);
-    auto sensor_type = getDeviceTypeFromUsbDescriptor(desc);
-    auto attached_device = createUsbDevice(sensor_type);
-    if (!attached_device)
-      return 1;
-    pc::devices::Device::attached_devices.push_back(attached_device.value());
+    if (device_type == DeviceType::K4A) {
+      pc::logger->debug("K4A device plugged in");
 
-    // if we were able to initialise a new device, run any attach event
-    // callbacks
-    for (auto cb : _usb_attach_callbacks)
-      cb(attached_device.value());
+      std::string serial_number;
+      std::size_t device_index = K4ADevice::active_driver_count();
+      try {
+        serial_number = K4ADevice::get_serial_number(device_index);
+      } catch (k4a::error e) {
+	pc::logger->warn("Failed getting serial number of K4A at index {}",
+			 device_index);
+        pc::logger->warn(e.what());
+        return 1;
+      }
+
+      DeviceConfiguration config{};
+
+      // load an existing device configuration if it exists
+      auto saved_session_devices = callback_data->fetch_session_devices();
+      for (const auto &[saved_device_id, existing_config] : saved_session_devices) {
+	if (saved_device_id == serial_number) {
+	  config = existing_config;
+	  break;
+	}
+      }
+
+      // if an instance for this device already exists (maybe it was unplugged)
+      auto reattached = false;
+      for (auto &device : Device::attached_devices) {
+        if (device->id() == serial_number) {
+	  pc::logger->debug("Reattaching existing device");
+	  try {
+	    device->reattach();
+            return 0;
+          } catch (k4a::error e) {
+	    pc::logger->error("Reattach failed!");
+	    pc::logger->error(e.what());
+            return 1;
+          }
+        }
+      }
+
+      Device::attached_devices.push_back(std::make_shared<K4ADevice>(config));
+
+    }
 
   } else if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT) {
 
-    // TODO handle device detach
-    for (auto cb : _usb_detach_callbacks)
-      cb(nullptr);
+    if (device_type == DeviceType::K4A) {
+
+      pc::logger->debug("K4A device unplugged");
+
+    }
+
   }
   return 0;
 }
 
-void registerUsbAttachCallback(
-    std::function<void(std::shared_ptr<pc::devices::Device>)> cb) {
-  _usb_attach_callbacks.push_back(cb);
-}
+// pc::devices::DeviceType
+// getDeviceTypeFromUsbDescriptor(struct libusb_device_descriptor desc) {
+//   // then with info from the descriptor, generate the product string
+//   // (ids come from descriptor in hex format)
+//   auto product_string =
+//       fmt::format("{:#06x}:{:#06x}", desc.idVendor, desc.idProduct);
+//   // with the product string we can determine what device type we need to
+//   // initialise
+//   if (UsbDeviceTypeFromProductString.contains(product_string))
+//     return UsbDeviceTypeFromProductString.at(product_string);
+//   else
+//     return pc::devices::UnknownDevice;
+// }
 
-void registerUsbDetachCallback(
-    std::function<void(std::shared_ptr<pc::devices::Device>)> cb) {
-  _usb_detach_callbacks.push_back(cb);
-}
+// std::optional<std::shared_ptr<pc::devices::Device>>
+// createUsbDevice(pc::devices::DeviceType sensor_type) {
+
+// #if WITH_K4A
+
+//   if (sensor_type == pc::devices::K4A)
+//     return std::make_shared<devices::K4ADevice>(
+// 	pc::devices::DeviceConfiguration{});
+
+// #endif
+// #if WITH_K4W2
+//   if (sensor_type == pc::devices::K4W2)
+//     return std::make_shared<devices::K4W2Device>();
+// #endif
+// #if WITH_RS2
+//   if (sensor_type == pc::devices::RS2)
+//     return std::make_shared<devices::RS2>();
+// #endif
+//   else
+//     return std::nullopt;
+// }
+
+// void registerUsbAttachCallback(
+//     std::function<void(std::shared_ptr<pc::devices::Device>)> cb) {
+//   _usb_attach_callbacks.push_back(cb);
+// }
+
+// void registerUsbDetachCallback(
+//     std::function<void(std::shared_ptr<pc::devices::Device>)> cb) {
+//   _usb_detach_callbacks.push_back(cb);
+// }
 
 } // namespace pc

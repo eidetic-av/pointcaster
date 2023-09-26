@@ -9,18 +9,17 @@ namespace pc::devices {
 using namespace std::chrono_literals;
 using namespace pc::k4a_utils;
 
-uint K4ADriver::device_count = 0;
-
 K4ADriver::K4ADriver(const DeviceConfiguration &config) {
   static std::mutex serial_driver_construction;
   std::lock_guard<std::mutex> lock(serial_driver_construction);
 
-  device_index = device_count;
+  device_index = active_count;
 
   pc::logger->info("Opening driver for k4a {} ({})\n", device_index, id());
 
-  _device = k4a::device::open(device_index);
-  _serial_number = _device.get_serialnum();
+  _device = std::make_unique<k4a::device>(k4a::device::open(device_index));
+  _open = true;
+  _serial_number = _device->get_serialnum();
   pc::logger->info("k4a {} Open", device_index);
 
   _k4a_config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
@@ -36,73 +35,79 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config) {
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_30;
   }
 
-  _device.start_cameras(&_k4a_config);
-  pc::logger->info("k4a {} started camera", device_index);
+  active_count++;
 
-  _device.set_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
-                            K4A_COLOR_CONTROL_MODE_AUTO, 100000);
-
-  _device.start_imu();
-  pc::logger->info("k4a {} started IMU", device_index);
-
-  // need to store the calibration and transformation data, as they are used
-  // later to transform colour camera to point cloud space
-  _calibration = _device.get_calibration(_k4a_config.depth_mode,
-                                         _k4a_config.color_resolution);
-  _transformation = k4a::transformation(_calibration);
-
-  // start a thread that captures new frames and dumps them into raw buffers
   _capture_loop = std::thread(&K4ADriver::capture_frames, this);
-
-  // _tracker = k4abt::tracker::create(_calibration);
   // _tracker_loop = std::thread(&K4ADriver::track_bodies, this);
-  pc::logger->error("No Tracker!");
 
-  _open = true;
-
-  device_count++;
+  start_sensors();
 }
 
 K4ADriver::~K4ADriver() {
   pc::logger->info("Closing driver for k4a {} ({})", device_index, id());
-  _open = false;
   _stop_requested = true;
   _capture_loop.join();
   // _tracker_loop.join();
-  _device.stop_cameras();
-  _device.stop_imu();
-  _device.close();
-  device_count--;
+  // _tracker.reset();
+  stop_sensors();
+  _device->close();
+  active_count--;
+}
+
+void K4ADriver::start_sensors() {
+  if (_running) return;
+
+  _device->start_cameras(&_k4a_config);
+  pc::logger->debug("Started cameras: {}", id());
+
+  _device->start_imu();
+  pc::logger->debug("Started imu: {}", id());
+
+  _calibration = _device->get_calibration(_k4a_config.depth_mode,
+                                          _k4a_config.color_resolution);
+  _transformation = k4a::transformation(_calibration);
+  // _tracker =
+  //     std::make_unique<k4abt::tracker>(k4abt::tracker::create(_calibration));
+
+  _running = true;
+}
+
+void K4ADriver::stop_sensors() {
+  if (!_running) return;
+
+  _running = false;
+
+  _device->stop_cameras();
+  pc::logger->debug("Stopped cameras: {}", id());
+
+  _device->stop_imu();
+  pc::logger->debug("Stopped imu: {}", id());
 }
 
 void K4ADriver::reload() {
-  _stop_requested = true;
-  _capture_loop.join();
-  // _tracker_loop.join();
-  _stop_requested = false;
-
-  _device.stop_cameras();
-  _device.stop_imu();
-
-  _tracker.destroy();
-
+  stop_sensors();
   _point_cloud = {};
   _skeletons.clear();
+  start_sensors();
+}
 
-  _device.start_cameras(&_k4a_config);
-  _device.start_imu();
-  _open = true;
-
-  _calibration = _device.get_calibration(_k4a_config.depth_mode,
-                                         _k4a_config.color_resolution);
-  _transformation = k4a::transformation(_calibration);
-  _tracker = k4abt::tracker::create(_calibration);
-
-  _capture_loop = std::thread(&K4ADriver::capture_frames, this);
-  // _tracker_loop = std::thread(&K4ADriver::track_bodies, this);
+void K4ADriver::reattach() {
+  uint index = active_count;
+  try {
+    pc::logger->debug("Reattaching k4a driver index: {}", index);
+    _device = std::make_unique<k4a::device>(k4a::device::open(index));
+    _open = true;
+    device_index = index;
+    active_count++;
+  } catch (k4a::error e) {
+    pc::logger->error("is it here?");
+    throw e;
+  }
 }
 
 bool K4ADriver::is_open() const { return _open; }
+
+bool K4ADriver::is_running() const { return _running; }
 
 std::string K4ADriver::id() const { return _serial_number; }
 
@@ -115,25 +120,64 @@ void K4ADriver::enable_body_tracking(const bool enabled) {
 }
 
 void K4ADriver::capture_frames() {
+
+  using namespace std::chrono;
+
+  auto last_capture_time = steady_clock::now();
+  auto lost_device = false;
+  auto lost_device_check_count = 0;
+
   while (!_stop_requested) {
 
-    if (!_open || _pause_sensor) {
+    if (lost_device) {
+      if (lost_device_check_count++ % 20 == 0)
+        pc::logger->warn("Waiting for lost Kinect ({})...", id());
+      if (_device == nullptr) {
+        std::this_thread::sleep_for(250ms);
+      } else {
+	lost_device = false;
+	start_sensors();
+      }
+      continue;
+    }
+
+    if (!_open || !_running || _pause_sensor) {
       std::this_thread::sleep_for(10ms);
       continue;
     }
 
     k4a::capture capture;
     try {
-      bool result = _device.get_capture(&capture, 10ms);
-      if (!result)
+      bool result = _device->get_capture(&capture, 10ms);
+
+      if (!result) {
+	auto now = steady_clock::now();
+	// after two seconds, clean up the lost device resources, and wait for
+	// them to be reset in reattach()
+        if (duration_cast<seconds>(now - last_capture_time).count() >= 2) {
+          pc::logger->error("Kinect ({}) connection lost!", id());
+          lost_device = true;
+          _open = false;
+	  active_count--;
+          try {
+            stop_sensors();
+	    // _tracker.reset();
+	    _device.reset();
+          } catch (k4a::error e) {
+            pc::logger->error(e.what());
+          }
+        }
         continue;
+      }
+
+      last_capture_time = steady_clock::now();
+
     } catch (k4a::error e) {
-      pc::logger->error(e.what());
+      if (_running) pc::logger->error(e.what());
       continue;
     }
 
-    if (!_open)
-      continue;
+    if (!_open || !_running) continue;
 
     k4a::image transformed_color_image;
     k4a::image point_cloud_image;
@@ -178,7 +222,7 @@ void K4ADriver::track_bodies() {
 
     k4abt_frame_t body_frame_handle = nullptr;
     k4abt::frame body_frame(body_frame_handle);
-    if (!_tracker.pop_result(&body_frame, 50ms))
+    if (!_tracker->pop_result(&body_frame, 50ms))
       continue;
 
     const auto body_count = body_frame.get_num_bodies();
@@ -268,6 +312,8 @@ void K4ADriver::track_bodies() {
 }
 
 void K4ADriver::apply_auto_tilt(const bool apply) {
+  if (!_running) return;
+  
   if (!apply) {
     _auto_tilt = Eigen::Matrix3f::Identity();
     return;
@@ -332,8 +378,10 @@ bool K4ADriver::is_aligning() {
 bool K4ADriver::is_aligned() { return _aligned; }
 
 void K4ADriver::run_aligner(const k4a::capture &frame) {
-  _tracker.enqueue_capture(frame);
-  k4abt::frame body_frame = _tracker.pop_result();
+  if (!_tracker) return;
+  
+  _tracker->enqueue_capture(frame);
+  k4abt::frame body_frame = _tracker->pop_result();
   const auto body_count = body_frame.get_num_bodies();
 
   if (body_count > 0) {
@@ -411,7 +459,6 @@ void K4ADriver::run_aligner(const k4a::capture &frame) {
 }
 
 void K4ADriver::set_depth_mode(const k4a_depth_mode_t mode) {
-  _open = false;
   _k4a_config.depth_mode = mode;
   if (mode == K4A_DEPTH_MODE_WFOV_UNBINNED) {
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_15;
@@ -422,74 +469,74 @@ void K4ADriver::set_depth_mode(const k4a_depth_mode_t mode) {
 }
 
 void K4ADriver::set_exposure(const int new_exposure) {
-  _device.set_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
-                            K4A_COLOR_CONTROL_MODE_MANUAL, new_exposure);
+  _device->set_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
+                             K4A_COLOR_CONTROL_MODE_MANUAL, new_exposure);
 }
 
 int K4ADriver::get_exposure() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
-  _device.get_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
-                            &result_mode, &result_value);
+  _device->get_color_control(K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE,
+                             &result_mode, &result_value);
   return result_value;
 }
 
 void K4ADriver::set_brightness(const int new_brightness) {
-  _device.set_color_control(K4A_COLOR_CONTROL_BRIGHTNESS,
-                            K4A_COLOR_CONTROL_MODE_MANUAL, new_brightness);
+  _device->set_color_control(K4A_COLOR_CONTROL_BRIGHTNESS,
+                             K4A_COLOR_CONTROL_MODE_MANUAL, new_brightness);
 }
 
 int K4ADriver::get_brightness() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
-  _device.get_color_control(K4A_COLOR_CONTROL_BRIGHTNESS, &result_mode,
-                            &result_value);
+  _device->get_color_control(K4A_COLOR_CONTROL_BRIGHTNESS, &result_mode,
+                             &result_value);
   return result_value;
 }
 
 void K4ADriver::set_contrast(const int new_contrast) {
-  _device.set_color_control(K4A_COLOR_CONTROL_CONTRAST,
-                            K4A_COLOR_CONTROL_MODE_MANUAL, new_contrast);
+  _device->set_color_control(K4A_COLOR_CONTROL_CONTRAST,
+                             K4A_COLOR_CONTROL_MODE_MANUAL, new_contrast);
 }
 
 int K4ADriver::get_contrast() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
-  _device.get_color_control(K4A_COLOR_CONTROL_CONTRAST, &result_mode,
-                            &result_value);
+  _device->get_color_control(K4A_COLOR_CONTROL_CONTRAST, &result_mode,
+                             &result_value);
   return result_value;
 }
 
 void K4ADriver::set_saturation(const int new_saturation) {
-  _device.set_color_control(K4A_COLOR_CONTROL_SATURATION,
-                            K4A_COLOR_CONTROL_MODE_MANUAL, new_saturation);
+  _device->set_color_control(K4A_COLOR_CONTROL_SATURATION,
+                             K4A_COLOR_CONTROL_MODE_MANUAL, new_saturation);
 }
 
 int K4ADriver::get_saturation() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
-  _device.get_color_control(K4A_COLOR_CONTROL_SATURATION, &result_mode,
-                            &result_value);
+  _device->get_color_control(K4A_COLOR_CONTROL_SATURATION, &result_mode,
+                             &result_value);
   return result_value;
 }
 
 void K4ADriver::set_gain(const int new_gain) {
-  _device.set_color_control(K4A_COLOR_CONTROL_GAIN,
-                            K4A_COLOR_CONTROL_MODE_MANUAL, new_gain);
+  _device->set_color_control(K4A_COLOR_CONTROL_GAIN,
+                             K4A_COLOR_CONTROL_MODE_MANUAL, new_gain);
 }
 
 int K4ADriver::get_gain() const {
   int result_value = -1;
   k4a_color_control_mode_t result_mode;
-  _device.get_color_control(K4A_COLOR_CONTROL_GAIN, &result_mode,
-                            &result_value);
+  _device->get_color_control(K4A_COLOR_CONTROL_GAIN, &result_mode,
+                             &result_value);
   return result_value;
 }
 
 std::array<float, 3> K4ADriver::accelerometer_sample() {
   k4a_imu_sample_t imu_sample;
 
-  if (!_device.get_imu_sample(&imu_sample, 100ms))
+  if (!_device->get_imu_sample(&imu_sample, 100ms))
     return {0, 0, 0};
 
   auto accel = imu_sample.acc_sample.v;

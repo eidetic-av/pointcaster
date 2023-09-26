@@ -6,6 +6,7 @@
 #include <k4abt.hpp>
 #include <utility>
 #include <vector>
+#include <atomic>
 
 namespace pc::devices {
 
@@ -18,7 +19,14 @@ public:
 
   void draw_device_controls() override;
   void update_device_control(int *target, int value,
-                             std::function<void(int)> set_func);
+			     std::function<void(int)> set_func);
+
+  static inline std::atomic<std::size_t> count;
+  static std::string get_serial_number(const std::size_t device_index);
+
+  static inline std::size_t active_driver_count() {
+    return K4ADriver::active_count;
+  };
 };
 
 } // namespace pc::devices

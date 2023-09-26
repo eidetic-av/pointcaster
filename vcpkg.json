@@ -10,6 +10,7 @@
     "toml11",
     "serdepp",
     "azure-kinect-sensor-sdk",
+    "cuda",
     "corrade",
     "eigen3",
     "fmt",

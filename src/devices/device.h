@@ -22,20 +22,22 @@
 
 namespace pc::devices {
 
-enum DeviceType { UnknownDevice, K4A, K4W2, Rs2 };
+enum class DeviceType { UnknownDevice, K4A, K4W2, Rs2 };
 
 class Device {
 public:
-  static std::vector<std::shared_ptr<Device>> attached_devices;
-  static std::mutex devices_access;
-
-  Device(DeviceConfiguration config);
+  static inline std::vector<std::shared_ptr<Device>> attached_devices;
+  static inline std::mutex devices_access;
 
   std::string name = "";
   bool is_sensor = true;
   bool paused = false;
 
+  Device(DeviceConfiguration config);
+
   virtual std::string id() = 0;
+
+  void reattach() { _driver->reattach(); }
 
   bool broadcast_enabled() { return _enable_broadcast; }
   auto point_cloud() { return _driver->point_cloud(_config); };

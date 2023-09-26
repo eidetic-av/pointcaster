@@ -243,16 +243,17 @@ concept IsVectorType = requires { typename T::vector_type; };
 // just alias these for now before refactoring bob-pointclouds library
 using PointCloud = bob::types::PointCloud;
 using position = bob::types::position;
+using color = bob::types::color;
 
-struct color {
-  using vector_type = unsigned char;
-  vector_type r, g, b, a = 0;
-  bool operator==(const color other) const {
-    return r == other.r && g == other.g && b == other.b && a == other.a;
-  }
-  bool operator!=(const color other) const { return !operator==(other); }
-  DERIVE_SERDE(color,
-	       (&Self::r, "r")(&Self::g, "g")(&Self::b, "b")(&Self::a, "a"))
-};
+// struct color {
+//   using vector_type = unsigned char;
+//   vector_type r, g, b, a = 0;
+//   bool operator==(const color other) const {
+//     return r == other.r && g == other.g && b == other.b && a == other.a;
+//   }
+//   bool operator!=(const color other) const { return !operator==(other); }
+//   DERIVE_SERDE(color,
+// 	       (&Self::r, "r")(&Self::g, "g")(&Self::b, "b")(&Self::a, "a"))
+// };
 
 } // namespace pc::types

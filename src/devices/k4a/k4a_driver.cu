@@ -1,6 +1,7 @@
 #include "k4a_driver.h"
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
+#include <thrust/device_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sequence.h>
@@ -175,123 +176,77 @@ auto make_transform_pipeline(Iterator begin, size_t count,
   // std::forward<Transformations>(transformations)...);
 }
 
-PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config) {
+PointCloud
+K4ADriver::point_cloud(const DeviceConfiguration &config) {
 
   if (!_buffers_updated || !is_open())
     return _point_cloud;
 
   _last_config = config;
 
+  // TODO all these vectors can be allocated once per K4ADriver instance
+  // (but they can't be member variables because they are CUDA types and won't
+  // compile in non-nvcc TUs that include k4a_driver.h)
+
+  thrust::device_vector<short3> incoming_positions(incoming_point_count);
+  thrust::device_vector<color> incoming_colors(incoming_point_count);
+  thrust::device_vector<short3> filtered_positions(incoming_point_count);
+  thrust::device_vector<color> filtered_colors(incoming_point_count);
+  thrust::device_vector<position> output_positions(incoming_point_count);
+  thrust::device_vector<color> output_colors(incoming_point_count);
+
+  thrust::device_vector<int> indices(incoming_point_count);
+  thrust::sequence(indices.begin(), indices.end());
+
   std::lock_guard<std::mutex> lock(_buffer_mutex);
 
-  const uint positions_in_size = sizeof(short3) * incoming_point_count;
-  const uint positions_out_size = sizeof(position) * incoming_point_count;
-  const uint colors_size = sizeof(color) * incoming_point_count;
+  thrust::copy(_positions_buffer.begin(), _positions_buffer.end(),
+               incoming_positions.begin());
+  thrust::copy(_colors_buffer.begin(), _colors_buffer.end(),
+               incoming_colors.begin());
 
-  // initialize our GPU memory
-  short3 *incoming_positions;
-  color *incoming_colors;
-  short3 *filtered_positions;
-  color *filtered_colors;
-  position *output_positions;
-  color *output_colors;
-
-  cudaMallocManaged(&incoming_positions, positions_in_size);
-  cudaMallocManaged(&incoming_colors, colors_size);
-  cudaMallocManaged(&filtered_positions, positions_in_size);
-  cudaMallocManaged(&filtered_colors, colors_size);
-  cudaMallocManaged(&output_positions, positions_out_size);
-  cudaMallocManaged(&output_colors, colors_size);
-
-  // fill the GPU memory with our CPU buffers from the kinect
-  cudaMemcpy(incoming_positions, _positions_buffer.data(), positions_in_size,
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(incoming_colors, _colors_buffer.data(), colors_size,
-             cudaMemcpyHostToDevice);
-
-  // make some thrust::device_ptr from the raw pointers so they work
-  // <algorithm> style
-  thrust::device_ptr<short3> incoming_positions_ptr =
-      thrust::device_pointer_cast(incoming_positions);
-  thrust::device_ptr<color> incoming_colors_ptr =
-      thrust::device_pointer_cast(incoming_colors);
-  thrust::device_ptr<short3> filtered_positions_ptr =
-      thrust::device_pointer_cast(filtered_positions);
-  thrust::device_ptr<color> filtered_colors_ptr =
-      thrust::device_pointer_cast(filtered_colors);
-  thrust::device_ptr<position> output_positions_ptr =
-      thrust::device_pointer_cast(output_positions);
-  thrust::device_ptr<color> output_colors_ptr =
-      thrust::device_pointer_cast(output_colors);
-
-  // we create some sequence of point indices to zip so our GPU kernels have
-  // access to them
-  int *indices;
-  cudaMallocManaged(&indices, positions_in_size);
-  thrust::device_ptr<int> point_indices = thrust::device_pointer_cast(indices);
-  thrust::sequence(point_indices, point_indices + incoming_point_count);
-
-  // zip position and color buffers together so we can run our algorithms on
-  // the dataset as a single point-cloud
+  // // zip position and color buffers together so we can run our algorithms on
+  // // the dataset as a single point-cloud
   auto incoming_points_begin = thrust::make_zip_iterator(thrust::make_tuple(
-      incoming_positions_ptr, incoming_colors_ptr, point_indices));
-  auto incoming_points_end = thrust::make_zip_iterator(
-      thrust::make_tuple(incoming_positions_ptr + incoming_point_count,
-                         incoming_colors_ptr + incoming_point_count,
-                         point_indices + incoming_point_count));
+      incoming_positions.begin(), incoming_colors.begin(), indices.begin()));
+  auto incoming_points_end = thrust::make_zip_iterator(thrust::make_tuple(
+      incoming_positions.end(), incoming_colors.end(), indices.end()));
+
   auto filtered_points_begin = thrust::make_zip_iterator(thrust::make_tuple(
-      filtered_positions_ptr, filtered_colors_ptr, point_indices));
+      filtered_positions.begin(), filtered_colors.begin(), indices.begin()));
+
   auto output_points_begin = thrust::make_zip_iterator(
-      thrust::make_tuple(output_positions_ptr, output_colors_ptr));
+      thrust::make_tuple(output_positions.begin(), output_colors.begin()));
 
   // run the kernels
   auto filtered_points_end =
       thrust::copy_if(incoming_points_begin, incoming_points_end,
-                      filtered_points_begin, point_filter{config});
+		      filtered_points_begin, point_filter{config});
   thrust::transform(filtered_points_begin, filtered_points_end,
-                    output_points_begin,
-                    point_transformer(config, _alignment_center,
-                                      _aligned_position_offset, _auto_tilt));
+		    output_points_begin,
+		    point_transformer(config, _alignment_center,
+				      _aligned_position_offset, _auto_tilt));
+
+  // wait for the kernels to complete
+  cudaDeviceSynchronize();
 
   // we can determine the output count using the resulting output iterator
   // from running the kernels
   auto output_point_count =
       std::distance(filtered_points_begin, filtered_points_end);
 
-  // auto [it, it_end] = make_transform_pipeline(output_points_begin,
-  // output_point_count,
-  //                    Translate{1000, 1000, 1000});
-
-  // TRANSLATE
-  // auto [transform_start, transform_end] = make_transform_pipeline(
-  //     output_points_begin, output_points_begin + output_point_count,
-  //     Translate{5000, 5000, 5000});
-
-  // thrust::transform(translate_start,
-  // 		    translate_end,
-  // 		    output_points_begin, Translate{-5000, -5000, -5000});
-
-  // wait for the GPU process to complete
-  cudaDeviceSynchronize();
-
   // copy back to our output point-cloud on the CPU
-  const uint output_positions_size = sizeof(position) * output_point_count;
-  const uint output_colors_size = sizeof(color) * output_point_count;
+  auto output_positions_size = sizeof(position) * output_point_count;
+  auto output_colors_size = sizeof(color) * output_point_count;
   _point_cloud.positions.resize(output_point_count);
   _point_cloud.colors.resize(output_point_count);
-  cudaMemcpy(_point_cloud.positions.data(), output_positions,
-             output_positions_size, cudaMemcpyDeviceToHost);
-  cudaMemcpy(_point_cloud.colors.data(), output_colors, output_colors_size,
-             cudaMemcpyDeviceToHost);
 
-  // clean up
-  cudaFree(indices);
-  cudaFree(incoming_positions);
-  cudaFree(incoming_colors);
-  cudaFree(filtered_positions);
-  cudaFree(filtered_colors);
-  cudaFree(output_positions);
-  cudaFree(output_colors);
+  thrust::copy(output_positions.begin(),
+	       output_positions.begin() + output_point_count,
+	       _point_cloud.positions.begin());
+  thrust::copy(output_colors.begin(),
+	       output_colors.begin() + output_point_count,
+	       _point_cloud.colors.begin());
 
   _buffers_updated = false;
 

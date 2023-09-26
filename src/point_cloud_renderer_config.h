@@ -6,6 +6,7 @@
 
 using pc::types::int2;
 using pc::types::float2;
+using pc::types::minMax;
 
 enum class ScaleMode {
   Span, Letterbox,
@@ -24,6 +25,7 @@ struct PointCloudRendererConfiguration {
   LetterboxMode letterbox_mode = LetterboxMode::Aspect16x9;
   bool orthographic = false;
   float2 orthographic_size = {5, 5};
+  minMax<float> clipping = {0.001f, 200};
   float point_size = 0.0015f;
   bool ground_grid = true;
   bool skeletons = true;
@@ -36,6 +38,7 @@ struct PointCloudRendererConfiguration {
 	       (&Self::letterbox_mode, "letterbox_mode")
 	       (&Self::orthographic, "orthographic")
 	       (&Self::orthographic_size, "orthographic_size")
+	       (&Self::clipping, "clipping")
 	       (&Self::point_size, "point_size")
 	       (&Self::ground_grid, "ground_grid")
 	       (&Self::skeletons, "skeletons")
@@ -43,6 +46,6 @@ struct PointCloudRendererConfiguration {
 
   using MemberTypes =
       pc::reflect::type_list<bool, int2, ScaleMode, LetterboxMode, bool, float2,
-			     float, bool, bool, bool>;
-  static const std::size_t MemberCount = 10;
+			     minMax<float>, float, bool, bool, bool>;
+  static const std::size_t MemberCount = 11;
 };

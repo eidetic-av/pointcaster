@@ -15,7 +15,6 @@ option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_MQTT "Enable MQTT client support" ON)
 option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
-option(WITH_MEMORY_SANITIZER "Enable memory sanitizer on Debug configuration builds" OFF)
 
 find_program(MOLD_LINKER_FOUND mold)
 if (LINUX AND MOLD_LINKER_FOUND)
@@ -135,6 +134,13 @@ endif()
 find_package(OpenCV CONFIG REQUIRED)
 list(APPEND LINK_LIBS ${OpenCV_LIBS})
 
+# ----- CUDA -----
+
+find_package(CUDAToolkit REQUIRED)
+find_package(Thrust CONFIG REQUIRED)
+thrust_create_target(Thrust)
+list(APPEND LINK_LIBS Thrust)
+
 # ----- Utility libs -----
 
 find_package(fmt CONFIG REQUIRED)
@@ -207,9 +213,6 @@ if (WITH_THREAD_SANITIZER)
 elseif(WITH_ADDRESS_SANITIZER)
   target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
   target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
-elseif(WITH_MEMORY_SANITIZER)
-  target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=memory>")
-  target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=memory>")
 endif()
 
 # ----- Post-build actions -----

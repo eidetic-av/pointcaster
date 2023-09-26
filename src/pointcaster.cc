@@ -128,6 +128,7 @@ public:
 
 protected:
   PointCasterSession _session;
+  std::mutex _session_devices_mutex;
 
   std::vector<std::jthread> _async_tasks;
 
@@ -149,8 +150,7 @@ protected:
   std::unique_ptr<Radio> _radio;
 
   std::unique_ptr<UsbMonitor> _usb_monitor;
-
-  
+  std::mutex _usb_config_mutex;
 
   ImGuiIntegration::Context _imgui_context{NoCreate};
 
@@ -204,6 +204,7 @@ protected:
 
 PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
+
   pc::logger->info("This is pointcaster");
 
   // Get OS resolution
@@ -320,6 +321,20 @@ PointCaster::PointCaster(const Arguments &args)
   _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
                           Matrix4::translation(Vector3(0, 0, 0)));
 
+  // init the usb device monitor, it takes a function that is able to return the
+  // current usb configuration (so it can grab that on it's own USB thread when
+  // needed)
+
+  const auto fetch_usb_config = [this] {
+    std::lock_guard lock(this->_usb_config_mutex);
+    return this->_session.usb;
+  };
+  const auto fetch_session_devices = [this] {
+    std::lock_guard lock(this->_session_devices_mutex);
+    return this->_session.devices;
+  };
+  _usb_monitor = std::make_unique<UsbMonitor>(fetch_usb_config, fetch_session_devices);
+
   // load last session
   auto data_dir = path::get_or_create_data_directory();
   std::filesystem::path last_modified_session_file;
@@ -412,35 +427,8 @@ PointCaster::PointCaster(const Arguments &args)
 
   MidiClient::create(_session.midi);
 
-  //
   _snapshots_context = std::make_unique<Snapshots>();
 
-  // Init our sensors
-  // TODO the following should be moved into pc::devices ns and outside this
-  // source file
-  // std::lock_guard<std::mutex> lock(pc::devices::devices_access);
-  // pc::devices::attached_devices.reset(new std::vector<pointer<Device>>);
-  // create a callback for the USB handler thread
-  // that will add new devices to our main sensor list
-  registerUsbAttachCallback([&](auto attached_device) {
-    pc::logger->debug("attached usb callback");
-    // freeUsb();
-    // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    // for (std::size_t i = 0; i < k4a::device::get_installed_count(); i++) {
-    //   pointer<pc::devices::Device> p;
-    //   p.reset(new pc::devices::K4ADevice());
-    //   pc::devices::attached_devices.push_back(std::move(p));
-    // }
-    // std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    // initUsb();
-    // devices->push_back(attached_device);
-  });
-  registerUsbDetachCallback([&](auto detached_device) {
-    // std::erase(*devices, detached_device);
-    pc::logger->debug("detached usb callback");
-  });
-  // init libusb and any attached devices
-  _usb_monitor = std::make_unique<UsbMonitor>();
 
   TweenManager::create();
   _timeline.start();
@@ -529,12 +517,12 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     _camera_controllers.push_back(std::move(saved_camera));
   }
 
-  if (_session.load_devices_at_launch) {
+  if (_session.usb.open_on_launch) {
     if (_session.devices.empty()) {
-      // open all devices
+      // TODO open all devices
       open_kinect_sensors();
     } else {
-      // get saved device configurations and populate the device list
+      // TODO get saved device configurations and populate the device list
       run_async([this] {
 	for (auto &[device_id, device_config] : _session.devices) {
 	  pc::logger->info("Loading device '{}' from config file", device_id);
@@ -1020,11 +1008,16 @@ void PointCaster::draw_devices_window() {
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("Devices", nullptr);
 
-  ImGui::Checkbox("Open at launch", &_session.load_devices_at_launch);
-  if (ImGui::Button("Open")) open_kinect_sensors();
-  ImGui::SameLine();
-  if (ImGui::Button("Close")) {
-    Device::attached_devices.clear();
+  {
+    auto &usb = _session.usb;
+    std::lock_guard lock(_usb_config_mutex);
+
+    ImGui::Checkbox("Open on launch", &usb.open_on_launch);
+    ImGui::Checkbox("Open on hotplug", &usb.open_on_hotplug);
+
+    if (ImGui::Button("Open")) open_kinect_sensors();
+    ImGui::SameLine();
+    if (ImGui::Button("Close")) Device::attached_devices.clear();
   }
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);

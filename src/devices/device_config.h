@@ -48,7 +48,6 @@ struct K4AConfiguration {
 
 struct DeviceConfiguration {
   bool unfolded = false;
-
   bool flip_x = false;
   bool flip_y = false;
   bool flip_z = false;
@@ -64,7 +63,7 @@ struct DeviceConfiguration {
   K4AConfiguration k4a;
 
   DERIVE_SERDE(DeviceConfiguration,
-	       (&Self::unfolded, "unfolded")
+	       (&Self::unfolded, "unfolded") 
 	       (&Self::flip_x, "flip_x") (&Self::flip_y, "flip_y") (&Self::flip_z, "flip_z")
 	       (&Self::crop_x, "crop_x") (&Self::crop_y, "crop_y") (&Self::crop_z, "crop_z")
 	       (&Self::offset, "offset") (&Self::rotation_deg, "rotation_deg") (&Self::scale, "scale")

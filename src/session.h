@@ -2,6 +2,7 @@
 
 #include "camera/camera_config.h"
 #include "devices/device_config.h"
+#include "devices/usb_config.h"
 #include "mqtt/mqtt_client_config.h"
 #include "midi/midi_client_config.h"
 
@@ -10,6 +11,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <atomic>
 
 namespace pc {
 
@@ -36,7 +38,7 @@ struct PointCasterSessionLayout {
 
 struct PointCasterSession {
   std::string id;
-  bool load_devices_at_launch = true;
+  devices::UsbConfiguration usb;
   MqttClientConfiguration mqtt;
   midi::MidiClientConfiguration midi;
   std::map<std::string, devices::DeviceConfiguration> devices;
@@ -44,12 +46,13 @@ struct PointCasterSession {
   PointCasterSessionLayout layout;
 
   DERIVE_SERDE(
-      PointCasterSession, (&Self::id, "id")
+      PointCasterSession,
+      (&Self::id, "id")
       (&Self::mqtt, "mqtt")
       (&Self::midi, "midi")
       [attributes(make_optional)] (&Self::devices, "devices")
       [attributes(make_optional)] (&Self::cameras, "cameras")
-      (&Self::load_devices_at_launch, "load_devices_at_launch")
+      (&Self::usb, "usb")
       (&Self::layout, "layout"))
 };
 

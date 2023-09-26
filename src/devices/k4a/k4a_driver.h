@@ -32,15 +32,19 @@ public:
   static constexpr uint2 color_resolution{1280, 720};
   static constexpr uint2 depth_resolution{512, 512};
 
-  static uint device_count;
+  static inline std::atomic<uint> active_count = 0;
 
   K4ADriver(const DeviceConfiguration& config);
   ~K4ADriver();
 
   std::string id() const override;
   bool is_open() const override;
+  bool is_running() const override;
 
-  void reload();
+  void start_sensors() override;
+  void stop_sensors() override;
+  void reload() override;
+  void reattach() override;
 
   void set_paused(bool paused) override;
 
@@ -73,18 +77,30 @@ public:
 private:
   static constexpr uint incoming_point_count =
       depth_resolution.x * depth_resolution.y;
+
   static constexpr uint color_buffer_size =
       incoming_point_count * sizeof(color);
   static constexpr uint positions_buffer_size =
       incoming_point_count * sizeof(short3);
+  static constexpr uint positions_in_size =
+      sizeof(short3) * incoming_point_count;
+  static constexpr uint positions_out_size =
+      sizeof(position) * incoming_point_count;
+  static constexpr uint colors_size = sizeof(color) * incoming_point_count;
+
+  std::atomic_bool _open{false};
+  std::atomic_bool _running{false};
 
   std::string _serial_number;
   DeviceConfiguration _last_config;
 
+  std::unique_ptr<k4a::device> _device;
+  std::unique_ptr<k4abt::tracker> _tracker;
+
   std::atomic_bool _pause_sensor{false};
   bool _stop_requested = false;
   std::thread _capture_loop;
-  k4a::device _device;
+
   k4a_device_configuration_t _k4a_config;
   k4a::calibration _calibration;
   k4a::transformation _transformation;
@@ -92,13 +108,12 @@ private:
   std::mutex _buffer_mutex;
   std::atomic<bool> _buffers_updated;
 
-  k4abt::tracker _tracker;
+  std::array<short3, incoming_point_count> _positions_buffer;
+  std::array<color, incoming_point_count> _colors_buffer;
+
   bool _body_tracking_enabled;
   std::thread _tracker_loop;
   std::vector<K4ASkeleton> _skeletons;
-
-  std::array<short3, positions_buffer_size> _positions_buffer;
-  std::array<color, color_buffer_size> _colors_buffer;
 
   static constexpr uint _total_alignment_frames = 10;
   uint _alignment_frame_count = _total_alignment_frames;
@@ -114,8 +129,8 @@ private:
   void track_bodies();
   void capture_frames();
 
-  PointCloud _point_cloud;
+  void sync_cuda();
 
-  std::atomic_bool _open{false};
+  PointCloud _point_cloud;
 };
 } // namespace pc::devices

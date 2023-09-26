@@ -11,23 +11,24 @@ K4ADevice::K4ADevice(DeviceConfiguration config) : Device(config) {
   pc::logger->info("Initialising K4ADevice");
 
   _driver = std::make_unique<K4ADriver>(config);
-  if (attached_devices.size() == 0)
-    _driver->primary_aligner = true;
+  if (attached_devices.size() == 0) _driver->primary_aligner = true;
   name = "Azure Kinect " + std::to_string(_driver->device_index + 1);
 
   // TODO set these parameters from config instead of the reverse
-  auto driver = dynamic_cast<K4ADriver *>(_driver.get());
-  _config.k4a.exposure = driver->get_exposure();
-  _config.k4a.brightness = driver->get_brightness();
-  _config.k4a.contrast = driver->get_contrast();
-  _config.k4a.saturation = driver->get_saturation();
-  _config.k4a.gain = driver->get_gain();
+  // auto driver = dynamic_cast<K4ADriver *>(_driver.get());
+  // _config.k4a.exposure = driver->get_exposure();
+  // _config.k4a.brightness = driver->get_brightness();
+  // _config.k4a.contrast = driver->get_contrast();
+  // _config.k4a.saturation = driver->get_saturation();
+  // _config.k4a.gain = driver->get_gain();
 
+  count++;
   // declare_parameters(_driver->id(), _config);
 }
 
 K4ADevice::~K4ADevice() {
   pc::logger->info("Closing {}", name);
+  count--;
 }
 
 std::string K4ADevice::id() { return _driver->id(); }
@@ -116,6 +117,18 @@ void K4ADevice::draw_device_controls() {
   ImGui::SameLine();
   if (ImGui::Button("Clear"))
     driver->apply_auto_tilt(false);
+}
+
+std::string K4ADevice::get_serial_number(const std::size_t device_index) {
+
+  static std::mutex serial_num_query_lock;
+  std::unique_lock lock(serial_num_query_lock);
+
+  auto device = k4a::device::open(device_index);
+  auto serial_number = device.get_serialnum();
+  device.close();
+
+  return serial_number;
 }
 
 } // namespace pc::devices

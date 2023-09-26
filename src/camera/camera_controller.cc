@@ -166,7 +166,7 @@ void CameraController::bind_framebuffer() {
 void CameraController::reset_projection_matrix() {
   auto resolution = _config.rendering.resolution;
   auto aspect_ratio = static_cast<float>(resolution[0]) / resolution[1];
-  auto clipping = defaults::clipping;
+  auto clipping = _config.rendering.clipping;
 
   if (_config.rendering.orthographic) {
     auto &ortho_size = _config.rendering.orthographic_size;
@@ -449,6 +449,17 @@ void CameraController::draw_imgui_controls() {
     if (ImGui::Checkbox("rendering.orthographic", &rendering.orthographic)) {
       reset_projection_matrix();
     }
+
+    ImGui::Spacing();
+
+    if (slider(name(), "rendering.clipping.min", rendering.clipping.min, 0.001f,
+               1000.0f, defaults::clipping.min)) {
+      reset_projection_matrix();
+    };
+    if (slider(name(), "rendering.clipping.max", rendering.clipping.max, 0.001f,
+               1000.0f, defaults::clipping.max)) {
+      reset_projection_matrix();
+    };
 
     ImGui::Spacing();
 

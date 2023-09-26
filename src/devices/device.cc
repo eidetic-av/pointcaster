@@ -14,9 +14,6 @@ namespace pc::devices {
 
 using pc::gui::slider;
 
-std::mutex Device::devices_access;
-std::vector<std::shared_ptr<Device>> Device::attached_devices;
-
 Device::Device(DeviceConfiguration config) : _config(config){};
 
 pc::types::PointCloud synthesized_point_cloud() {
@@ -46,8 +43,11 @@ std::vector<K4ASkeleton> scene_skeletons() {
 void Device::draw_imgui_controls() {
   ImGui::PushID(_driver->id().c_str());
 
-  // &_config.unfolded
   ImGui::SetNextItemOpen(_config.unfolded);
+
+  auto open = _driver->is_open();
+  if (!open) ImGui::BeginDisabled();
+  
   if (ImGui::CollapsingHeader(name.c_str(), _config.unfolded)) {
     _config.unfolded = true;
 
@@ -55,11 +55,28 @@ void Device::draw_imgui_controls() {
 
     // ImGui::Checkbox("Enable Broadcast", &_enable_broadcast);
 
-    const bool was_paused = paused;
-    ImGui::Checkbox("Pause Sensor", &paused);
-    if (paused != was_paused)
-      _driver->set_paused(paused);
+    auto running = _driver->is_running();
+    if (running) ImGui::BeginDisabled();
+    if (ImGui::Button("Start")) {
+      // TODO async without being this risky
+      std::thread([this] { _driver->start_sensors(); }).detach();
+    }
+    if (running) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (!running) ImGui::BeginDisabled();
+    if (ImGui::Button("Stop")) {
+      // TODO async without being this risky
+      std::thread([this] { _driver->stop_sensors(); }).detach();
+    }
+    if (!running) ImGui::EndDisabled();
+
     ImGui::Spacing();
+
+    const bool was_paused = paused;
+    ImGui::Checkbox("Pause", &paused);
+    if (paused != was_paused) _driver->set_paused(paused);
+
+
     ImGui::Spacing();
     ImGui::Spacing();
 
@@ -132,6 +149,9 @@ void Device::draw_imgui_controls() {
   } else {
     _config.unfolded = false;
   }
+
+  if (!open) ImGui::EndDisabled();
+  
   ImGui::PopID();
 };
 
