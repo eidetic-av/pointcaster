@@ -84,7 +84,7 @@ void MqttClient::connect(const std::string_view host_name, const int port) {
 						 _config.id.data());
 
   auto options = mqtt::connect_options_builder()
-		     .connect_timeout(5ms)
+		     .connect_timeout(150ms)
 		     .clean_session()
 		     .automatic_reconnect()
 		     .finalize();
@@ -155,25 +155,19 @@ void MqttClient::send_messages(std::stop_token st) {
 
   while (!st.stop_requested()) {
 
-    auto message_count = _messages_to_publish.size_approx();
-    if (message_count == 0) continue;
-
-    std::vector<MqttMessage> messages;
-    messages.reserve(message_count);
-
-    _messages_to_publish.try_dequeue_bulk(std::back_inserter(messages),
-					  message_count);
-
     if (!_client || !_client->is_connected()) {
+      std::this_thread::sleep_for(100ms);
       continue;
     }
 
-    for (auto &message : messages) {
+    MqttMessage message;
+    if (_messages_to_publish.wait_dequeue_timed(message, 50ms)) {
+      if (!_client || !_client->is_connected()) continue;
       auto &payload = message.buffer;
       try {
 	_client->publish(message.topic, payload.data(), payload.size());
       } catch (const mqtt::exception &e) {
-	pc::logger->error(e.what());
+        pc::logger->error(e.what());
       }
     }
   }

@@ -9,7 +9,7 @@
 #include <msgpack.hpp>
 #include <mutex>
 #include <string_view>
-#include <concurrentqueue/concurrentqueue.h>
+#include <concurrentqueue/blockingconcurrentqueue.h>
 #include <span>
 
 namespace pc {
@@ -79,7 +79,7 @@ private:
   };
 
   std::jthread _sender_thread;
-  moodycamel::ConcurrentQueue<const MqttMessage> _messages_to_publish;
+  moodycamel::BlockingConcurrentQueue<const MqttMessage> _messages_to_publish;
 
   void send_messages(std::stop_token st);
 
