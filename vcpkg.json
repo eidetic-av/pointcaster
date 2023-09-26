@@ -65,6 +65,7 @@
     "sdl2",
     "nativefiledialog",
     "tweeny",
-    "concurrentqueue"
+    "concurrentqueue",
+    "tracy"
   ]
 }

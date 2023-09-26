@@ -167,6 +167,13 @@ list(APPEND LINK_LIBS tweeny)
 find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 list(APPEND LINK_LIBS unofficial::concurrentqueue::concurrentqueue)
 
+# ----- Profiling -----
+
+find_package(Tracy CONFIG REQUIRED)
+list(APPEND LINK_LIBS Tracy::TracyClient)
+add_compile_definitions($<$<CONFIG:Debug>:TRACY_ENABLE>)
+add_compile_definitions($<$<CONFIG:Debug>:TRACY_ON_DEMAND>)
+
 # ----- Application setup -----
 
 set(SOURCE_FILES
