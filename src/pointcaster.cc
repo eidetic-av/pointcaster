@@ -770,8 +770,6 @@ void PointCaster::draw_onscreen_log() {
 
 void PointCaster::draw_main_viewport() {
 
-  _interacting_camera_controller = std::nullopt;
-
   ImGuiWindowClass docking_viewport_class = {};
 
   ImGuiID id =
@@ -804,6 +802,8 @@ void PointCaster::draw_main_viewport() {
         new_camera_index = _camera_controllers.size() - 1;
         pc::logger->info("new camera: {}", new_camera_index);
       }
+
+      _interacting_camera_controller = std::nullopt;
 
       for (int i = 0; i < _camera_controllers.size(); i++) {
         auto &camera_controller = _camera_controllers.at(i);
@@ -1322,11 +1322,11 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
   case KeyEvent::Key::C: {
-    if (!_interacting_camera_controller)
-      break;
-    auto &camera_controller = _interacting_camera_controller->get();
-    auto showing_window = camera_controller.config().show_window;
-    camera_controller.config().show_window = !showing_window;
+    CameraController &active_camera_controller =
+	_interacting_camera_controller ? _interacting_camera_controller->get()
+				       : *_camera_controllers[0];
+    bool showing_window = active_camera_controller.config().show_window;
+    active_camera_controller.config().show_window = !showing_window;
     break;
   }
   case KeyEvent::Key::D: {
@@ -1414,9 +1414,9 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
 
   auto& camera_controller = _interacting_camera_controller->get();
 
-  // rotate
+  // rotate / orbit
   if (event.buttons() == MouseMoveEvent::Button::Left) {
-    camera_controller.mouse_rotate(event);
+    camera_controller.mouse_orbit(event);
   }
   // translate
   else if (event.buttons() == MouseMoveEvent::Button::Right) {
@@ -1437,15 +1437,9 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
   auto& camera_controller = _interacting_camera_controller->get();
 
   const Float delta = event.offset().y();
-  if (Math::abs(delta) < 1.0e-2f)
-    return;
+  if (Math::abs(delta) < 1.0e-2f) return;
 
-  if (event.modifiers() ==
-      Magnum::Platform::Sdl2Application::InputEvent::Modifier::Alt) {
-    camera_controller.zoom_perspective(event);
-  } else {
-    camera_controller.dolly(event);
-  }
+  camera_controller.dolly(event);
 }
 
 } // namespace pc

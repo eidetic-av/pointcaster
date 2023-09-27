@@ -23,46 +23,38 @@ using Rad_f = Magnum::Math::Rad<float>;
 
 namespace defaults {
 
-static constexpr float3 rotation{15, 0, 0};
-
-static constexpr float distance = 10;
-static const float3 translation{0.0f,
-				distance *std::sin(float(Rad_f(rotation.x))),
-				distance *std::cos(float(Rad_f(rotation.x)))};
+static constexpr float distance = 1.0f;
+static constexpr float2 orbit = {0.0f, 0.0f};
+static constexpr float roll = 0.0f;
+static constexpr float3 translation{0.0f, 0.0f, 0.0f};
 static constexpr float fov = 45;
 
 static constexpr int2 rendering_resolution{3840, 2160};
 static constexpr int2 analysis_resolution{480, 270};
 
-static constexpr minMax<float> clipping = {0.001f, 200};
-
-namespace magnum {
-
-static constexpr Euler rotation{Deg_f{defaults::rotation.x},
-                                Deg_f{defaults::rotation.y},
-                                Deg_f{defaults::rotation.z}};
-static constexpr float distance = defaults::distance;
-static const Position translation{defaults::translation[0],
-                                  defaults::translation[1],
-                                  defaults::translation[2]};
-static constexpr Deg_f fov{defaults::fov};
-
-} // namespace magnum
+static constexpr minMax<float> perspective_clipping = {0.0001f, 20.0f};
+static constexpr minMax<float> orthographic_clipping = {-15, 15};
 
 } // namespace defaults
 
 struct TransformConfiguration {
   bool unfolded;
-  float3 rotation = defaults::rotation;
+  bool show_anchor = false;
+
+  float distance = defaults::distance;
+  float2 orbit = defaults::orbit;
+  float roll = defaults::roll;
   float3 translation = defaults::translation;
 
   DERIVE_SERDE(TransformConfiguration,
 	       (&Self::unfolded, "unfolded")
-	       (&Self::rotation, "rotation")
+	       (&Self::distance, "distance")
+	       (&Self::orbit, "orbit")
+	       (&Self::roll, "roll")
 	       (&Self::translation, "translation"))
 
-  using MemberTypes = pc::reflect::type_list<bool, float3, float3>;
-  static const std::size_t MemberCount = 3;
+  using MemberTypes = pc::reflect::type_list<bool, bool, float, float2, float, float3>;
+  static const std::size_t MemberCount = 6;
 };
 
 struct CameraConfiguration {
