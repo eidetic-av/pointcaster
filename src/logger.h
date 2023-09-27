@@ -1,12 +1,12 @@
 #pragma once
 
 #include "logger.h"
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/sinks/ringbuffer_sink.h>
-#include <memory>
-#include <string_view>
-#include <optional>
 #include <chrono>
+#include <memory>
+#include <optional>
+#include <spdlog/sinks/ringbuffer_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <string_view>
 
 namespace pc {
   namespace log::detail {
