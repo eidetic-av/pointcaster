@@ -90,6 +90,8 @@
 #include "skybridge.h"
 #endif
 
+#include <tracy/Tracy.hpp>
+
 namespace pc {
 
 using namespace pc;
@@ -1283,6 +1285,8 @@ void PointCaster::drawEvent() {
   // Run the next frame immediately
   redraw();
   _timeline.nextFrame();
+
+  FrameMark;
 }
 
 void PointCaster::set_full_screen(bool full_screen) {

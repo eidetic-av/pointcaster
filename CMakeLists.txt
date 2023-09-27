@@ -16,6 +16,8 @@ option(WITH_MQTT "Enable MQTT client support" ON)
 option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
 
+option(TRACY_ENABLE "Enable profiling using Tracy" OFF)
+
 find_program(MOLD_LINKER_FOUND mold)
 if (LINUX AND MOLD_LINKER_FOUND)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fuse-ld=mold")
@@ -170,9 +172,11 @@ list(APPEND LINK_LIBS unofficial::concurrentqueue::concurrentqueue)
 # ----- Profiling -----
 
 find_package(Tracy CONFIG REQUIRED)
-list(APPEND LINK_LIBS Tracy::TracyClient)
-add_compile_definitions($<$<CONFIG:Debug>:TRACY_ENABLE>)
-add_compile_definitions($<$<CONFIG:Debug>:TRACY_ON_DEMAND>)
+if (TRACY_ENABLE)
+  list(APPEND LINK_LIBS Tracy::TracyClient)
+  add_compile_definitions(TRACY_ENABLE)
+  add_compile_definitions(TRACY_ON_DEMAND)
+endif()
 
 # ----- Application setup -----
 
