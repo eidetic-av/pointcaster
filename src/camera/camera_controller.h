@@ -69,7 +69,8 @@ public:
 
   void dolly(Magnum::Platform::Sdl2Application::MouseScrollEvent& event);
   void mouse_orbit(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);
-  void mouse_translate(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);
+  void mouse_translate(Magnum::Platform::Sdl2Application::MouseMoveEvent &event,
+		       bool lock_y_axis = false);
 
   void draw_imgui_controls();
 

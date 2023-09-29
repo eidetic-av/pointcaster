@@ -1417,7 +1417,8 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
   }
   // translate
   else if (event.buttons() == MouseMoveEvent::Button::Right) {
-    camera_controller.mouse_translate(event);
+    auto lock_y_axis = event.modifiers() == InputEvent::Modifier::Shift;
+    camera_controller.mouse_translate(event, lock_y_axis);
   }
 
   event.setAccepted();

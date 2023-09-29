@@ -23,8 +23,8 @@ using Rad_f = Magnum::Math::Rad<float>;
 
 namespace defaults {
 
-static constexpr float distance = 1.0f;
-static constexpr float2 orbit = {0.0f, 0.0f};
+static constexpr float distance = 3.5f;
+static constexpr float2 orbit = {0.0f, 15.0f};
 static constexpr float roll = 0.0f;
 static constexpr float3 translation{0.0f, 0.0f, 0.0f};
 static constexpr float fov = 45;
