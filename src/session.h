@@ -5,6 +5,7 @@
 #include "devices/usb_config.h"
 #include "mqtt/mqtt_client_config.h"
 #include "midi/midi_client_config.h"
+#include "radio/radio_config.h"
 
 #include <serdepp/serde.hpp>
 
@@ -38,21 +39,23 @@ struct PointCasterSessionLayout {
 
 struct PointCasterSession {
   std::string id;
+  std::map<std::string, devices::DeviceConfiguration> devices;
+  std::map<std::string, camera::CameraConfiguration> cameras;
+  radio::RadioConfiguration radio;
   devices::UsbConfiguration usb;
   MqttClientConfiguration mqtt;
   midi::MidiClientConfiguration midi;
-  std::map<std::string, devices::DeviceConfiguration> devices;
-  std::map<std::string, camera::CameraConfiguration> cameras;
   PointCasterSessionLayout layout;
 
   DERIVE_SERDE(
       PointCasterSession,
       (&Self::id, "id")
-      (&Self::mqtt, "mqtt")
-      (&Self::midi, "midi")
       [attributes(make_optional)] (&Self::devices, "devices")
       [attributes(make_optional)] (&Self::cameras, "cameras")
+      (&Self::radio, "radio")
       (&Self::usb, "usb")
+      (&Self::mqtt, "mqtt")
+      (&Self::midi, "midi")
       (&Self::layout, "layout"))
 };
 

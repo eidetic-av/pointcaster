@@ -68,7 +68,7 @@
 #include "devices/usb.h"
 #include "gui/widgets.h"
 #include "point_cloud_renderer.h"
-#include "radio.h"
+#include "radio/radio.h"
 #include "snapshots.h"
 #include "tween/tween_manager.h"
 #include "sphere_renderer.h"
@@ -234,7 +234,6 @@ PointCaster::PointCaster(const Arguments &args)
   }
 
   conf.setWindowFlags(Sdl2Application::Configuration::WindowFlag::Resizable);
-
 
   // Try 8x MSAA, fall back to zero if not possible.
   // Enable only 2x MSAA if we have enough DPI.
@@ -422,11 +421,9 @@ PointCaster::PointCaster(const Arguments &args)
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  // Initialise our networks
-  _radio = std::make_unique<Radio>();
-
+  // TODO decide between singletons or app members for clients?
+  _radio = std::make_unique<Radio>(_session.radio);
   MqttClient::create(_session.mqtt);
-
   MidiClient::create(_session.midi);
 
   _snapshots_context = std::make_unique<Snapshots>();
