@@ -187,6 +187,7 @@ protected:
   bool _full_screen;
   void set_full_screen(bool full_screen);
 
+  void quit();
   void save_and_quit();
 
   Timeline _timeline;
@@ -433,10 +434,14 @@ PointCaster::PointCaster(const Arguments &args)
   _timeline.start();
 }
 
-void PointCaster::save_and_quit() {
-  save_session();
+void PointCaster::quit() {
   Device::attached_devices.clear();
   exit(0);
+}
+
+void PointCaster::save_and_quit() {
+  save_session();
+  quit();
 }
 
 void PointCaster::save_session() {
@@ -1102,7 +1107,6 @@ void PointCaster::drawEvent() {
 			       GL::FramebufferClear::Depth);
 
   render_cameras();
-  return;
 
   _imgui_context.newFrame();
   pc::gui::begin_gui_helpers();
@@ -1243,8 +1247,7 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     break;
   }
   case KeyEvent::Key::Q: {
-    // save_and_quit();
-    exit(0);
+    quit();
     break;
   }
   case KeyEvent::Key::R: {

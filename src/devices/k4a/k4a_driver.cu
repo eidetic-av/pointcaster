@@ -8,7 +8,7 @@
 
 namespace pc::devices {
 
-__host__ __device__ static inline float rad(float deg) {
+__host__ __device__ static inline float as_rad(float deg) {
   constexpr auto mult = 3.141592654f / 180.0f;
   return deg * mult;
 };
@@ -55,11 +55,14 @@ struct point_transformer
     // flip y and z axes for our world space
     pos_f = Vector3f(pos_f[0], -pos_f[1], -pos_f[2]);
 
+    // All K4A inputs seem to be rotated by ~7degrees amount for some reason...
+    const AngleAxisf inbuilt_rot(as_rad(-7.0f), Vector3f::UnitX());
+
     // create the rotation around our center
-    AngleAxisf rot_x(rad(config.rotation_deg.x), Vector3f::UnitX());
-    AngleAxisf rot_y(rad(config.rotation_deg.y), Vector3f::UnitY());
-    AngleAxisf rot_z(rad(config.rotation_deg.z), Vector3f::UnitZ());
-    Quaternionf q = rot_z * rot_y * rot_x;
+    AngleAxisf rot_x(as_rad(config.rotation_deg.x), Vector3f::UnitX());
+    AngleAxisf rot_y(as_rad(config.rotation_deg.y), Vector3f::UnitY());
+    AngleAxisf rot_z(as_rad(config.rotation_deg.z), Vector3f::UnitZ());
+    Quaternionf q = rot_z * rot_y * rot_x * inbuilt_rot;
     Affine3f rot_transform =
         Translation3f(-alignment_center) * q * Translation3f(alignment_center);
 
@@ -71,12 +74,9 @@ struct point_transformer
     pos_f += Vector3f(config.offset.x, config.offset.y, config.offset.z);
 
     // specified axis flips
-    if (config.flip_x)
-      pos_f.x() = -pos_f.x();
-    if (config.flip_y)
-      pos_f.y() = -pos_f.y();
-    if (config.flip_z)
-      pos_f.z() = -pos_f.z();
+    if (config.flip_x) pos_f.x() = -pos_f.x();
+    if (config.flip_y) pos_f.y() = -pos_f.y();
+    if (config.flip_z) pos_f.z() = -pos_f.z();
 
     // and scaling
     pos_f *= config.scale;
@@ -103,18 +103,12 @@ struct point_filter {
   }
 
   __device__ bool check_bounds(short3 value) const {
-    if (value.x < config.crop_x.min)
-      return false;
-    if (value.x > config.crop_x.max)
-      return false;
-    if (value.y < config.crop_y.min)
-      return false;
-    if (value.y > config.crop_y.max)
-      return false;
-    if (value.z < config.crop_z.min)
-      return false;
-    if (value.z > config.crop_z.max)
-      return false;
+    if (value.x < config.crop_x.min) return false;
+    if (value.x > config.crop_x.max) return false;
+    if (value.y < config.crop_y.min) return false;
+    if (value.y > config.crop_y.max) return false;
+    if (value.z < config.crop_z.min) return false;
+    if (value.z > config.crop_z.max) return false;
     return true;
   }
 
@@ -122,14 +116,11 @@ struct point_filter {
 
   __device__ bool operator()(point_in_t point) const {
     auto index = thrust::get<2>(point);
-    if (!sample(index))
-      return false;
+    if (!sample(index)) return false;
     auto color = thrust::get<1>(point);
-    if (!check_color(color))
-      return false;
+    if (!check_color(color)) return false;
     auto position = thrust::get<0>(point);
-    if (!check_bounds(position))
-      return false;
+    if (!check_bounds(position)) return false;
     return true;
   }
 };

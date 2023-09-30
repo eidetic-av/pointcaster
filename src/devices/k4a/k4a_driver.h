@@ -71,8 +71,8 @@ public:
   void set_gain(const int new_gain);
   int get_gain() const;
 
-  std::array<float, 3> accelerometer_sample();
-  void apply_auto_tilt(const bool apply);
+  void set_auto_tilt(bool enabled) { _auto_tilt_enabled = enabled; };
+  void clear_auto_tilt() { _auto_tilt = Eigen::Matrix3f::Identity(); }
 
 private:
   static constexpr uint incoming_point_count =
@@ -123,11 +123,14 @@ private:
   position _aligned_position_offset;
   Eigen::Quaternion<float> _aligned_orientation_offset;
 
+  std::thread _imu_loop;
+  bool _auto_tilt_enabled;
   Eigen::Matrix3f _auto_tilt = Eigen::Matrix3f::Identity();
 
-  void run_aligner(const k4a::capture &frame);
-  void track_bodies();
   void capture_frames();
+  void track_bodies();
+  void process_imu();
+  void run_aligner(const k4a::capture &frame);
 
   void sync_cuda();
 

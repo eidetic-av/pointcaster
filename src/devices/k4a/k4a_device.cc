@@ -104,19 +104,18 @@ void K4ADevice::draw_device_controls() {
 
   if (gui::begin_tree_node("Body tracking", _config.body.unfolded)) {
     auto &body = _config.body;
-    auto initially_enabled = body.enabled;
-    ImGui::Checkbox("Enabled", &body.enabled);
-    if (body.enabled != initially_enabled)
+    if (ImGui::Checkbox("Enabled", &body.enabled)) {
       driver->enable_body_tracking(body.enabled);
+    }
     ImGui::TreePop();
   }
 
-  ImGui::Checkbox("Auto tilt", &_config.k4a.auto_tilt);
-  if (_config.k4a.auto_tilt) driver->apply_auto_tilt(true);
+  if (ImGui::Checkbox("Auto tilt", &_config.k4a.auto_tilt)) {
+    driver->set_auto_tilt(_config.k4a.auto_tilt);
+  };
 
   ImGui::SameLine();
-  if (ImGui::Button("Clear"))
-    driver->apply_auto_tilt(false);
+  if (ImGui::Button("Clear")) driver->clear_auto_tilt();
 }
 
 std::string K4ADevice::get_serial_number(const std::size_t device_index) {

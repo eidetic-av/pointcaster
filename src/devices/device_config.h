@@ -12,9 +12,10 @@ using pc::types::short3;
 
 struct BodyTrackingConfiguration {
   bool unfolded = false;
-  bool enabled;
+  bool enabled = false;
 
-  DERIVE_SERDE(BodyTrackingConfiguration, (&Self::unfolded, "unfolded")
+  DERIVE_SERDE(BodyTrackingConfiguration,
+	       (&Self::unfolded, "unfolded")
 	       (&Self::enabled, "enabled"))
 
   using MemberTypes = pc::reflect::type_list<bool, bool>;
@@ -32,7 +33,7 @@ struct K4AConfiguration {
   bool auto_tilt = false;
 
   DERIVE_SERDE(K4AConfiguration,
-	       (&Self::unfolded, "unfolded")
+               (&Self::unfolded, "unfolded")
 	       (&Self::depth_mode, "depth_mode")
 	       (&Self::exposure, "exposure")
 	       (&Self::exposure, "brightness")

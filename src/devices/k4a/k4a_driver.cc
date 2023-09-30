@@ -9,7 +9,11 @@ namespace pc::devices {
 using namespace std::chrono_literals;
 using namespace pc::k4a_utils;
 
-K4ADriver::K4ADriver(const DeviceConfiguration &config) {
+K4ADriver::K4ADriver(const DeviceConfiguration &config)
+    : _capture_loop(&K4ADriver::capture_frames, this),
+      _tracker_loop(&K4ADriver::track_bodies, this),
+      _imu_loop(&K4ADriver::process_imu, this)
+{
   static std::mutex serial_driver_construction;
   std::lock_guard<std::mutex> lock(serial_driver_construction);
 
@@ -18,7 +22,8 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config) {
   pc::logger->info("Opening driver for k4a {} ({})\n", device_index, id());
 
   _device = std::make_unique<k4a::device>(k4a::device::open(device_index));
-  _open = true;
+  pc::logger->debug("Device open");
+  
   _serial_number = _device->get_serialnum();
   pc::logger->info("k4a {} Open", device_index);
 
@@ -35,23 +40,25 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config) {
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_30;
   }
 
-  active_count++;
-
-  _capture_loop = std::thread(&K4ADriver::capture_frames, this);
-  // _tracker_loop = std::thread(&K4ADriver::track_bodies, this);
+  _auto_tilt_enabled = config.k4a.auto_tilt;
+  _body_tracking_enabled = config.body.enabled;
 
   start_sensors();
+  _open = true;
+
+  active_count++;
 }
 
 K4ADriver::~K4ADriver() {
   pc::logger->info("Closing driver for k4a {} ({})", device_index, id());
+  active_count--;
+  _open = false;
   _stop_requested = true;
   _capture_loop.join();
-  // _tracker_loop.join();
-  // _tracker.reset();
+  _tracker_loop.join();
+  _imu_loop.join();
   stop_sensors();
   _device->close();
-  active_count--;
 }
 
 void K4ADriver::start_sensors() {
@@ -66,8 +73,8 @@ void K4ADriver::start_sensors() {
   _calibration = _device->get_calibration(_k4a_config.depth_mode,
                                           _k4a_config.color_resolution);
   _transformation = k4a::transformation(_calibration);
-  // _tracker =
-  //     std::make_unique<k4abt::tracker>(k4abt::tracker::create(_calibration));
+  _tracker =
+      std::make_unique<k4abt::tracker>(k4abt::tracker::create(_calibration));
 
   _running = true;
 }
@@ -114,8 +121,7 @@ std::string K4ADriver::id() const { return _serial_number; }
 void K4ADriver::set_paused(bool paused) { _pause_sensor = paused; }
 
 void K4ADriver::enable_body_tracking(const bool enabled) {
-  if (_body_tracking_enabled != enabled)
-    _skeletons.clear();
+  if (!enabled) _skeletons.clear();
   _body_tracking_enabled = enabled;
 }
 
@@ -141,6 +147,7 @@ void K4ADriver::capture_frames() {
       continue;
     }
 
+
     if (!_open || !_running || _pause_sensor) {
       std::this_thread::sleep_for(10ms);
       continue;
@@ -161,7 +168,7 @@ void K4ADriver::capture_frames() {
 	  active_count--;
           try {
             stop_sensors();
-	    // _tracker.reset();
+	    _tracker.reset();
 	    _device.reset();
           } catch (k4a::error e) {
             pc::logger->error(e.what());
@@ -183,9 +190,8 @@ void K4ADriver::capture_frames() {
     k4a::image point_cloud_image;
 
     try {
-      if (is_aligning())
-        run_aligner(capture);
-      // if (_body_tracking_enabled) _tracker.enqueue_capture(capture);
+      if (is_aligning()) run_aligner(capture);
+      if (_body_tracking_enabled) _tracker->enqueue_capture(capture);
 
       auto depth_image = capture.get_depth_image();
       auto color_image = capture.get_color_image();
@@ -220,14 +226,17 @@ void K4ADriver::track_bodies() {
 
   while (!_stop_requested) {
 
+    if (!_body_tracking_enabled || !_tracker || !_open || !_running) {
+      std::this_thread::sleep_for(50ms);
+      continue;
+    }
+
     k4abt_frame_t body_frame_handle = nullptr;
     k4abt::frame body_frame(body_frame_handle);
-    if (!_tracker->pop_result(&body_frame, 50ms))
-      continue;
+    if (!_tracker->pop_result(&body_frame, 50ms)) continue;
 
     const auto body_count = body_frame.get_num_bodies();
-    if (body_count == 0)
-      continue;
+    if (body_count == 0) continue;
 
     auto config = _last_config;
     // TODO make all the following serialize into the config
@@ -311,29 +320,44 @@ void K4ADriver::track_bodies() {
   }
 }
 
-void K4ADriver::apply_auto_tilt(const bool apply) {
-  if (!_running) return;
+void K4ADriver::process_imu() {
+  using namespace std::chrono;
   
-  if (!apply) {
-    _auto_tilt = Eigen::Matrix3f::Identity();
-    return;
-  }
+  constexpr auto imu_sample_frequency = 15ms;
+  constexpr auto imu_sample_count = 50;
 
-  static std::future<void> auto_tilt_task;
+  constexpr auto sample_accelerometer =
+      [](k4a::device &device) -> std::array<float, 3> {
+    k4a_imu_sample_t imu_sample;
+    if (!device.get_imu_sample(&imu_sample, 100ms))
+      return {0, 0, 0};
+    auto accel = imu_sample.acc_sample.v;
+    return {accel[0], accel[1], accel[2]};
+  };
 
-  if (auto_tilt_task.valid() &&
-      auto_tilt_task.wait_for(0ms) != std::future_status::ready) {
-    // compute is still running
-    return;
-  }
+  std::array<std::array<float, 3>, imu_sample_count> accelerometer_samples;
 
-  auto_tilt_task = std::async(std::launch::async, [&] {
-    constexpr auto sample_count = 50;
-    std::vector<std::array<float, 3>> accelerometer_samples;
-    for (int i = 0; i < sample_count; i++) {
-      if (i != 0)
-        std::this_thread::sleep_for(100us);
-      accelerometer_samples.push_back(accelerometer_sample());
+  auto last_update_time = steady_clock::now();
+
+  while (!_stop_requested) {
+
+    if (!_open || !_running || !_auto_tilt_enabled) {
+      std::this_thread::sleep_for(50ms);
+      continue;
+    }
+
+    pc::logger->debug("running auto-tilt loop");
+
+    auto now = steady_clock::now();
+    auto time_since_last_update = duration_cast<milliseconds>(now - last_update_time);
+    if (time_since_last_update < imu_sample_frequency) {
+      auto wait_time = imu_sample_frequency - time_since_last_update;
+      std::this_thread::sleep_for(wait_time);
+    }
+
+    for (int i = 0; i < imu_sample_count; i++) {
+      if (i != 0) std::this_thread::sleep_for(100us);
+      accelerometer_samples[i] = sample_accelerometer(*_device);
     }
 
     // and get the average
@@ -343,8 +367,10 @@ void K4ADriver::apply_auto_tilt(const bool apply) {
         [](const auto &a, const auto &b) {
           return std::array<float, 3>{a[0] + b[0], a[1] + b[1], a[2] + b[2]};
         });
-    std::array<float, 3> accel_average{
-        sum[0] / sample_count, sum[1] / sample_count, sum[2] / sample_count};
+
+    std::array<float, 3> accel_average{sum[0] / imu_sample_count,
+				       sum[1] / imu_sample_count,
+				       sum[2] / imu_sample_count};
 
     // and turn it into a rotation matrix we can apply
     Eigen::Quaternionf q;
@@ -363,7 +389,9 @@ void K4ADriver::apply_auto_tilt(const bool apply) {
     if (tilt_difference > difference_threshold) {
       _auto_tilt = new_tilt;
     }
-  });
+
+    last_update_time = steady_clock::now();
+  }
 }
 
 void K4ADriver::start_alignment() {
@@ -531,16 +559,6 @@ int K4ADriver::get_gain() const {
   _device->get_color_control(K4A_COLOR_CONTROL_GAIN, &result_mode,
                              &result_value);
   return result_value;
-}
-
-std::array<float, 3> K4ADriver::accelerometer_sample() {
-  k4a_imu_sample_t imu_sample;
-
-  if (!_device->get_imu_sample(&imu_sample, 100ms))
-    return {0, 0, 0};
-
-  auto accel = imu_sample.acc_sample.v;
-  return {accel[0], accel[1], accel[2]};
 }
 
 } // namespace pc::devices
