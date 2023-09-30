@@ -255,6 +255,8 @@ void CameraController::dolly(Sdl2Application::MouseScrollEvent &event) {
   else {
     auto &ortho_size = _config.rendering.orthographic_size;
     ortho_size = {ortho_size.x + delta, ortho_size.y + delta};
+    if (ortho_size.x < 0.05f) ortho_size.x = 0.05f;
+    if (ortho_size.y < 0.05f) ortho_size.y = 0.05f;
     reset_projection_matrix();
   }
 }
