@@ -268,7 +268,8 @@ void CameraController::mouse_orbit(Sdl2Application::MouseMoveEvent &event) {
   }
 }
 
-  void CameraController::mouse_translate(Sdl2Application::MouseMoveEvent &event, bool lock_y_axis = false) {
+void CameraController::mouse_translate(Sdl2Application::MouseMoveEvent &event,
+                                       bool lock_y_axis) {
   const auto frame_centre = _frame_size / 2;
   const auto centre_depth = depth_at(frame_centre);
   const Vector3 p = unproject(event.position(), centre_depth);
@@ -286,7 +287,7 @@ void CameraController::mouse_orbit(Sdl2Application::MouseMoveEvent &event) {
 	    _orbit_parent_up_down->transformationMatrix().rotation() * delta;
     add_translation({delta.x(), delta.y(), delta.z()});
   }
-  }
+}
 
 Magnum::Vector3
 CameraController::unproject(const Magnum::Vector2i &window_position,
