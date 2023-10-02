@@ -1,0 +1,7 @@
+{
+  "name": "cuda-noise",
+  "version": "0.2.0",
+  "description": "Library of common noise functions for CUDA kernels ",
+  "homepage": "https://github.com/covexp/cuda-noise",
+  "license": "MIT"
+}

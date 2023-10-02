@@ -37,6 +37,9 @@ list(APPEND LINK_LIBS Eigen3::Eigen)
 find_path(EARCUT_HPP_INCLUDE_DIRS "mapbox/earcut.hpp")
 list(APPEND INCLUDE_DIRS ${EARCUT_HPP_INCLUDE_DIRS})
 
+find_path(CUDA_NOISE_INCLUDE_DIRS "cuda_noise.cuh")
+list(APPEND INCLUDE_DIRS ${CUDA_NOISE_INCLUDE_DIRS})
+
 # ----- Point clouds -----
 
 find_package(bob-pointclouds CONFIG REQUIRED)
