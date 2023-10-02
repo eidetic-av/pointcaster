@@ -1,3 +1,4 @@
+#include "../../logger.h"
 #include "k4a_driver.h"
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
@@ -8,16 +9,46 @@
 
 namespace pc::devices {
 
+typedef thrust::tuple<short3, color, int>
+    point_in_t;
+typedef thrust::tuple<position, color> point_out_t;
+
 __host__ __device__ static inline float as_rad(float deg) {
   constexpr auto mult = 3.141592654f / 180.0f;
   return deg * mult;
 };
 
+struct K4ADriverImplDeviceMemory {
+  thrust::device_vector<short3> incoming_positions;
+  thrust::device_vector<color> incoming_colors;
+  thrust::device_vector<short3> filtered_positions;
+  thrust::device_vector<color> filtered_colors;
+  thrust::device_vector<position> output_positions;
+  thrust::device_vector<color> output_colors;
+  thrust::device_vector<int> indices;
+
+  K4ADriverImplDeviceMemory(std::size_t point_count)
+      : incoming_positions(point_count), incoming_colors(point_count),
+        filtered_positions(point_count), filtered_colors(point_count),
+        output_positions(point_count), output_colors(point_count),
+        indices(point_count) {
+    thrust::sequence(indices.begin(), indices.end());
+  }
+};
+
+void K4ADriver::init_device_memory() {
+  _device_memory = new K4ADriverImplDeviceMemory(incoming_point_count);
+  _device_memory_ready = true;
+  pc::logger->debug("Initialised device memory ({})", id());
+}
+void K4ADriver::free_device_memory() {
+  _device_memory_ready = false;
+  delete _device_memory;
+  pc::logger->debug("Device memory freed ({})", id());
+}
+
 // TODO these GPU kernels can probably be taken outside of the k4a classes and
 // used with any sensor type
-
-typedef thrust::tuple<short3, color, int> point_in_t;
-typedef thrust::tuple<position, color> point_out_t;
 
 struct point_transformer
     : public thrust::unary_function<point_in_t, point_out_t> {
@@ -170,24 +201,18 @@ auto make_transform_pipeline(Iterator begin, size_t count,
 PointCloud
 K4ADriver::point_cloud(const DeviceConfiguration &config) {
 
-  if (!_buffers_updated || !is_open())
+  if (!_device_memory_ready || !_open || !_buffers_updated)
     return _point_cloud;
 
   _last_config = config;
 
-  // TODO all these vectors can be allocated once per K4ADriver instance
-  // (but they can't be member variables because they are CUDA types and won't
-  // compile in non-nvcc TUs that include k4a_driver.h)
-
-  thrust::device_vector<short3> incoming_positions(incoming_point_count);
-  thrust::device_vector<color> incoming_colors(incoming_point_count);
-  thrust::device_vector<short3> filtered_positions(incoming_point_count);
-  thrust::device_vector<color> filtered_colors(incoming_point_count);
-  thrust::device_vector<position> output_positions(incoming_point_count);
-  thrust::device_vector<color> output_colors(incoming_point_count);
-
-  thrust::device_vector<int> indices(incoming_point_count);
-  thrust::sequence(indices.begin(), indices.end());
+  auto& incoming_positions = _device_memory->incoming_positions;
+  auto& incoming_colors = _device_memory->incoming_colors;
+  auto& filtered_positions = _device_memory->filtered_positions;
+  auto& filtered_colors = _device_memory->filtered_colors;
+  auto& output_positions = _device_memory->output_positions;
+  auto& output_colors = _device_memory->output_colors;
+  auto& indices = _device_memory->indices;
 
   std::lock_guard<std::mutex> lock(_buffer_mutex);
 

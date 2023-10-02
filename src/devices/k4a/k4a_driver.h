@@ -26,11 +26,18 @@ using pc::types::float4;
 using K4ASkeleton =
     std::array<std::pair<pc::types::position, float4>, K4ABT_JOINT_COUNT>;
 
+// Forward declaration hides CUDA types, allowing K4ADriver to have CUDA
+// members. This prevents issues when this header is included in TUs not
+// compiled with nvcc.
+struct K4ADriverImplDeviceMemory;
+
 class K4ADriver : public Driver {
 
 public:
   static constexpr uint2 color_resolution{1280, 720};
   static constexpr uint2 depth_resolution{512, 512};
+  static constexpr std::size_t incoming_point_count =
+      depth_resolution.x * depth_resolution.y;
 
   static inline std::atomic<uint> active_count = 0;
 
@@ -75,8 +82,6 @@ public:
   void clear_auto_tilt() { _auto_tilt = Eigen::Matrix3f::Identity(); }
 
 private:
-  static constexpr uint incoming_point_count =
-      depth_resolution.x * depth_resolution.y;
 
   static constexpr uint color_buffer_size =
       incoming_point_count * sizeof(color);
@@ -87,6 +92,11 @@ private:
   static constexpr uint positions_out_size =
       sizeof(position) * incoming_point_count;
   static constexpr uint colors_size = sizeof(color) * incoming_point_count;
+
+  K4ADriverImplDeviceMemory *_device_memory;
+  std::atomic_bool _device_memory_ready{false};
+  void init_device_memory();
+  void free_device_memory();
 
   std::atomic_bool _open{false};
   std::atomic_bool _running{false};

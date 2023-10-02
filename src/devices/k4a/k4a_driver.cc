@@ -43,6 +43,8 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config)
   _auto_tilt_enabled = config.k4a.auto_tilt;
   _body_tracking_enabled = config.body.enabled;
 
+  init_device_memory();
+
   start_sensors();
   _open = true;
 
@@ -59,6 +61,7 @@ K4ADriver::~K4ADriver() {
   _imu_loop.join();
   stop_sensors();
   _device->close();
+  free_device_memory();
 }
 
 void K4ADriver::start_sensors() {
