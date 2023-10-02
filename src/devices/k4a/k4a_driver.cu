@@ -97,17 +97,17 @@ struct point_transformer
     Affine3f rot_transform =
         Translation3f(-alignment_center) * q * Translation3f(alignment_center);
 
+    // specified axis flips
+    if (config.flip_x) pos_f.x() = -pos_f.x();
+    if (config.flip_y) pos_f.y() = -pos_f.y();
+    if (config.flip_z) pos_f.z() = -pos_f.z();
+
     // perform alignment transformation along with manual rotation
     pos_f =
         (rot_transform * pos_f) + alignment_center + aligned_position_offset;
 
     // perform our manual translation
     pos_f += Vector3f(config.offset.x, config.offset.y, config.offset.z);
-
-    // specified axis flips
-    if (config.flip_x) pos_f.x() = -pos_f.x();
-    if (config.flip_y) pos_f.y() = -pos_f.y();
-    if (config.flip_z) pos_f.z() = -pos_f.z();
 
     // and scaling
     pos_f *= config.scale;
