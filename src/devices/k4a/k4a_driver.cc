@@ -32,9 +32,9 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config)
   _k4a_config.color_resolution = K4A_COLOR_RESOLUTION_720P;
   _k4a_config.synchronized_images_only = true;
 
-  _k4a_config.depth_mode = config.k4a.depth_mode;
+  _k4a_config.depth_mode = (k4a_depth_mode_t)config.k4a.depth_mode;
 
-  if (config.k4a.depth_mode == K4A_DEPTH_MODE_WFOV_UNBINNED) {
+  if (config.k4a.depth_mode == (int)K4A_DEPTH_MODE_WFOV_UNBINNED) {
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_15;
   } else {
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_30;
@@ -73,7 +73,7 @@ void K4ADriver::start_sensors() {
   _device->start_imu();
   pc::logger->debug("Started imu: {}", id());
 
-  _calibration = _device->get_calibration(_k4a_config.depth_mode,
+  _calibration = _device->get_calibration((k4a_depth_mode_t)_k4a_config.depth_mode,
                                           _k4a_config.color_resolution);
   _transformation = k4a::transformation(_calibration);
   _tracker =
@@ -490,8 +490,8 @@ void K4ADriver::run_aligner(const k4a::capture &frame) {
 }
 
 void K4ADriver::set_depth_mode(const k4a_depth_mode_t mode) {
-  _k4a_config.depth_mode = mode;
-  if (mode == K4A_DEPTH_MODE_WFOV_UNBINNED) {
+  _k4a_config.depth_mode = (int)mode;
+  if (mode == (int)K4A_DEPTH_MODE_WFOV_UNBINNED) {
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_15;
   } else {
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_30;

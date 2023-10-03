@@ -23,7 +23,7 @@ K4ADevice::K4ADevice(DeviceConfiguration config) : Device(config) {
   // _config.k4a.gain = driver->get_gain();
 
   count++;
-  // declare_parameters(_driver->id(), _config);
+  declare_parameters(_driver->id(), _config);
 }
 
 K4ADevice::~K4ADevice() {

@@ -72,6 +72,7 @@
 #include "radio/radio.h"
 #include "snapshots.h"
 #include "sphere_renderer.h"
+#include "tween/tween_manager.h"
 #include "uuid.h"
 #include "wireframe_objects.h"
 
@@ -857,7 +858,7 @@ void PointCaster::draw_main_viewport() {
 				    window_size.y - tab_bar_height};
 	  camera_controller->viewport_size = frame_space;
 
-          if (scale_mode == ScaleMode::Span) {
+          if (scale_mode == (int)ScaleMode::Span) {
 
             auto image_pos = ImGui::GetCursorPos();
             ImGuiIntegration::image(camera_controller->color_frame(),
@@ -871,7 +872,7 @@ void PointCaster::draw_main_viewport() {
                                       {frame_space.x(), frame_space.y()});
 	      draw_frame_labels(image_pos);
             }
-	  } else if (scale_mode == ScaleMode::Letterbox) {
+	  } else if (scale_mode == (int)ScaleMode::Letterbox) {
 
             float width, height, horizontal_offset, vertical_offset;
 
@@ -990,12 +991,10 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
    }, camera_config.show_window);
 
   draw_button(ICON_FA_ENVELOPE, [&] {
-	if (camera_config.rendering.scale_mode == ScaleMode::Span)
-	  camera_config.rendering.scale_mode = ScaleMode::Letterbox;
-	else camera_config.rendering.scale_mode = ScaleMode::Span;
-   }, camera_config.rendering.scale_mode == ScaleMode::Letterbox);
-
-  const auto controls_window_size = ImGui::GetWindowSize();
+    if (camera_config.rendering.scale_mode == (int)ScaleMode::Span)
+      camera_config.rendering.scale_mode = (int)ScaleMode::Letterbox;
+    else camera_config.rendering.scale_mode = (int)ScaleMode::Span;
+  }, camera_config.rendering.scale_mode == (int)ScaleMode::Letterbox);
 
   ImGui::SetWindowPos({viewport_window_pos.x + control_inset.x,
 		       viewport_window_pos.y + control_inset.y});

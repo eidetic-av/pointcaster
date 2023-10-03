@@ -24,7 +24,7 @@ struct BodyTrackingConfiguration {
 
 struct K4AConfiguration {
   bool unfolded = false;
-  k4a_depth_mode_t depth_mode = K4A_DEPTH_MODE_NFOV_UNBINNED;
+  int depth_mode = (int)K4A_DEPTH_MODE_NFOV_UNBINNED;
   int exposure = 10000;
   int brightness = 128;
   int contrast = 5;
@@ -42,7 +42,7 @@ struct K4AConfiguration {
 	       (&Self::exposure, "gain")
 	       (&Self::auto_tilt, "auto_tilt"))
 
-  using MemberTypes = pc::reflect::type_list<bool, k4a_depth_mode_t, int, int,
+  using MemberTypes = pc::reflect::type_list<bool, int, int, int,
 					     int, int, int, bool>;
   static const std::size_t MemberCount = 8;
 };

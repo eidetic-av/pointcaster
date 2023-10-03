@@ -83,7 +83,7 @@ CameraController::CameraController(Magnum::Platform::Application *app,
   pc::logger->info("Initialised Camera Controller {} with id {}", _config.name,
                    _config.id);
 
-  // declare_parameters(name(), _config);
+  declare_parameters(name(), _config);
 }
 
 CameraController::~CameraController() { CameraController::count--; }
@@ -95,7 +95,7 @@ void CameraController::setup_frame(Vector2i frame_size) {
       static_cast<int>(frame_size.y() / _app->dpiScaling().y())};
 
   auto aspect_ratio = frame_size.x() / static_cast<float>(frame_size.y());
-  if (_config.rendering.scale_mode == ScaleMode::Span &&
+  if (_config.rendering.scale_mode == (int)ScaleMode::Span &&
       viewport_size.has_value()) {
     // automatically set frame height based on size of viewport
     aspect_ratio = viewport_size->x() / viewport_size->y();
@@ -350,12 +350,12 @@ void CameraController::draw_imgui_controls() {
     auto &rendering = _config.rendering;
 
     auto current_scale_mode = rendering.scale_mode;
-    if (current_scale_mode == ScaleMode::Letterbox) {
+    if (current_scale_mode == (int)ScaleMode::Letterbox) {
 
       vector_table(name(), "rendering.resolution", rendering.resolution, 2,
                    7680, pc::camera::defaults::rendering_resolution);
 
-    } else if (current_scale_mode == ScaleMode::Span) {
+    } else if (current_scale_mode == (int)ScaleMode::Span) {
       // disable setting y resolution manually in span mode,
       // it's inferred from the x resolution and window size
       vector_table(name(), "rendering.resolution", rendering.resolution, 2,
@@ -367,10 +367,10 @@ void CameraController::draw_imgui_controls() {
     const char *options[] = {"Span", "Letterbox"};
     ImGui::Combo("Scale mode", &scale_mode_i, options,
                  static_cast<int>(ScaleMode::Count));
-    rendering.scale_mode = static_cast<ScaleMode>(scale_mode_i);
+    rendering.scale_mode = scale_mode_i;
     if (rendering.scale_mode != current_scale_mode) {
       const auto aspect_ratio_policy =
-          rendering.scale_mode == ScaleMode::Letterbox
+	rendering.scale_mode == (int)ScaleMode::Letterbox
               ? SceneGraph::AspectRatioPolicy::NotPreserved
               : SceneGraph::AspectRatioPolicy::Extend;
       _camera->setAspectRatioPolicy(aspect_ratio_policy);
