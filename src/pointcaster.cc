@@ -67,10 +67,10 @@
 #include "devices/device.h"
 #include "devices/usb.h"
 #include "gui/widgets.h"
+#include "transformers/global_transformer.h"
 #include "point_cloud_renderer.h"
 #include "radio/radio.h"
 #include "snapshots.h"
-#include "tween/tween_manager.h"
 #include "sphere_renderer.h"
 #include "uuid.h"
 #include "wireframe_objects.h"
@@ -102,6 +102,7 @@ using namespace pc::radio;
 using namespace pc::snapshots;
 using namespace pc::midi;
 using namespace pc::tween;
+using namespace pc::transformers;
 using namespace Magnum;
 using namespace Math::Literals;
 
@@ -146,6 +147,8 @@ protected:
   std::unique_ptr<SphereRenderer> _sphere_renderer;
 
   std::unique_ptr<WireframeGrid> _ground_grid;
+
+  std::unique_ptr<GlobalTransformer> _global_transformer;
 
   std::unique_ptr<Snapshots> _snapshots_context;
 
@@ -418,6 +421,9 @@ PointCaster::PointCaster(const Arguments &args)
     _sphere_mesh.setInstanceCount(_sphere_instance_data.size());
   }
 
+  // initialise point cloud transformers
+  _global_transformer = std::make_unique<GlobalTransformer>(_session.global_transformers);
+
   // Start the timer, loop at 144 Hz max
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
@@ -561,7 +567,9 @@ void PointCaster::render_cameras() {
     // synthesise_point_cloud function 
     // - make sure to cache already synthesised configurations
     if (points.empty()) {
-      points = devices::synthesized_point_cloud();
+
+      TransformerList transformer_list = {*_global_transformer};
+      points = devices::synthesized_point_cloud(transformer_list);
       if (rendering_config.snapshots)
         points += snapshots::point_cloud();
       _point_cloud_renderer->points = points;
@@ -650,7 +658,7 @@ void PointCaster::draw_menu_bar() {
           window_toggle = !window_toggle;
       };
 
-      window_item("Transform", "t", _session.layout.show_global_transform_window);
+      window_item("Global Transform", "g", _session.layout.show_global_transform_window);
       window_item("Devices", "d", _session.layout.show_devices_window);
       window_item("RenderStats", "f", _session.layout.show_stats);
       window_item("MQTT", "m", _session.mqtt.show_window);
@@ -1135,7 +1143,7 @@ void PointCaster::drawEvent() {
     if (_session.layout.show_snapshots_window)
       _snapshots_context->draw_imgui_window();
     if (_session.layout.show_global_transform_window)
-      pc::devices::draw_global_controls();
+      _global_transformer->draw_imgui_window();
 #if WITH_MQTT
     if (_session.mqtt.show_window)
       MqttClient::instance()->draw_imgui_window();
@@ -1235,7 +1243,12 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     break;
   }
   case KeyEvent::Key::G: {
-    _session.layout.hide_ui = !_session.layout.hide_ui;
+    if (event.modifiers() == InputEvent::Modifier::Shift) {
+      _session.layout.hide_ui = !_session.layout.hide_ui;
+    } else {
+      _session.layout.show_global_transform_window =
+          !_session.layout.show_global_transform_window;
+    }
     break;
   }
   case KeyEvent::Key::M: {
