@@ -38,9 +38,8 @@ static constexpr MinMax<float> orthographic_clipping = {-15, 15};
 } // namespace defaults
 
 struct TransformConfiguration {
-  bool unfolded;
+  bool unfolded = true;
   bool show_anchor = false;
-
   float distance = defaults::distance;
   Float2 orbit = defaults::orbit;
   float roll = defaults::roll;
@@ -48,6 +47,7 @@ struct TransformConfiguration {
 
   DERIVE_SERDE(TransformConfiguration,
 	       (&Self::unfolded, "unfolded")
+	       (&Self::show_anchor, "show_anchor")
 	       (&Self::distance, "distance")
 	       (&Self::orbit, "orbit")
 	       (&Self::roll, "roll")
@@ -63,9 +63,7 @@ struct CameraConfiguration {
   bool show_window;
   float fov = defaults::fov;
   int scroll_precision = 1;
-
   TransformConfiguration transform;
-
   PointCloudRendererConfiguration rendering;
   analysis::Analyser2DConfiguration analysis;
 
