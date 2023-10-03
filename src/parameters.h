@@ -122,7 +122,7 @@ void declare_parameters(std::string_view parameter_id, T &complex_value) {
   const auto member_names = type_info.member_names().members();
 
   // create an integer sequence to iterate through the type's members at
-  // compile-time... this isrequired because the index to the member is used
+  // compile-time... this is required because the index to the member is used
   // inside a template argument
   constexpr auto index_sequence = std::make_index_sequence<T::MemberCount>{};
 
