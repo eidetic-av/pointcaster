@@ -15,6 +15,7 @@
 
 namespace pc::devices {
 
+using pc::transformers::TransformerList;
 using pc::types::color;
 using pc::types::Float3;
 using pc::types::Float4;
@@ -24,7 +25,7 @@ using pc::types::Short3;
 using pc::types::Uint2;
 
 using K4ASkeleton =
-    std::array<std::pair<pc::types::position, float4>, K4ABT_JOINT_COUNT>;
+    std::array<std::pair<pc::types::position, Float4>, K4ABT_JOINT_COUNT>;
 
 // Forward declaration hides CUDA types, allowing K4ADriver to have CUDA
 // members. This prevents issues when this header is included in TUs not
@@ -55,7 +56,8 @@ public:
 
   void set_paused(bool paused) override;
 
-  PointCloud point_cloud(const DeviceConfiguration &config) override;
+  PointCloud point_cloud(const DeviceConfiguration &config,
+			 TransformerList transformers = {}) override;
 
   void start_alignment() override;
   bool is_aligning() override;

@@ -202,6 +202,9 @@ set(SOURCE_FILES
   src/uuid.cc
   src/wtf/wtf.cc
   src/tween/tween_manager.cc
+  src/transformers/global_transformer.cc
+  src/transformers/global_transformer.cu
+  src/transformers/noise_transformer.cc
   ${POINTCASTER_SRC}
   ${OPTIONAL_SRC})
 

@@ -5,6 +5,7 @@
 #endif
 
 #include "../pointer.h"
+#include "../transformers/global_transformer.h"
 #include "device_config.h"
 #include "driver.h"
 #include <Corrade/Containers/Pointer.h>
@@ -40,7 +41,10 @@ public:
   void reattach() { _driver->reattach(); }
 
   bool broadcast_enabled() { return _enable_broadcast; }
-  auto point_cloud() { return _driver->point_cloud(_config); };
+
+  auto point_cloud(pc::transformers::TransformerList transformers = {}) {
+    return _driver->point_cloud(_config, transformers);
+  };
 
   const DeviceConfiguration config() { return _config; };
 
@@ -63,7 +67,8 @@ protected:
   }
 };
 
-extern pc::types::PointCloud synthesized_point_cloud();
+extern pc::types::PointCloud
+synthesized_point_cloud(pc::transformers::TransformerList transformers = {});
 
 // TODO make all the k4a stuff more generic
 using pc::types::Float4;

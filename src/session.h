@@ -6,6 +6,7 @@
 #include "mqtt/mqtt_client_config.h"
 #include "midi/midi_client_config.h"
 #include "radio/radio_config.h"
+#include "transformers/transformers.h"
 
 #include <serdepp/serde.hpp>
 
@@ -46,6 +47,8 @@ struct PointCasterSession {
   MqttClientConfiguration mqtt;
   midi::MidiClientConfiguration midi;
   PointCasterSessionLayout layout;
+  transformers::TransformerConfiguration global_transformers;
+
 
   DERIVE_SERDE(
       PointCasterSession,
@@ -56,6 +59,7 @@ struct PointCasterSession {
       (&Self::usb, "usb")
       (&Self::mqtt, "mqtt")
       (&Self::midi, "midi")
+      (&Self::global_transformers, "global_transformers")
       (&Self::layout, "layout"))
 };
 

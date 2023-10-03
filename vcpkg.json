@@ -11,6 +11,7 @@
     "serdepp",
     "azure-kinect-sensor-sdk",
     "cuda",
+    "cuda-noise",
     "corrade",
     "eigen3",
     "fmt",

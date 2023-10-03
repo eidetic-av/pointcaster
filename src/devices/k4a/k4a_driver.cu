@@ -198,8 +198,8 @@ auto make_transform_pipeline(Iterator begin, size_t count,
   // std::forward<Transformations>(transformations)...);
 }
 
-PointCloud
-K4ADriver::point_cloud(const DeviceConfiguration &config) {
+PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
+				  TransformerList transformers_list) {
 
   if (!_device_memory_ready || !_open || !_buffers_updated)
     return _point_cloud;
@@ -221,8 +221,8 @@ K4ADriver::point_cloud(const DeviceConfiguration &config) {
   thrust::copy(_colors_buffer.begin(), _colors_buffer.end(),
                incoming_colors.begin());
 
-  // // zip position and color buffers together so we can run our algorithms on
-  // // the dataset as a single point-cloud
+  // zip position and color buffers together so we can run our algorithms on
+  // the dataset as a single point-cloud
   auto incoming_points_begin = thrust::make_zip_iterator(thrust::make_tuple(
       incoming_positions.begin(), incoming_colors.begin(), indices.begin()));
   auto incoming_points_end = thrust::make_zip_iterator(thrust::make_tuple(
@@ -243,13 +243,18 @@ K4ADriver::point_cloud(const DeviceConfiguration &config) {
 		    point_transformer(config, _alignment_center,
 				      _aligned_position_offset, _auto_tilt));
 
-  // wait for the kernels to complete
-  cudaDeviceSynchronize();
-
   // we can determine the output count using the resulting output iterator
   // from running the kernels
   auto output_point_count =
       std::distance(filtered_points_begin, filtered_points_end);
+
+  for (auto &transformers : transformers_list) {
+    transformers.get().run_transformers(output_points_begin,
+					output_points_begin + output_point_count);
+  }
+
+  // wait for the kernels to complete
+  cudaDeviceSynchronize();
 
   // copy back to our output point-cloud on the CPU
   auto output_positions_size = sizeof(position) * output_point_count;
