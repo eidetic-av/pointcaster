@@ -58,14 +58,14 @@ public:
   void set_distance(const float metres);
   void add_distance(const float metres);
 
-  void set_orbit(const float2 degrees);
-  void add_orbit(const float2 degrees);
+  void set_orbit(const Float2 degrees);
+  void add_orbit(const Float2 degrees);
 
   void set_roll(const float degrees);
   void add_roll(const float degrees);
 
-  void set_translation(const float3 metres);
-  void add_translation(const float3 metres);
+  void set_translation(const Float3 metres);
+  void add_translation(const Float3 metres);
 
   void dolly(Magnum::Platform::Sdl2Application::MouseScrollEvent& event);
   void mouse_orbit(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);

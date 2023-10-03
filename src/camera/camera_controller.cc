@@ -196,14 +196,14 @@ void CameraController::add_distance(const float metres) {
   _config.transform.distance = camera_transform_matrix.translation().z();
 }
 
-void CameraController::set_orbit(const float2 degrees) {
+void CameraController::set_orbit(const Float2 degrees) {
   _orbit_parent_left_right->setTransformation(
       Matrix4::rotationY(Deg{degrees.x}));
   _orbit_parent_up_down->setTransformation(Matrix4::rotationX(Deg{-degrees.y}));
   _config.transform.orbit = {degrees.x, degrees.y};
 }
 
-void CameraController::add_orbit(const float2 degrees) {
+void CameraController::add_orbit(const Float2 degrees) {
   _orbit_parent_left_right->setTransformation(
       _orbit_parent_left_right->transformationMatrix() *
       Matrix4::rotationY(Deg{degrees.x}));
@@ -232,13 +232,13 @@ void CameraController::add_roll(const float degrees) {
   _config.transform.roll += degrees;
 }
 
-void CameraController::set_translation(const float3 metres) {
+void CameraController::set_translation(const Float3 metres) {
   _anchor->setTransformation(
       Matrix4::translation({metres.x, metres.y, metres.z}));
   _config.transform.translation = metres;
 }
 
-void CameraController::add_translation(const float3 metres) {
+void CameraController::add_translation(const Float3 metres) {
   auto transform = _anchor->transformationMatrix();
   transform.translation() += {metres.x, metres.y, metres.z};
   _anchor->setTransformation(transform);
@@ -379,8 +379,8 @@ void CameraController::draw_imgui_controls() {
 
     auto was_ortho = rendering.orthographic;
     if (ImGui::Checkbox("rendering.orthographic", &rendering.orthographic)) {
-      minMax<float> from;
-      minMax<float> to;
+      MinMax<float> from;
+      MinMax<float> to;
       if (was_ortho && !rendering.orthographic) {
 	from = defaults::orthographic_clipping;
 	to = defaults::perspective_clipping;
@@ -438,7 +438,7 @@ void CameraController::draw_imgui_controls() {
                    {"width", "height"});
 
       vector_table(name(), "analysis.binary_threshold",
-                   analysis.binary_threshold, 1, 255, int2{50, 255}, {},
+                   analysis.binary_threshold, 1, 255, Int2{50, 255}, {},
                    {"min", "max"});
 
       slider(name(), "analysis.blur_size", analysis.blur_size, 0, 40, 1);

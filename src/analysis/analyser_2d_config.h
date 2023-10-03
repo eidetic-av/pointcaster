@@ -5,8 +5,8 @@
 
 namespace pc::analysis {
 
-using pc::types::int2;
-using pc::types::float2;
+using pc::types::Int2;
+using pc::types::Float2;
 
 struct CannyEdgeConfiguration {
   bool enabled = false;
@@ -94,8 +94,8 @@ struct OpticalFlowConfiguration {
 
 struct OutputConfiguration {
   bool unfolded = false;
-  float2 scale = {1.0f, 1.0f};
-  float2 offset = {0.0f, 0.0f};
+  Float2 scale = {1.0f, 1.0f};
+  Float2 offset = {0.0f, 0.0f};
 
   DERIVE_SERDE(OutputConfiguration,
                (&Self::unfolded, "unfolded")
@@ -107,8 +107,8 @@ struct Analyser2DConfiguration {
   bool unfolded = false;
   bool enabled = false;
   bool use_cuda = false;
-  int2 resolution = {480, 270};
-  int2 binary_threshold = {50, 255};
+  Int2 resolution = {480, 270};
+  Int2 binary_threshold = {50, 255};
   int blur_size = 1;
 
   CannyEdgeConfiguration canny;

@@ -114,9 +114,9 @@ void Device::draw_imgui_controls() {
       // ImGui can't handle shorts, so we need to use int's then convert
       // back TODO there's probably a better way to do it by defining
       // implicit conversions??
-      pc::types::minMax<int> crop_x_in{_config.crop_x.min, _config.crop_x.max};
-      pc::types::minMax<int> crop_y_in{_config.crop_y.min, _config.crop_y.max};
-      pc::types::minMax<int> crop_z_in{_config.crop_z.min, _config.crop_z.max};
+      pc::types::MinMax<int> crop_x_in{_config.crop_x.min, _config.crop_x.max};
+      pc::types::MinMax<int> crop_y_in{_config.crop_y.min, _config.crop_y.max};
+      pc::types::MinMax<int> crop_z_in{_config.crop_z.min, _config.crop_z.max};
       ImGui::SliderInt2(label("x", 1).c_str(), crop_x_in.arr(), -10000, 10000);
       ImGui::SliderInt2(label("y", 1).c_str(), crop_y_in.arr(), -10000, 10000);
       ImGui::SliderInt2(label("z", 1).c_str(), crop_z_in.arr(), -10000, 10000);
@@ -130,7 +130,7 @@ void Device::draw_imgui_controls() {
       pc::gui::vector_table(id(), "Position", _config.offset, -3000.0f, 3000.0f,
                             0.0f);
 
-      pc::types::float3 rotation = _config.rotation_deg;
+      pc::types::Float3 rotation = _config.rotation_deg;
       if (pc::gui::vector_table(id(), "Rotation", rotation, -180.0f, 180.0f,
                                 0.0f)) {
         _config.rotation_deg = rotation;

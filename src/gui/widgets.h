@@ -20,11 +20,11 @@
 
 namespace pc::gui {
 
-using pc::types::float2;
-using pc::types::float3;
-using pc::types::float4;
-using pc::types::int2;
-using pc::types::int3;
+using pc::types::Float2;
+using pc::types::Float3;
+using pc::types::Float4;
+using pc::types::Int2;
+using pc::types::Int3;
 
 /* Must be called at the start of each imgui frame */
 void begin_gui_helpers();

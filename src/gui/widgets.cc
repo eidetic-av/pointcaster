@@ -248,33 +248,33 @@ bool vector_table(
 }
 
 template bool vector_table(std::string_view group_id,
-                           std::string_view parameter_id, int2 &vec, int min,
+                           std::string_view parameter_id, Int2 &vec, int min,
                            int max, std::array<int, 2> reset_values,
                            std::array<bool, 2> disabled,
                            std::array<std::string, 2> labels);
 
 template bool vector_table(std::string_view group_id,
-                           std::string_view parameter_id, int3 &vec, int min,
+                           std::string_view parameter_id, Int3 &vec, int min,
                            int max, std::array<int, 3> reset_values,
                            std::array<bool, 3> disabled,
                            std::array<std::string, 3> labels);
 
 template bool vector_table(std::string_view group_id,
-                           std::string_view parameter_id, float2 &vec,
+                           std::string_view parameter_id, Float2 &vec,
                            float min, float max,
                            std::array<float, 2> reset_values,
                            std::array<bool, 2> disabled,
                            std::array<std::string, 2> labels);
 
 template bool vector_table(std::string_view group_id,
-                           std::string_view parameter_id, float3 &vec,
+                           std::string_view parameter_id, Float3 &vec,
                            float min, float max,
                            std::array<float, 3> reset_values,
                            std::array<bool, 3> disabled,
                            std::array<std::string, 3> labels);
 
 template bool vector_table(std::string_view group_id,
-                           std::string_view parameter_id, float4 &vec,
+                           std::string_view parameter_id, Float4 &vec,
                            float min, float max,
                            std::array<float, 4> reset_values,
                            std::array<bool, 4> disabled,

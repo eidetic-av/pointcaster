@@ -16,12 +16,12 @@
 namespace pc::devices {
 
 using pc::types::color;
+using pc::types::Float3;
+using pc::types::Float4;
 using pc::types::PointCloud;
 using pc::types::position;
-using pc::types::short3;
-using pc::types::uint2;
-using pc::types::float3;
-using pc::types::float4;
+using pc::types::Short3;
+using pc::types::Uint2;
 
 using K4ASkeleton =
     std::array<std::pair<pc::types::position, float4>, K4ABT_JOINT_COUNT>;
@@ -34,8 +34,8 @@ struct K4ADriverImplDeviceMemory;
 class K4ADriver : public Driver {
 
 public:
-  static constexpr uint2 color_resolution{1280, 720};
-  static constexpr uint2 depth_resolution{512, 512};
+  static constexpr Uint2 color_resolution{1280, 720};
+  static constexpr Uint2 depth_resolution{512, 512};
   static constexpr std::size_t incoming_point_count =
       depth_resolution.x * depth_resolution.y;
 
@@ -86,9 +86,9 @@ private:
   static constexpr uint color_buffer_size =
       incoming_point_count * sizeof(color);
   static constexpr uint positions_buffer_size =
-      incoming_point_count * sizeof(short3);
+      incoming_point_count * sizeof(Short3);
   static constexpr uint positions_in_size =
-      sizeof(short3) * incoming_point_count;
+      sizeof(Short3) * incoming_point_count;
   static constexpr uint positions_out_size =
       sizeof(position) * incoming_point_count;
   static constexpr uint colors_size = sizeof(color) * incoming_point_count;
@@ -118,7 +118,7 @@ private:
   std::mutex _buffer_mutex;
   std::atomic<bool> _buffers_updated;
 
-  std::array<short3, incoming_point_count> _positions_buffer;
+  std::array<Short3, incoming_point_count> _positions_buffer;
   std::array<color, incoming_point_count> _colors_buffer;
 
   bool _body_tracking_enabled;

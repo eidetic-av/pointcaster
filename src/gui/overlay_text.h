@@ -5,11 +5,11 @@
 
 namespace pc::gui {
 
-using pc::types::int2;
+using pc::types::Int2;
 
 struct OverlayText {
   std::string text;
-  int2 position;
+  Int2 position;
   float scale = 1.0f;
 };
 

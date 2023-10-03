@@ -8,14 +8,14 @@
 
 namespace pc::k4a_utils {
 
-using pc::types::float3;
-using pc::types::float4;
+using pc::types::Float3;
+using pc::types::Float4;
 
-inline std::array<float3, 32>
+inline std::array<Float3, 32>
 calculateAverageJointPositions(const std::vector<k4abt_skeleton_t> &skeletons) {
-  std::array<float3, 32> averages;
+  std::array<Float3, 32> averages;
   for (int joint_id = 0; joint_id < 32; joint_id++) {
-    float3 sum{0, 0, 0};
+    Float3 sum{0, 0, 0};
     for (const auto &skeleton : skeletons) {
       const auto joint = skeleton.joints[joint_id];
       const auto position = joint.position.xyz;
@@ -30,11 +30,11 @@ calculateAverageJointPositions(const std::vector<k4abt_skeleton_t> &skeletons) {
   return averages;
 }
 
-inline std::array<float4, 32> calculateAverageJointOrientations(
+inline std::array<Float4, 32> calculateAverageJointOrientations(
     const std::vector<k4abt_skeleton_t> &skeletons) {
-  std::array<float4, 32> averages;
+  std::array<Float4, 32> averages;
   for (int joint_id = 0; joint_id < 32; joint_id++) {
-    float4 sum{0, 0, 0, 0};
+    Float4 sum{0, 0, 0, 0};
     for (const auto &skeleton : skeletons) {
       const auto joint = skeleton.joints[joint_id];
       const auto orientation = joint.orientation.wxyz;

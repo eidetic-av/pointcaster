@@ -66,9 +66,9 @@ protected:
 extern pc::types::PointCloud synthesized_point_cloud();
 
 // TODO make all the k4a stuff more generic
-using pc::types::float4;
+using pc::types::Float4;
 using K4ASkeleton =
-    std::array<std::pair<pc::types::position, float4>, K4ABT_JOINT_COUNT>;
+    std::array<std::pair<pc::types::position, Float4>, K4ABT_JOINT_COUNT>;
 extern std::vector<K4ASkeleton> scene_skeletons();
 
 extern pc::types::position global_translate;

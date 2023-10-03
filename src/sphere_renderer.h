@@ -13,7 +13,7 @@ namespace pc {
 
   class SphereRenderer {
   public:
-    pc::types::float3 position {0, 0, 0};
+    pc::types::Float3 position {0, 0, 0};
     float radius = 3.0f;
 
     Magnum::GL::Mesh mesh;

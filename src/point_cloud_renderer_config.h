@@ -4,9 +4,9 @@
 #include "structs.h"
 #include <array>
 
-using pc::types::int2;
-using pc::types::float2;
-using pc::types::minMax;
+using pc::types::Int2;
+using pc::types::Float2;
+using pc::types::MinMax;
 
 enum class ScaleMode {
   Span, Letterbox,
@@ -20,12 +20,12 @@ enum class LetterboxMode {
 
 struct PointCloudRendererConfiguration {
   bool unfolded = false;
-  int2 resolution{3840, 2160};
+  Int2 resolution{3840, 2160};
   ScaleMode scale_mode = ScaleMode::Span;
   LetterboxMode letterbox_mode = LetterboxMode::Aspect16x9;
   bool orthographic = false;
-  float2 orthographic_size = {5, 5};
-  minMax<float> clipping = {0.001f, 200};
+  Float2 orthographic_size = {5, 5};
+  MinMax<float> clipping = {0.001f, 200};
   float point_size = 0.0015f;
   bool ground_grid = true;
   bool skeletons = true;
@@ -45,7 +45,7 @@ struct PointCloudRendererConfiguration {
 	       (&Self::snapshots, "snapshots"))
 
   using MemberTypes =
-      pc::reflect::type_list<bool, int2, ScaleMode, LetterboxMode, bool, float2,
-			     minMax<float>, float, bool, bool, bool>;
+      pc::reflect::type_list<bool, Int2, ScaleMode, LetterboxMode, bool, Float2,
+			     MinMax<float>, float, bool, bool, bool>;
   static const std::size_t MemberCount = 11;
 };

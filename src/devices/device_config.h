@@ -6,9 +6,9 @@
 
 namespace pc::devices {
 
-using pc::types::float3;
-using pc::types::minMax;
-using pc::types::short3;
+using pc::types::Float3;
+using pc::types::MinMax;
+using pc::types::Short3;
 
 struct BodyTrackingConfiguration {
   bool unfolded = false;
@@ -52,11 +52,11 @@ struct DeviceConfiguration {
   bool flip_x = false;
   bool flip_y = false;
   bool flip_z = false;
-  minMax<short> crop_x{-10000, 10000};
-  minMax<short> crop_y{-10000, 10000};
-  minMax<short> crop_z{-10000, 10000};
-  float3 offset{0, 0, 0};
-  float3 rotation_deg{0, 0, 0};
+  MinMax<short> crop_x{-10000, 10000};
+  MinMax<short> crop_y{-10000, 10000};
+  MinMax<short> crop_z{-10000, 10000};
+  Float3 offset{0, 0, 0};
+  Float3 rotation_deg{0, 0, 0};
   float scale = 1;
   int sample = 1;
 
@@ -71,8 +71,8 @@ struct DeviceConfiguration {
 	       (&Self::sample, "sample") (&Self::body, "body") (&Self::k4a, "k4a"))
 
   using MemberTypes = pc::reflect::type_list<
-      bool, bool, bool, bool, minMax<short>, minMax<short>, minMax<short>,
-      float3, float3, float, int, BodyTrackingConfiguration, K4AConfiguration>;
+      bool, bool, bool, bool, MinMax<short>, MinMax<short>, MinMax<short>,
+      Float3, Float3, float, int, BodyTrackingConfiguration, K4AConfiguration>;
   static const std::size_t MemberCount = 13;
 };
 

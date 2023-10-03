@@ -9,7 +9,7 @@
 
 namespace pc::devices {
 
-typedef thrust::tuple<short3, color, int>
+typedef thrust::tuple<Short3, color, int>
     point_in_t;
 typedef thrust::tuple<position, color> point_out_t;
 
@@ -19,9 +19,9 @@ __host__ __device__ static inline float as_rad(float deg) {
 };
 
 struct K4ADriverImplDeviceMemory {
-  thrust::device_vector<short3> incoming_positions;
+  thrust::device_vector<Short3> incoming_positions;
   thrust::device_vector<color> incoming_colors;
-  thrust::device_vector<short3> filtered_positions;
+  thrust::device_vector<Short3> filtered_positions;
   thrust::device_vector<color> filtered_colors;
   thrust::device_vector<position> output_positions;
   thrust::device_vector<color> output_colors;
@@ -74,7 +74,7 @@ struct point_transformer
     // we reinterpret our point in Eigen containers so we have easy maths
     using namespace Eigen;
 
-    short3 pos = thrust::get<0>(point);
+    Short3 pos = thrust::get<0>(point);
 
     // we put our position into a float vector because it allows us to
     // transform it by other float types (e.g. matrices, quaternions)
@@ -133,7 +133,7 @@ struct point_filter {
     return true;
   }
 
-  __device__ bool check_bounds(short3 value) const {
+  __device__ bool check_bounds(Short3 value) const {
     if (value.x < config.crop_x.min) return false;
     if (value.x > config.crop_x.max) return false;
     if (value.y < config.crop_y.min) return false;

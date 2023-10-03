@@ -5,7 +5,7 @@
 
 namespace pc::types {
 
-template <typename T> struct minMax {
+template <typename T> struct MinMax {
   T min;
   T max;
   T *arr() { return &min; }
@@ -16,41 +16,41 @@ template <typename T> struct minMax {
       return false;
     return true;
   }
-  DERIVE_SERDE(minMax<T>,
+  DERIVE_SERDE(MinMax<T>,
 	       (&Self::min, "min")(&Self::max, "max"))
 };
 
 template <typename T> struct VectorSize;
 
-struct float2 {
+struct Float2 {
   using vector_type = float;
   vector_type x, y = 0;
   vector_type& operator[](std::size_t index) {
     switch(index) {
       case 0: return x;
       case 1: return y;
-      default: throw std::out_of_range("Index out of range for float3");
+      default: throw std::out_of_range("Index out of range for Float3");
     }
   }
   const vector_type& operator[](std::size_t index) const {
     switch(index) {
       case 0: return x;
       case 1: return y;
-      default: throw std::out_of_range("Index out of range for float3");
+      default: throw std::out_of_range("Index out of range for Float3");
     }
   }
-  bool operator==(const float2 other) const {
+  bool operator==(const Float2 other) const {
     return x == other.x && y == other.y;
   }
-  bool operator!=(const float2 other) const { return !operator==(other); }
-  DERIVE_SERDE(float2, (&Self::x, "x")(&Self::y, "y"))
+  bool operator!=(const Float2 other) const { return !operator==(other); }
+  DERIVE_SERDE(Float2, (&Self::x, "x")(&Self::y, "y"))
 };
 
-template <> struct VectorSize<float2> {
+template <> struct VectorSize<Float2> {
   static constexpr std::size_t value = 2;
 };
 
-struct float3 {
+struct Float3 {
   using vector_type = float;
   vector_type x, y, z = 0;
   vector_type& operator[](std::size_t index) {
@@ -58,7 +58,7 @@ struct float3 {
       case 0: return x;
       case 1: return y;
       case 2: return z;
-      default: throw std::out_of_range("Index out of range for float3");
+      default: throw std::out_of_range("Index out of range for Float3");
     }
   }
   const vector_type& operator[](std::size_t index) const {
@@ -66,22 +66,22 @@ struct float3 {
       case 0: return x;
       case 1: return y;
       case 2: return z;
-      default: throw std::out_of_range("Index out of range for float3");
+      default: throw std::out_of_range("Index out of range for Float3");
     }
   }
-  bool operator==(const float3 other) const {
+  bool operator==(const Float3 other) const {
     return x == other.x && y == other.y && z == other.z;
   }
-  bool operator!=(const float3 other) const { return !operator==(other); }
-  DERIVE_SERDE(float3,
+  bool operator!=(const Float3 other) const { return !operator==(other); }
+  DERIVE_SERDE(Float3,
 	       (&Self::x, "x")(&Self::y, "y")(&Self::z, "z"))
 };
 
-template <> struct VectorSize<float3> {
+template <> struct VectorSize<Float3> {
   static constexpr std::size_t value = 3;
 };
 
-struct float4 {
+struct Float4 {
   using vector_type = float;
   vector_type w, x, y, z = 0;
   vector_type& operator[](std::size_t index) {
@@ -90,7 +90,7 @@ struct float4 {
       case 1: return y;
       case 2: return z;
       case 3: return w;
-      default: throw std::out_of_range("Index out of range for float4");
+      default: throw std::out_of_range("Index out of range for Float4");
     }
   }
   const vector_type& operator[](std::size_t index) const {
@@ -99,22 +99,22 @@ struct float4 {
       case 1: return y;
       case 2: return z;
       case 3: return w;
-      default: throw std::out_of_range("Index out of range for float4");
+      default: throw std::out_of_range("Index out of range for Float4");
     }
   }
-  bool operator==(const float4 other) const {
+  bool operator==(const Float4 other) const {
     return x == other.x && y == other.y && z == other.z && w == other.w;
   }
-  bool operator!=(const float4 other) const { return !operator==(other); }
-  DERIVE_SERDE(float4,(&Self::w, "w")(&Self::x, "x")(
+  bool operator!=(const Float4 other) const { return !operator==(other); }
+  DERIVE_SERDE(Float4,(&Self::w, "w")(&Self::x, "x")(
 			   &Self::y, "y")(&Self::z, "z"))
 };
 
-template <> struct VectorSize<float4> {
+template <> struct VectorSize<Float4> {
   static constexpr std::size_t value = 4;
 };
 
-struct int2 {
+struct Int2 {
   using vector_type = int;
   vector_type x, y = 0;
   vector_type& operator[](std::size_t index) {
@@ -131,18 +131,18 @@ struct int2 {
       default: throw std::out_of_range("Index out of range for int2");
     }
   }
-  bool operator==(const int2 other) const {
+  bool operator==(const Int2 other) const {
     return x == other.x && y == other.y;
   }
-  bool operator!=(const int2 other) const { return !operator==(other); }
-  DERIVE_SERDE(int2,(&Self::x, "x")(&Self::y, "y"))
+  bool operator!=(const Int2 other) const { return !operator==(other); }
+  DERIVE_SERDE(Int2,(&Self::x, "x")(&Self::y, "y"))
 };
 
-template <> struct VectorSize<int2> {
+template <> struct VectorSize<Int2> {
   static constexpr std::size_t value = 2;
 };
 
-struct int3 {
+struct Int3 {
   using vector_type = int;
   vector_type x, y, z = 0;
   vector_type& operator[](std::size_t index) {
@@ -150,7 +150,7 @@ struct int3 {
       case 0: return x;
       case 1: return y;
       case 2: return z;
-      default: throw std::out_of_range("Index out of range for int3");
+      default: throw std::out_of_range("Index out of range for Int3");
     }
   }
   const int& operator[](std::size_t index) const {
@@ -158,50 +158,50 @@ struct int3 {
       case 0: return x;
       case 1: return y;
       case 2: return z;
-      default: throw std::out_of_range("Index out of range for int3");
+      default: throw std::out_of_range("Index out of range for Int3");
     }
   }
-  bool operator==(const int3 other) const {
+  bool operator==(const Int3 other) const {
     return x == other.x && y == other.y && z == other.z;
   }
-  bool operator!=(const int3 other) const { return !operator==(other); }
-  DERIVE_SERDE(int3, 
+  bool operator!=(const Int3 other) const { return !operator==(other); }
+  DERIVE_SERDE(Int3, 
 	       (&Self::x, "x")(&Self::y, "y")(&Self::z, "z"))
 };
 
-template <> struct VectorSize<int3> {
+template <> struct VectorSize<Int3> {
   static constexpr std::size_t value = 3;
 };
 
-struct uint2 {
+struct Uint2 {
   using vector_type = unsigned int;
   vector_type x, y = 0;
   vector_type& operator[](std::size_t index) {
     switch(index) {
       case 0: return x;
       case 1: return y;
-      default: throw std::out_of_range("Index out of range for uint2");
+      default: throw std::out_of_range("Index out of range for Uint2");
     }
   }
   const vector_type& operator[](std::size_t index) const {
     switch(index) {
       case 0: return x;
       case 1: return y;
-      default: throw std::out_of_range("Index out of range for uint2");
+      default: throw std::out_of_range("Index out of range for Uint2");
     }
   }
-  bool operator==(const uint2 other) const {
+  bool operator==(const Uint2 other) const {
     return x == other.x && y == other.y;
   }
-  bool operator!=(const uint2 other) const { return !operator==(other); }
-  DERIVE_SERDE(uint2,(&Self::x, "x")(&Self::y, "y"))
+  bool operator!=(const Uint2 other) const { return !operator==(other); }
+  DERIVE_SERDE(Uint2,(&Self::x, "x")(&Self::y, "y"))
 };
 
-template <> struct VectorSize<uint2> {
+template <> struct VectorSize<Uint2> {
   static constexpr std::size_t value = 2;
 };
 
-struct short3 {
+struct Short3 {
   using vector_type = short;
   vector_type x, y, z = 0;
   vector_type& operator[](std::size_t index) {
@@ -209,7 +209,7 @@ struct short3 {
       case 0: return x;
       case 1: return y;
       case 2: return z;
-      default: throw std::out_of_range("Index out of range for short3");
+      default: throw std::out_of_range("Index out of range for Short3");
     }
   }
   const vector_type& operator[](std::size_t index) const {
@@ -217,18 +217,18 @@ struct short3 {
       case 0: return x;
       case 1: return y;
       case 2: return z;
-      default: throw std::out_of_range("Index out of range for short3");
+      default: throw std::out_of_range("Index out of range for Short3");
     }
   }
-  bool operator==(const short3 other) const {
+  bool operator==(const Short3 other) const {
     return x == other.x && y == other.y && z == other.z;
   }
-  bool operator!=(const short3 other) const { return !operator==(other); }
-  DERIVE_SERDE(short3,
+  bool operator!=(const Short3 other) const { return !operator==(other); }
+  DERIVE_SERDE(Short3,
 	       (&Self::x, "x")(&Self::y, "y")(&Self::z, "z"))
 };
 
-template <> struct VectorSize<short3> {
+template <> struct VectorSize<Short3> {
   static constexpr std::size_t value = 3;
 };
 
