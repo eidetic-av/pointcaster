@@ -349,8 +349,6 @@ void K4ADriver::process_imu() {
       continue;
     }
 
-    pc::logger->debug("running auto-tilt loop");
-
     auto now = steady_clock::now();
     auto time_since_last_update = duration_cast<milliseconds>(now - last_update_time);
     if (time_since_last_update < imu_sample_frequency) {

@@ -32,8 +32,7 @@ void Analyser2D::set_frame_size(Magnum::Vector2i frame_size) {
 
 void Analyser2D::dispatch_analysis(Magnum::GL::Texture2D &texture,
                                    Analyser2DConfiguration &config) {
-  if (!config.enabled)
-    return;
+  if (!config.enabled) return;
   std::lock_guard lock_dispatch(_dispatch_mutex);
   // move the image onto the CPU for use in our analysis thread
   _input_image =
