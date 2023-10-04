@@ -22,6 +22,8 @@ namespace pc::transformers {
       config.unfolded = false;
     }
 
+    ImGui::PopID();
+
   };
 
 }
