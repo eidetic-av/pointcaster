@@ -12,40 +12,29 @@
 #include <regex>
 #include <stdexcept>
 #include <unordered_map>
+#include <functional>
 
-namespace pc {
+namespace pc::mqtt {
 
 using namespace std::chrono_literals;
 
 static const std::regex uri_pattern(R"(^([a-zA-Z]+):\/\/([^:\/]+):(\d+)$)");
 
-std::shared_ptr<MqttClient> MqttClient::_instance;
-std::once_flag MqttClient::_instantiated;
-
 std::string input_hostname;
 int input_port;
 
-void MqttClient::create(MqttClientConfiguration &config) {
-  std::call_once(_instantiated, [&config]() {
-    _instance = std::shared_ptr<MqttClient>(new MqttClient(config));
-    publisher::add(_instance);
-    std::atexit([] {
-      publisher::remove(_instance);
-      _instance.reset();
-    });
-  });
-}
-
-MqttClient::MqttClient(MqttClientConfiguration &config) : _config(config) {
+MqttClient::MqttClient(MqttClientConfiguration &config)
+    : _config(config), _sender_thread([this](auto st) { send_messages(st); }) {
   set_uri(config.broker_uri);
   if (_config.auto_connect) connect();
-  _sender_thread = std::jthread([this](auto st) { send_messages(st); });
+  publisher::add(this);
 }
 
 MqttClient::~MqttClient() {
-  if (!_client) return;
   _sender_thread.request_stop();
-  _client->disconnect();
+  _sender_thread.join();
+  publisher::remove(this);
+  if (_client) _client->disconnect();
 }
 
 void MqttClient::connect() {
@@ -80,10 +69,10 @@ void MqttClient::connect(const std::string_view host_name, const int port) {
 
   pc::logger->info("Connecting to MQTT broker at {}", _config.broker_uri);
 
-  _client = std::make_unique<mqtt::client>(_config.broker_uri.data(),
+  _client = std::make_unique<::mqtt::client>(_config.broker_uri.data(),
 						 _config.id.data());
 
-  auto options = mqtt::connect_options_builder()
+  auto options = ::mqtt::connect_options_builder()
 		     .connect_timeout(150ms)
 		     .clean_session()
 		     .automatic_reconnect()
@@ -94,7 +83,7 @@ void MqttClient::connect(const std::string_view host_name, const int port) {
     try {
       _client->connect(options);
       pc::logger->info("MQTT connection active");
-    } catch (const mqtt::exception &e) {
+    } catch (const ::mqtt::exception &e) {
       pc::logger->error(e.what());
     }
     _connecting = false;
@@ -108,7 +97,7 @@ void MqttClient::disconnect() {
       _client->disconnect();
       pc::logger->info("Disconnected from MQTT broker");
       _client.reset();
-    } catch (mqtt::exception &e) {
+    } catch (::mqtt::exception &e) {
       pc::logger->error(e.what());
     }
   });
@@ -153,20 +142,23 @@ void MqttClient::set_uri(const std::string_view hostname, int port) {
 void MqttClient::send_messages(std::stop_token st) {
   using namespace std::chrono_literals;
 
+  static constexpr auto thread_wait_time = 50ms;
+
+  while ((!_client || !_client->is_connected()) && !st.stop_requested()) {
+    std::this_thread::sleep_for(thread_wait_time);
+  }
+
   while (!st.stop_requested()) {
-
-    if (!_client || !_client->is_connected()) {
-      std::this_thread::sleep_for(100ms);
-      continue;
-    }
-
     MqttMessage message;
-    if (_messages_to_publish.wait_dequeue_timed(message, 50ms)) {
+    while (_messages_to_publish.wait_dequeue_timed(message, thread_wait_time)) {
+
+      // messages are lost if the client is not connected
       if (!_client || !_client->is_connected()) continue;
+
       auto &payload = message.buffer;
       try {
 	_client->publish(message.topic, payload.data(), payload.size());
-      } catch (const mqtt::exception &e) {
+      } catch (const ::mqtt::exception &e) {
         pc::logger->error(e.what());
       }
     }

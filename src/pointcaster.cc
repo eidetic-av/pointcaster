@@ -80,9 +80,7 @@
 #include "devices/k4a/k4a_device.h"
 #include <k4a/k4a.h>
 
-#if WITH_MQTT
 #include "mqtt/mqtt_client.h"
-#endif
 #include "mqtt/mqtt_client_config.h"
 
 #include "midi/midi_client.h"
@@ -102,6 +100,7 @@ using namespace pc::camera;
 using namespace pc::radio;
 using namespace pc::snapshots;
 using namespace pc::midi;
+using namespace pc::mqtt;
 using namespace pc::tween;
 using namespace pc::transformers;
 using namespace Magnum;
@@ -154,6 +153,7 @@ protected:
   std::unique_ptr<Snapshots> _snapshots_context;
 
   std::unique_ptr<Radio> _radio;
+  std::unique_ptr<MqttClient> _mqtt;
 
   std::unique_ptr<UsbMonitor> _usb_monitor;
   std::mutex _usb_config_mutex;
@@ -429,9 +429,9 @@ PointCaster::PointCaster(const Arguments &args)
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  // TODO decide between singletons or app members for clients?
   _radio = std::make_unique<Radio>(_session.radio);
-  MqttClient::create(_session.mqtt);
+  _mqtt = std::make_unique<MqttClient>(_session.mqtt);
+  // TODO make the midiclient a member not a singleton
   MidiClient::create(_session.midi);
 
   _snapshots_context = std::make_unique<Snapshots>();
@@ -1143,10 +1143,8 @@ void PointCaster::drawEvent() {
       _snapshots_context->draw_imgui_window();
     if (_session.layout.show_global_transform_window)
       _global_transformer->draw_imgui_window();
-#if WITH_MQTT
     if (_session.mqtt.show_window)
-      MqttClient::instance()->draw_imgui_window();
-#endif
+      _mqtt->draw_imgui_window();
     if (_session.midi.show_window)
       MidiClient::instance()->draw_imgui_window();
   }

@@ -12,22 +12,11 @@
 #include <concurrentqueue/blockingconcurrentqueue.h>
 #include <span>
 
-namespace pc {
+namespace pc::mqtt {
 
 class MqttClient {
 public:
-
-  static std::shared_ptr<MqttClient> &instance() {
-    if (!_instance)
-      throw std::logic_error(
-	  "No MqttClient instance created. Call MqttClient::create() first.");
-    return _instance;
-  }
-
-  static void create(MqttClientConfiguration &config);
-
-  MqttClient(const MqttClient &) = delete;
-  MqttClient &operator=(const MqttClient &) = delete;
+  MqttClient(MqttClientConfiguration &config);
 
   ~MqttClient();
 
@@ -63,15 +52,10 @@ public:
   void draw_imgui_window();
 
 private:
-  static std::shared_ptr<MqttClient> _instance;
-  static std::once_flag _instantiated;
-
-  explicit MqttClient(MqttClientConfiguration &config);
-
   MqttClientConfiguration &_config;
   std::future<void> _connection_future;
   std::atomic_bool _connecting;
-  std::unique_ptr<mqtt::client> _client;
+  std::unique_ptr<::mqtt::client> _client;
 
   struct MqttMessage {
     std::string topic;

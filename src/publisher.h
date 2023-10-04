@@ -6,21 +6,14 @@
 #include <type_traits>
 #include <variant>
 #include <vector>
-
-#if WITH_MQTT
 #include "mqtt/mqtt_client.h"
-#endif
 
 namespace pc::publisher {
 
 // A variant that holds all of our publisher types
-using Publisher = std::variant<
-#if WITH_MQTT
-    std::remove_reference_t<decltype(MqttClient::instance())>
-#endif
-    >;
+using Publisher = std::variant<mqtt::MqttClient *>;
 
-// A list of all publishers in the application
+// The list of all publishers in the application
 extern std::vector<Publisher> _instances;
 void add(Publisher publisher);
 void remove(Publisher publisher);
@@ -50,14 +43,14 @@ publish_all(const std::string_view topic, const T &data,
 	    std::initializer_list<std::string_view> topic_nodes = {}) {
   for (auto &publisher : _instances) {
     std::visit(
-	[&topic, &data, &topic_nodes](auto &p) {
+	[&topic, &data, &topic_nodes](auto &publisher) {
 	  // if the container isn't empty, call publish
 	  if (!data.empty()) {
-            p->publish(topic, data, topic_nodes);
-          } else if (p->publish_empty()) {
+            publisher->publish(topic, data, topic_nodes);
+          } else if (publisher->publish_empty()) {
             // if the container is empty, we check if the publisher is set to
 	    // publish empty containers or not
-	    p->publish(topic, data, topic_nodes);
+	    publisher->publish(topic, data, topic_nodes);
           }
         },
         publisher);
@@ -69,8 +62,11 @@ template <typename T>
 std::enable_if_t<!is_publishable_container_v<T>, void>
 publish_all(const std::string_view topic, const T &data) {
   for (auto &publisher : _instances) {
-    std::visit([&topic, &data](auto &p) { p->publish(topic, data); },
-	       publisher);
+    std::visit(
+	[&topic, &data](auto &publisher) {
+	  publisher->publish(topic, data);
+	},
+	publisher);
   }
 }
 
