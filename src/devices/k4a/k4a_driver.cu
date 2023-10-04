@@ -134,13 +134,13 @@ struct point_filter {
   }
 
   __device__ bool check_bounds(Short3 value) const {
-    if (value.x < config.crop_x.min) return false;
-    if (value.x > config.crop_x.max) return false;
-    if (value.y < config.crop_y.min) return false;
-    if (value.y > config.crop_y.max) return false;
-    if (value.z < config.crop_z.min) return false;
-    if (value.z > config.crop_z.max) return false;
-    return true;
+    auto x = config.flip_x ? -value.x : value.x;
+    auto y = config.flip_y ? -value.y : value.y;
+    auto z = config.flip_z ? -value.z : value.z;
+    return 
+      x >= config.crop_x.min && x <= config.crop_x.max &&
+      y >= config.crop_y.min && y <= config.crop_y.max &&
+      z >= config.crop_z.min && z <= config.crop_z.max;
   }
 
   __device__ bool sample(int index) const { return index % config.sample == 0; }
