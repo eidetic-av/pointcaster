@@ -1,6 +1,6 @@
 #include "analyser_2d.h"
 #include "../logger.h"
-#include "../publisher.h"
+#include "../publisher/publisher.h"
 #include <Corrade/Containers/Array.h>
 #include <Magnum/GL/BufferImage.h>
 #include <Magnum/GL/PixelFormat.h>
