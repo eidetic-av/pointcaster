@@ -1,23 +1,25 @@
 #pragma once
 
+#include "../publisher/publishable_traits.h"
 #include "mqtt_client_config.h"
 #include <atomic>
+#include <concurrentqueue/blockingconcurrentqueue.h>
 #include <expected>
 #include <future>
 #include <memory>
 #include <mqtt/client.h>
 #include <msgpack.hpp>
 #include <mutex>
-#include <string_view>
-#include <concurrentqueue/blockingconcurrentqueue.h>
 #include <span>
+#include <string_view>
+#include <type_traits>
+#include "../logger.h"
 
 namespace pc::mqtt {
 
 class MqttClient {
 public:
   MqttClient(MqttClientConfiguration &config);
-
   ~MqttClient();
 
   void connect();
@@ -32,22 +34,21 @@ public:
   void set_uri(const std::string_view hostname, int port);
 
   void publish(const std::string_view topic, const std::string_view message,
-	       std::initializer_list<std::string_view> topic_nodes = {});
-  void publish(const std::string_view topic, const std::vector<uint8_t> &bytes,
-	       std::initializer_list<std::string_view> topic_nodes = {});
+               std::initializer_list<std::string_view> topic_nodes = {});
   void publish(const std::string_view topic, const void *payload,
 	       const std::size_t size,
-	       std::initializer_list<std::string_view> topic_nodes = {});
+	       std::initializer_list<std::string_view> topic_nodes = {},
+	       bool empty = false);
 
   template <typename T>
-  void publish(const std::string_view topic, const T &data,
-	       std::initializer_list<std::string_view> topic_nodes = {}) {
+  std::enable_if_t<is_publishable_container_v<T>, void>
+  publish(const std::string_view topic, const T &data,
+	  std::initializer_list<std::string_view> topic_nodes = {}) {
+
     msgpack::sbuffer send_buffer;
     msgpack::pack(send_buffer, data);
-    publish(topic, send_buffer.data(), send_buffer.size(), topic_nodes);
+    publish(topic, send_buffer.data(), send_buffer.size(), topic_nodes, data.empty());
   }
-
-  bool publish_empty() { return _config.publish_empty_data; }
 
   void draw_imgui_window();
 
@@ -69,7 +70,7 @@ private:
 
   std::string
   construct_topic_string(const std::string_view topic_name,
-			 std::initializer_list<std::string_view> topic_nodes);
+                         std::initializer_list<std::string_view> topic_nodes);
 };
 
-} // namespace pc
+} // namespace pc::mqtt

@@ -1,8 +1,9 @@
 #include "mqtt_client.h"
 #include "../logger.h"
-#include "../publisher.h"
+#include "../publisher/publisher.h"
 #include <chrono>
 #include <fmt/format.h>
+#include <functional>
 #include <future>
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -12,7 +13,6 @@
 #include <regex>
 #include <stdexcept>
 #include <unordered_map>
-#include <functional>
 
 namespace pc::mqtt {
 
@@ -109,17 +109,26 @@ void MqttClient::publish(const std::string_view topic,
   publish(topic, message.data(), message.size(), topic_nodes);
 }
 
-void MqttClient::publish(const std::string_view topic,
-                         const std::vector<uint8_t> &payload,
-                         std::initializer_list<std::string_view> topic_nodes) {
-  publish(topic, payload.data(), payload.size(), topic_nodes);
-}
-
 void MqttClient::publish(const std::string_view topic, const void *payload,
-                         const std::size_t size, std::initializer_list<std::string_view> topic_nodes) {
+                         const std::size_t size,
+                         std::initializer_list<std::string_view> topic_nodes,
+			 bool empty) {
+  if (empty && !_config.publish_empty_stream && !_config.publish_empty_once) {
+    return;
+  }
+
+  auto topic_string = construct_topic_string(topic, topic_nodes);
+
+  if (_config.publish_empty_once) {
+    static std::unordered_map<std::string, bool> published_empty_once;
+    static std::mutex published_empty_once_mutex;
+    std::lock_guard lock(published_empty_once_mutex);
+    if (empty && published_empty_once[topic_string]) return;
+    published_empty_once[topic_string] = empty;
+  }
+
   auto data = static_cast<const std::byte *>(payload);
   std::vector<std::byte> buffer(data, data + size);
-  auto topic_string = construct_topic_string(topic, topic_nodes);
   _messages_to_publish.enqueue({std::move(topic_string), std::move(buffer)});
 }
 
@@ -246,7 +255,13 @@ void MqttClient::draw_imgui_window() {
   ImGui::Checkbox("Auto connect", &_config.auto_connect);
   ImGui::Spacing();
 
-  ImGui::Checkbox("Publish empty data", &_config.publish_empty_data);
+  // The following options are mutually exclusive
+  if (ImGui::Checkbox("Publish empty stream", &_config.publish_empty_stream)) {
+    _config.publish_empty_once = false;
+  }
+  if (ImGui::Checkbox("Publish empty once", &_config.publish_empty_once)) {
+    _config.publish_empty_stream = false;
+  }
 
   ImGui::End();
 }
