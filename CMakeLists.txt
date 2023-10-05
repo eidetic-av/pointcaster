@@ -197,11 +197,11 @@ set(SOURCE_FILES
   src/gui/widgets.cc
   src/gui/range_slider.cc
   src/parameters.cc
-  src/publisher.cc
   src/path.cc
   src/uuid.cc
   src/wtf/wtf.cc
   src/tween/tween_manager.cc
+  src/publisher/publisher.cc
   src/transformers/global_transformer.cc
   src/transformers/global_transformer.cu
   src/transformers/noise_transformer.cc
