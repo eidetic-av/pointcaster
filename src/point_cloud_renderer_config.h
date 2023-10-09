@@ -22,9 +22,9 @@ enum class LetterboxMode {
 
 struct PointCloudRendererConfiguration {
   bool unfolded = false;
-  Int2 resolution{3840, 2160};
-  int scale_mode{(int)ScaleMode::Span};
-  int letterbox_mode{(int)LetterboxMode::Aspect16x9};
+  Int2 resolution = {3840, 2160};
+  int scale_mode = {(int)ScaleMode::Span};
+  int letterbox_mode = {(int)LetterboxMode::Aspect16x9};
   bool orthographic = false;
   Float2 orthographic_size = {5, 5};
   MinMax<float> clipping = {0.001f, 200};

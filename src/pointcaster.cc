@@ -154,6 +154,7 @@ protected:
 
   std::unique_ptr<Radio> _radio;
   std::unique_ptr<MqttClient> _mqtt;
+  std::unique_ptr<MidiClient> _midi;
 
   std::unique_ptr<UsbMonitor> _usb_monitor;
   std::mutex _usb_config_mutex;
@@ -431,8 +432,7 @@ PointCaster::PointCaster(const Arguments &args)
 
   _radio = std::make_unique<Radio>(_session.radio);
   _mqtt = std::make_unique<MqttClient>(_session.mqtt);
-  // TODO make the midiclient a member not a singleton
-  MidiClient::create(_session.midi);
+  _midi = std::make_unique<MidiClient>(_session.midi);
 
   _snapshots_context = std::make_unique<Snapshots>();
 
@@ -1146,7 +1146,7 @@ void PointCaster::drawEvent() {
     if (_session.mqtt.show_window)
       _mqtt->draw_imgui_window();
     if (_session.midi.show_window)
-      MidiClient::instance()->draw_imgui_window();
+      _midi->draw_imgui_window();
   }
 
   _imgui_context.updateApplicationCursor(*this);

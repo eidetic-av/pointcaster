@@ -2,6 +2,7 @@
 #include "../gui/widgets.h"
 #include "../logger.h"
 #include "../parameters.h"
+#include "../publisher/publisher.h"
 #include "../string_utils.h"
 #include "../tween/tween_manager.h"
 #include <cmath>
@@ -17,12 +18,10 @@ namespace pc::midi {
 
 using pc::tween::TweenManager;
 
-std::shared_ptr<MidiClient> MidiClient::_instance;
-std::once_flag MidiClient::_instantiated;
-
 static std::unordered_map<std::string, std::string> _port_keys;
 
-MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
+MidiClient::MidiClient(MidiClientConfiguration &config)
+    : _config(config), _sender_thread([this](auto st) { send_messages(st); }) {
 
   for (auto api : libremidi::available_apis()) {
     std::string api_name(libremidi::get_api_display_name(api));
@@ -37,17 +36,24 @@ MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
     pc::logger->info("MIDI: Initiliasing {} MIDI API", api_name);
 
     libremidi::observer_configuration observer_config{
-        .input_added =
-            [this, api](const auto &p) { this->handle_input_added(p, api); },
-        .input_removed =
-            [this](const auto &p) { this->handle_input_removed(p); }};
+	.input_added = [this,
+			api](const auto &p) { handle_input_added(p, api); },
+	.input_removed = [this](const auto &p) { handle_input_removed(p); },
+	.output_added = [this,
+			 api](const auto &p) { handle_output_added(p, api); },
+	.output_removed = [this](const auto &p) { handle_output_removed(p); }};
 
     _midi_observers.emplace(
-        api_name,
-        libremidi::observer{observer_config,
-                            libremidi::observer_configuration_for(api)});
+	api_name,
+	libremidi::observer{observer_config,
+			    libremidi::observer_configuration_for(api)});
   }
-  pc::logger->info("MIDI: Waiting for MIDI hotplug events");
+  pc::logger->info("MIDI: Listening for MIDI hotplug events");
+
+
+  // Create a virtual MIDI output to publish to
+  _virtual_output.open_virtual_port("pointcaster output 1");
+  publisher::add(this);
 
   // for any MIDI cc bindings to UI parameters saved in the config,
   // notify the parameter its been 'bound'
@@ -71,13 +77,69 @@ MidiClient::MidiClient(MidiClientConfiguration &config) : _config(config) {
   }
 }
 
+MidiClient::~MidiClient() {
+  _sender_thread.request_stop();
+  _sender_thread.join();
+  publisher::remove(this);
+}
+
+void MidiClient::publish(const std::string_view topic,
+			 const uint8_t channel_num, const uint8_t cc_num,
+			 const float value) {
+  auto mapped_value = static_cast<uint8_t>(
+      std::round(std::max(std::min(value, 1.0f), 0.0f) * 127));
+  _messages_to_publish.enqueue(
+      {std::string(topic), channel_num, cc_num, mapped_value});
+}
+
+void MidiClient::publish(const std::string_view topic, const uint8_t channel_num,
+                         const std::array<float, 2> values) {
+  publish(topic, channel_num, 1, values[0]);
+  publish(topic, channel_num, 2, values[1]);
+}
+
+void MidiClient::publish(const std::string_view topic, const uint8_t channel_num,
+                         const std::array<float, 3> values) {
+  publish(topic, channel_num, 1, values[0]);
+  publish(topic, channel_num, 2, values[1]);
+  publish(topic, channel_num, 3, values[2]);
+}
+
+void MidiClient::publish(const std::string_view topic, const uint8_t channel_num,
+                         const std::array<float, 4> values) {
+  publish(topic, channel_num, 1, values[0]);
+  publish(topic, channel_num, 2, values[1]);
+  publish(topic, channel_num, 3, values[2]);
+  publish(topic, channel_num, 4, values[3]);
+}
+
+void MidiClient::send_messages(std::stop_token st) {
+  using namespace std::chrono_literals;
+
+  static constexpr auto thread_wait_time = 50ms;
+
+  while (!_virtual_output.is_port_open() && !st.stop_requested()) {
+    std::this_thread::sleep_for(thread_wait_time);
+  }
+
+  while (!st.stop_requested()) {
+    MidiOutMessage message;
+    while (_messages_to_publish.wait_dequeue_timed(message, thread_wait_time)) {
+      auto status_byte =
+	  static_cast<uint8_t>(libremidi::message_type::CONTROL_CHANGE) +
+	  (message.channel_num - 1); // convert channel num to zero-indexed
+      _virtual_output.send_message(status_byte, message.cc_num, message.value);
+    }
+  }
+}
+
 void MidiClient::handle_input_added(const libremidi::input_port &port,
                                     const libremidi::API &api) {
   auto api_config = libremidi::midi_in_configuration_for(api);
 
   auto on_new_message =
       [this, port_name = port.port_name](const libremidi::message &msg) {
-        handle_message(port_name, msg);
+        handle_input_message(port_name, msg);
       };
 
   auto [iter, emplaced] = _midi_inputs.emplace(
@@ -102,7 +164,7 @@ void MidiClient::handle_input_removed(const libremidi::input_port &port) {
                    port.port_name);
 }
 
-void MidiClient::handle_message(const std::string &port_name,
+void MidiClient::handle_input_message(const std::string &port_name,
                                 const libremidi::message &msg) {
 
   using libremidi::message_type;
@@ -253,14 +315,65 @@ void MidiClient::handle_message(const std::string &port_name,
   }
 }
 
+void MidiClient::handle_output_added(const libremidi::output_port &port,
+                                    const libremidi::API &api) {
+  // auto api_config = libremidi::midi_out_configuration_for(api);
+
+  // auto [iter, emplaced] = _midi_outputs.emplace(
+  //     port.port_name,
+  //     libremidi::midi_out{{}, api_config});
+  // if (!emplaced) return;
+
+  // try {
+  //   iter->second.open_virtual_port("pointcaster output");
+  //   pc::logger->info("MIDI: '{}' added new virtual output port '{}'", port.device_name,
+  //                    port.port_name);
+  // } catch (libremidi::driver_error e) {
+  //   pc::logger->warn("{}: {}", port.device_name, e.what());
+  // }
+}
+
+void MidiClient::handle_output_removed(const libremidi::output_port &port) {
+  // if (!_midi_outputs.contains(port.port_name)) return;
+  // _midi_outputs.at(port.port_name).close_port();
+  // _midi_outputs.erase(port.port_name);
+  // pc::logger->info("{}: removed output port {}", port.device_name,
+  // 		   port.port_name);
+}
+
 void MidiClient::draw_imgui_window() {
 
   using pc::gui::slider;
-  
+
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("MIDI", nullptr);
 
   slider("midi", "input_lerp", _config.input_lerp, 0.0f, 1.0f, 0.65f);
+
+  ImGui::SetNextItemOpen(_config.outputs.unfolded);
+  if (ImGui::CollapsingHeader("Outputs", _config.outputs.unfolded)) {
+    _config.outputs.unfolded = true;
+
+    // for (auto &[output_device_name, output] : _midi_outputs) {
+    //   if (!output.is_port_open())
+    // 	continue;
+    //   ImGui::TextDisabled("%s", output_device_name.c_str());
+    //   if (ImGui::Button("Send test CC")) {
+    // 	uint8_t channel = 1;
+    // 	uint8_t cc_number = 10;
+    // 	uint8_t cc_value = 50;
+    // 	uint8_t status_byte =
+    // 	    static_cast<uint8_t>(libremidi::message_type::CONTROL_CHANGE) +
+    // 	    (channel - 1); // channel num is zero indexed
+    //     output.send_message(status_byte, cc_number, cc_value);
+    // 	pc::logger->debug("Sent test byte");
+    //   }
+    //   ImGui::Spacing();
+    // }
+
+  } else {
+    _config.outputs.unfolded = false;
+  }
 
   ImGui::End();
 }

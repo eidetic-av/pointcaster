@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../mqtt/mqtt_client.h"
+#include "../midi/midi_client.h"
 #include "publishable_traits.h"
 #include <initializer_list>
 #include <type_traits>
@@ -9,7 +10,7 @@
 namespace pc::publisher {
 
 // A variant that holds all of our publisher types
-using Publisher = std::variant<mqtt::MqttClient *>;
+using Publisher = std::variant<mqtt::MqttClient *, midi::MidiClient *>;
 
 // The list of all publishers in the application
 extern std::vector<Publisher> _instances;

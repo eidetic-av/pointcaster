@@ -44,10 +44,10 @@ public:
   std::enable_if_t<is_publishable_container_v<T>, void>
   publish(const std::string_view topic, const T &data,
 	  std::initializer_list<std::string_view> topic_nodes = {}) {
-
     msgpack::sbuffer send_buffer;
     msgpack::pack(send_buffer, data);
-    publish(topic, send_buffer.data(), send_buffer.size(), topic_nodes, data.empty());
+    publish(topic, send_buffer.data(), send_buffer.size(),
+            std::move(topic_nodes), data.empty());
   }
 
   void draw_imgui_window();
@@ -67,10 +67,6 @@ private:
   moodycamel::BlockingConcurrentQueue<const MqttMessage> _messages_to_publish;
 
   void send_messages(std::stop_token st);
-
-  std::string
-  construct_topic_string(const std::string_view topic_name,
-                         std::initializer_list<std::string_view> topic_nodes);
 };
 
 } // namespace pc::mqtt

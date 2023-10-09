@@ -202,6 +202,7 @@ set(SOURCE_FILES
   src/wtf/wtf.cc
   src/tween/tween_manager.cc
   src/publisher/publisher.cc
+  src/publisher/publisher_utils.cc
   src/transformers/global_transformer.cc
   src/transformers/global_transformer.cu
   src/transformers/noise_transformer.cc
