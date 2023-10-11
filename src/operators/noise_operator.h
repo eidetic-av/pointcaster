@@ -1,10 +1,10 @@
 #pragma once
 #include "../serialization.h"
-#include "transformer_types.h"
+#include "operator_types.h"
 
-namespace pc::transformers {
+namespace pc::operators {
 
-struct NoiseTransformerConfiguration {
+struct NoiseOperatorConfiguration {
 
   bool unfolded = false;
   bool enabled = true;
@@ -15,7 +15,7 @@ struct NoiseTransformerConfiguration {
   float lacunarity = 2.0f;
   float decay = 0.5f;
 
-  DERIVE_SERDE(NoiseTransformerConfiguration,
+  DERIVE_SERDE(NoiseOperatorConfiguration,
 	       (&Self::unfolded, "unfolded")
 	       (&Self::enabled, "enabled")
 	       (&Self::scale, "scale")
@@ -29,16 +29,16 @@ struct NoiseTransformerConfiguration {
   static const std::size_t MemberCount = 8;
 };
 
-struct NoiseTransformer : public thrust::unary_function<point_t, point_t> {
+struct NoiseOperator : public thrust::unary_function<point_t, point_t> {
 
-  NoiseTransformerConfiguration _config;
+  NoiseOperatorConfiguration _config;
 
-  NoiseTransformer(const NoiseTransformerConfiguration &config)
+  NoiseOperator(const NoiseOperatorConfiguration &config)
       : _config(config){};
 
   __device__ point_t operator()(point_t point) const;
 
-  static void draw_imgui_controls(NoiseTransformerConfiguration& config);
+  static void draw_imgui_controls(NoiseOperatorConfiguration& config);
 };
 
-} // namespace pc::transformers
+} // namespace pc::operators

@@ -199,7 +199,7 @@ auto make_transform_pipeline(Iterator begin, size_t count,
 }
 
 PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
-				  TransformerList transformers_list) {
+				  OperatorList operator_list) {
 
   if (!_device_memory_ready || !_open || !_buffers_updated)
     return _point_cloud;
@@ -248,9 +248,9 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   auto output_point_count =
       std::distance(filtered_points_begin, filtered_points_end);
 
-  for (auto &transformers : transformers_list) {
-    transformers.get().run_transformers(output_points_begin,
-					output_points_begin + output_point_count);
+  for (auto &operators : operator_list) {
+    operators.get().run_operators(output_points_begin,
+				  output_points_begin + output_point_count);
   }
 
   // wait for the kernels to complete

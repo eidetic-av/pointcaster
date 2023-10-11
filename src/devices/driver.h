@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../structs.h"
-#include "../transformers/global_transformer.h"
+#include "../operators/session_operator_host.h"
 #include "device_config.h"
 #include <Magnum/Magnum.h>
 #include <Magnum/Math/Vector3.h>
@@ -27,7 +27,7 @@ public:
 
   virtual pc::types::PointCloud
   point_cloud(const DeviceConfiguration &config,
-	      pc::transformers::TransformerList transformers = {}) = 0;
+	      pc::operators::OperatorList operators = {}) = 0;
   virtual std::string id() const = 0;
 
   virtual void set_paused(bool pause) = 0;

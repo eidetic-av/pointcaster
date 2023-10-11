@@ -1,9 +1,9 @@
-#include "noise_transformer.h"
+#include "noise_operator.h"
 #include "../gui/widgets.h"
 
-namespace pc::transformers {
+namespace pc::operators {
 
-  void NoiseTransformer::draw_imgui_controls(NoiseTransformerConfiguration& config) {
+  void NoiseOperator::draw_imgui_controls(NoiseOperatorConfiguration& config) {
 
     using gui::slider;
 

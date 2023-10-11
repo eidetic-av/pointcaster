@@ -1,14 +1,14 @@
 #include "../structs.h"
-#include "noise_transformer.h"
+#include "noise_operator.h"
 #include <cuda_noise.cuh>
 #include <thrust/functional.h>
 
-namespace pc::transformers {
+namespace pc::operators {
 
 using pc::types::color;
 using pc::types::position;
 
-__device__ point_t NoiseTransformer::operator()(point_t point) const {
+__device__ point_t NoiseOperator::operator()(point_t point) const {
 
   position pos = thrust::get<0>(point);
   color col = thrust::get<1>(point);
@@ -35,4 +35,4 @@ __device__ point_t NoiseTransformer::operator()(point_t point) const {
   return thrust::make_tuple(pos, col);
 };
 
-} // namespace pc::transformers
+} // namespace pc::operators

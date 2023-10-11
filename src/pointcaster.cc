@@ -71,7 +71,7 @@
 #include "radio/radio.h"
 #include "snapshots.h"
 #include "sphere_renderer.h"
-#include "transformers/global_transformer.h"
+#include "operators/session_operator_host.h"
 #include "tween/tween_manager.h"
 #include "uuid.h"
 #include "wireframe_objects.h"
@@ -103,7 +103,7 @@ using namespace pc::snapshots;
 using namespace pc::midi;
 using namespace pc::mqtt;
 using namespace pc::tween;
-using namespace pc::transformers;
+using namespace pc::operators;
 using namespace Magnum;
 using namespace Math::Literals;
 
@@ -165,7 +165,7 @@ protected:
 
   std::unique_ptr<WireframeGrid> _ground_grid;
 
-  std::unique_ptr<GlobalTransformer> _global_transformer;
+  std::unique_ptr<SessionOperatorHost> _session_operator_host;
 
   std::unique_ptr<Snapshots> _snapshots_context;
 
@@ -442,8 +442,9 @@ PointCaster::PointCaster(const Arguments &args)
     _sphere_mesh.setInstanceCount(_sphere_instance_data.size());
   }
 
-  // initialise point cloud transformers
-  _global_transformer = std::make_unique<GlobalTransformer>(_session.global_transformers);
+  // initialise point cloud operator hosts
+  _session_operator_host =
+      std::make_unique<SessionOperatorHost>(_session.session_operator_host);
 
   // Start the timer, loop at 144 Hz max
   setSwapInterval(1);
@@ -620,8 +621,8 @@ void PointCaster::render_cameras() {
     // - make sure to cache already synthesised configurations
     if (points.empty()) {
 
-      TransformerList transformer_list = {*_global_transformer};
-      points = devices::synthesized_point_cloud(transformer_list);
+      OperatorList operator_list = {*_session_operator_host};
+      points = devices::synthesized_point_cloud(operator_list);
       if (rendering_config.snapshots)
         points += snapshots::point_cloud();
       _point_cloud_renderer->points = points;
@@ -1193,7 +1194,7 @@ void PointCaster::drawEvent() {
     if (_session.layout.show_snapshots_window)
       _snapshots_context->draw_imgui_window();
     if (_session.layout.show_global_transform_window)
-      _global_transformer->draw_imgui_window();
+      _session_operator_host->draw_imgui_window();
     if (_session.mqtt.show_window)
       _mqtt->draw_imgui_window();
     if (_session.midi.show_window)

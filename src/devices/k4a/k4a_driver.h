@@ -15,7 +15,7 @@
 
 namespace pc::devices {
 
-using pc::transformers::TransformerList;
+using pc::operators::OperatorList;
 using pc::types::color;
 using pc::types::Float3;
 using pc::types::Float4;
@@ -57,7 +57,7 @@ public:
   void set_paused(bool paused) override;
 
   PointCloud point_cloud(const DeviceConfiguration &config,
-			 TransformerList transformers = {}) override;
+			 OperatorList transformers = {}) override;
 
   void start_alignment() override;
   bool is_aligning() override;

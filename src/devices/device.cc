@@ -13,18 +13,18 @@
 namespace pc::devices {
 
 using pc::gui::slider;
-using pc::transformers::TransformerList;
+using pc::operators::OperatorList;
 
 Device::Device(DeviceConfiguration config) : _config(config){};
 
 pc::types::PointCloud
-synthesized_point_cloud(TransformerList transformers) {
+synthesized_point_cloud(OperatorList operators) {
   auto result = pc::types::PointCloud{};
   if (Device::attached_devices.size() == 0)
     return result;
   // std::lock_guard<std::mutex> lock(devices_access);
   for (auto &device : Device::attached_devices)
-    result += device->point_cloud(transformers);
+    result += device->point_cloud(operators);
   return result;
 }
 

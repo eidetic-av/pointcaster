@@ -204,9 +204,9 @@ set(SOURCE_FILES
   src/tween/tween_manager.cc
   src/publisher/publisher.cc
   src/publisher/publisher_utils.cc
-  src/transformers/global_transformer.cc
-  src/transformers/global_transformer.cu
-  src/transformers/noise_transformer.cc
+  src/operators/session_operator_host.cc
+  src/operators/session_operator_host.cu
+  src/operators/noise_operator.cc
   ${POINTCASTER_SRC}
   ${OPTIONAL_SRC})
 
