@@ -194,6 +194,7 @@ set(SOURCE_FILES
   src/point_cloud_renderer.cc
   src/sphere_renderer.cc
   src/shaders/particle_sphere.cc
+  src/shaders/texture_display.cc
   src/gui/widgets.cc
   src/gui/range_slider.cc
   src/parameters.cc
