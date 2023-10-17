@@ -80,8 +80,10 @@ public:
   void set_gain(const int new_gain);
   int get_gain() const;
 
-  void set_auto_tilt(bool enabled) { _auto_tilt_enabled = enabled; };
-  void clear_auto_tilt() { _auto_tilt = Eigen::Matrix3f::Identity(); }
+  void clear_auto_tilt() {
+    std::lock_guard lock(_auto_tilt_value_mutex);
+    _auto_tilt_value = Eigen::Matrix3f::Identity();
+  }
 
 private:
 
@@ -136,8 +138,8 @@ private:
   Eigen::Quaternion<float> _aligned_orientation_offset;
 
   std::thread _imu_loop;
-  bool _auto_tilt_enabled;
-  Eigen::Matrix3f _auto_tilt = Eigen::Matrix3f::Identity();
+  std::mutex _auto_tilt_value_mutex;
+  Eigen::Matrix3f _auto_tilt_value = Eigen::Matrix3f::Identity();
 
   void capture_frames();
   void track_bodies();

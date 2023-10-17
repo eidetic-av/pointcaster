@@ -40,7 +40,6 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config)
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_30;
   }
 
-  _auto_tilt_enabled = config.k4a.auto_tilt;
   _body_tracking_enabled = config.body.enabled;
 
   init_device_memory();
@@ -243,7 +242,6 @@ void K4ADriver::track_bodies() {
 
     auto config = _last_config;
     // TODO make all the following serialize into the config
-    auto auto_tilt = _auto_tilt;
     auto alignment_center = Eigen::Vector3f(
         _alignment_center.x, _alignment_center.y, _alignment_center.z);
     auto aligned_position_offset =
@@ -266,8 +264,11 @@ void K4ADriver::track_bodies() {
                           orientation.z);
 
         // perform any auto-tilt
-        pos_f = auto_tilt * pos_f;
-        ori_f = auto_tilt * ori_f;
+        {
+	  std::lock_guard lock(_auto_tilt_value_mutex);
+          pos_f = _auto_tilt_value * pos_f;
+          ori_f = _auto_tilt_value * ori_f;
+        }
         // flip y and z axes for our world space
         pos_f = Vector3f(pos_f[0], -pos_f[1], -pos_f[2]);
 
@@ -341,10 +342,11 @@ void K4ADriver::process_imu() {
   std::array<std::array<float, 3>, imu_sample_count> accelerometer_samples;
 
   auto last_update_time = steady_clock::now();
+  Eigen::Matrix3f last_tilt = _auto_tilt_value;
 
   while (!_stop_requested) {
 
-    if (!_open || !_running || !_auto_tilt_enabled) {
+    if (!_open || !_running || !_last_config.k4a.auto_tilt.enabled) {
       std::this_thread::sleep_for(50ms);
       continue;
     }
@@ -379,19 +381,22 @@ void K4ADriver::process_imu() {
         Eigen::Vector3f(accel_average[1], accel_average[2], accel_average[0]),
         Eigen::Vector3f(0.f, -1.f, 0.f));
 
-    Eigen::Matrix3f last_tilt = _auto_tilt;
     Eigen::Matrix3f new_tilt = q.toRotationMatrix().transpose();
 
     float tilt_difference =
         (new_tilt * last_tilt.transpose()).eulerAngles(2, 1, 0).norm();
 
-    constexpr float difference_threshold = M_PI / 180.0f * 0.25f; // degrees
+    float difference_threshold =
+	M_PI / 180.0f * _last_config.k4a.auto_tilt.threshold; // degrees
 
     if (tilt_difference > difference_threshold) {
-      _auto_tilt = new_tilt;
+      std::lock_guard lock(_auto_tilt_value_mutex);
+      auto lerp_factor = _last_config.k4a.auto_tilt.lerp_factor;
+      _auto_tilt_value = last_tilt * (1.0f - lerp_factor) + new_tilt * lerp_factor;
     }
 
     last_update_time = steady_clock::now();
+    last_tilt = _auto_tilt_value;
   }
 }
 

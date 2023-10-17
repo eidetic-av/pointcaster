@@ -22,6 +22,20 @@ struct BodyTrackingConfiguration {
   static const std::size_t MemberCount = 2;
 };
 
+struct AutoTiltConfiguration {
+  bool enabled = false;
+  float lerp_factor = 0.025f;
+  float threshold = 1.0f; // degrees
+
+  DERIVE_SERDE(AutoTiltConfiguration,
+	       (&Self::enabled, "enabled")
+	       (&Self::lerp_factor, "lerp_factor")
+	       (&Self::threshold, "threshold"))
+
+  using MemberTypes = pc::reflect::type_list<bool, float, float>;
+  static const std::size_t MemberCount = 3;
+};
+
 struct K4AConfiguration {
   bool unfolded = false;
   int depth_mode = (int)K4A_DEPTH_MODE_NFOV_UNBINNED;
@@ -30,7 +44,7 @@ struct K4AConfiguration {
   int contrast = 5;
   int saturation = 31;
   int gain = 128;
-  bool auto_tilt = false;
+  AutoTiltConfiguration auto_tilt;
 
   DERIVE_SERDE(K4AConfiguration,
                (&Self::unfolded, "unfolded")
@@ -42,8 +56,8 @@ struct K4AConfiguration {
 	       (&Self::exposure, "gain")
 	       (&Self::auto_tilt, "auto_tilt"))
 
-  using MemberTypes = pc::reflect::type_list<bool, int, int, int,
-					     int, int, int, bool>;
+  using MemberTypes =
+      pc::reflect::type_list<bool, int, int, int, int, int, int, AutoTiltConfiguration>;
   static const std::size_t MemberCount = 8;
 };
 

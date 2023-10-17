@@ -212,12 +212,23 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   auto &output_colors = _device_memory->output_colors;
   auto &indices = _device_memory->indices;
 
-  std::lock_guard<std::mutex> lock(_buffer_mutex);
+  // copy data from other threads
+  std::unique_lock buffer_access(_buffer_mutex);
 
   thrust::copy(_positions_buffer.begin(), _positions_buffer.end(),
                incoming_positions.begin());
   thrust::copy(_colors_buffer.begin(), _colors_buffer.end(),
                incoming_colors.begin());
+
+  // we can unlock our capture-thread buffers because we don't need them
+  // again until after the GPU has finalised compute
+  buffer_access.unlock();
+
+  Eigen::Matrix3f auto_tilt_value;
+  {
+    std::lock_guard lock(_auto_tilt_value_mutex);
+    auto_tilt_value = _auto_tilt_value;
+  }
 
   // zip position and color buffers together so we can run our algorithms on
   // the dataset as a single point-cloud
@@ -235,11 +246,12 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   // run the kernels
   auto filtered_points_end =
       thrust::copy_if(incoming_points_begin, incoming_points_end,
-		      filtered_points_begin, point_filter{config});
-  thrust::transform(filtered_points_begin, filtered_points_end,
-		    output_points_begin,
-		    point_transformer(config, _alignment_center,
-				      _aligned_position_offset, _auto_tilt));
+                      filtered_points_begin, point_filter{config});
+
+  thrust::transform(
+      filtered_points_begin, filtered_points_end, output_points_begin,
+      point_transformer(config, _alignment_center, _aligned_position_offset,
+                        auto_tilt_value));
 
   // we can determine the output count using the resulting output iterator
   // from running the kernels
@@ -255,6 +267,8 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   cudaDeviceSynchronize();
 
   // copy back to our output point-cloud on the CPU
+  buffer_access.lock();
+
   auto output_positions_size = sizeof(position) * output_point_count;
   auto output_colors_size = sizeof(color) * output_point_count;
   _point_cloud.positions.resize(output_point_count);

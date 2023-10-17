@@ -110,12 +110,16 @@ void K4ADevice::draw_device_controls() {
     ImGui::TreePop();
   }
 
-  if (ImGui::Checkbox("Auto tilt", &_config.k4a.auto_tilt)) {
-    driver->set_auto_tilt(_config.k4a.auto_tilt);
-  };
-
+  ImGui::Checkbox("Auto tilt", &_config.k4a.auto_tilt.enabled);
   ImGui::SameLine();
   if (ImGui::Button("Clear")) driver->clear_auto_tilt();
+
+  if (_config.k4a.auto_tilt.enabled) {
+    slider(id(), "k4a.auto_tilt.lerp_factor", _config.k4a.auto_tilt.lerp_factor,
+	   0.0f, 1.0f, 0.025f);
+    slider(id(), "k4a.auto_tilt.threshold", _config.k4a.auto_tilt.threshold,
+	   0.0f, 5.0f, 1.0f);
+  }
 }
 
 std::string K4ADevice::get_serial_number(const std::size_t device_index) {
