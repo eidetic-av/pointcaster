@@ -9,8 +9,7 @@
 
 namespace pc::devices {
 
-typedef thrust::tuple<Short3, color, int>
-    point_in_t;
+typedef thrust::tuple<Short3, color, int> point_in_t;
 typedef thrust::tuple<position, color> point_out_t;
 
 __host__ __device__ static inline float as_rad(float deg) {
@@ -137,10 +136,9 @@ struct point_filter {
     auto x = config.flip_x ? -value.x : value.x;
     auto y = config.flip_y ? -value.y : value.y;
     auto z = config.flip_z ? -value.z : value.z;
-    return 
-      x >= config.crop_x.min && x <= config.crop_x.max &&
-      y >= config.crop_y.min && y <= config.crop_y.max &&
-      z >= config.crop_z.min && z <= config.crop_z.max;
+    return x >= config.crop_x.min && x <= config.crop_x.max &&
+           y >= config.crop_y.min && y <= config.crop_y.max &&
+           z >= config.crop_z.min && z <= config.crop_z.max;
   }
 
   __device__ bool sample(int index) const { return index % config.sample == 0; }
@@ -199,20 +197,20 @@ auto make_transform_pipeline(Iterator begin, size_t count,
 }
 
 PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
-				  OperatorList operator_list) {
+                                  OperatorList operator_list) {
 
   if (!_device_memory_ready || !_open || !_buffers_updated)
     return _point_cloud;
 
   _last_config = config;
 
-  auto& incoming_positions = _device_memory->incoming_positions;
-  auto& incoming_colors = _device_memory->incoming_colors;
-  auto& filtered_positions = _device_memory->filtered_positions;
-  auto& filtered_colors = _device_memory->filtered_colors;
-  auto& output_positions = _device_memory->output_positions;
-  auto& output_colors = _device_memory->output_colors;
-  auto& indices = _device_memory->indices;
+  auto &incoming_positions = _device_memory->incoming_positions;
+  auto &incoming_colors = _device_memory->incoming_colors;
+  auto &filtered_positions = _device_memory->filtered_positions;
+  auto &filtered_colors = _device_memory->filtered_colors;
+  auto &output_positions = _device_memory->output_positions;
+  auto &output_colors = _device_memory->output_colors;
+  auto &indices = _device_memory->indices;
 
   std::lock_guard<std::mutex> lock(_buffer_mutex);
 
@@ -250,7 +248,7 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
 
   for (auto &operators : operator_list) {
     operators.get().run_operators(output_points_begin,
-				  output_points_begin + output_point_count);
+                                  output_points_begin + output_point_count);
   }
 
   // wait for the kernels to complete
@@ -263,11 +261,11 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   _point_cloud.colors.resize(output_point_count);
 
   thrust::copy(output_positions.begin(),
-	       output_positions.begin() + output_point_count,
-	       _point_cloud.positions.begin());
+               output_positions.begin() + output_point_count,
+               _point_cloud.positions.begin());
   thrust::copy(output_colors.begin(),
-	       output_colors.begin() + output_point_count,
-	       _point_cloud.colors.begin());
+               output_colors.begin() + output_point_count,
+               _point_cloud.colors.begin());
 
   _buffers_updated = false;
 
