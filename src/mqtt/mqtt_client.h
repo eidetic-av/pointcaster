@@ -22,6 +22,11 @@ public:
   MqttClient(MqttClientConfiguration &config);
   ~MqttClient();
 
+  MqttClient(const MqttClient &) = delete;
+  MqttClient &operator=(const MqttClient &) = delete;
+  MqttClient(MqttClient &&) = delete;
+  MqttClient &operator=(MqttClient &&) = delete;
+
   void connect();
   void connect(const std::string_view uri);
   void connect(const std::string_view host_name, const int port);

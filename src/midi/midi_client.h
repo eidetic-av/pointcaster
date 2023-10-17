@@ -29,6 +29,8 @@ public:
 
   MidiClient(const MidiClient &) = delete;
   MidiClient &operator=(const MidiClient &) = delete;
+  MidiClient(MidiClient &&) = delete;
+  MidiClient &operator=(MidiClient &&) = delete;
 
   void publish(const std::string_view topic, const uint8_t channel_num,
 	       const uint8_t cc_num, const float value);
