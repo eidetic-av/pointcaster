@@ -415,7 +415,6 @@ void CameraController::draw_imgui_controls() {
     ImGui::Checkbox("rendering.ground_grid", &rendering.ground_grid);
     ImGui::Checkbox("rendering.skeletons", &rendering.skeletons);
 
-    // ** >>>> TODO HERet
     slider(name(), "rendering.point_size", rendering.point_size, 0.0f, 0.01f,
 	   0.0015f);
 
