@@ -15,9 +15,12 @@ void bind_parameter(std::string_view parameter_id,
 }
 
 void unbind_parameter(std::string_view parameter_id) {
-  auto& binding = parameter_bindings.at(parameter_id);
-  for (auto &erase_cb : binding.erase_callbacks) {
-    erase_cb();
+  auto it = parameter_bindings.find(parameter_id);
+  if (it != parameter_bindings.end()) {
+    auto &binding = it->second;
+    for (auto &erase_cb : binding.erase_callbacks) {
+      erase_cb();
+    }
   }
   // parameter_bindings.erase(parameter_id);
   parameter_states[parameter_id] = ParameterState::Unbound;

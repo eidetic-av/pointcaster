@@ -60,8 +60,16 @@ public:
   bool contains(std::string_view key) { return _inner_map.contains(key); }
 
   void erase(const std::string &key) { _inner_map.erase(key); }
-
   void erase(std::string_view key) { _inner_map.erase(std::string(key)); }
+
+  auto find(const std::string &key) { return _inner_map.find(key); };
+  auto find(std::string_view key) { return _inner_map.find(std::string(key)); };
+
+  auto begin() { return _inner_map.begin(); }
+  auto begin() const { return _inner_map.cbegin(); }
+
+  auto end() { return _inner_map.end(); }
+  auto end() const { return _inner_map.cend(); }
 
   std::pair<typename MapType::iterator, bool> emplace(const std::string &key,
                                                       const ValueType &value) {
