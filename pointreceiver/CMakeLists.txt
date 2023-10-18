@@ -7,6 +7,8 @@ endif()
 message("-- Configuring ${RECEIVER_LIB_LINKAGE} pointreceiver lib\
  for ${VCPKG_TARGET_TRIPLET}")
 
+# ----- Dependencies -----
+
 find_package(spdlog CONFIG REQUIRED)
 list(APPEND RECEIVER_LINK_LIBS spdlog::spdlog)
 
@@ -23,9 +25,12 @@ list(APPEND RECEIVER_INCLUDE_DIRS ${READERWRITERQUEUE_INCLUDE_DIRS})
 find_package(bob-pointclouds CONFIG REQUIRED)
 list(APPEND RECEIVER_LINK_LIBS bob::pointclouds)
 
+# ----- Pointreceiver library -----
+
 set(RECEIVER_SOURCE_FILES src/pointreceiver.cc)
 
-add_library(pointreceiver ${RECEIVER_LIB_LINKAGE} ${RECEIVER_SOURCE_FILES})
+add_library(pointreceiver ${RECEIVER_LIB_LINKAGE}
+  ${RECEIVER_SOURCE_FILES})
 
 set_target_properties(pointreceiver PROPERTIES
   CXX_STANDARD 20
@@ -47,7 +52,6 @@ if (WITH_TESTS)
   target_link_libraries(pointreceiver-test PRIVATE
   ${RECEIVER_PLATFORM_LIBS} ${RECEIVER_LINK_LIBS})
 endif()
-
 
 # set msvc runtime
 if(WIN32 AND ${RECEIVER_LIB_LINKAGE} STREQUAL "STATIC")

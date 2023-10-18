@@ -41,8 +41,8 @@ Radio::Radio(RadioConfiguration &config)
         radio.bind(destination);
         pc::logger->info("Radio broadcasting on port {}", _config.port);
 
-        time_point<system_clock> start_send_time;
-        time_point<system_clock> end_send_time;
+        time_point<steady_clock> start_send_time;
+        time_point<steady_clock> end_send_time;
 
         using delta_time = duration<uint, milliseconds>;
         uint delta_ms = 0;
@@ -57,38 +57,40 @@ Radio::Radio(RadioConfiguration &config)
           }
 
           // TODO broadcast_rate needs to be dynamic based on when we have a
-          // new point cloud
+          // new point cloud?
           auto sleep_time = broadcast_rate - milliseconds(delta_ms);
           if (sleep_time.count() > 0)
             std::this_thread::sleep_for(sleep_time);
 
-          start_send_time = system_clock::now();
+          start_send_time = steady_clock::now();
           std::size_t packet_bytes = 0;
 
-          if (snapshots::frames.size() != broadcast_snapshot_frame_count) {
+          // if (snapshots::frames.size() != broadcast_snapshot_frame_count) {
 
-            if (snapshots::frames.size() == 0) {
-              zmq::message_t snapshot_frame_msg(std::string_view("clear"));
-              snapshot_frame_msg.set_group("snapshots");
-              radio.send(snapshot_frame_msg, zmq::send_flags::none);
-              packet_bytes += snapshot_frame_msg.size();
-            } else {
-              auto synthesized_snapshot_frame = std::reduce(
-                  snapshots::frames.begin(), snapshots::frames.end(),
-                  types::PointCloud{},
-                  [](auto a, auto b) -> types::PointCloud { return a + b; });
-              auto bytes =
-                  synthesized_snapshot_frame.serialize(_config.compress_frames);
-              zmq::message_t snapshot_frames_msg(bytes);
-              snapshot_frames_msg.set_group("snapshots");
-              radio.send(snapshot_frames_msg, zmq::send_flags::none);
-              packet_bytes += snapshot_frames_msg.size();
-            }
-            broadcast_snapshot_frame_count = snapshots::frames.size();
-          }
+          //   if (snapshots::frames.size() == 0) {
+          //     zmq::message_t snapshot_frame_msg(std::string_view("clear"));
+          //     snapshot_frame_msg.set_group("snapshots");
+          //     radio.send(snapshot_frame_msg, zmq::send_flags::none);
+          //     packet_bytes += snapshot_frame_msg.size();
+          //   } else {
+          //     auto synthesized_snapshot_frame = std::reduce(
+          //         snapshots::frames.begin(), snapshots::frames.end(),
+          //         types::PointCloud{},
+          //         [](auto a, auto b) -> types::PointCloud { return a + b; });
+          //     auto bytes =
+          //         synthesized_snapshot_frame.serialize(_config.compress_frames);
+          //     zmq::message_t snapshot_frames_msg(bytes);
+          //     snapshot_frames_msg.set_group("snapshots");
+          //     radio.send(snapshot_frames_msg, zmq::send_flags::none);
+          //     packet_bytes += snapshot_frames_msg.size();
+          //   }
+          //   broadcast_snapshot_frame_count = snapshots::frames.size();
+          // }
 
+	  pc::logger->debug("pre send");
           auto live_point_cloud = pc::devices::synthesized_point_cloud();
-          if (live_point_cloud.size() > 0) {
+	  if (live_point_cloud.size() > 0) {
+	    pc::logger->debug("pc size: {}", live_point_cloud.size());
             auto bytes = live_point_cloud.serialize(_config.compress_frames);
             zmq::message_t point_cloud_msg(bytes);
             point_cloud_msg.set_group("live");
@@ -96,10 +98,10 @@ Radio::Radio(RadioConfiguration &config)
             packet_bytes += point_cloud_msg.size();
           }
 
-          end_send_time = system_clock::now();
-          delta_ms =
-              duration_cast<milliseconds>(end_send_time - start_send_time)
-                  .count();
+	  end_send_time = steady_clock::now();
+	  delta_ms =
+	      duration_cast<milliseconds>(end_send_time - start_send_time)
+		  .count();
 
           if (_config.capture_stats) {
             std::lock_guard lock(stats_access);
