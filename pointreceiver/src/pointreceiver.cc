@@ -42,7 +42,7 @@ int startNetworkThread(const char* point_caster_address, int timeout_ms) {
 	dish.set(sockopt::connect_timeout, 0);
 
 	// auto endpoint = fmt::format("tcp://{}", point_caster_address);
-	auto endpoint = "tcp://192.168.1.220:9999";
+	auto endpoint = "tcp://127.0.0.1:9999";
 	log(fmt::format("Attempting to connect to '{}'", endpoint));
 	dish.connect(endpoint);
 
