@@ -67,6 +67,8 @@
     "nativefiledialog",
     "tweeny",
     "concurrentqueue",
+    "readerwriterqueue",
+    "draco",
     "tracy"
   ]
 }

@@ -15,7 +15,8 @@ option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_MQTT "Enable MQTT client support" ON)
 option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
-
+option(WITH_RECEIVER_LIB "Build pointreceiver client library" OFF)
+option(WITH_TESTS "Build tests" OFF)
 option(TRACY_ENABLE "Enable profiling using Tracy" OFF)
 
 find_program(MOLD_LINKER_FOUND mold)
@@ -181,7 +182,9 @@ if (TRACY_ENABLE)
   add_compile_definitions(TRACY_ON_DEMAND)
 endif()
 
-# ----- Application setup -----
+# ----- Pointcloud library -----
+
+# ----- Pointcaster application -----
 
 set(SOURCE_FILES
   src/pointcaster.cc
@@ -232,6 +235,12 @@ if (WITH_THREAD_SANITIZER)
 elseif(WITH_ADDRESS_SANITIZER)
   target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
   target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
+endif()
+
+# ----- Pointreceiver library -----
+
+if (WITH_RECEIVER_LIB)
+  add_subdirectory(pointreceiver)
 endif()
 
 # ----- Post-build actions -----

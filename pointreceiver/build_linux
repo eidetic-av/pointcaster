@@ -1,0 +1,9 @@
+#!/bin/sh
+
+mkdir -p build/linux_x64
+echo "Configuring for Linux x64"
+cmake -B ./build/linux_x64 -S . -G "Ninja Multi-Config" -DCMAKE_TOOLCHAIN_FILE="/opt/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_OVERLAY_PORTS="/home/matth/pointcaster/ports"
+echo "Building Linux x64 Debug"
+cmake --build ./build/linux_x64 --config Debug
+# echo "Building Linux x64 Release"
+# cmake --build ./build/linux_x64 --config Release

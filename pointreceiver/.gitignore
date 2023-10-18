@@ -1,0 +1,5 @@
+build/
+build_android/
+.cache/
+*~
+compile_commands.json
