@@ -17,7 +17,12 @@ option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration bui
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
 option(WITH_RECEIVER_LIB "Build pointreceiver client library" OFF)
 option(WITH_TESTS "Build tests" OFF)
+
+option(WITH_TRACY "Enable profiling using Tracy" OFF)
 option(TRACY_ENABLE "Enable profiling using Tracy" OFF)
+if (WITH_TRACY)
+  set(TRACY_ENABLE ON CACHE BOOL "Enable profiling using Tracy" FORCE)
+endif()
 
 find_program(MOLD_LINKER_FOUND mold)
 if (LINUX AND MOLD_LINKER_FOUND)
