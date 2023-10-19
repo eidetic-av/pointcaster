@@ -1,13 +1,14 @@
 #include "radio.h"
+#include "../devices/device.h"
 #include "../logger.h"
+#include "../snapshots.h"
+#include <Tracy/tracy/Tracy.hpp>
 #include <chrono>
+#include <fmt/format.h>
+#include <imgui.h>
 #include <map>
 #include <numeric>
 #include <zmq.hpp>
-#include <fmt/format.h>
-#include "../devices/device.h"
-#include "../snapshots.h"
-#include <imgui.h>
 
 namespace pc::radio {
 
@@ -27,8 +28,6 @@ Radio::Radio(RadioConfiguration &config)
         using namespace std::chrono;
         using namespace std::chrono_literals;
 
-        constexpr auto broadcast_rate = 33ms;
-
         zmq::context_t zmq_context;
         zmq::socket_t radio(zmq_context, zmq::socket_type::radio);
         // prioritise the latest frame
@@ -41,76 +40,78 @@ Radio::Radio(RadioConfiguration &config)
         radio.bind(destination);
         pc::logger->info("Radio broadcasting on port {}", _config.port);
 
-        time_point<steady_clock> start_send_time;
-        time_point<steady_clock> end_send_time;
-
         using delta_time = duration<uint, milliseconds>;
-        uint delta_ms = 0;
+        milliseconds delta_ms;
 
         uint broadcast_snapshot_frame_count = 0;
 
+        constexpr auto broadcast_rate = 33ms;
+        auto next_send_time = steady_clock::now() + broadcast_rate;
+
         while (!st.stop_requested()) {
+          ZoneScopedN("Radio Tick");
 
           if (!_config.enabled) {
-	    std::this_thread::sleep_for(broadcast_rate);
-	    continue;
+            std::this_thread::sleep_until(next_send_time);
+            next_send_time += broadcast_rate;
+            continue;
           }
 
-          // TODO broadcast_rate needs to be dynamic based on when we have a
-          // new point cloud?
-          auto sleep_time = broadcast_rate - milliseconds(delta_ms);
-          if (sleep_time.count() > 0)
-            std::this_thread::sleep_for(sleep_time);
+          if (steady_clock::now() < next_send_time) {
+            std::this_thread::sleep_until(next_send_time);
+          }
+          next_send_time += broadcast_rate;
 
-          start_send_time = steady_clock::now();
           std::size_t packet_bytes = 0;
+          {
+            ZoneScopedN("Serialization and ZMQ Send");
+            auto start_send_time = steady_clock::now();
 
-          // if (snapshots::frames.size() != broadcast_snapshot_frame_count) {
+            // if (snapshots::frames.size() != broadcast_snapshot_frame_count) {
 
-          //   if (snapshots::frames.size() == 0) {
-          //     zmq::message_t snapshot_frame_msg(std::string_view("clear"));
-          //     snapshot_frame_msg.set_group("snapshots");
-          //     radio.send(snapshot_frame_msg, zmq::send_flags::none);
-          //     packet_bytes += snapshot_frame_msg.size();
-          //   } else {
-          //     auto synthesized_snapshot_frame = std::reduce(
-          //         snapshots::frames.begin(), snapshots::frames.end(),
-          //         types::PointCloud{},
-          //         [](auto a, auto b) -> types::PointCloud { return a + b; });
-          //     auto bytes =
-          //         synthesized_snapshot_frame.serialize(_config.compress_frames);
-          //     zmq::message_t snapshot_frames_msg(bytes);
-          //     snapshot_frames_msg.set_group("snapshots");
-          //     radio.send(snapshot_frames_msg, zmq::send_flags::none);
-          //     packet_bytes += snapshot_frames_msg.size();
-          //   }
-          //   broadcast_snapshot_frame_count = snapshots::frames.size();
-          // }
+            //   if (snapshots::frames.size() == 0) {
+            //     zmq::message_t snapshot_frame_msg(std::string_view("clear"));
+            //     snapshot_frame_msg.set_group("snapshots");
+            //     radio.send(snapshot_frame_msg, zmq::send_flags::none);
+            //     packet_bytes += snapshot_frame_msg.size();
+            //   } else {
+            //     auto synthesized_snapshot_frame = std::reduce(
+            //         snapshots::frames.begin(), snapshots::frames.end(),
+            //         types::PointCloud{},
+            //         [](auto a, auto b) -> types::PointCloud { return a + b;
+            //         });
+            //     auto bytes = synthesized_snapshot_frame.serialize(
+            //         _config.compress_frames);
+            //     zmq::message_t snapshot_frames_msg(bytes);
+            //     snapshot_frames_msg.set_group("snapshots");
+            //     radio.send(snapshot_frames_msg, zmq::send_flags::none);
+            //     packet_bytes += snapshot_frames_msg.size();
+            //   }
+            //   broadcast_snapshot_frame_count = snapshots::frames.size();
+            // }
 
-	  pc::logger->debug("pre send");
-          auto live_point_cloud = pc::devices::synthesized_point_cloud();
-	  if (live_point_cloud.size() > 0) {
-	    pc::logger->debug("pc size: {}", live_point_cloud.size());
-            auto bytes = live_point_cloud.serialize(_config.compress_frames);
-            zmq::message_t point_cloud_msg(bytes);
-            point_cloud_msg.set_group("live");
-            radio.send(point_cloud_msg, zmq::send_flags::none);
-            packet_bytes += point_cloud_msg.size();
+            auto live_point_cloud = pc::devices::synthesized_point_cloud();
+            if (live_point_cloud.size() > 0) {
+              auto bytes = live_point_cloud.serialize(_config.compress_frames);
+              zmq::message_t point_cloud_msg(bytes);
+              point_cloud_msg.set_group("live");
+              radio.send(point_cloud_msg, zmq::send_flags::none);
+              packet_bytes += point_cloud_msg.size();
+            }
+
+            delta_ms = duration_cast<milliseconds>(steady_clock::now() -
+                                                   start_send_time);
           }
-
-	  end_send_time = steady_clock::now();
-	  delta_ms =
-	      duration_cast<milliseconds>(end_send_time - start_send_time)
-		  .count();
 
           if (_config.capture_stats) {
             std::lock_guard lock(stats_access);
-            send_durations.push_back(delta_ms);
+            send_durations.push_back(delta_ms.count());
             frame_sizes.push_back(packet_bytes / (float)1024);
-            if (send_durations.size() > 300)
+            constexpr auto max_stats_count = 300;
+            if (send_durations.size() > max_stats_count) {
               send_durations.clear();
-            if (frame_sizes.size() > 300)
               frame_sizes.clear();
+            }
           }
         }
 
@@ -142,20 +143,19 @@ void Radio::draw_imgui_window() {
       stats_frame_counter = 0;
       std::lock_guard lock(stats_access);
       if (send_durations.size() > 0) {
-	avg_duration =
-	    std::reduce(send_durations.begin(), send_durations.end()) /
-	    send_durations.size();
-	const auto minmax =
-	    std::minmax_element(send_durations.begin(), send_durations.end());
-	minmax_duration = {*minmax.first, *minmax.second};
+        avg_duration =
+            std::reduce(send_durations.begin(), send_durations.end()) /
+            send_durations.size();
+        const auto minmax =
+            std::minmax_element(send_durations.begin(), send_durations.end());
+        minmax_duration = {*minmax.first, *minmax.second};
       }
       if (frame_sizes.size() > 0) {
-	avg_size =
-	    std::reduce(frame_sizes.begin(), frame_sizes.end()) /
-	    frame_sizes.size();
-	const auto minmax =
-	    std::minmax_element(frame_sizes.begin(), frame_sizes.end());
-	minmax_size = {*minmax.first, *minmax.second};
+        avg_size = std::reduce(frame_sizes.begin(), frame_sizes.end()) /
+                   frame_sizes.size();
+        const auto minmax =
+            std::minmax_element(frame_sizes.begin(), frame_sizes.end());
+        minmax_size = {*minmax.first, *minmax.second};
       }
     }
     if (avg_duration != 0) {
@@ -203,4 +203,4 @@ void Radio::draw_imgui_window() {
   ImGui::PopID();
 }
 
-} // namespace pc::pointcaster
+} // namespace pc::radio
