@@ -1,7 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.Runtime;
 using System.Runtime.InteropServices;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.VFX;
@@ -9,6 +9,8 @@ using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using System.Linq;
 using Unity.Mathematics;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 
 public class PointReceiver : MonoBehaviour
 {
@@ -37,7 +39,6 @@ public class PointReceiver : MonoBehaviour
     public static PointReceiver Instance;
 
     public string PointCasterAddress = "127.0.0.1:9999";
-    public TextMeshPro Text;
     public RawImage PositionPreview;
     public RawImage ColorPreview;
 
@@ -54,7 +55,7 @@ public class PointReceiver : MonoBehaviour
     public RenderTexture Positions;
     public RenderTexture Colors;
 
-	ComputeShader TransferShader;
+    ComputeShader TransferShader;
     int TransferKernel;
 
     void Start()
@@ -93,35 +94,42 @@ public class PointReceiver : MonoBehaviour
             Positions = new RenderTexture(textureWidth, textureHeight, 0, RenderTextureFormat.ARGBFloat);
             Positions.enableRandomWrite = true;
             Positions.Create();
+
             TransferShader.SetTexture(TransferKernel, "positions", Positions);
+
             if (Colors) Destroy(Colors);
             Colors = new RenderTexture(textureWidth, textureHeight, 0, RenderTextureFormat.ARGBFloat);
             Colors.enableRandomWrite = true;
             Colors.Create();
+
             TransferShader.SetTexture(TransferKernel, "colors", Colors);
 
             // move the incoming position values into a structured buffer to use on the GPU
             // -- the incoming data comes as a 'position' packed into 64-bits:
             //    16 bits for x, y and z values with another 16-bit padding value
-            // -- similar for the colour values, expect they're packed into 32-bits with an 
+            // -- similar for the colour values, except they're packed into 32-bits with an 
             //    8-bit char per color (the shader also changes colors from bgra to rgba format)
 
-            var packedPositions = new short[PointCount * 4];
-            var packedColors = new float[PointCount];
-            Marshal.Copy(GetPointPositionsBuffer(), packedPositions, 0, PointCount * 4);
-            Marshal.Copy(GetPointColorsBuffer(), packedColors, 0, PointCount);
+            // var packedPositions = new short[PointCount * 4];
+            // var packedColors = new float[PointCount];
+            // Marshal.Copy(GetPointPositionsBuffer(), packedPositions, 0, PointCount * 4);
+            // Marshal.Copy(GetPointColorsBuffer(), packedColors, 0, PointCount);
 
-            PositionsBuffer = new ComputeBuffer(PointCount * 2, sizeof(int), ComputeBufferType.Structured);
-            PositionsBuffer.SetData(packedPositions);
-            TransferShader.SetBuffer(TransferKernel, "packedPositions", PositionsBuffer);
+	    if (PositionsBuffer != null) PositionsBuffer.Dispose();
+	    if (ColorsBuffer != null) ColorsBuffer.Dispose();
 
-            ColorsBuffer = new ComputeBuffer(PointCount, sizeof(float), ComputeBufferType.Structured);
-            ColorsBuffer.SetData(packedColors);
-            TransferShader.SetBuffer(TransferKernel, "packedColors", ColorsBuffer);
+	    PositionsBuffer = new ComputeBuffer(PointCount, sizeof(long), ComputeBufferType.Structured);
+	    PositionsBuffer.SetData(GetPointPositionsBuffer(), PointCount, sizeof(long));
+	    TransferShader.SetBuffer(TransferKernel, "packedPositions", PositionsBuffer);
+
+	    ColorsBuffer = new ComputeBuffer(PointCount, sizeof(float), ComputeBufferType.Structured);
+	    ColorsBuffer.SetData(GetPointColorsBuffer(), PointCount, sizeof(int));
+	    TransferShader.SetBuffer(TransferKernel, "packedColors", ColorsBuffer);
 
             // since we unpack them two at a time, we dispatch half as many kernels in the x direction
             int blockX = Mathf.CeilToInt(textureWidth / 8f);
             int blockY = Mathf.CeilToInt(textureHeight / 8f);
+
             TransferShader.Dispatch(TransferKernel, blockX, blockY, 1);
 
 	    foreach(var vfx in GetComponentsInChildren<VisualEffect>())
