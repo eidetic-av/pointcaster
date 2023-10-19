@@ -25,24 +25,26 @@ int startNetworkThread(const char *point_caster_address, int timeout_ms) {
   request_thread_stop = false;
   dish_thread =
       std::make_unique<std::thread>([&, point_caster_address, timeout_ms]() {
-        using namespace zmq;
         using namespace std::chrono;
         using namespace std::chrono_literals;
 
         log("Beginning networking thread");
-        // create the dish that receives point clouds
-        context_t ctx;
-        socket_t dish(ctx, socket_type::dish);
-        // don't retain frames in memory
-        dish.set(sockopt::linger, 0);
-        dish.set(sockopt::rcvhwm, 10);
-        // connection attempt should time out if requested
-        // if (timeout_ms != 0)
-        //  dish.set(sockopt::connect_timeout, timeout_ms);
-        dish.set(sockopt::connect_timeout, 0);
 
-        // auto endpoint = fmt::format("tcp://{}", point_caster_address);
-        auto endpoint = "tcp://127.0.0.1:9999";
+        // create the dish that receives point clouds
+        zmq::context_t ctx;
+        zmq::socket_t dish(ctx, zmq::socket_type::dish);
+
+        // don't retain frames in memory
+        dish.set(zmq::sockopt::linger, 0);
+        dish.set(zmq::sockopt::rcvhwm, 10);
+
+        // connection attempt should time out if requested
+        if (timeout_ms != 0) dish.set(zmq::sockopt::connect_timeout, timeout_ms);
+
+	constexpr auto recv_timeout_ms = 1000;
+	dish.set(zmq::sockopt::rcvtimeo, recv_timeout_ms);
+
+        auto endpoint = fmt::format("tcp://{}", point_caster_address);
         log(fmt::format("Attempting to connect to '{}'", endpoint));
         dish.connect(endpoint);
 
@@ -59,10 +61,13 @@ int startNetworkThread(const char *point_caster_address, int timeout_ms) {
         time_point<system_clock> last_snapshot_time = system_clock::now();
 
         while (!request_thread_stop) {
-          // block until we receive a pointcloud message
+
           zmq::message_t incoming_msg;
-          auto result = dish.recv(incoming_msg);
+          auto result = dish.recv(incoming_msg, zmq::recv_flags::none);
+	  if (!result) continue;
+
           std::string group = incoming_msg.group();
+
           // deserialize the incoming message
           auto msg_size = incoming_msg.size();
           bob::types::bytes buffer(msg_size);
@@ -70,10 +75,10 @@ int startNetworkThread(const char *point_caster_address, int timeout_ms) {
           buffer.assign(bytes_ptr, bytes_ptr + msg_size);
           // log(fmt::format("bytes size: {}", buffer.size()));
           // log(fmt::format("pc.size: {}", point_cloud.size()));
-          if (group == "live")
+          if (group == "live") {
             cloud_queue.try_enqueue(PointCloud::deserialize(buffer));
-          else if (group == "snapshots") {
-            auto msg_begin = static_cast<const char *>(incoming_msg.data());
+	  } else if (group == "snapshots") {
+	    auto msg_begin = static_cast<const char *>(incoming_msg.data());
             std::string header_msg(msg_begin, msg_begin + 5);
             if (header_msg == "clear") {
               snapshot_frames.clear();

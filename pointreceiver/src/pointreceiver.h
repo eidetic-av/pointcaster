@@ -28,7 +28,7 @@ void log(std::string text) {
 #endif
 
 extern "C" {
-	JNIEXPORT int startNetworkThread(const char* point_caster_address = "192.168.1.220:9999", int timeout_ms = 0);
+	JNIEXPORT int startNetworkThread(const char* point_caster_address = "127.0.0.1:9999", int timeout_ms = 0);
 	JNIEXPORT int stopNetworkThread();
 	JNIEXPORT bool dequeue();
 	JNIEXPORT int pointCount();
