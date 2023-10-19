@@ -25,7 +25,6 @@ Shader "Point Cloud/Point"
             #pragma multi_compile _ _COMPUTE_BUFFER
 
             #include "UnityCG.cginc"
-            #include "Common.cginc"
 
             struct Attributes
             {
@@ -46,7 +45,8 @@ Shader "Point Cloud/Point"
             half _PointSize;
 
         #if _COMPUTE_BUFFER
-            StructuredBuffer<float4> _PointBuffer;
+            StructuredBuffer<float4> _PositionsBuffer;
+            StructuredBuffer<float> _ColorsBuffer;
         #endif
 
         #if _COMPUTE_BUFFER
@@ -56,11 +56,11 @@ Shader "Point Cloud/Point"
         #endif
             {
             #if _COMPUTE_BUFFER
-                // float4 pt = _PointBuffer[vid];
-                float maxval = 1234567890123456789024f;
-                float4 pt = float4(0, 0, 0, maxval);
+                float4 pt = _PositionsBuffer[vid];
                 float4 pos = mul(_Transform, float4(pt.xyz, 1));
-                half3 col = PcxDecodeColor(asuint(pt.w));
+                float col_in = _ColorsBuffer[vid];
+                // half3 col = DecodeColor(col_in).rgb;
+                half3 col = half3(1, 1, 1);
             #else
                 float4 pos = input.position;
                 half3 col = input.color;
