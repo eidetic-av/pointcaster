@@ -121,8 +121,7 @@ static PointCloud point_cloud;
 bool dequeue() {
   point_cloud = PointCloud{};
   const bool dequeue_success = cloud_queue.try_dequeue(point_cloud);
-  if (!dequeue_success)
-    return false;
+  if (!dequeue_success) return false;
   point_cloud += synthesized_snapshot_frames;
   return true;
 }
@@ -138,8 +137,7 @@ void testLoop() {
   while (i++ < 6000) {
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(0.5ms);
-    if (!dequeue())
-      continue;
+    if (!dequeue()) continue;
     auto count = pointCount();
     // auto buffer = pointPositions();
     log(fmt::format("--{}", i));
