@@ -113,7 +113,6 @@ int startNetworkThread(const char *point_caster_address, int timeout_ms) {
 int stopNetworkThread() {
   request_thread_stop = true;
   dish_thread->join();
-  dish_thread.reset(nullptr);
   return 0;
 }
 
