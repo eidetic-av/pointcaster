@@ -14,6 +14,7 @@ class Driver {
 public:
   uint device_index;
   bool primary_aligner = false;
+  bool lost_device = false;
 
   virtual ~Driver() = default;
 

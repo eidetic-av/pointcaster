@@ -59,7 +59,7 @@ K4ADriver::~K4ADriver() {
   _tracker_loop.join();
   _imu_loop.join();
   stop_sensors();
-  _device->close();
+  if (!lost_device) _device->close();
   free_device_memory();
 }
 
@@ -132,7 +132,6 @@ void K4ADriver::capture_frames() {
   using namespace std::chrono;
 
   auto last_capture_time = steady_clock::now();
-  auto lost_device = false;
   auto lost_device_check_count = 0;
 
   while (!_stop_requested) {
