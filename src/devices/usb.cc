@@ -83,7 +83,9 @@ int UsbMonitor::handle_hotplug_event(struct libusb_context *ctx,
 				     struct libusb_device *dev,
 				     libusb_hotplug_event event,
 				     void *user_data) {
-  auto *callback_data = static_cast<HotplugCallbackData*>(user_data);
+  auto *callback_data = static_cast<HotplugCallbackData *>(user_data);
+
+  pc::logger->debug("handle hotplug");
 
   // keep track of running callbacks...
   // increment the running callback counter

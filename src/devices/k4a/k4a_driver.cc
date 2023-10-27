@@ -21,12 +21,6 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config)
 
   pc::logger->info("Opening driver for k4a {} ({})\n", device_index, id());
 
-  _device = std::make_unique<k4a::device>(k4a::device::open(device_index));
-  pc::logger->debug("Device open");
-  
-  _serial_number = _device->get_serialnum();
-  pc::logger->info("k4a {} Open", device_index);
-
   _k4a_config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
   _k4a_config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
   _k4a_config.color_resolution = K4A_COLOR_RESOLUTION_720P;
@@ -44,10 +38,28 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config)
 
   init_device_memory();
 
-  start_sensors();
-  _open = true;
+  try {
+    auto device = k4a::device::open(device_index);
+    _device = std::make_unique<k4a::device>(std::move(device));
+    _serial_number = _device->get_serialnum();
 
-  active_count++;
+    start_sensors();
+
+    active_count++;
+
+    _open = true;
+
+    pc::logger->info("k4a {} Open", device_index);
+
+  } catch (const k4a::error &e) {
+
+    pc::logger->warn("K4ADriver device initialisation failed");
+    pc::logger->warn(e.what());
+    pc::logger->warn("Will wait for new connections...");
+
+    lost_device = true;
+    _open = false;
+  }
 }
 
 K4ADriver::~K4ADriver() {
@@ -59,7 +71,9 @@ K4ADriver::~K4ADriver() {
   _tracker_loop.join();
   _imu_loop.join();
   stop_sensors();
-  if (!lost_device) _device->close();
+  if (!lost_device) {
+    _device->close();
+  }
   free_device_memory();
 }
 
