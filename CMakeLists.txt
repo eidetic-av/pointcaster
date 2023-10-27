@@ -34,6 +34,8 @@ if(LINUX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive -Wfatal-errors")
 endif()
 
+# link time optimisation for release builds
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION $<$<CONFIG:Release>:TRUE>)
 
 # ----- Geometry -----
 
