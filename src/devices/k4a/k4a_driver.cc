@@ -3,23 +3,23 @@
 #include "k4a_utils.h"
 #include <future>
 #include <numeric>
+#include <set>
 
 namespace pc::devices {
 
 using namespace std::chrono_literals;
 using namespace pc::k4a_utils;
 
-K4ADriver::K4ADriver(const DeviceConfiguration &config)
+K4ADriver::K4ADriver(const DeviceConfiguration &config, std::string_view target_id)
     : _capture_loop(&K4ADriver::capture_frames, this),
       _tracker_loop(&K4ADriver::track_bodies, this),
       _imu_loop(&K4ADriver::process_imu, this)
 {
   static std::mutex serial_driver_construction;
+  static std::set<uint> open_driver_indices;
   std::lock_guard<std::mutex> lock(serial_driver_construction);
 
-  device_index = active_count;
-
-  pc::logger->info("Opening driver for k4a {} ({})\n", device_index, id());
+  pc::logger->info("Opening driver for k4a {} ({})\n", (uint) active_count, target_id);
 
   _k4a_config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
   _k4a_config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
@@ -38,10 +38,45 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config)
 
   init_device_memory();
 
+  // the k4a SDK opens devices only via their USB index...
+  // since we serialize specific configurations via serial number,
+  // the following logic makes sure we open the right device
+
+  // if the device with the target serial number is not found,
+  // we put the driver into a "lost_device" state waiting for it
+  // to be plugged in
+
   try {
-    auto device = k4a::device::open(device_index);
+
+    bool found_target = false;
+    auto attempting_open_index = 0;
+
+    k4a::device device;
+
+    while (!found_target) {
+
+      if (open_driver_indices.contains(attempting_open_index)) {
+	attempting_open_index++;
+	continue;
+      }
+
+      device = k4a::device::open(attempting_open_index);
+      _serial_number = device.get_serialnum();
+      if (target_id.empty()) found_target = true;
+      else {
+	if (_serial_number == target_id) found_target = true;
+        else {
+	  pc::logger->debug("Found Kinect with wrong serial num... trying again...");
+	  device.close();
+          attempting_open_index++;
+        }
+      }
+    }
+
+    device_index = attempting_open_index;
+    open_driver_indices.insert(device_index);
+
     _device = std::make_unique<k4a::device>(std::move(device));
-    _serial_number = _device->get_serialnum();
 
     start_sensors();
 
@@ -49,13 +84,15 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config)
 
     _open = true;
 
-    pc::logger->info("k4a {} Open", device_index);
+    pc::logger->info("k4a {} Open", (uint) active_count);
 
   } catch (const k4a::error &e) {
 
     pc::logger->warn("K4ADriver device initialisation failed");
     pc::logger->warn(e.what());
     pc::logger->warn("Will wait for new connections...");
+
+    _device.reset();
 
     lost_device = true;
     _open = false;
@@ -80,7 +117,26 @@ K4ADriver::~K4ADriver() {
 void K4ADriver::start_sensors() {
   if (_running) return;
 
-  _device->start_cameras(&_k4a_config);
+  pc::logger->debug("Starting sensors: {}", id());
+
+
+  // sometimes start_cameras fails but it works after a few seconds...
+  static constexpr auto max_start_camera_attempts = 2;
+  bool started = false;
+
+  for (int i = 0; i < max_start_camera_attempts; i++) {
+    try {
+      _device->start_cameras(&_k4a_config);
+      started = true;
+      break;
+    } catch (const k4a::error &e) {
+      std::this_thread::sleep_for(5s);
+    }
+  }
+
+  // if it really failed after a few attempts, throw to the outer scope
+  if (!started) throw new k4a::error("Failed to start cameras!");
+
   pc::logger->debug("Started cameras: {}", id());
 
   _device->start_imu();

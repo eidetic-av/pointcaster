@@ -7,12 +7,15 @@
 
 namespace pc::devices {
 
-K4ADevice::K4ADevice(DeviceConfiguration config) : Device(config) {
+K4ADevice::K4ADevice(DeviceConfiguration config, std::string_view target_id) : Device(config) {
   pc::logger->info("Initialising K4ADevice");
 
-  _driver = std::make_unique<K4ADriver>(config);
-  if (attached_devices.size() == 0) _driver->primary_aligner = true;
-  name = "Azure Kinect " + std::to_string(_driver->device_index + 1);
+  auto connection_index = Device::attached_devices.size() + 1;
+
+  _driver = std::make_unique<K4ADriver>(config, target_id);
+
+  name = "Azure Kinect " + std::to_string(connection_index);
+  if (connection_index == 1) _driver->primary_aligner = true;
 
   // TODO set these parameters from config instead of the reverse
   // auto driver = dynamic_cast<K4ADriver *>(_driver.get());

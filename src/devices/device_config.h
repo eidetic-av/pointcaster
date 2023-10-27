@@ -84,9 +84,11 @@ struct DeviceConfiguration {
 	       (&Self::offset, "offset") (&Self::rotation_deg, "rotation_deg") (&Self::scale, "scale")
 	       (&Self::sample, "sample") (&Self::body, "body") (&Self::k4a, "k4a"))
 
-  using MemberTypes = pc::reflect::type_list<
-      bool, bool, bool, bool, MinMax<short>, MinMax<short>, MinMax<short>,
-      Float3, Float3, float, int, BodyTrackingConfiguration, K4AConfiguration>;
+  using MemberTypes =
+      pc::reflect::type_list<bool, bool, bool, bool, MinMax<short>,
+			     MinMax<short>, MinMax<short>, Float3, Float3,
+			     float, int, BodyTrackingConfiguration,
+			     K4AConfiguration>;
   static const std::size_t MemberCount = 13;
 };
 

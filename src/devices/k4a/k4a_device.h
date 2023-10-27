@@ -12,7 +12,7 @@ namespace pc::devices {
 
 class K4ADevice : public Device {
 public:
-  K4ADevice(DeviceConfiguration config);
+  K4ADevice(DeviceConfiguration config, std::string_view target_id = "");
   ~K4ADevice();
 
   std::string id() override;

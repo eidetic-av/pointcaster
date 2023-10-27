@@ -193,7 +193,8 @@ protected:
   void save_session(std::filesystem::path file_path);
   void load_session(std::filesystem::path file_path);
 
-  void load_device(const DeviceConfiguration& config);
+  std::atomic_bool loading_device = false;
+  void load_device(const DeviceConfiguration& config, std::string_view target_id = "");
   void open_kinect_sensors();
 
   void render_cameras();
@@ -581,15 +582,15 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   }
 
   if (_session.usb.open_on_launch) {
+    pc::logger->info(_session.devices.size());
     if (_session.devices.empty()) {
-      // TODO open all devices
       open_kinect_sensors();
     } else {
-      // TODO get saved device configurations and populate the device list
+      // get saved device configurations and populate the device list
       run_async([this] {
 	for (auto &[device_id, device_config] : _session.devices) {
 	  pc::logger->info("Loading device '{}' from config file", device_id);
-	  load_device(device_config);
+	  load_device(device_config, device_id);
         }
       });
     }
@@ -670,23 +671,27 @@ void PointCaster::render_cameras() {
   GL::defaultFramebuffer.bind();
 }
 
-void PointCaster::load_device(const DeviceConfiguration& config) {
+void PointCaster::load_device(const DeviceConfiguration& config, std::string_view target_id) {
+  loading_device = true;
   try {
-    Device::attached_devices.push_back(std::make_shared<K4ADevice>(config));
+    Device::attached_devices.push_back(std::make_shared<K4ADevice>(config, target_id));
   } catch (k4a::error e) {
     pc::logger->error(e.what());
   } catch (...) {
     pc::logger->error("Failed to open device. (Unknown exception)");
   }
+  loading_device = false;
 }
 
 void PointCaster::open_kinect_sensors() {
   run_async([this] {
+    loading_device = true;
     const auto open_device_count = Device::attached_devices.size();
     const auto attached_device_count = k4a::device::get_installed_count();
     for (std::size_t i = open_device_count; i < attached_device_count; i++) {
       load_device({});
     }
+    loading_device = false;
   });
 }
 
@@ -1088,6 +1093,9 @@ void PointCaster::draw_devices_window() {
     device->draw_imgui_controls();
   }
   ImGui::PopItemWidth();
+
+  if (loading_device) ImGui::TextDisabled("Loading device...");
+
   ImGui::End();
 }
 

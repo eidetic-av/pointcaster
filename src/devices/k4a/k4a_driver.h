@@ -42,7 +42,7 @@ public:
 
   static inline std::atomic<uint> active_count = 0;
 
-  K4ADriver(const DeviceConfiguration& config);
+  K4ADriver(const DeviceConfiguration& config, std::string_view target_id = "");
   ~K4ADriver();
 
   std::string id() const override;
