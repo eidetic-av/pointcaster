@@ -2,7 +2,7 @@
 #include "../devices/device.h"
 #include "../logger.h"
 #include "../snapshots.h"
-#include <Tracy/tracy/Tracy.hpp>
+#include <tracy/Tracy.hpp>
 #include <chrono>
 #include <fmt/format.h>
 #include <imgui.h>
