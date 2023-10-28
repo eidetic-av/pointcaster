@@ -1,38 +1,31 @@
 #pragma once
 
+#include "../publisher/publishable_traits.h"
 #include "mqtt_client_config.h"
 #include <atomic>
+#include <concurrentqueue/blockingconcurrentqueue.h>
 #include <expected>
 #include <future>
 #include <memory>
-#include <mqtt/async_client.h>
-#include <mutex>
-#include <string_view>
+#include <mqtt/client.h>
 #include <msgpack.hpp>
+#include <mutex>
+#include <span>
+#include <string_view>
+#include <type_traits>
+#include "../logger.h"
 
-namespace pc {
+namespace pc::mqtt {
 
 class MqttClient {
 public:
-
-  static std::shared_ptr<MqttClient> &instance() {
-    if (!_instance)
-      throw std::logic_error(
-	  "No MqttClient instance created. Call MqttClient::create() first.");
-    return _instance;
-  }
-
-  static void create(MqttClientConfiguration &config) {
-    std::lock_guard lock(_mutex);
-    _instance = make_instance(config);
-  }
-
-  static bool connected() { return _connected; };
+  MqttClient(MqttClientConfiguration &config);
+  ~MqttClient();
 
   MqttClient(const MqttClient &) = delete;
   MqttClient &operator=(const MqttClient &) = delete;
-
-  ~MqttClient();
+  MqttClient(MqttClient &&) = delete;
+  MqttClient &operator=(MqttClient &&) = delete;
 
   void connect();
   void connect(const std::string_view uri);
@@ -40,40 +33,45 @@ public:
 
   void disconnect();
 
+  bool connecting() { return _connecting; };
+
   void set_uri(const std::string_view uri);
   void set_uri(const std::string_view hostname, int port);
 
-  void publish(const std::string_view topic, const std::string_view message);
-  void publish(const std::string_view topic, const std::vector<uint8_t> &bytes);
+  void publish(const std::string_view topic, const std::string_view message,
+               std::initializer_list<std::string_view> topic_nodes = {});
   void publish(const std::string_view topic, const void *payload,
-	       const std::size_t size);
+	       const std::size_t size,
+	       std::initializer_list<std::string_view> topic_nodes = {},
+	       bool empty = false);
 
   template <typename T>
-  void publish(const std::string_view topic, const T &data) {
+  std::enable_if_t<is_publishable_container_v<T>, void>
+  publish(const std::string_view topic, const T &data,
+	  std::initializer_list<std::string_view> topic_nodes = {}) {
     msgpack::sbuffer send_buffer;
     msgpack::pack(send_buffer, data);
-    publish(topic, send_buffer.data(), send_buffer.size());
+    publish(topic, send_buffer.data(), send_buffer.size(),
+            std::move(topic_nodes), data.empty());
   }
 
   void draw_imgui_window();
 
 private:
-  static std::mutex _mutex;
-  static std::shared_ptr<MqttClient> _instance;
-  static std::atomic_bool _connected;
-
-  static std::shared_ptr<MqttClient>
-  make_instance(MqttClientConfiguration &config) {
-    return std::shared_ptr<MqttClient>(new MqttClient(config));
-  }
-
-  explicit MqttClient(MqttClientConfiguration &config);
-
   MqttClientConfiguration &_config;
   std::future<void> _connection_future;
-  std::unique_ptr<mqtt::async_client> _client;
+  std::atomic_bool _connecting;
+  std::unique_ptr<::mqtt::client> _client;
 
-  bool check_connected();
+  struct MqttMessage {
+    std::string topic;
+    std::vector<std::byte> buffer;
+  };
+
+  std::jthread _sender_thread;
+  moodycamel::BlockingConcurrentQueue<const MqttMessage> _messages_to_publish;
+
+  void send_messages(std::stop_token st);
 };
 
-} // namespace pc
+} // namespace pc::mqtt

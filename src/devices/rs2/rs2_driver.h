@@ -7,7 +7,7 @@
 
 #include <librealsense2/rs.hpp>
 
-namespace pc::sensors {
+namespace pc::devices {
 
 class Rs2Driver : public Driver {
 public:
@@ -61,4 +61,4 @@ private:
 
   bool _open = false;
 };
-} // namespace pc::sensors
+} // namespace pc::devices

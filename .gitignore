@@ -1,5 +1,6 @@
 build/
 bin/
+captures/
 vcpkg_installed/
 .cache/
 .vs/

@@ -5,7 +5,7 @@
 #include <fmt/format.h>
 #include <imgui.h>
 
-namespace pc::sensors {
+namespace pc::devices {
 
 using namespace Magnum;
 
@@ -61,4 +61,4 @@ void Rs2Device::drawDeviceSpecificControls() {
                    contrast_range);
 }
 
-} // namespace pc::sensors
+} // namespace pc::devices

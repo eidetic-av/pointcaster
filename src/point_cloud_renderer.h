@@ -1,17 +1,18 @@
 #pragma once
 
-#include <memory>
-#include <cstdint>
-#include <vector>
+#include "point_cloud_renderer_config.h"
+#include "shaders/particle_sphere.h"
+#include "structs.h"
 #include <Corrade/Containers/Pointer.h>
 #include <Magnum/GL/Buffer.h>
 #include <Magnum/GL/Mesh.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/SceneGraph/Camera.h>
+#include <cstdint>
+#include <memory>
 #include <pointclouds.h>
-#include "structs.h"
-#include "shaders/particle_sphere.h"
-#include "point_cloud_renderer_config.h"
+#include <tracy/Tracy.hpp>
+#include <vector>
 
 namespace pc {
 

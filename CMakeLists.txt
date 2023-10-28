@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22.0)
 project(bob-pointcaster LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 20)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX TRUE)
@@ -15,7 +15,14 @@ option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_MQTT "Enable MQTT client support" ON)
 option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
-option(WITH_MEMORY_SANITIZER "Enable memory sanitizer on Debug configuration builds" OFF)
+option(WITH_RECEIVER_LIB "Build pointreceiver client library" OFF)
+option(WITH_TESTS "Build tests" OFF)
+
+option(WITH_TRACY "Enable profiling using Tracy" OFF)
+option(TRACY_ENABLE "Enable profiling using Tracy" OFF)
+if (WITH_TRACY)
+  set(TRACY_ENABLE ON CACHE BOOL "Enable profiling using Tracy" FORCE)
+endif()
 
 find_program(MOLD_LINKER_FOUND mold)
 if (LINUX AND MOLD_LINKER_FOUND)
@@ -23,12 +30,12 @@ if (LINUX AND MOLD_LINKER_FOUND)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fuse-ld=mold")
 endif()
 
+if(LINUX)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive -Wfatal-errors")
+endif()
 
-# ----- imgui lib -----
-
-find_package(imgui CONFIG REQUIRED)
-add_library(ImGui::ImGui ALIAS imgui::imgui)
-list(APPEND LINK_LIBS imgui::imgui)
+# link time optimisation for release builds
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION $<$<CONFIG:Release>:TRUE>)
 
 # ----- Geometry -----
 
@@ -37,6 +44,9 @@ list(APPEND LINK_LIBS Eigen3::Eigen)
 
 find_path(EARCUT_HPP_INCLUDE_DIRS "mapbox/earcut.hpp")
 list(APPEND INCLUDE_DIRS ${EARCUT_HPP_INCLUDE_DIRS})
+
+find_path(CUDA_NOISE_INCLUDE_DIRS "cuda_noise.cuh")
+list(APPEND INCLUDE_DIRS ${CUDA_NOISE_INCLUDE_DIRS})
 
 # ----- Point clouds -----
 
@@ -72,6 +82,18 @@ if (WITH_MQTT)
   add_compile_definitions(WITH_MQTT)
 endif()
 
+# ----- Control -----
+
+find_package(libremidi CONFIG REQUIRED)
+list(APPEND LINK_LIBS libremidi)
+list(APPEND POINTCASTER_SRC src/midi/midi_client.cc)
+
+# ----- Dear ImGui lib -----
+
+find_package(imgui CONFIG REQUIRED)
+add_library(ImGui::ImGui ALIAS imgui::imgui)
+list(APPEND LINK_LIBS imgui::imgui)
+add_definitions(-DIMGUI_DEFINE_MATH_OPERATORS)
 
 # ----- Magnum 3D engine -----
 
@@ -105,8 +127,9 @@ if (WITH_K4A)
   list(APPEND OPTIONAL_LIBS k4a::k4a)
 
   list(APPEND OPTIONAL_SRC
-    src/devices/k4a/k4a_driver.cu
-    src/devices/k4a/k4a_device.cc)
+    src/devices/k4a/k4a_device.cc
+    src/devices/k4a/k4a_driver.cc
+    src/devices/k4a/k4a_driver.cu)
 
   find_package(k4abt REQUIRED)
   list(APPEND OPTIONAL_LIBS k4a::k4abt)
@@ -124,6 +147,13 @@ endif()
 find_package(OpenCV CONFIG REQUIRED)
 list(APPEND LINK_LIBS ${OpenCV_LIBS})
 
+# ----- CUDA -----
+
+find_package(CUDAToolkit REQUIRED)
+find_package(Thrust CONFIG REQUIRED)
+thrust_create_target(Thrust)
+list(APPEND LINK_LIBS Thrust)
+
 # ----- Utility libs -----
 
 find_package(fmt CONFIG REQUIRED)
@@ -135,10 +165,33 @@ list(APPEND LINK_LIBS spdlog::spdlog_header_only)
 find_package(nlohmann_json CONFIG REQUIRED)
 list(APPEND LINK_LIBS nlohmann_json::nlohmann_json)
 
+find_package(serdepp CONFIG REQUIRED)
+list(APPEND LINK_LIBS serdepp::serdepp)
+
+find_package(toml11 CONFIG REQUIRED)
+list(APPEND LINK_LIBS toml11::toml11)
+
 find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
 list(APPEND INCLUDE_DIRS ${ZPP_BITS_INCLUDE_DIRS})
 
-# ----- Application setup -----
+find_package(Tweeny CONFIG REQUIRED)
+list(APPEND LINK_LIBS tweeny)
+
+find_package(unofficial-concurrentqueue CONFIG REQUIRED)
+list(APPEND LINK_LIBS unofficial::concurrentqueue::concurrentqueue)
+
+# ----- Profiling -----
+
+find_package(Tracy CONFIG REQUIRED)
+if (TRACY_ENABLE)
+  list(APPEND LINK_LIBS Tracy::TracyClient)
+  add_compile_definitions(TRACY_ENABLE)
+  add_compile_definitions(TRACY_ON_DEMAND)
+endif()
+
+# ----- Pointcloud library -----
+
+# ----- Pointcaster application -----
 
 set(SOURCE_FILES
   src/pointcaster.cc
@@ -146,15 +199,25 @@ set(SOURCE_FILES
   src/devices/usb.cc
   src/camera/camera_controller.cc
   src/analysis/analyser_2d.cc
-  src/radio.cc
+  src/radio/radio.cc
   src/snapshots.cc
   src/point_cloud_renderer.cc
   src/sphere_renderer.cc
   src/shaders/particle_sphere.cc
-  src/gui_helpers.cc
+  src/shaders/texture_display.cc
+  src/gui/widgets.cc
+  src/gui/range_slider.cc
+  src/parameters.cc
   src/path.cc
   src/uuid.cc
   src/wtf/wtf.cc
+  src/tween/tween_manager.cc
+  src/publisher/publisher.cc
+  src/publisher/publisher_utils.cc
+  src/operators/session_operator_host.cc
+  src/operators/session_operator_host.cu
+  src/operators/noise_operator.cc
+  ${POINTCASTER_SRC}
   ${OPTIONAL_SRC})
 
 corrade_add_resource(RESOURCES resources.conf)
@@ -179,9 +242,12 @@ if (WITH_THREAD_SANITIZER)
 elseif(WITH_ADDRESS_SANITIZER)
   target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
   target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
-elseif(WITH_MEMORY_SANITIZER)
-  target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=memory>")
-  target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=memory>")
+endif()
+
+# ----- Pointreceiver library -----
+
+if (WITH_RECEIVER_LIB)
+  add_subdirectory(pointreceiver)
 endif()
 
 # ----- Post-build actions -----

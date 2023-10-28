@@ -3,7 +3,7 @@
 #include "../device.h"
 #include "rs2_driver.h"
 
-namespace pc::sensors {
+namespace pc::devices {
 
 class Rs2Device : public Device {
 public:
@@ -15,4 +15,4 @@ public:
 protected:
   void drawDeviceSpecificControls() override;
 };
-} // namespace pc::sensors
+} // namespace pc::devices

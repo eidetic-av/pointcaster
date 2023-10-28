@@ -1,5 +1,5 @@
 {
-  "name": "bob-pointcaster",
+  "name": "pointcaster",
   "version-string": "0.0.1",
   "dependencies": [
     "bob-pointclouds",
@@ -7,14 +7,18 @@
     "earcut-hpp",
     "paho-mqttpp3",
     "msgpack",
-    "nlohmann-json",
+    "toml11",
+    "serdepp",
     "azure-kinect-sensor-sdk",
+    "cuda",
+    "cuda-noise",
     "corrade",
     "eigen3",
     "fmt",
     "spdlog",
     "cppzmq",
     "libusb",
+    "libremidi",
     "imgui",
     {
       "name": "opencv",
@@ -60,6 +64,11 @@
       "features": ["imgui", "eigen"]
     },
     "sdl2",
-    "nativefiledialog"
+    "nativefiledialog",
+    "tweeny",
+    "concurrentqueue",
+    "readerwriterqueue",
+    "draco",
+    "tracy"
   ]
 }

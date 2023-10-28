@@ -7,12 +7,13 @@
 #include <Corrade/Containers/Pointer.h>
 #include <Magnum/SceneGraph/Camera.h>
 #include <Magnum/Math/Color.h>
+#include <vector>
 
 namespace pc {
 
   class SphereRenderer {
   public:
-    pc::types::float3 position {0, 0, 0};
+    pc::types::Float3 position {0, 0, 0};
     float radius = 3.0f;
 
     Magnum::GL::Mesh mesh;
@@ -22,7 +23,7 @@ namespace pc {
 
     SphereRenderer();
 
-    void draw(Magnum::SceneGraph::Camera3D &camera);
+    void draw(Magnum::SceneGraph::Camera3D &camera,
+              std::vector<pc::types::position> sphere_positions);
   };
-
 }

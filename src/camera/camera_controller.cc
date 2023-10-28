@@ -1,8 +1,9 @@
 #include "camera_controller.h"
 #include "../analysis/analyser_2d_config.h"
-#include "../gui_helpers.h"
+#include "../gui/widgets.h"
 #include "../logger.h"
 #include "../math.h"
+#include "../parameters.h"
 #include "../uuid.h"
 #include "camera_config.h"
 #include <Corrade/Containers/Array.h>
@@ -35,78 +36,66 @@
 namespace pc::camera {
 
 using namespace Magnum;
+using Magnum::Platform::Sdl2Application;
 using Magnum::Image2D;
 using Magnum::Matrix4;
 using Magnum::Quaternion;
 using Magnum::Vector3;
 using Magnum::Math::Deg;
 
-std::atomic<uint> CameraController::count = 0;
+std::atomic<std::size_t> CameraController::count = 0;
 
 CameraController::CameraController(Magnum::Platform::Application *app,
                                    Scene3D *scene)
     : CameraController(app, scene, CameraConfiguration{}){};
 
 CameraController::CameraController(Magnum::Platform::Application *app,
-                                   Scene3D *scene, CameraConfiguration config)
-    : _app(app), _config(config) {
+				   Scene3D *scene, CameraConfiguration config)
+    : _app(app), _config(config), _frame_analyser(this) {
 
-  // rotations are manipulated by individual parent objects...
-  // this makes rotations easier to reason about and serialize,
-  // as we don't need quaternion multiplications or conversions to and from
-  // matrices to serialize as three independent euler values
+  _anchor = std::make_unique<Object3D>(scene);
+  _orbit_parent_left_right = std::make_unique<Object3D>(_anchor.get());
+  _orbit_parent_up_down = std::make_unique<Object3D>(_orbit_parent_left_right.get());
+  _camera_parent = std::make_unique<Object3D>(_orbit_parent_up_down.get());
+  _camera = std::make_unique<Camera3D>(*_camera_parent);
 
-  _yaw_parent = std::make_unique<Object3D>(scene);
-  _pitch_parent = std::make_unique<Object3D>(_yaw_parent.get());
-  _camera_parent = std::make_unique<Object3D>(_pitch_parent.get());
-  _roll_parent = std::make_unique<Object3D>(_camera_parent.get());
-  _camera = std::make_unique<Camera3D>(*_roll_parent);
-
-  _camera_parent->setTransformation(Matrix4::lookAt(
-      {defaults::magnum::translation.z(), defaults::magnum::translation.y(),
-       defaults::magnum::translation.x()},
-      {}, Vector3::yAxis()));
-
-  // deserialize our camera configuration into Magnum types
-  auto rotation = Euler{Deg_f(_config.rotation[0]), Deg_f(_config.rotation[1]),
-                        Deg_f(_config.rotation[2])};
-  auto translation = Position{_config.translation[0], _config.translation[1],
-                              _config.translation[2]};
-
-  set_rotation(rotation, true);
-  set_translation(translation);
+  // apply any loaded configuration
+  set_distance(_config.transform.distance);
+  set_orbit(_config.transform.orbit);
+  set_roll(_config.transform.roll);
+  set_translation(_config.transform.translation);
 
   if (_config.id.empty()) {
     _config.id = pc::uuid::word();
   }
   _config.name = "camera_" + std::to_string(++CameraController::count);
 
-  auto resolution = _config.rendering.resolution;
-  _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
-      Deg_f(_config.fov), static_cast<float>(resolution[0]) / resolution[1],
-      0.001f, 200.0f));
+  reset_projection_matrix();
 
+  auto &resolution = _config.rendering.resolution;
   if (resolution[0] == 0 || resolution[1] == 0)
-    _config.rendering.resolution = pc::camera::defaults::rendering_resolution;
+    resolution = defaults::rendering_resolution;
 
   pc::logger->info("{}x{}", resolution[0], resolution[1]);
 
-  setup_framebuffer({resolution[0], resolution[1]});
+  setup_frame({resolution[0], resolution[1]});
 
   pc::logger->info("Initialised Camera Controller {} with id {}", _config.name,
                    _config.id);
+
+  declare_parameters(name(), _config);
 }
 
 CameraController::~CameraController() { CameraController::count--; }
 
-void CameraController::setup_framebuffer(Vector2i frame_size) {
+void CameraController::setup_frame(Vector2i frame_size) {
 
   Vector2i scaled_size{
       static_cast<int>(frame_size.x() / _app->dpiScaling().x()),
       static_cast<int>(frame_size.y() / _app->dpiScaling().y())};
 
   auto aspect_ratio = frame_size.x() / static_cast<float>(frame_size.y());
-  if (_config.rendering.scale_mode == ScaleMode::Span &&
+  if (_config.rendering.scale_mode == (int)ScaleMode::Span &&
       viewport_size.has_value()) {
     // automatically set frame height based on size of viewport
     aspect_ratio = viewport_size->x() / viewport_size->y();
@@ -115,19 +104,25 @@ void CameraController::setup_framebuffer(Vector2i frame_size) {
         _config.rendering.resolution[0] / aspect_ratio;
   }
 
+  // update any transforms that have changed
+  set_distance(_config.transform.distance);
+  set_orbit(_config.transform.orbit);
+  set_roll(_config.transform.roll);
+  set_translation(_config.transform.translation);
+
+  // if no change in frame size, bind the framebuffer and finish here
   if (scaled_size == _frame_size) {
     bind_framebuffer();
     return;
   }
 
+  // otherwise recreate containers with new frame size
+
   _frame_size = scaled_size;
 
   _frame_analyser.set_frame_size(_frame_size);
 
-  // TODO replace the aspect ratio fix here when we have
-  // a more solid handle over fov control
-  _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
-      Deg_f(_config.fov), aspect_ratio, 0.001f, 200.0f));
+  reset_projection_matrix();
 
   std::lock_guard lock_color(_color_frame_mutex);
 
@@ -153,6 +148,22 @@ void CameraController::bind_framebuffer() {
       .bind();
 }
 
+void CameraController::reset_projection_matrix() {
+  auto resolution = _config.rendering.resolution;
+  auto aspect_ratio = static_cast<float>(resolution[0]) / resolution[1];
+  auto clipping = _config.rendering.clipping;
+
+  if (_config.rendering.orthographic) {
+    auto &ortho_size = _config.rendering.orthographic_size;
+    _camera->setProjectionMatrix(Matrix4::orthographicProjection(
+	{ortho_size.x * aspect_ratio, ortho_size.y}, clipping.min,
+	clipping.max));
+  } else {
+    _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
+	Deg_f(_config.fov), aspect_ratio, clipping.min, clipping.max));
+  }
+}
+
 GL::Texture2D &CameraController::color_frame() {
   std::unique_lock lock(_color_frame_mutex);
   return *_color;
@@ -164,180 +175,134 @@ GL::Texture2D &CameraController::analysis_frame() {
 
 void CameraController::dispatch_analysis() {
   std::unique_lock lock(_color_frame_mutex);
-  _frame_analyser.dispatch_analysis(*_color.get(), _config.frame_analysis);
+  _frame_analyser.dispatch_analysis(*_color.get(), _config.analysis);
 }
 
 int CameraController::analysis_time() {
   return _frame_analyser.analysis_time();
 }
 
-// TODO
-bool _is_dz_started = false;
-float _init_height_at_distance = 0.0f;
+void CameraController::set_distance(const float metres) {
+  auto camera_transform_matrix = _camera_parent->transformationMatrix();
+  camera_transform_matrix.translation().z() = metres;
+  _camera_parent->setTransformation(camera_transform_matrix);
+  _config.transform.distance = metres;
+}
 
-Matrix4 CameraController::make_projection_matrix() {
-  auto frustum_height_at_distance = [](float distance, float fov) {
-    return 2.0f * distance *
-           std::tan(fov * 0.5f * Math::Constants<float>::pi() / 180.0f);
-  };
+void CameraController::add_distance(const float metres) {
+  auto camera_transform_matrix = _camera_parent->transformationMatrix();
+  camera_transform_matrix.translation().z() += metres;
+  _camera_parent->setTransformation(camera_transform_matrix);
+  _config.transform.distance = camera_transform_matrix.translation().z();
+}
 
-  auto fov_for_height_and_distance = [](float height, float distance) {
-    return 2.0f * std::atan(height * 0.5f / distance) * 180.0f /
-           Math::Constants<float>::pi();
-  };
+void CameraController::set_orbit(const Float2 degrees) {
+  _orbit_parent_left_right->setTransformation(
+      Matrix4::rotationY(Deg{degrees.x}));
+  _orbit_parent_up_down->setTransformation(Matrix4::rotationX(Deg{-degrees.y}));
+  _config.transform.orbit = {degrees.x, degrees.y};
+}
 
-  const auto focal_point =
-      unproject(_frame_size / 2, depth_at(_frame_size / 2));
-  auto camera_location = _camera_parent->transformation().translation();
-  pc::logger->info("camera_location: {}, {}, {}", camera_location.x(),
-                   camera_location.y(), camera_location.z());
-  const auto target_distance = (camera_location - focal_point).length();
+void CameraController::add_orbit(const Float2 degrees) {
+  _orbit_parent_left_right->setTransformation(
+      _orbit_parent_left_right->transformationMatrix() *
+      Matrix4::rotationY(Deg{degrees.x}));
 
-  if (!_is_dz_started) {
-    _init_height_at_distance =
-        frustum_height_at_distance(target_distance, _perspective_value);
-    _is_dz_started = true;
+  _orbit_parent_up_down->setTransformation(
+      _orbit_parent_up_down->transformationMatrix() *
+      Matrix4::rotationX(Deg{-degrees.y}));
+
+  _config.transform.orbit.x += degrees.x;
+  _config.transform.orbit.y += degrees.y;
+}
+
+void CameraController::set_roll(const float degrees) {
+  auto current_translation =
+      _camera_parent->transformationMatrix().translation();
+  auto roll = Matrix4::rotationZ(Deg{degrees}).rotation();
+  _camera_parent->setTransformation(Matrix4::from(roll, current_translation));
+  _config.transform.roll = degrees;
+}
+
+void CameraController::add_roll(const float degrees) {
+  auto current_transform = _camera_parent->transformationMatrix();
+  auto added_roll = Matrix4::rotationZ(Deg{degrees});
+  auto new_transform = current_transform * added_roll;
+  _camera_parent->setTransformation(new_transform);
+  _config.transform.roll += degrees;
+}
+
+void CameraController::set_translation(const Float3 metres) {
+  _anchor->setTransformation(
+      Matrix4::translation({metres.x, metres.y, metres.z}));
+  _config.transform.translation = metres;
+}
+
+void CameraController::add_translation(const Float3 metres) {
+  auto transform = _anchor->transformationMatrix();
+  transform.translation() += {metres.x, metres.y, metres.z};
+  _anchor->setTransformation(transform);
+
+  _config.transform.translation.x += metres.x;
+  _config.transform.translation.y += metres.y;
+  _config.transform.translation.z += metres.z;
+}
+
+void CameraController::dolly(Sdl2Application::MouseScrollEvent &event) {
+  const auto delta =
+      -event.offset().y() / static_cast<float>(_config.scroll_precision);
+  if (!_config.rendering.orthographic) add_distance(delta / 10);
+  else {
+    auto &ortho_size = _config.rendering.orthographic_size;
+    ortho_size = {ortho_size.x + delta, ortho_size.y + delta};
+    if (ortho_size.x < 0.05f) ortho_size.x = 0.05f;
+    if (ortho_size.y < 0.05f) ortho_size.y = 0.05f;
+    reset_projection_matrix();
   }
-
-  auto fov = pc::math::remap(0.0f, 1.0f, 0.01f, 90.0f - 0.01f,
-                             _perspective_value, true);
-
-  auto height = frustum_height_at_distance(target_distance, fov);
-  auto new_fov = fov_for_height_and_distance(height, target_distance);
-
-  // Compute new distance to maintain the initial frustum height.
-  // auto new_distance = _init_height_at_distance / (2.0f *
-  // Math::tan(Deg(new_fov * 0.5f) * Math::Constants<float>::pi() / 180.0f));
-  // Compute the new camera position to move towards or away from the subject as
-  // FOV changes.
-  auto direction = (camera_location - focal_point).normalized();
-  // camera_location = focal_point + direction * -new_distance;
-
-  // Update the camera's position.
-  // auto transform = Matrix4::from(_camera_parent->transformation().rotation(),
-  // 				 camera_location);
-  // _camera_parent->setTransformation(transform);
-
-  // return Matrix4::perspectiveProjection(Deg(new_fov), 4.0f / 3.0f, 0.001f,
-  return Matrix4::perspectiveProjection(
-      Deg(new_fov), _frame_size.x() / _frame_size.y(), 0.001f, 200.0f);
 }
 
-void CameraController::set_rotation(
-    const Magnum::Math::Vector3<Magnum::Math::Rad<float>> &rotation,
-    bool force) {
-
-  std::array<float, 3> input_deg = {float(Deg_f(rotation.x())),
-                                    float(Deg_f(rotation.y())),
-                                    float(Deg_f(rotation.z()))};
-  if (!force && _config.rotation[0] == input_deg[0] &&
-      _config.rotation[1] == input_deg[1] &&
-      _config.rotation[2] == input_deg[2]) {
-    return;
-  }
-
-  _config.rotation = {float(Deg_f(rotation.x())), float(Deg_f(rotation.y())),
-                      float(Deg_f(rotation.z()))};
-
-  _yaw_parent->resetTransformation();
-  auto y_rotation = rotation.y() - defaults::magnum::rotation.y();
-  _yaw_parent->rotate(y_rotation, Vector3::yAxis());
-
-  _pitch_parent->resetTransformation();
-  auto x_rotation = rotation.x() - defaults::magnum::rotation.x();
-  _pitch_parent->rotate(x_rotation, Vector3::zAxis());
-
-  _roll_parent->resetTransformation();
-  auto z_rotation = rotation.z() - defaults::magnum::rotation.z();
-  _roll_parent->rotate(z_rotation, Vector3::zAxis());
-}
-
-void CameraController::set_translation(
-    const Magnum::Math::Vector3<float> &translation) {
-  _config.translation = {translation.x(), translation.y(), translation.z()};
-  auto transform = _camera_parent->transformationMatrix();
-  transform.translation() = {translation.z(), translation.y(), translation.x()};
-  _camera_parent->setTransformation(transform);
-}
-
-void CameraController::dolly(
-    Magnum::Platform::Sdl2Application::MouseScrollEvent &event) {
-  const auto delta = event.offset().y();
-  const auto frame_centre = _frame_size / 2;
-  const auto centre_depth = depth_at(frame_centre);
-  const auto focal_point = unproject(frame_centre, centre_depth);
-  constexpr auto speed = 0.01f;
-  _camera_parent->translateLocal(focal_point * delta * speed);
-  auto translation = _camera_parent->transformationMatrix().translation();
-  _config.translation = {translation.z(), translation.y(), translation.x()};
-}
-
-void CameraController::mouse_rotate(
-    Magnum::Platform::Sdl2Application::MouseMoveEvent &event) {
+void CameraController::mouse_orbit(Sdl2Application::MouseMoveEvent &event) {
   auto delta = Vector2{event.relativePosition()} * _rotate_speed;
-  Euler rotation_amount;
-  if (event.modifiers() ==
-      Magnum::Platform::Sdl2Application::InputEvent::Modifier::Ctrl) {
-    rotation_amount.z() = Rad(delta.y());
+  if (event.modifiers() == Sdl2Application::InputEvent::Modifier::Ctrl) {
+    add_roll(-delta.y());
   } else {
-    rotation_amount.x() = Rad(-delta.y());
-    rotation_amount.y() = Rad(delta.x());
+    add_orbit({-delta.x(), delta.y()});
   }
-  auto rotation = Euler{Deg_f(_config.rotation[0]), Deg_f(_config.rotation[1]),
-                        Deg_f(_config.rotation[2])};
-  set_rotation(rotation + rotation_amount);
 }
 
-void CameraController::mouse_translate(
-    Magnum::Platform::Sdl2Application::MouseMoveEvent &event) {
+void CameraController::mouse_translate(Sdl2Application::MouseMoveEvent &event,
+                                       bool lock_y_axis) {
   const auto frame_centre = _frame_size / 2;
   const auto centre_depth = depth_at(frame_centre);
   const Vector3 p = unproject(event.position(), centre_depth);
-  const auto delta =
-      Vector3{(float)event.relativePosition().x() * _move_speed.x(),
-              (float)event.relativePosition().y() * _move_speed.y(), 0};
-  auto translation = Position{_config.translation[0], _config.translation[1],
-                              _config.translation[2]};
-  set_translation(translation + delta);
-}
 
-CameraController &
-CameraController::set_perspective(const Magnum::Float &perspective_value) {
-  _perspective_value = Math::max(Math::min(perspective_value, 1.0f),
-                                 std::numeric_limits<float>::min());
-  _camera->setProjectionMatrix(make_projection_matrix());
-  return *this;
-}
+  Vector3 delta = {(float)event.relativePosition().x() * _move_speed.x(),
+		   (float)event.relativePosition().y() * _move_speed.y(), 0};
 
-CameraController &CameraController::zoom_perspective(
-    Magnum::Platform::Sdl2Application::MouseScrollEvent &event) {
-  auto delta = event.offset().y();
-  set_perspective(_perspective_value - delta / 10);
-  return *this;
+  if (lock_y_axis) {
+    delta = _orbit_parent_left_right->transformationMatrix().rotation() *
+	    _orbit_parent_up_down->transformationMatrix().rotation() * delta;
+    add_translation({delta.x(), 0, delta.z()});
+  } else {
+
+    delta = _orbit_parent_left_right->transformationMatrix().rotation() *
+	    _orbit_parent_up_down->transformationMatrix().rotation() * delta;
+    add_translation({delta.x(), delta.y(), delta.z()});
+  }
 }
 
 Magnum::Vector3
 CameraController::unproject(const Magnum::Vector2i &window_position,
-                            Magnum::Float depth) const {
+			    Magnum::Float depth) const {
   const Vector2i view_position{window_position.x(),
-                               _frame_size.y() - window_position.y() - 1};
+			       _frame_size.y() - window_position.y() - 1};
   const Vector3 in{2 * Vector2{view_position} / Vector2{_frame_size} -
-                       Vector2{1.0f},
-                   depth * 2.0f - 1.0f};
-  /*
-  Use the following to get global coordinates instead of camera-relative:
-
-  (_camera_parent->absoluteTransformationMatrix()*_camera->projectionMatrix().inverted()).transformPoint(in)
-  */
+		       Vector2{1.0f},
+		   depth * 2.0f - 1.0f};
   return _camera->projectionMatrix().inverted().transformPoint(in);
 }
 
 Float CameraController::depth_at(const Vector2i &window_position) {
-
-  /* First scale the position from being relative to window size to being
-     relative to framebuffer size as those two can be different on HiDPI
-     systems */
-
   const Vector2i position = window_position * Vector2{_app->framebufferSize()} /
                             Vector2{_app->windowSize()};
   const Vector2i fbPosition{position.x(),
@@ -350,47 +315,51 @@ Float CameraController::depth_at(const Vector2i &window_position) {
       Range2Di::fromSize(fbPosition, Vector2i{1}).padded(Vector2i{2}),
       {GL::PixelFormat::DepthComponent, GL::PixelType::Float});
 
-  /* TODO: change to just Math::min<Float>(data.pixels<Float>() when the
-     batch functions in Math can handle 2D views */
   return Math::min<Float>(data.pixels<Float>().asContiguous());
 }
 
 void CameraController::draw_imgui_controls() {
 
-  using pc::gui::draw_slider;
+  using pc::gui::slider;
   using pc::gui::vector_table;
 
-  ImGui::SetNextItemOpen(_config.transform_open);
-  if (ImGui::CollapsingHeader("Transform", _config.transform_open)) {
-    _config.transform_open = true;
-    auto &translate = _config.translation;
-    if (vector_table("Translation", translate, -10.f, 10.f, 0.0f)) {
-      set_translation(Position{translate[0], translate[1], translate[2]});
-    }
-    auto &rotate = _config.rotation;
-    if (vector_table("Rotation", rotate, -360.0f, 360.0f, 0.0f)) {
-      set_rotation(Euler{Deg_f(rotate[0]), Deg_f(rotate[1]), Deg_f(rotate[2])});
-    }
+  ImGui::SetNextItemOpen(_config.transform.unfolded);
+  if (ImGui::CollapsingHeader("Transform", _config.transform.unfolded)) {
+    _config.transform.unfolded = true;
+
+    ImGui::Checkbox("transform.show_anchor", &_config.transform.show_anchor);
+
+    vector_table(name(), "transform.translation", _config.transform.translation,
+		 -10.f, 10.f, 0.0f);
+
+    vector_table(name(), "transform.orbit", _config.transform.orbit, -360.f,
+                 360.f, 0.0f);
+
+    slider(name(), "transform.roll", _config.transform.roll, -360.f, 360.f,
+           0.0f);
+
+    slider(name(), "scroll_precision", _config.scroll_precision, 1, 30, 1);
+
   } else {
-    _config.transform_open = false;
+    _config.transform.unfolded = false;
   }
 
-  ImGui::SetNextItemOpen(_config.rendering_open);
+  ImGui::SetNextItemOpen(_config.rendering.unfolded);
   if (ImGui::CollapsingHeader("Rendering")) {
-    _config.rendering_open = true;
+    _config.rendering.unfolded = true;
     auto &rendering = _config.rendering;
 
     auto current_scale_mode = rendering.scale_mode;
-    if (current_scale_mode == ScaleMode::Letterbox) {
-      vector_table("Resolution", rendering.resolution, 2, 7680,
-                   {pc::camera::defaults::rendering_resolution[0],
-                    pc::camera::defaults::rendering_resolution[1]});
-    } else if (current_scale_mode == ScaleMode::Span) {
+    if (current_scale_mode == (int)ScaleMode::Letterbox) {
+
+      vector_table(name(), "rendering.resolution", rendering.resolution, 2,
+                   7680, pc::camera::defaults::rendering_resolution);
+
+    } else if (current_scale_mode == (int)ScaleMode::Span) {
       // disable setting y resolution manually in span mode,
       // it's inferred from the x resolution and window size
-      vector_table("Resolution", rendering.resolution, 2, 7680,
-                   {pc::camera::defaults::rendering_resolution[0],
-                    pc::camera::defaults::rendering_resolution[1]},
+      vector_table(name(), "rendering.resolution", rendering.resolution, 2,
+                   7680, pc::camera::defaults::rendering_resolution,
                    {false, true});
     }
 
@@ -398,121 +367,172 @@ void CameraController::draw_imgui_controls() {
     const char *options[] = {"Span", "Letterbox"};
     ImGui::Combo("Scale mode", &scale_mode_i, options,
                  static_cast<int>(ScaleMode::Count));
-    rendering.scale_mode = static_cast<ScaleMode>(scale_mode_i);
+    rendering.scale_mode = scale_mode_i;
     if (rendering.scale_mode != current_scale_mode) {
       const auto aspect_ratio_policy =
-          rendering.scale_mode == ScaleMode::Letterbox
+	rendering.scale_mode == (int)ScaleMode::Letterbox
               ? SceneGraph::AspectRatioPolicy::NotPreserved
               : SceneGraph::AspectRatioPolicy::Extend;
       _camera->setAspectRatioPolicy(aspect_ratio_policy);
     }
+    ImGui::Spacing();
+
+    auto was_ortho = rendering.orthographic;
+    if (ImGui::Checkbox("rendering.orthographic", &rendering.orthographic)) {
+      MinMax<float> from;
+      MinMax<float> to;
+      if (was_ortho && !rendering.orthographic) {
+	from = defaults::orthographic_clipping;
+	to = defaults::perspective_clipping;
+      } else if (!was_ortho && rendering.orthographic) {
+	from = defaults::perspective_clipping;
+	to = defaults::orthographic_clipping;
+      }
+      rendering.clipping.min = math::remap(from.min, from.max, to.min, to.max,
+					   rendering.clipping.min);
+      rendering.clipping.max = math::remap(from.min, from.max, to.min, to.max,
+					   rendering.clipping.max);
+      reset_projection_matrix();
+    }
 
     ImGui::Spacing();
 
-    ImGui::Checkbox("ground grid", &rendering.ground_grid);
+    auto clipping_minmax = rendering.orthographic
+                               ? defaults::orthographic_clipping
+                               : defaults::perspective_clipping;
 
-    draw_slider<float>("point size", &rendering.point_size, 0.00001f, 0.08f,
-                       0.0015f);
+    if (slider(name(), "rendering.clipping.min", rendering.clipping.min,
+	       clipping_minmax.min, clipping_minmax.max, clipping_minmax.min)) {
+      reset_projection_matrix();
+    };
+    if (slider(name(), "rendering.clipping.max", rendering.clipping.max,
+	       clipping_minmax.min, clipping_minmax.max, clipping_minmax.max)) {
+      reset_projection_matrix();
+    };
+
+    ImGui::Spacing();
+
+    ImGui::Checkbox("rendering.ground_grid", &rendering.ground_grid);
+    ImGui::Checkbox("rendering.skeletons", &rendering.skeletons);
+
+    slider(name(), "rendering.point_size", rendering.point_size, 0.0f, 0.01f,
+	   0.0015f);
+
   } else {
-    _config.rendering_open = false;
+    _config.rendering.unfolded = false;
   }
 
-  ImGui::SetNextItemOpen(_config.analysis_open);
-  if (ImGui::CollapsingHeader("Analysis", _config.analysis_open)) {
-    _config.analysis_open = true;
-    auto &frame_analysis = _config.frame_analysis;
-    ImGui::Checkbox("Enabled", &frame_analysis.enabled);
-    if (frame_analysis.enabled) {
+  ImGui::SetNextItemOpen(_config.analysis.unfolded);
+  if (ImGui::CollapsingHeader("Analysis", _config.analysis.unfolded)) {
+    _config.analysis.unfolded = true;
+
+    auto &analysis = _config.analysis;
+    ImGui::Checkbox("Enabled", &analysis.enabled);
+    if (analysis.enabled) {
       ImGui::SameLine();
-      ImGui::Checkbox("Use CUDA", &frame_analysis.use_cuda);
+      ImGui::Checkbox("analysis.use_cuda", &analysis.use_cuda);
 
-      vector_table("Resolution", frame_analysis.resolution, 2, 3840,
-                   {pc::camera::defaults::analysis_resolution[0],
-                    pc::camera::defaults::analysis_resolution[1]},
-                   {}, {"width", "height"});
-      vector_table("Binary threshold", frame_analysis.binary_threshold, 1, 255,
-                   {50, 255}, {}, {"min", "max"});
+      vector_table(name(), "analysis.resolution", analysis.resolution, 2, 3840,
+                   pc::camera::defaults::analysis_resolution, {},
+                   {"width", "height"});
 
-      draw_slider<int>("Blur size", &frame_analysis.blur_size, 0, 40, 3);
+      vector_table(name(), "analysis.binary_threshold",
+                   analysis.binary_threshold, 1, 255, Int2{50, 255}, {},
+                   {"min", "max"});
 
-      auto &canny = frame_analysis.canny;
+      slider(name(), "analysis.blur_size", analysis.blur_size, 0, 40, 1);
+
+      auto &canny = analysis.canny;
       ImGui::Checkbox("Canny edge detection", &canny.enabled);
       if (canny.enabled) {
-        draw_slider<int>("canny min", &canny.min_threshold, 0, 255, 100);
-        draw_slider<int>("canny max", &canny.max_threshold, 0, 255, 255);
-        int aperture_in = (canny.aperture_size - 1) / 2;
-        draw_slider<int>("canny aperture", &aperture_in, 1, 3, 1);
-        canny.aperture_size = aperture_in * 2 + 1;
+	slider(name(), "analysis.canny.min_threshold", canny.min_threshold, 0,
+	       255, 100);
+	slider(name(), "analysis.canny.max_threshold", canny.max_threshold, 0,
+	       255, 255);
+	int aperture_in = (canny.aperture_size - 1) / 2;
+	slider(name(), "analysis.canny.aperture_size", aperture_in, 1, 3, 1);
+	canny.aperture_size = aperture_in * 2 + 1;
       }
 
-      if (gui::begin_tree_node("Contours", frame_analysis.contours_open)) {
-        auto &contours = frame_analysis.contours;
+      if (gui::begin_tree_node("Contours", analysis.contours.unfolded)) {
+        auto &contours = analysis.contours;
 
-        ImGui::Checkbox("Draw on viewport", &contours.draw);
+        ImGui::Checkbox("analysis.contours.draw", &contours.draw);
 
-        ImGui::Checkbox("Simplify", &contours.simplify);
+        ImGui::Checkbox("analysis.contours.label", &contours.label);
+        ImGui::Spacing();
+
+        ImGui::Checkbox("analysis.contours.simplify", &contours.simplify);
         if (contours.simplify) {
-          draw_slider<float>("arc scale", &contours.simplify_arc_scale,
-                             0.000001f, 0.15f, 0.01f);
-          draw_slider<float>("min area", &contours.simplify_min_area, 0.0001f,
-                             2.0f, 0.0001f);
+	  slider(name(), "analysis.contours.simplify_arc_scale",
+		 contours.simplify_arc_scale, 0.000001f, 0.15f, 0.01f);
+	  slider(name(), "analysis.contours.simplify_min_area",
+		 contours.simplify_min_area, 0.0001f, 2.0f, 0.0001f);
         }
+        ImGui::Spacing();
 
-        ImGui::Checkbox("Publish", &contours.publish);
+        ImGui::Checkbox("analysis.contours.publish", &contours.publish);
+        ImGui::Checkbox("analysis.contours.publish_centroids", &contours.publish_centroids);
         ImGui::Spacing();
 
         ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
         if (contours.triangulate.enabled) {
-          ImGui::Checkbox("Draw triangles", &contours.triangulate.draw);
-          ImGui::Checkbox("Publish triangles", &contours.triangulate.publish);
-          draw_slider<float>("Min tri area", &contours.triangulate.minimum_area,
-                             0.0f, 0.02f, 0.0f);
+          ImGui::Checkbox("analysis.contours.triangulate.draw",
+                          &contours.triangulate.draw);
+          ImGui::Checkbox("analysis.contours.triangulate.publish",
+                          &contours.triangulate.publish);
+	  slider(name(), "analysis.contours.triangulate.minimum_area",
+		 contours.triangulate.minimum_area, 0.0f, 0.02f, 0.0f);
         }
         ImGui::TreePop();
       }
 
       if (gui::begin_tree_node("Optical Flow",
-                               frame_analysis.optical_flow_open)) {
-        auto &optical_flow = frame_analysis.optical_flow;
-        ImGui::Checkbox("Enabled", &optical_flow.enabled);
-        ImGui::Checkbox("Draw", &optical_flow.draw);
-        ImGui::Checkbox("Publish", &optical_flow.publish);
+                               analysis.optical_flow.unfolded)) {
+        auto &optical_flow = analysis.optical_flow;
+        ImGui::Checkbox("analysis.optical_flow.enabled", &optical_flow.enabled);
+        ImGui::Checkbox("analysis.optical_flow.draw", &optical_flow.draw);
+        ImGui::Checkbox("analysis.optical_flow.publish", &optical_flow.publish);
 
-        draw_slider<int>("Feature points", &optical_flow.feature_point_count,
-                         25, 1000, 250);
-        draw_slider<float>("Points distance",
-                           &optical_flow.feature_point_distance, 0.001f, 30.0f,
-                           10.0f);
-        if (frame_analysis.use_cuda) {
+	slider(name(), "analysis.optical_flow.feature_point_count",
+	       optical_flow.feature_point_count, 25, 1000, 250);
+	slider(name(), "analysis.optical_flow.feature_point_distance",
+	       optical_flow.feature_point_distance, 0.001f, 30.0f, 10.0f);
+        if (analysis.use_cuda) {
           float quality_level =
               optical_flow.cuda_feature_detector_quality_cutoff * 10.0f;
-          draw_slider<float>("Point quality cutoff", &quality_level, 0.01f,
-                             1.0f, 0.1f);
+	  slider(name(), "analysis.optical_flow.quality_level", quality_level,
+		 0.01f, 1.0f, 0.1f);
           optical_flow.cuda_feature_detector_quality_cutoff =
               quality_level / 10.0f;
         }
-        draw_slider<float>("Magnitude", &optical_flow.magnitude_scale, 0.1f,
-                           5.0f, 1.0f);
-        draw_slider<float>("Magnitude exponent",
-                           &optical_flow.magnitude_exponent, 0.001f, 2.5f,
-                           1.0f);
-        draw_slider<float>("Minimum distance", &optical_flow.minimum_distance,
-                           0.0f, 0.2f, 0.0f);
-        draw_slider<float>("Maximum distance", &optical_flow.maximum_distance,
-                           0.0f, 0.8f, 0.8f);
+	slider(name(), "analysis.optical_flow.magnitude_scale",
+	       optical_flow.magnitude_scale, 0.1f, 5.0f, 1.0f);
+	slider(name(), "analysis.optical_flow.magnitude_exponent",
+	       optical_flow.magnitude_exponent, 0.001f, 2.5f, 1.0f);
+	slider(name(), "analysis.optical_flow.minimum_distance",
+	       optical_flow.minimum_distance, 0.0f, 0.2f, 0.0f);
+	slider(name(), "analysis.optical_flow.maximum_distance",
+	       optical_flow.maximum_distance, 0.0f, 0.8f, 0.8f);
 
         ImGui::TreePop();
       }
 
-      if (gui::begin_tree_node("Output", frame_analysis.output_open)) {
-        vector_table("Scale", frame_analysis.output_scale, 0.0f, 2.0f, 1.0f);
-        vector_table("Offset", frame_analysis.output_offset, -1.0f, 1.0f, 0.0f);
+      if (gui::begin_tree_node("Output", analysis.output.unfolded)) {
+        vector_table(name(), "analysis.output.scale", analysis.output.scale,
+                     0.0f, 2.0f, 1.0f);
+        vector_table(name(), "analysis.output.offset", analysis.output.offset,
+                     -1.0f, 1.0f, 0.0f);
         ImGui::TreePop();
       }
     }
   } else {
-    _config.analysis_open = false;
+    _config.analysis.unfolded = false;
   }
+}
+
+std::vector<gui::OverlayText> CameraController::labels() {
+  return _frame_analyser.analysis_labels();
 }
 
 } // namespace pc::camera

@@ -1,9 +1,9 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO mosra/magnum
-    REF bbb54a9df8a439f1a4f76e020eeb0e82cb7e4834
-    SHA512 72612805c0e086bf957c7367805fc67b4d28230bce3b3d4392195c8ed89ac75dca8b2759fcaeb0cad1f7333e32e38f349021750462c2ff7a2c21aca93288cbc6
-    HEAD_REF master
+    REF multiwindow
+    SHA512 c269c96240e7da35059c3a682888b3f3cfe46fd552a8e517888a3b434a310c3fc11b38885a694a934d8497c7e082b2d16abfda980f485e1148de231becbf29fd
+    HEAD_REF multiwindow
     PATCHES
         002-sdl-includes.patch
         003-fix-FindGLFW.patch

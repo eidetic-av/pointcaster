@@ -3,6 +3,8 @@
 #include <array>
 #include <string>
 #include <string_view>
+#include <cctype>
+#include <unordered_map>
 
 namespace pc::strings {
 
@@ -35,6 +37,62 @@ constexpr std::string concat(const Args &...args) noexcept {
   result.reserve((to_string(args).size() + ...));
   ((result.append(to_string(args))), ...);
   return result;
+}
+
+constexpr std::string snake_case(std::string_view input) noexcept {
+  std::string result;
+  result.reserve(input.size());
+  for (auto c : input) {
+    if (std::isalnum(static_cast<unsigned char>(c))) {
+      result.push_back(std::tolower(static_cast<unsigned char>(c)));
+    } else if (std::isspace(static_cast<unsigned char>(c))) {
+      result.push_back('_');
+    }
+  }
+  return result;
+}
+
+constexpr std::string title_case(std::string_view input) noexcept {
+  std::string result;
+  result.reserve(input.size());
+  bool capitalize = true;
+  for (auto c : input) {
+    if (c == '_') {
+      result.push_back(' '); // replace underscore with space
+      capitalize = true;
+    } else if (capitalize) {
+      result.push_back(std::toupper(static_cast<unsigned char>(c)));
+      capitalize = false;
+    } else {
+      result.push_back(c);
+    }
+  }
+  return result;
+}
+
+constexpr std::string sentence_case(std::string_view input) noexcept {
+  std::string result;
+  result.reserve(input.size());
+  bool capitalize = true;
+  for (auto c : input) {
+    if (c == '_') {
+      result.push_back(' '); // replace underscore with space
+    } else if (capitalize) {
+      result.push_back(std::toupper(static_cast<unsigned char>(c)));
+      capitalize = false;
+    } else {
+      result.push_back(c);
+    }
+  }
+  return result;
+}
+
+constexpr std::string_view last_element(std::string_view str,
+				     char delimiter = '.') noexcept {
+  if (auto pos = str.rfind(delimiter); pos != std::string_view::npos) {
+    return str.substr(pos + 1);
+  }
+  return str;
 }
 
 } // namespace pc::strings

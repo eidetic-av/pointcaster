@@ -3,7 +3,7 @@
 #include "../device.h"
 #include <fmt/format.h>
 
-namespace pc::sensors {
+namespace pc::devices {
 
 K4W2Device::K4W2Device() {
   _driver.reset(new K4W2Driver());
@@ -14,4 +14,4 @@ std::string K4W2Device::getBroadcastId() {
   return _driver->getId();
 }
 
-} // namespace pc::sensors
+} // namespace pc::devices

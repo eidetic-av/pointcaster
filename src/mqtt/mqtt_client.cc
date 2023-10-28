@@ -1,35 +1,41 @@
 #include "mqtt_client.h"
+#include "../logger.h"
+#include "../publisher/publisher.h"
+#include "../publisher/publisher_utils.h"
+#include <chrono>
+#include <fmt/format.h>
+#include <functional>
+#include <future>
 #include <imgui.h>
 #include <imgui_stdlib.h>
-#include <regex>
-#include <fmt/format.h>
-#include <chrono>
-#include <future>
-#include <stdexcept>
+#include <initializer_list>
 #include <msgpack.hpp>
-#include "../logger.h"
+#include <mutex>
+#include <regex>
+#include <stdexcept>
+#include <unordered_map>
 
-namespace pc {
+namespace pc::mqtt {
 
 using namespace std::chrono_literals;
 
 static const std::regex uri_pattern(R"(^([a-zA-Z]+):\/\/([^:\/]+):(\d+)$)");
 
-std::shared_ptr<MqttClient> MqttClient::_instance;
-std::mutex MqttClient::_mutex;
-std::atomic_bool MqttClient::_connected = false;
-
 std::string input_hostname;
 int input_port;
 
-MqttClient::MqttClient(MqttClientConfiguration &config) : _config(config) {
+MqttClient::MqttClient(MqttClientConfiguration &config)
+    : _config(config), _sender_thread([this](auto st) { send_messages(st); }) {
   set_uri(config.broker_uri);
   if (_config.auto_connect) connect();
+  publisher::add(this);
 }
 
 MqttClient::~MqttClient() {
-  if (!_client) return;
-  _client->disconnect()->wait();
+  _sender_thread.request_stop();
+  _sender_thread.join();
+  publisher::remove(this);
+  if (_client) _client->disconnect();
 }
 
 void MqttClient::connect() {
@@ -64,54 +70,67 @@ void MqttClient::connect(const std::string_view host_name, const int port) {
 
   pc::logger->info("Connecting to MQTT broker at {}", _config.broker_uri);
 
-  _client = std::make_unique<mqtt::async_client>(_config.broker_uri.data(),
-						 _config.client_id.data());
+  _client = std::make_unique<::mqtt::client>(_config.broker_uri.data(),
+						 _config.id.data());
 
-  auto options = mqtt::connect_options_builder()
+  auto options = ::mqtt::connect_options_builder()
+		     .connect_timeout(150ms)
 		     .clean_session()
 		     .automatic_reconnect()
 		     .finalize();
 
   _connection_future = std::async(std::launch::async, [this, options]() {
-    if (_client->connect(options)->wait_for(10s)) {
-      MqttClient::_connected = true;
+    _connecting = true;
+    try {
+      _client->connect(options);
       pc::logger->info("MQTT connection active");
-    } else {
-      pc::logger->warn("MQTT connection failed");
-      MqttClient::_connected = false;
+    } catch (const ::mqtt::exception &e) {
+      pc::logger->error(e.what());
     }
+    _connecting = false;
   });
 }
 
 void MqttClient::disconnect() {
   if (!_client) return;
-  try {
-    _client->disconnect()->wait();
-    _client.reset();
-    MqttClient::_connected = false;
-    pc::logger->info("Disconnected from MQTT broker");
-  } catch (mqtt::exception &e) {
-    pc::logger->error(e.what());
-  }
+  _connection_future = std::async(std::launch::async, [this]() {
+    try {
+      _client->disconnect();
+      pc::logger->info("Disconnected from MQTT broker");
+      _client.reset();
+    } catch (::mqtt::exception &e) {
+      pc::logger->error(e.what());
+    }
+  });
 }
 
 void MqttClient::publish(const std::string_view topic,
-                         const std::string_view message) {
-  if (!_connected) return;
-  mqtt::topic t(*_client.get(), topic.data());
-  t.publish(message.data());
-}
-
-void MqttClient::publish(const std::string_view topic,
-			 const std::vector<uint8_t> &payload) {
-  publish(topic, payload.data(), payload.size());
+			 const std::string_view message,
+			 std::initializer_list<std::string_view> topic_nodes) {
+  publish(topic, message.data(), message.size(), topic_nodes);
 }
 
 void MqttClient::publish(const std::string_view topic, const void *payload,
-                         const std::size_t size) {
-  if (!_connected) return;
-  mqtt::topic t(*_client.get(), topic.data());
-  t.publish(payload, size);
+                         const std::size_t size,
+                         std::initializer_list<std::string_view> topic_nodes,
+			 bool empty) {
+  if (empty && !_config.publish_empty_stream && !_config.publish_empty_once) {
+    return;
+  }
+
+  auto topic_string = publisher::construct_topic_string(topic, topic_nodes);
+
+  if (_config.publish_empty_once) {
+    static std::unordered_map<std::string, bool> published_empty_once;
+    static std::mutex published_empty_once_mutex;
+    std::lock_guard lock(published_empty_once_mutex);
+    if (empty && published_empty_once[topic_string]) return;
+    published_empty_once[topic_string] = empty;
+  }
+
+  auto data = static_cast<const std::byte *>(payload);
+  std::vector<std::byte> buffer(data, data + size);
+  _messages_to_publish.enqueue({std::move(topic_string), std::move(buffer)});
 }
 
 void MqttClient::set_uri(const std::string_view uri) {
@@ -130,6 +149,34 @@ void MqttClient::set_uri(const std::string_view hostname, int port) {
   set_uri(fmt::format("tcp://{}:{}", hostname, port));
 }
 
+void MqttClient::send_messages(std::stop_token st) {
+  using namespace std::chrono_literals;
+
+  static constexpr auto thread_wait_time = 50ms;
+
+  while ((!_client || !_client->is_connected()) && !st.stop_requested()) {
+    std::this_thread::sleep_for(thread_wait_time);
+  }
+
+  while (!st.stop_requested()) {
+    MqttMessage message;
+    while (_messages_to_publish.wait_dequeue_timed(message, thread_wait_time)) {
+
+      // messages are lost if the client is not connected
+      if (!_client || !_client->is_connected()) continue;
+
+      auto &payload = message.buffer;
+      try {
+	_client->publish(message.topic, payload.data(), payload.size());
+      } catch (const ::mqtt::exception &e) {
+        pc::logger->error(e.what());
+      }
+    }
+  }
+
+  pc::logger->info("Ended MQTT sender thread");
+}
+
 void MqttClient::draw_imgui_window() {
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("MQTT", nullptr);
@@ -137,25 +184,35 @@ void MqttClient::draw_imgui_window() {
   ImGui::InputInt("Broker port", &input_port);
   ImGui::Spacing();
 
-  const auto draw_connect_buttons = [this]() {
+  const auto draw_connect_buttons = [this](bool connected) {
+    if (connected) ImGui::BeginDisabled();
     if (ImGui::Button("Connect"))
       connect(input_hostname, input_port);
+    if (connected) ImGui::EndDisabled();
     ImGui::SameLine();
     if (ImGui::Button("Disconnect"))
       disconnect();
   };
 
-  if (!_connection_future.valid()) {
-    draw_connect_buttons();
-  } else if (_connection_future.wait_for(0s) == std::future_status::ready) {
-    draw_connect_buttons();
-  } else {
+  if (_connecting) {
     ImGui::BeginDisabled();
-    draw_connect_buttons();
+    draw_connect_buttons(false);
     ImGui::EndDisabled();
+  } else {
+    draw_connect_buttons(_client && _client->is_connected());
   }
 
   ImGui::Checkbox("Auto connect", &_config.auto_connect);
+  ImGui::Spacing();
+
+  // The following options are mutually exclusive
+  if (ImGui::Checkbox("Publish empty stream", &_config.publish_empty_stream)) {
+    _config.publish_empty_once = false;
+  }
+  if (ImGui::Checkbox("Publish empty once", &_config.publish_empty_once)) {
+    _config.publish_empty_stream = false;
+  }
+
   ImGui::End();
 }
 

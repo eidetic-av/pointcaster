@@ -5,7 +5,7 @@
 #include <spdlog/spdlog.h>
 #include <thread>
 
-namespace pc::sensors {
+namespace pc::devices {
 
 class K4W2Driver : public Driver {
 public:
@@ -41,4 +41,4 @@ private:
 
   bool _open = false;
 };
-} // namespace pc::sensors
+} // namespace pc::devices

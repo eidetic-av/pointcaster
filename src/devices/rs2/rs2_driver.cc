@@ -4,7 +4,7 @@
 #include <limits>
 #include <spdlog/spdlog.h>
 
-namespace pc::sensors {
+namespace pc::devices {
 
 using namespace pc::types;
 using namespace Magnum;
@@ -89,7 +89,7 @@ PointCloud Rs2Driver::getPointCloud(const DeviceConfiguration &config) {
 
   std::lock_guard<std::mutex> lock(_buffer_mutex);
 
-  std::vector<short3> positions(_point_count);
+  std::vector<Short3> positions(_point_count);
   std::vector<color> colors(_point_count);
   // memcpy(colors.data(), _colors_buffer.data(), _point_count * sizeof(float));
   // TODO this offset can be made part of each device,
@@ -126,7 +126,7 @@ PointCloud Rs2Driver::getPointCloud(const DeviceConfiguration &config) {
     const short y_out = ((y_in * config.scale) + config.offset.y) * 1000;
     const short z_out = ((z_in * config.scale) + config.offset.z) * 1000;
     // add position to our point cloud buffer
-    positions[point_count_out] = short3{x_out, y_out, z_out};
+    positions[point_count_out] = Short3{x_out, y_out, z_out};
 
     // convert color from u/v to bgra8
     auto uv = _uvs_buffer[i];
@@ -158,4 +158,4 @@ PointCloud Rs2Driver::getPointCloud(const DeviceConfiguration &config) {
   return _point_cloud;
 }
 
-} // namespace pc::sensors
+} // namespace pc::devices
