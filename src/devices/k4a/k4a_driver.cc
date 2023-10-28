@@ -591,7 +591,7 @@ void K4ADriver::run_aligner(const k4a::capture &frame) {
 }
 
 void K4ADriver::set_depth_mode(const k4a_depth_mode_t mode) {
-  _k4a_config.depth_mode = (int)mode;
+  _k4a_config.depth_mode = mode;
   if (mode == (int)K4A_DEPTH_MODE_WFOV_UNBINNED) {
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_15;
   } else {

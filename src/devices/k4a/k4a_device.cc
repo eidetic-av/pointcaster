@@ -72,7 +72,7 @@ void K4ADevice::draw_device_controls() {
     }();
 
     auto [selected_item_index, label] =
-        depth_mode_to_combo_item.at(_config.k4a.depth_mode);
+		depth_mode_to_combo_item.at((k4a_depth_mode_t)_config.k4a.depth_mode);
 
     if (ImGui::Combo("Depth Mode", &selected_item_index,
 		     combo_item_string.c_str())) {
