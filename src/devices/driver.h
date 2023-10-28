@@ -21,7 +21,6 @@ public:
   virtual void start_sensors() = 0;
   virtual void stop_sensors() = 0;
   virtual void reload() = 0;
-  virtual void reattach() = 0;
 
   virtual bool is_open() const = 0;
   virtual bool is_running() const = 0;

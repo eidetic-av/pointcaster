@@ -38,7 +38,7 @@ public:
 
   virtual std::string id() = 0;
 
-  void reattach() { _driver->reattach(); }
+  bool lost_device() { return _driver->lost_device; }
 
   bool broadcast_enabled() { return _enable_broadcast; }
 

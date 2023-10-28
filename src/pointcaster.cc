@@ -674,7 +674,8 @@ void PointCaster::render_cameras() {
 void PointCaster::load_device(const DeviceConfiguration& config, std::string_view target_id) {
   loading_device = true;
   try {
-    Device::attached_devices.push_back(std::make_shared<K4ADevice>(config, target_id));
+    auto device = std::make_shared<K4ADevice>(config, target_id);
+    Device::attached_devices.push_back(device);
   } catch (k4a::error e) {
     pc::logger->error(e.what());
   } catch (...) {

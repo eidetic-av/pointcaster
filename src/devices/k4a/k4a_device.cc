@@ -137,4 +137,10 @@ std::string K4ADevice::get_serial_number(const std::size_t device_index) {
   return serial_number;
 }
 
+void K4ADevice::reattach(int index) {
+  pc::logger->info("Reattaching K4A ({}) at index {}", id(), index);
+  auto driver = static_cast<K4ADriver *>(_driver.get());
+  driver->reattach(index);
+}
+
 } // namespace pc::devices

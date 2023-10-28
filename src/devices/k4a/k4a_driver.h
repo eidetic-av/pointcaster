@@ -45,6 +45,11 @@ public:
   K4ADriver(const DeviceConfiguration& config, std::string_view target_id = "");
   ~K4ADriver();
 
+  K4ADriver(const K4ADriver &) = delete;
+  K4ADriver &operator=(const K4ADriver &) = delete;
+  K4ADriver(K4ADriver &&) = delete;
+  K4ADriver &operator=(K4ADriver &&) = delete;
+
   std::string id() const override;
   bool is_open() const override;
   bool is_running() const override;
@@ -52,7 +57,8 @@ public:
   void start_sensors() override;
   void stop_sensors() override;
   void reload() override;
-  void reattach() override;
+
+  void reattach(int index);
 
   void set_paused(bool paused) override;
 

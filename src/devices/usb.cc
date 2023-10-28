@@ -117,49 +117,81 @@ int UsbMonitor::handle_hotplug_event(struct libusb_context *ctx,
 
   if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
 
+    // on a device arriving, get a list of any devices we've previously lost to
+    // check if this is them returning
+
+    std::vector<std::shared_ptr<Device>> lost_devices;
+    for (const auto &device : Device::attached_devices) {
+      if (device->lost_device()) lost_devices.push_back(device);
+    }
+
     if (device_type == DeviceType::K4A) {
       pc::logger->debug("K4A device plugged in");
 
-      std::string serial_number;
-      std::size_t device_index = K4ADevice::active_driver_count();
-      try {
-        serial_number = K4ADevice::get_serial_number(device_index);
-      } catch (k4a::error e) {
-	pc::logger->warn("Failed getting serial number of K4A at index {}",
-			 device_index);
-        pc::logger->warn(e.what());
-        return 1;
+      static std::mutex serial_k4a_hotplug_handling;
+      std::lock_guard<std::mutex> lock(serial_k4a_hotplug_handling);
+
+      // if we have some lost devices to check for, get the k4a's that are
+      // waiting to be connected
+      std::vector<std::shared_ptr<K4ADevice>> lost_k4a_devices;
+      for (const auto &device : lost_devices) {
+	auto k4a_device = std::dynamic_pointer_cast<K4ADevice>(device);
+	if (k4a_device) lost_k4a_devices.push_back(k4a_device);
       }
 
-      DeviceConfiguration config{};
+      // we need to iterate each connected k4a, make sure we can open a new one
+      // succesfully, and look for the serial number to see if it matches any
+      // that are currently waiting to be re-plugged
 
-      // load an existing device configuration if it exists
-      auto saved_session_devices = callback_data->fetch_session_devices();
-      for (const auto &[saved_device_id, existing_config] : saved_session_devices) {
-	if (saved_device_id == serial_number) {
-	  config = existing_config;
-	  break;
-	}
-      }
+      bool successfully_opened_new_device = false;
 
-      // if an instance for this device already exists (maybe it was unplugged)
-      auto reattached = false;
-      for (auto &device : Device::attached_devices) {
-        if (device->id() == serial_number) {
-	  pc::logger->debug("Reattaching existing device");
-	  try {
-	    device->reattach();
-            return 0;
-          } catch (k4a::error e) {
-	    pc::logger->error("Reattach failed!");
-	    pc::logger->error(e.what());
-            return 1;
+      int matching_lost_index = -1;
+      std::shared_ptr<K4ADevice> matching_lost_k4a;
+
+      for (int i = 0; i < k4a::device::get_installed_count(); i++) {
+        try {
+	  // device::open will fail if it's already open, but we still need to
+	  // iterate all plugged in k4as because the device indexes change when
+	  // new ones are plugged in
+	  auto device = k4a::device::open(i);
+	  auto serial_number = device.get_serialnum();
+          pc::logger->debug("Found new device serial: {}", serial_number);
+          device.close();
+	  successfully_opened_new_device = true;
+	  if (lost_k4a_devices.empty()) break;
+	  // check if that serial is one that's currently lost and waiting
+          for (const auto &lost_k4a : lost_k4a_devices) {
+            if (lost_k4a->id() == serial_number) {
+	      matching_lost_index = i;
+	      matching_lost_k4a = lost_k4a;
+	      break;
+            }
           }
+        } catch (const k4a::error &e) {
+	  pc::logger->debug("Can't retrieve k4a serial number at index {}", i);
         }
+	if (matching_lost_index != -1) break;
       }
 
-      Device::attached_devices.push_back(std::make_shared<K4ADevice>(config));
+      // if we weren't able to actually open a device, ignore this hotplug...
+      // it means the k4a doesn't have enough power or something like that
+      if (!successfully_opened_new_device) {
+	pc::logger->warn("Failed to open k4a on USB event (possible power loss)");
+        return 0;
+      }
 
+      // if it's a completely new device, initialise it fresh
+      if (lost_k4a_devices.empty() || matching_lost_index == -1) {
+	Device::attached_devices.push_back(
+	    std::make_shared<K4ADevice>(DeviceConfiguration{}));
+	return 0;
+      }
+
+      // or if we found a matching lost device, reattach it!
+      if (matching_lost_index != -1) {
+	matching_lost_k4a->reattach(matching_lost_index);
+	return 0;
+      }
     }
 
   } else if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT) {
