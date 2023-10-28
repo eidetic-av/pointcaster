@@ -11,7 +11,7 @@ unsigned int _parameter_index;
 
 void begin_gui_helpers() { _parameter_index = 0; }
 
-constexpr std::string format_label(std::string_view label) {
+std::string format_label(std::string_view label) {
   return strings::sentence_case(strings::last_element(label));
 };
 

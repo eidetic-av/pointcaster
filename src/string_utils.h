@@ -8,23 +8,23 @@
 
 namespace pc::strings {
 
-constexpr std::string to_string(const std::string &str) noexcept { return str; }
+std::string to_string(const std::string &str) noexcept { return str; }
 
-constexpr std::string to_string(const char *str) noexcept {
+std::string to_string(const char *str) noexcept {
   return str ? std::string(str) : std::string{};
 }
 
-constexpr std::string to_string(std::string_view str) noexcept {
+std::string to_string(std::string_view str) noexcept {
   return str.empty() ? std::string{} : std::string(str);
 }
 
-constexpr std::string to_string(int value) noexcept {
+std::string to_string(int value) noexcept {
   std::array<char, 32> buffer;
   auto len = std::snprintf(buffer.data(), buffer.size(), "%d", value);
   return std::string(buffer.data(), len);
 }
 
-constexpr std::string to_string(double value, int precision = 6) noexcept {
+std::string to_string(double value, int precision = 6) noexcept {
   std::array<char, 32> buffer;
   auto len =
       std::snprintf(buffer.data(), buffer.size(), "%.*f", precision, value);
@@ -32,14 +32,14 @@ constexpr std::string to_string(double value, int precision = 6) noexcept {
 }
 
 template <typename... Args>
-constexpr std::string concat(const Args &...args) noexcept {
+std::string concat(const Args &...args) noexcept {
   std::string result;
   result.reserve((to_string(args).size() + ...));
   ((result.append(to_string(args))), ...);
   return result;
 }
 
-constexpr std::string snake_case(std::string_view input) noexcept {
+std::string snake_case(std::string_view input) noexcept {
   std::string result;
   result.reserve(input.size());
   for (auto c : input) {
@@ -52,7 +52,7 @@ constexpr std::string snake_case(std::string_view input) noexcept {
   return result;
 }
 
-constexpr std::string title_case(std::string_view input) noexcept {
+std::string title_case(std::string_view input) noexcept {
   std::string result;
   result.reserve(input.size());
   bool capitalize = true;
@@ -70,7 +70,7 @@ constexpr std::string title_case(std::string_view input) noexcept {
   return result;
 }
 
-constexpr std::string sentence_case(std::string_view input) noexcept {
+std::string sentence_case(std::string_view input) noexcept {
   std::string result;
   result.reserve(input.size());
   bool capitalize = true;
