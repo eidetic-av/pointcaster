@@ -1,0 +1,34 @@
+diff --git a/src/Magnum/Platform/Sdl2Application.cpp b/src/Magnum/Platform/Sdl2Application.cpp
+index 3c3eee841..4b42cb523 100644
+--- a/src/Magnum/Platform/Sdl2Application.cpp
++++ b/src/Magnum/Platform/Sdl2Application.cpp
+@@ -1061,7 +1061,6 @@ void Sdl2Application::makeContextCurrent(Sdl2ApplicationWindow& window) {
+     if(_activeGlContextWindow != window._window) {
+         SDL_GL_MakeCurrent(window._window, _glContext);
+         _activeGlContextWindow = window._window;
+-#warning TODO
+         // Context::current().resetState(Context::State::WindowSpecific);
+     }
+ }
+@@ -1147,13 +1146,11 @@ bool Sdl2Application::mainLoopIteration() {
+                             #endif
+                             _dpiScaling};
+                         /** @todo handle also WM_DPICHANGED events when a window is moved between displays with different DPI */
+-#warning make context current here? probably??
+                         makeContextCurrent(*_windows[event.window.windowID]);
+                         callEventHandler(event.window.windowID, &Sdl2ApplicationWindow::viewportEvent, e);
+                         _windows[event.window.windowID]->_windowFlags |= WindowFlag::Redraw;
+                         #endif
+                     } break;
+-#warning SDL_WINDOWEVENT_CLOSE
+                     /* Direct everything that wasn't exposed via a callback to
+                        anyEvent(), so users can implement event handling for
+                        things not present in the Application APIs */
+@@ -1198,7 +1195,6 @@ bool Sdl2Application::mainLoopIteration() {
+ 
+             case SDL_MULTIGESTURE: {
+                 MultiGestureEvent e{event, {event.mgesture.x, event.mgesture.y}, event.mgesture.dTheta, event.mgesture.dDist, event.mgesture.numFingers};
+-#warning wtf, why no window ID?!
+                 multiGestureEvent(e);
+                 break;
+             }
