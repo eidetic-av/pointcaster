@@ -69,7 +69,7 @@ private:
   };
 
   std::jthread _sender_thread;
-  moodycamel::BlockingConcurrentQueue<const MqttMessage> _messages_to_publish;
+  moodycamel::BlockingConcurrentQueue<MqttMessage> _messages_to_publish;
 
   void send_messages(std::stop_token st);
 };
