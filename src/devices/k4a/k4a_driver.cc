@@ -18,7 +18,7 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config, std::string_view target_
   static std::mutex serial_driver_construction;
   std::lock_guard<std::mutex> lock(serial_driver_construction);
 
-  pc::logger->info("Opening driver for k4a {} ({})\n", (uint) active_count, target_id);
+  pc::logger->info("Opening driver for k4a {} ({})\n", (unsigned int) active_count, target_id);
 
   _k4a_config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
   _k4a_config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
@@ -109,7 +109,7 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config, std::string_view target_
 
     _open = true;
 
-    pc::logger->info("k4a {} Open", (uint) device_index);
+    pc::logger->info("k4a {} Open", (unsigned int) device_index);
 
     return;
 

@@ -12,7 +12,7 @@ namespace pc::devices {
 
 class Driver {
 public:
-  uint device_index;
+  unsigned int device_index;
   bool primary_aligner = false;
   bool lost_device = false;
 

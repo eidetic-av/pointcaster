@@ -13,12 +13,12 @@
 namespace pc::radio {
 
 static std::mutex stats_access;
-static std::vector<uint> send_durations;
+static std::vector<unsigned int> send_durations;
 static std::vector<float> frame_sizes;
 
-uint stats_frame_counter = 0;
+unsigned int stats_frame_counter = 0;
 float avg_duration = 0;
-std::pair<uint, uint> minmax_duration;
+std::pair<unsigned int, unsigned int> minmax_duration;
 float avg_size = 0;
 std::pair<float, float> minmax_size;
 
@@ -40,10 +40,10 @@ Radio::Radio(RadioConfiguration &config)
         radio.bind(destination);
         pc::logger->info("Radio broadcasting on port {}", _config.port);
 
-        using delta_time = duration<uint, milliseconds>;
+        using delta_time = duration<unsigned int, milliseconds>;
         milliseconds delta_ms;
 
-        uint broadcast_snapshot_frame_count = 0;
+        unsigned int broadcast_snapshot_frame_count = 0;
 
         constexpr auto broadcast_rate = 33ms;
         auto next_send_time = steady_clock::now() + broadcast_rate;

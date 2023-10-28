@@ -40,7 +40,7 @@ public:
   static constexpr std::size_t incoming_point_count =
       depth_resolution.x * depth_resolution.y;
 
-  static inline std::atomic<uint> active_count = 0;
+  static inline std::atomic<unsigned int> active_count = 0;
 
   K4ADriver(const DeviceConfiguration& config, std::string_view target_id = "");
   ~K4ADriver();
@@ -93,15 +93,15 @@ public:
 
 private:
 
-  static constexpr uint color_buffer_size =
+  static constexpr std::size_t color_buffer_size =
       incoming_point_count * sizeof(color);
-  static constexpr uint positions_buffer_size =
+  static constexpr std::size_t positions_buffer_size =
       incoming_point_count * sizeof(Short3);
-  static constexpr uint positions_in_size =
+  static constexpr std::size_t positions_in_size =
       sizeof(Short3) * incoming_point_count;
-  static constexpr uint positions_out_size =
+  static constexpr std::size_t positions_out_size =
       sizeof(position) * incoming_point_count;
-  static constexpr uint colors_size = sizeof(color) * incoming_point_count;
+  static constexpr std::size_t colors_size = sizeof(color) * incoming_point_count;
 
   K4ADriverImplDeviceMemory *_device_memory;
   std::atomic_bool _device_memory_ready{false};
@@ -135,8 +135,8 @@ private:
   std::thread _tracker_loop;
   std::vector<K4ASkeleton> _skeletons;
 
-  static constexpr uint _total_alignment_frames = 10;
-  uint _alignment_frame_count = _total_alignment_frames;
+  static constexpr unsigned int _total_alignment_frames = 10;
+  unsigned int _alignment_frame_count = _total_alignment_frames;
   std::vector<k4abt_skeleton_t> _alignment_skeleton_frames;
   bool _aligned = false;
   position _alignment_center{0, 0, 0};
