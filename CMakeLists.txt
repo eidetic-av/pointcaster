@@ -162,9 +162,6 @@ list(APPEND LINK_LIBS fmt::fmt)
 find_package(spdlog CONFIG REQUIRED)
 list(APPEND LINK_LIBS spdlog::spdlog_header_only)
 
-find_package(nlohmann_json CONFIG REQUIRED)
-list(APPEND LINK_LIBS nlohmann_json::nlohmann_json)
-
 find_package(serdepp CONFIG REQUIRED)
 list(APPEND LINK_LIBS serdepp::serdepp)
 
