@@ -1,7 +1,7 @@
 #pragma once
 
 #include <pointclouds.h>
-#include <serdepp/serde.hpp>
+#include "serialization.h"
 
 namespace pc::types {
 

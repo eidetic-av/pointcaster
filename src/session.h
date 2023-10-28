@@ -7,9 +7,7 @@
 #include "midi/midi_client_config.h"
 #include "radio/radio_config.h"
 #include "operators/operators.h"
-
-#include <serdepp/serde.hpp>
-
+#include "serialization.h"
 #include <string>
 #include <vector>
 #include <map>

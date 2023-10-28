@@ -1,6 +1,10 @@
 #pragma once
 
+#ifndef __CUDACC__
 #include <serdepp/serde.hpp>
+#else
+#define DERIVE_SERDE(...) // No-op for CUDA
+#endif
 #include <tuple>
 
 namespace pc::reflect {
