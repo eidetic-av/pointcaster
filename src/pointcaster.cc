@@ -536,7 +536,7 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   }
 
   auto session_toml = serde::serialize<toml::value>(_session);
-  std::ofstream(file_path) << toml::format(session_toml);
+  std::ofstream(file_path, std::ios::binary) << toml::format(session_toml);
 }
 
 void PointCaster::load_session(std::filesystem::path file_path) {
