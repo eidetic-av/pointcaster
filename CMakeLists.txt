@@ -59,13 +59,10 @@ list(APPEND LINK_LIBS draco::draco)
 # ----- Networking -----
 
 find_package(ZeroMQ CONFIG REQUIRED)
-# zmq needs to be a shared lib on windows
+list(APPEND LINK_LIBS libzmq-static)
 if (WIN32)
-  list(APPEND LINK_LIBS libzmq)
-  # and it needs to include the system bcrypt
-  set(PLATFORM_LIBS ${PLATFORM_LIBS} bcrypt)
-else()
-  list(APPEND LINK_LIBS libzmq-static)
+  # zmq windows dependency:
+  list(APPEND PLATFORM_LIBS bcrypt)
 endif()
 
 if (WITH_MQTT)
