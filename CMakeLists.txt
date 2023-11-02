@@ -70,7 +70,7 @@ endif()
 
 if (WITH_MQTT)
   find_package(PahoMqttCpp CONFIG REQUIRED)
-    list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3-static uuid)
+  list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3-static uuid)
   find_package(msgpack-cxx CONFIG REQUIRED)
   list(APPEND LINK_LIBS msgpack-cxx)
   list(APPEND OPTIONAL_SRC src/mqtt/mqtt_client.cc)
@@ -220,6 +220,9 @@ endif()
 
 add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
 set_target_properties(pointcaster PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+
+set_property(TARGET pointcaster PROPERTY 
+  MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 target_include_directories(pointcaster PRIVATE
     ${INCLUDE_DIRS} ${OPTIONAL_INCLUDE_DIRS} 
