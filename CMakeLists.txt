@@ -70,12 +70,7 @@ endif()
 
 if (WITH_MQTT)
   find_package(PahoMqttCpp CONFIG REQUIRED)
-  # paho needs to be a shared lib on windows
-  if (WIN32)
-    list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3)
-  elseif(LINUX)
     list(APPEND LINK_LIBS PahoMqttCpp::paho-mqttpp3-static uuid)
-  endif()
   find_package(msgpack-cxx CONFIG REQUIRED)
   list(APPEND LINK_LIBS msgpack-cxx)
   list(APPEND OPTIONAL_SRC src/mqtt/mqtt_client.cc)
