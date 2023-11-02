@@ -37,6 +37,10 @@ endif()
 # link time optimisation for release builds
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION $<$<CONFIG:Release>:TRUE>)
 
+if (WIN32)
+  set(Boost_INCLUDE_DIR ${_VCPKG_INSTALLED_DIR}/x64-windows-static/include)
+endif()
+
 # ----- Geometry -----
 
 find_package(Eigen3 CONFIG REQUIRED)
@@ -249,8 +253,8 @@ if (WIN32 AND WITH_K4A)
   # (this lib can't be static)
   file (GLOB K4ABT_BINS "${K4ABT_ROOT}/sdk/windows-desktop/amd64/release/bin/*")
   foreach(K4ABT_BIN ${K4ABT_BINS})
-  add_custom_command(TARGET pointcaster POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    add_custom_command(TARGET pointcaster POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
       ${K4ABT_BIN} $<TARGET_FILE_DIR:pointcaster>)
   endforeach()
 endif()
