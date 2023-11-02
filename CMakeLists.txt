@@ -248,11 +248,14 @@ endif()
 # ----- Post-build actions -----
 
 if (WIN32 AND WITH_K4A)
-  # shared k4abt dll must be moved into executable directory manually
+  # shared k4abt binaries must be moved into executable directory manually
+  # (this lib can't be static)
+  file (GLOB K4ABT_BINS "${K4ABT_ROOT}/sdk/windows-desktop/amd64/release/bin/*")
+  foreach(K4ABT_BIN ${K4ABT_BINS})
   add_custom_command(TARGET pointcaster POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    ${K4ABT_ROOT}/sdk/windows-desktop/amd64/release/bin/k4abt.dll
-    $<TARGET_FILE_DIR:pointcaster>)
+      ${K4ABT_BIN} $<TARGET_FILE_DIR:pointcaster>)
+  endforeach()
 endif()
 
 if (LINUX)
