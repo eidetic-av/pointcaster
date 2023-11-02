@@ -542,15 +542,22 @@ void PointCaster::save_session(std::filesystem::path file_path) {
 void PointCaster::load_session(std::filesystem::path file_path) {
   pc::logger->info("Loading state from {}", file_path.string());
 
-  std::ifstream file(file_path);
+  std::ifstream file(file_path, std::ios::binary);
 
-  if (!file.is_open()) {
+  if (!file) {
     pc::logger->warn("Failed to open file");
     return;
   }
 
+  try {
   toml::value file_toml = toml::parse(file);
   _session = serde::deserialize<PointCasterSession>(file_toml);
+  }
+  catch (const toml::syntax_error& e) {
+      pc::logger->warn("Failed to parse config file toml");
+      pc::logger->warn(e.what());
+      return;
+  }
 
   // check if there is an adjacent .layout file
   // and load if so
@@ -569,7 +576,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     ImGui::LoadIniSettingsFromMemory(layout_data.data(), layout_size);
 
   } else {
-    pc::logger->info("Failed to open adjacent .layout file");
+    pc::logger->warn("Failed to open adjacent .layout file");
   }
 
   // get saved camera configurations and populate the cams list
