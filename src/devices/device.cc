@@ -3,6 +3,7 @@
 #include "../logger.h"
 #include <imgui.h>
 #include <k4abttypes.h>
+#include <tracy/Tracy.hpp>
 
 #include "k4a/k4a_driver.h"
 
@@ -19,12 +20,43 @@ Device::Device(DeviceConfiguration config) : _config(config){};
 
 pc::types::PointCloud
 synthesized_point_cloud(OperatorList operators) {
-  auto result = pc::types::PointCloud{};
+  ZoneScopedN("PointCloud::synthesized_point_cloud");
+
   if (Device::attached_devices.size() == 0)
-    return result;
+    return pc::types::PointCloud{};
+
+  // can run device->point_cloud(operators) in parallel before using them to
+  // construct the result
+
+  // For the += operator, return PointCloud& instead of PointCloud to avoid
+  // copying the result.
+
+  // it would be good to be able to preallocate memory here?
+  pc::types::PointCloud result{};
+
   // std::lock_guard<std::mutex> lock(devices_access);
-  for (auto &device : Device::attached_devices)
-    result += device->point_cloud(operators);
+
+  for (auto &device : Device::attached_devices) {
+    ZoneScopedN("run operators & add result");
+    auto device_cloud = device->point_cloud(operators);
+    {
+      ZoneScopedN("add result");
+      //result += std::move(d);
+      const auto cloud_size = device_cloud.positions.size();
+
+      result.positions.reserve(result.positions.size() + cloud_size);
+      result.positions.insert(
+	  result.positions.end(),
+	  std::make_move_iterator(device_cloud.positions.begin()),
+	  std::make_move_iterator(device_cloud.positions.end()));
+      result.colors.reserve(result.colors.size() + cloud_size);
+
+      result.colors.insert(result.colors.end(),
+			   std::make_move_iterator(device_cloud.colors.begin()),
+			   std::make_move_iterator(device_cloud.colors.end()));
+    }
+  }
+
   return result;
 }
 
@@ -112,10 +144,10 @@ void Device::draw_imgui_controls() {
       ImGui::SameLine();
       ImGui::Checkbox(label("z", 0).c_str(), &_config.flip_z);
 
-      ImGui::TextDisabled("Crop Input");
-      // ImGui can't handle shorts, so we need to use int's then convert
-      // back TODO there's probably a better way to do it by defining
-      // implicit conversions??
+      // TODO clean up the following mess into widgets
+      // and probably AABBs instead of MinMaxes
+
+      ImGui::TextDisabled("Input Cropping");
       pc::types::MinMax<int> crop_x_in{_config.crop_x.min, _config.crop_x.max};
       pc::types::MinMax<int> crop_y_in{_config.crop_y.min, _config.crop_y.max};
       pc::types::MinMax<int> crop_z_in{_config.crop_z.min, _config.crop_z.max};
@@ -128,6 +160,20 @@ void Device::draw_imgui_controls() {
       _config.crop_y.max = crop_y_in.max;
       _config.crop_z.min = crop_z_in.min;
       _config.crop_z.max = crop_z_in.max;
+
+      ImGui::TextDisabled("Render Bounds");
+      pc::types::MinMax<int> bound_x_out{_config.bound_x.min, _config.bound_x.max};
+      pc::types::MinMax<int> bound_y_out{_config.bound_y.min, _config.bound_y.max};
+      pc::types::MinMax<int> bound_z_out{_config.bound_z.min, _config.bound_z.max};
+      ImGui::SliderInt2(label("x", 2).c_str(), bound_x_out.arr(), -10000, 10000);
+      ImGui::SliderInt2(label("y", 2).c_str(), bound_y_out.arr(), -10000, 10000);
+      ImGui::SliderInt2(label("z", 2).c_str(), bound_z_out.arr(), -10000, 10000);
+      _config.bound_x.min = bound_x_out.min;
+      _config.bound_x.max = bound_x_out.max;
+      _config.bound_y.min = bound_y_out.min;
+      _config.bound_y.max = bound_y_out.max;
+      _config.bound_z.min = bound_z_out.min;
+      _config.bound_z.max = bound_z_out.max;
 
       pc::gui::vector_table(id(), "Position", _config.offset, -3000.0f, 3000.0f,
                             0.0f);

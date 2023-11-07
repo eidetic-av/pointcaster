@@ -6,6 +6,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sequence.h>
+#include <tracy/Tracy.hpp>
 
 namespace pc::devices {
 
@@ -22,6 +23,8 @@ struct K4ADriverImplDeviceMemory {
   thrust::device_vector<color> incoming_colors;
   thrust::device_vector<Short3> filtered_positions;
   thrust::device_vector<color> filtered_colors;
+  thrust::device_vector<position> transformed_positions;
+  thrust::device_vector<color> transformed_colors;
   thrust::device_vector<position> output_positions;
   thrust::device_vector<color> output_colors;
   thrust::device_vector<int> indices;
@@ -29,6 +32,7 @@ struct K4ADriverImplDeviceMemory {
   K4ADriverImplDeviceMemory(std::size_t point_count)
       : incoming_positions(point_count), incoming_colors(point_count),
         filtered_positions(point_count), filtered_colors(point_count),
+        transformed_positions(point_count), transformed_colors(point_count),
         output_positions(point_count), output_colors(point_count),
         indices(point_count) {
     thrust::sequence(indices.begin(), indices.end());
@@ -36,18 +40,51 @@ struct K4ADriverImplDeviceMemory {
 };
 
 void K4ADriver::init_device_memory() {
+  pc::logger->debug("Initialising K4A GPU device memory ({})", id());
   _device_memory = new K4ADriverImplDeviceMemory(incoming_point_count);
   _device_memory_ready = true;
-  pc::logger->debug("Initialised device memory ({})", id());
+  pc::logger->debug("Success");
 }
 void K4ADriver::free_device_memory() {
   _device_memory_ready = false;
   delete _device_memory;
-  pc::logger->debug("Device memory freed ({})", id());
+  pc::logger->debug("K4A GPU Device memory freed ({})", id());
 }
 
 // TODO these GPU kernels can probably be taken outside of the k4a classes and
 // used with any sensor type
+
+struct input_filter {
+  DeviceConfiguration config;
+
+  __device__ bool check_color(color value) const {
+    // remove totally black values
+    if (value.r == 0 && value.g == 0 && value.b == 0)
+      return false;
+    return true;
+  }
+
+  __device__ bool check_crop(Short3 value) const {
+    auto x = config.flip_x ? -value.x : value.x;
+    auto y = config.flip_y ? -value.y : value.y;
+    auto z = config.flip_z ? -value.z : value.z;
+    return x >= config.crop_x.min && x <= config.crop_x.max &&
+           y >= config.crop_y.min && y <= config.crop_y.max &&
+           z >= config.crop_z.min && z <= config.crop_z.max;
+  }
+
+  __device__ bool sample(int index) const { return index % config.sample == 0; }
+
+  __device__ bool operator()(point_in_t point) const {
+    auto index = thrust::get<2>(point);
+    if (!sample(index)) return false;
+    auto color = thrust::get<1>(point);
+    if (!check_color(color)) return false;
+    auto position = thrust::get<0>(point);
+    if (!check_crop(position)) return false;
+    return true;
+  }
+};
 
 struct point_transformer
     : public thrust::unary_function<point_in_t, point_out_t> {
@@ -122,82 +159,32 @@ struct point_transformer
   }
 };
 
-struct point_filter {
+
+struct output_filter {
   DeviceConfiguration config;
 
-  __device__ bool check_color(color value) const {
-    // remove totally black values
-    if (value.r == 0 && value.g == 0 && value.b == 0)
-      return false;
-    return true;
-  }
+  __device__ bool check_bounds(position value) const {
 
-  __device__ bool check_bounds(Short3 value) const {
     auto x = config.flip_x ? -value.x : value.x;
     auto y = config.flip_y ? -value.y : value.y;
     auto z = config.flip_z ? -value.z : value.z;
-    return x >= config.crop_x.min && x <= config.crop_x.max &&
-           y >= config.crop_y.min && y <= config.crop_y.max &&
-           z >= config.crop_z.min && z <= config.crop_z.max;
+
+    return x >= config.bound_x.min && x <= config.bound_x.max &&
+           y >= config.bound_y.min && y <= config.bound_y.max &&
+           z >= config.bound_z.min && z <= config.bound_z.max;
   }
 
-  __device__ bool sample(int index) const { return index % config.sample == 0; }
-
-  __device__ bool operator()(point_in_t point) const {
-    auto index = thrust::get<2>(point);
-    if (!sample(index)) return false;
-    auto color = thrust::get<1>(point);
-    if (!check_color(color)) return false;
-    auto position = thrust::get<0>(point);
-    if (!check_bounds(position)) return false;
-    return true;
+  __device__ bool operator()(point_out_t point) const {
+    auto pos = thrust::get<0>(point);
+    return check_bounds(pos);
   }
 };
 
-using thrust_point_t = thrust::tuple<position, color>;
-
-struct Translate {
-  float x;
-  float y;
-  float z;
-
-  __device__ thrust_point_t operator()(thrust_point_t point) const {
-    auto position = thrust::get<0>(point);
-    position.x += x;
-    position.y += y;
-    position.z += z;
-    return thrust::make_tuple(position, thrust::get<1>(point));
-  }
-};
-
-struct Scale {
-  float x;
-  float y;
-  float z;
-
-  __device__ thrust_point_t operator()(thrust_point_t point) const {
-    auto position = thrust::get<0>(point);
-    position.x *= x;
-    position.y *= y;
-    position.z *= z;
-    return thrust::make_tuple(position, thrust::get<1>(point));
-  }
-};
-
-template <typename Iterator, typename... Transformations>
-auto make_transform_pipeline(Iterator begin, size_t count,
-                             Transformations &&...transformations) {
-  auto it = thrust::make_transform_iterator(
-      begin, std::forward<Transformations>(transformations)...);
-  auto it_end = thrust::make_transform_iterator(
-      begin + count, std::forward<Transformations>(transformations)...);
-  return std::make_pair<Iterator, Iterator>(it, it_end);
-  // thrust::transform(it, it_end, begin,
-  // std::forward<Transformations>(transformations)...);
-}
 
 PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
                                   OperatorList operator_list) {
+
+  ZoneScopedN("K4ADriver::point_cloud");
 
   if (!_device_memory_ready || !_open || !_buffers_updated)
     return _point_cloud;
@@ -208,6 +195,8 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   auto &incoming_colors = _device_memory->incoming_colors;
   auto &filtered_positions = _device_memory->filtered_positions;
   auto &filtered_colors = _device_memory->filtered_colors;
+  auto &transformed_positions = _device_memory->transformed_positions;
+  auto &transformed_colors = _device_memory->transformed_colors;
   auto &output_positions = _device_memory->output_positions;
   auto &output_colors = _device_memory->output_colors;
   auto &indices = _device_memory->indices;
@@ -240,27 +229,32 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   auto filtered_points_begin = thrust::make_zip_iterator(thrust::make_tuple(
       filtered_positions.begin(), filtered_colors.begin(), indices.begin()));
 
-  auto output_points_begin = thrust::make_zip_iterator(
-      thrust::make_tuple(output_positions.begin(), output_colors.begin()));
-
-  // run the kernels
+  // copy incoming_points into filtered_points if they pass they input_filter
   auto filtered_points_end =
       thrust::copy_if(incoming_points_begin, incoming_points_end,
-                      filtered_points_begin, point_filter{config});
+                      filtered_points_begin, input_filter{config});
+
+  auto filtered_point_count = std::distance(filtered_points_begin, filtered_points_end);
+
+  // transform the filtered points, placing them into transformed_points
+  auto transformed_points_begin = thrust::make_zip_iterator(
+      thrust::make_tuple(transformed_positions.begin(), transformed_colors.begin()));
 
   thrust::transform(
-      filtered_points_begin, filtered_points_end, output_points_begin,
+      filtered_points_begin, filtered_points_end, transformed_points_begin,
       point_transformer(config, _alignment_center, _aligned_position_offset,
                         auto_tilt_value));
 
-  // we can determine the output count using the resulting output iterator
-  // from running the kernels
-  auto output_point_count =
-      std::distance(filtered_points_begin, filtered_points_end);
+  auto final_output_begin = thrust::make_zip_iterator(
+      thrust::make_tuple(output_positions.begin(), output_colors.begin()));
+
+  // copy transformed_points into final_output if they pass the output_filter
+  auto final_output_end = thrust::copy_if(
+      transformed_points_begin, transformed_points_begin + filtered_point_count,
+      final_output_begin, output_filter{config});
 
   for (auto &operators : operator_list) {
-    operators.get().run_operators(output_points_begin,
-                                  output_points_begin + output_point_count);
+    operators.get().run_operators(final_output_begin, final_output_end);
   }
 
   // wait for the kernels to complete
@@ -268,6 +262,11 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
 
   // copy back to our output point-cloud on the CPU
   buffer_access.lock();
+
+  // we can determine the output count using the resulting output iterator
+  // from running the kernels
+  auto output_point_count =
+      std::distance(final_output_begin, final_output_end);
 
   auto output_positions_size = sizeof(position) * output_point_count;
   auto output_colors_size = sizeof(color) * output_point_count;
