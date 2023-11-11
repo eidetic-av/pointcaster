@@ -3,7 +3,7 @@
 #include "../serialization.h"
 #include "../structs.h"
 #include "noise_operator.h"
-#include "knn_filter_operator.h"
+#include "sample_filter_operator.h"
 #include "operator_types.h"
 #include <variant>
 #include <functional>
@@ -12,7 +12,7 @@ namespace pc::operators {
 
 using OperatorConfigurationVariant = std::variant<
   NoiseOperatorConfiguration,
-  KNNFilterOperatorConfiguration
+  SampleFilterOperatorConfiguration
 >;
 
 // Extract types from variant into a tuple

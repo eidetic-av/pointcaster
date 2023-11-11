@@ -1,7 +1,7 @@
 #include "session_operator_host.h"
 #include "../gui/widgets.h"
 #include "../logger.h"
-#include "knn_filter_operator.h"
+#include "sample_filter_operator.h"
 #include "noise_operator.h"
 #include "operators.h"
 
@@ -39,8 +39,8 @@ void SessionOperatorHost::draw_imgui_window() {
 	    NoiseOperator::draw_imgui_controls(operator_config);
 	  }
 
-	  if constexpr (std::is_same_v<T, KNNFilterOperatorConfiguration>) {
-	    KNNFilterOperator::draw_imgui_controls(operator_config);
+	  if constexpr (std::is_same_v<T, SampleFilterOperatorConfiguration>) {
+	    SampleFilterOperator::draw_imgui_controls(operator_config);
 	  }
 
 	},

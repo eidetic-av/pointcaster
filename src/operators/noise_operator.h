@@ -31,14 +31,14 @@ struct NoiseOperatorConfiguration {
   static constexpr const char* Name = "Noise";
 };
 
-struct NoiseOperator : public thrust::unary_function<point_t, point_t> {
+struct NoiseOperator : public thrust::unary_function<indexed_point_t, indexed_point_t> {
 
   NoiseOperatorConfiguration _config;
 
   NoiseOperator(const NoiseOperatorConfiguration &config)
       : _config(config){};
 
-  __device__ point_t operator()(point_t point) const;
+  __device__ indexed_point_t operator()(indexed_point_t point) const;
 
   static void draw_imgui_controls(NoiseOperatorConfiguration& config);
 };
