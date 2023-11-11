@@ -254,7 +254,7 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
       final_output_begin, output_filter{config});
 
   for (auto &operators : operator_list) {
-    operators.get().run_operators(final_output_begin, final_output_end);
+    final_output_end = operators.get().run_operators(final_output_begin, final_output_end);
   }
 
   // wait for the kernels to complete

@@ -11,7 +11,7 @@ class SessionOperatorHost {
 public:
   SessionOperatorHost(OperatorHostConfiguration &config) : _config(config){};
 
-  void run_operators(operator_in_out_t begin, operator_in_out_t end) const;
+  operator_in_out_t run_operators(operator_in_out_t begin, operator_in_out_t end) const;
 
   void draw_imgui_window();
 

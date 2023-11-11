@@ -27,6 +27,8 @@ struct NoiseOperatorConfiguration {
 
   using MemberTypes = pc::reflect::type_list<bool, bool, float, float, int, int, float, float>;
   static const std::size_t MemberCount = 8;
+
+  static constexpr const char* Name = "Noise";
 };
 
 struct NoiseOperator : public thrust::unary_function<point_t, point_t> {
