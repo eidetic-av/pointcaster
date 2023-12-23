@@ -286,10 +286,10 @@ PointCaster::PointCaster(const Arguments &args)
   // load fonts from resources
   Utility::Resource rs("data");
 
-  auto font = rs.getRaw("SpaceGrotesk");
+  auto font = rs.getRaw("AtkinsonHyperlegibleRegular");
   ImFontConfig font_config;
   font_config.FontDataOwnedByAtlas = false;
-  const auto font_size = 14.0f;
+  const auto font_size = 14.5f;
   _font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(font.data()), font.size(),
       font_size * framebufferSize().x() / size.x(), &font_config);
@@ -297,7 +297,7 @@ PointCaster::PointCaster(const Arguments &args)
   auto mono_font = rs.getRaw("IosevkaArtisan");
   ImFontConfig mono_font_config;
   mono_font_config.FontDataOwnedByAtlas = false;
-  const auto mono_font_size = 16.0f;
+  const auto mono_font_size = 14.5f;
   _mono_font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(mono_font.data()), mono_font.size(),
       mono_font_size * framebufferSize().x() / size.x(), &mono_font_config);
