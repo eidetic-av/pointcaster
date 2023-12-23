@@ -53,7 +53,7 @@ public:
 
     if constexpr (std::is_same_v<typename T::value_type,
 				 std::vector<std::array<float, 2>>>) {
-      pc::logger->warn(
+      pc::logger->debug(
 	  "MIDI publishing not yet implemented for nested containers");
       return;
     } else {
