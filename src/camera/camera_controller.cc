@@ -492,28 +492,29 @@ void CameraController::draw_imgui_controls() {
         auto &optical_flow = analysis.optical_flow;
         ImGui::Checkbox("analysis.optical_flow.enabled", &optical_flow.enabled);
         ImGui::Checkbox("analysis.optical_flow.draw", &optical_flow.draw);
-        ImGui::Checkbox("analysis.optical_flow.publish", &optical_flow.publish);
+		ImGui::Checkbox("analysis.optical_flow.publish", &optical_flow.publish);
 
-	slider(name(), "analysis.optical_flow.feature_point_count",
-	       optical_flow.feature_point_count, 25, 1000, 250);
-	slider(name(), "analysis.optical_flow.feature_point_distance",
-	       optical_flow.feature_point_distance, 0.001f, 30.0f, 10.0f);
-        if (analysis.use_cuda) {
-          float quality_level =
-              optical_flow.cuda_feature_detector_quality_cutoff * 10.0f;
-	  slider(name(), "analysis.optical_flow.quality_level", quality_level,
-		 0.01f, 1.0f, 0.1f);
-          optical_flow.cuda_feature_detector_quality_cutoff =
-              quality_level / 10.0f;
-        }
-	slider(name(), "analysis.optical_flow.magnitude_scale",
-	       optical_flow.magnitude_scale, 0.1f, 5.0f, 1.0f);
-	slider(name(), "analysis.optical_flow.magnitude_exponent",
-	       optical_flow.magnitude_exponent, 0.001f, 2.5f, 1.0f);
-	slider(name(), "analysis.optical_flow.minimum_distance",
-	       optical_flow.minimum_distance, 0.0f, 0.2f, 0.0f);
-	slider(name(), "analysis.optical_flow.maximum_distance",
-	       optical_flow.maximum_distance, 0.0f, 0.8f, 0.8f);
+		slider(name(), "analysis.optical_flow.feature_point_count",
+			optical_flow.feature_point_count, 25, 1000, 250);
+		slider(name(), "analysis.optical_flow.feature_point_distance",
+			optical_flow.feature_point_distance, 0.001f, 30.0f, 10.0f);
+
+		if (analysis.use_cuda) {
+			float quality_level =
+				optical_flow.cuda_feature_detector_quality_cutoff * 10.0f;
+			slider(name(), "analysis.optical_flow.quality_level", quality_level,
+				0.01f, 1.0f, 0.1f);
+			optical_flow.cuda_feature_detector_quality_cutoff =
+				quality_level / 10.0f;
+		}
+		slider(name(), "analysis.optical_flow.magnitude_scale",
+			optical_flow.magnitude_scale, 0.1f, 5.0f, 1.0f);
+		slider(name(), "analysis.optical_flow.magnitude_exponent",
+			optical_flow.magnitude_exponent, 0.001f, 2.5f, 1.0f);
+		slider(name(), "analysis.optical_flow.minimum_distance",
+			optical_flow.minimum_distance, 0.0f, 0.2f, 0.0f);
+		slider(name(), "analysis.optical_flow.maximum_distance",
+			optical_flow.maximum_distance, 0.0f, 0.8f, 0.8f);
 
         ImGui::TreePop();
       }
