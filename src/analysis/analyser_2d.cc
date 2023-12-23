@@ -17,17 +17,19 @@
 #include <opencv2/imgproc.hpp>
 
 namespace pc::analysis {
-
+		
 Analyser2D::~Analyser2D() {
   _analysis_thread.request_stop();
   _dispatch_condition_variable.notify_one();
 }
 
 void Analyser2D::set_frame_size(Magnum::Vector2i frame_size) {
-  std::lock_guard lock(_analysis_frame_mutex);
-  _analysis_frame = std::make_unique<Magnum::GL::Texture2D>();
-  _analysis_frame->setStorage(1, Magnum::GL::TextureFormat::RGBA8, frame_size);
-  _frame_size = frame_size;
+	if (_frame_size != frame_size || _analysis_frame == nullptr) {
+		std::lock_guard lock(_analysis_frame_mutex);
+		_analysis_frame = std::make_unique<Magnum::GL::Texture2D>();
+		_analysis_frame->setStorage(1, Magnum::GL::TextureFormat::RGBA8, frame_size);
+		_frame_size = frame_size;
+	}
 }
 
 void Analyser2D::dispatch_analysis(Magnum::GL::Texture2D &texture,
@@ -268,7 +270,7 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     }
 
     std::vector<gui::OverlayText> frame_labels;
-
+ 
     // find the countours in the frame
     const auto &contours = analysis_config.contours;
     std::vector<std::vector<cv::Point>> contour_list;
