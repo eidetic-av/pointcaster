@@ -1,3 +1,5 @@
+#ifndef WIN32
+
 #include "usb.h"
 #include "device.h"
 #include "libusb.h"
@@ -253,3 +255,5 @@ int UsbMonitor::handle_hotplug_event(struct libusb_context *ctx,
 // }
 
 } // namespace pc
+
+#endif

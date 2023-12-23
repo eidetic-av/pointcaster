@@ -112,9 +112,11 @@ list(APPEND LINK_LIBS
 
 # ----- Sensor driver libraries -----
 
+if (NOT WIN32)
 find_package(libusb CONFIG REQUIRED)
 list(APPEND LINK_LIBS ${LIBUSB_LIBRARIES})
 list(APPEND INCLUDE_DIRS ${LIBUSB_INCLUDE_DIRS})
+endif()
 
 # Azure Kinect
 if (WITH_K4A)

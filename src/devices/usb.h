@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef WIN32
+
 #include "device.h"
 #include <functional>
 #include <libusb.h>
@@ -46,3 +48,5 @@ private:
 };
 
 } // namespace pc::devices
+
+#endif
