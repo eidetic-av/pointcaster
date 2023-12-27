@@ -38,8 +38,7 @@ void SessionOperatorHost::draw_imgui_window() {
 	  if constexpr (std::is_same_v<T, NoiseOperatorConfiguration>) {
 	    NoiseOperator::draw_imgui_controls(operator_config);
 	  }
-
-	  if constexpr (std::is_same_v<T, SampleFilterOperatorConfiguration>) {
+	  else if constexpr (std::is_same_v<T, SampleFilterOperatorConfiguration>) {
 	    SampleFilterOperator::draw_imgui_controls(operator_config);
 	  }
 
