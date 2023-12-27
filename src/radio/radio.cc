@@ -22,8 +22,9 @@ std::pair<unsigned int, unsigned int> minmax_duration;
 float avg_size = 0;
 std::pair<float, float> minmax_size;
 
-Radio::Radio(RadioConfiguration &config)
+Radio::Radio(RadioConfiguration &config, pc::operators::SessionOperatorHost& session_operator_host)
     : _config(config),
+      _session_operator_host(session_operator_host),
       _radio_thread(std::make_unique<std::jthread>([this](std::stop_token st) {
         using namespace std::chrono;
         using namespace std::chrono_literals;
@@ -90,7 +91,7 @@ Radio::Radio(RadioConfiguration &config)
             //   broadcast_snapshot_frame_count = snapshots::frames.size();
             // }
 
-            auto live_point_cloud = pc::devices::synthesized_point_cloud();
+            auto live_point_cloud = pc::devices::synthesized_point_cloud({ _session_operator_host });
             if (live_point_cloud.size() > 0) {
               auto bytes = live_point_cloud.serialize(_config.compress_frames);
               zmq::message_t point_cloud_msg(bytes);

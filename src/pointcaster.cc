@@ -456,7 +456,7 @@ PointCaster::PointCaster(const Arguments &args)
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  _radio = std::make_unique<Radio>(_session.radio);
+  _radio = std::make_unique<Radio>(_session.radio, *_session_operator_host);
   _mqtt = std::make_unique<MqttClient>(_session.mqtt);
   _midi = std::make_unique<MidiClient>(_session.midi);
 
@@ -634,8 +634,7 @@ void PointCaster::render_cameras() {
     // - make sure to cache already synthesised configurations
     if (points.empty()) {
 
-      OperatorList operator_list = {*_session_operator_host};
-      points = devices::synthesized_point_cloud(operator_list);
+      points = devices::synthesized_point_cloud({*_session_operator_host});
       if (rendering_config.snapshots)
         points += snapshots::point_cloud();
       _point_cloud_renderer->points = points;
