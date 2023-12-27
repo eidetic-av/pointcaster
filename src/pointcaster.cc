@@ -1423,6 +1423,11 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
     return;
   }
 
+  if (!_interacting_camera_controller) {
+	  event.setAccepted(true);
+	  return;
+  }
+
   auto& camera_controller = _interacting_camera_controller->get();
 
   // rotate / orbit
