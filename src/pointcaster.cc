@@ -1263,7 +1263,7 @@ void PointCaster::drawEvent() {
 
   // _secondary_window->_shader.bind_texture(frame).draw(_secondary_window->_mesh);
 
-  _secondary_window->redraw();
+  if (_secondary_window.has_value()) _secondary_window->redraw();
 
   redraw();
 
