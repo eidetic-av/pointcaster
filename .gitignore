@@ -1,4 +1,6 @@
 build/
+~build/
+_build/
 bin/
 captures/
 vcpkg_installed/

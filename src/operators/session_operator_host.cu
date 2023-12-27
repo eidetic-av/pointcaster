@@ -3,6 +3,8 @@
 #include "operator_utils.cuh"
 #include "outlier_filter_operator.cuh"
 #include "sample_filter_operator.cuh"
+#include "rotate_operator.cuh"
+#include "rake_operator.cuh"
 #include "session_operator_host.h"
 #include <thrust/copy.h>
 #include <thrust/device_vector.h>
@@ -29,15 +31,20 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
           ZoneScopedN(T::Name);
 
           if constexpr (std::is_same_v<T, NoiseOperatorConfiguration>) {
-            if (config.enabled) {
+            if (config.enabled)
               thrust::transform(begin, end, begin, NoiseOperator(config));
-            }
-          } else if constexpr (std::is_same_v<
-                                   T, SampleFilterOperatorConfiguration>) {
-            if (config.enabled) {
-              end = thrust::copy_if(begin, end, begin,
-                                    SampleFilterOperator(config));
-            }
+          }
+          else if constexpr (std::is_same_v<T, SampleFilterOperatorConfiguration>) {
+            if (config.enabled)
+              end = thrust::copy_if(begin, end, begin, SampleFilterOperator(config));
+          }
+          else if constexpr (std::is_same_v<T, RotateOperatorConfiguration>) {
+            if (config.enabled)
+              thrust::transform(begin, end, begin, RotateOperator(config));
+          }
+          else if constexpr (std::is_same_v<T, RakeOperatorConfiguration>) {
+            if (config.enabled)
+              thrust::transform(begin, end, begin, RakeOperator(config));
           }
           // else if constexpr (std::is_same_v<
             //                        T, OutlierFilterOperatorConfiguration>) {

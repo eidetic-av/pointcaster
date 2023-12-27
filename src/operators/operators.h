@@ -4,6 +4,8 @@
 #include "../structs.h"
 #include "noise_operator.h"
 #include "sample_filter_operator.h"
+#include "rotate_operator.h"
+#include "rake_operator.h"
 #include "operator_types.h"
 #include <variant>
 #include <functional>
@@ -11,9 +13,10 @@
 namespace pc::operators {
 
 using OperatorConfigurationVariant = std::variant<
-  NoiseOperatorConfiguration,
-  SampleFilterOperatorConfiguration
->;
+	NoiseOperatorConfiguration,
+    SampleFilterOperatorConfiguration,
+	RotateOperatorConfiguration,
+	RakeOperatorConfiguration>;
 
 // Extract types from variant into a tuple
 template<typename Variant>

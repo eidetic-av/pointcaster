@@ -3,6 +3,8 @@
 #include "../logger.h"
 #include "sample_filter_operator.h"
 #include "noise_operator.h"
+#include "rotate_operator.h"
+#include "rake_operator.h"
 #include "operators.h"
 
 namespace pc::operators {
@@ -28,6 +30,14 @@ void SessionOperatorHost::draw_imgui_window() {
 
     ImGui::EndPopup();
   }
+  ImGui::SameLine();
+  if (ImGui::Button("Rotate")) {
+    _config.operators.push_back(RotateOperatorConfiguration());
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Rake")) {
+    _config.operators.push_back(RakeOperatorConfiguration());
+  }
 
   for (auto &operator_config : _config.operators) {
     std::visit(
@@ -41,7 +51,12 @@ void SessionOperatorHost::draw_imgui_window() {
 	  else if constexpr (std::is_same_v<T, SampleFilterOperatorConfiguration>) {
 	    SampleFilterOperator::draw_imgui_controls(operator_config);
 	  }
-
+	  else if constexpr (std::is_same_v<T, RotateOperatorConfiguration>) {
+	    RotateOperator::draw_imgui_controls(operator_config);
+	  }
+	  else if constexpr (std::is_same_v<T, RakeOperatorConfiguration>) {
+	    RakeOperator::draw_imgui_controls(operator_config);
+	  }
 	},
 	operator_config);
   }

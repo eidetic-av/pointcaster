@@ -10,7 +10,24 @@
       "cmakeCommandArgs": "-DVCPKG_TARGET_TRIPLET=x64-windows-static -DVCPKG_OVERLAY_PORTS=\"${projectDir}\\ports\"",
       "buildCommandArgs": "",
       "ctestCommandArgs": "",
-      "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake"
+      "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "variables": [
+        {
+          "name": "WITH_ADDRESS_SANITIZER",
+          "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "WITH_POINTCASTER",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "TRACY_ENABLE",
+          "value": "False",
+          "type": "BOOL"
+        }
+      ]
     },
     {
       "name": "x64-MSVC-Release",
@@ -22,7 +39,29 @@
       "cmakeCommandArgs": "-DVCPKG_TARGET_TRIPLET=x64-windows-static -DVCPKG_OVERLAY_PORTS=\"${projectDir}\\ports\"",
       "buildCommandArgs": "",
       "ctestCommandArgs": "",
-      "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake"
+      "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "variables": [
+        {
+          "name": "WITH_TESTS",
+          "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "WITH_RECEIVER_LIB",
+          "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "RECEIVER_LIB_SHARED",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "WITH_POINTCASTER",
+          "value": "True",
+          "type": "BOOL"
+        }
+      ]
     },
     {
       "name": "x64-MSVC-RelWithDebInfo",
@@ -35,6 +74,40 @@
       "buildCommandArgs": "",
       "ctestCommandArgs": "",
       "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake"
+    },
+    {
+      "name": "x64-MSVC-Release-Lib",
+      "generator": "Ninja",
+      "configurationType": "Release",
+      "buildRoot": "${projectDir}\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "-DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_OVERLAY_PORTS=\"${projectDir}\\ports\"",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "variables": [
+        {
+          "name": "WITH_TESTS",
+          "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "WITH_RECEIVER_LIB",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "RECEIVER_LIB_SHARED",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "WITH_K4A",
+          "value": "False",
+          "type": "BOOL"
+        }
+      ]
     }
   ]
 }

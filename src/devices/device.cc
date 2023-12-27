@@ -25,6 +25,8 @@ synthesized_point_cloud(OperatorList operators) {
   if (Device::attached_devices.size() == 0)
     return pc::types::PointCloud{};
 
+  // TODO
+
   // can run device->point_cloud(operators) in parallel before using them to
   // construct the result
 
@@ -34,7 +36,7 @@ synthesized_point_cloud(OperatorList operators) {
   // it would be good to be able to preallocate memory here?
   pc::types::PointCloud result{};
 
-  // std::lock_guard<std::mutex> lock(devices_access);
+  std::lock_guard<std::mutex> lock(Device::devices_access);
 
   for (auto &device : Device::attached_devices) {
     ZoneScopedN("run operators & add result");

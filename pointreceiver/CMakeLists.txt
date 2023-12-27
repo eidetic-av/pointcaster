@@ -23,46 +23,37 @@ list(APPEND RECEIVER_INCLUDE_DIRS ${READERWRITERQUEUE_INCLUDE_DIRS})
 set(RECEIVER_SOURCE_FILES src/pointreceiver.cc)
 
 add_library(pointreceiver_obj OBJECT ${RECEIVER_SOURCE_FILES})
-set_target_properties(pointreceiver_obj PROPERTIES
-  POSITION_INDEPENDENT_CODE ON)
+set_target_properties(pointreceiver_obj PROPERTIES 
+    POSITION_INDEPENDENT_CODE ON)
 
-target_include_directories(pointreceiver_obj
-  PRIVATE ${RECEIVER_INCLUDE_DIRS})
+target_include_directories(pointreceiver_obj PRIVATE ${RECEIVER_INCLUDE_DIRS})
 
-add_library(pointreceiver SHARED $<TARGET_OBJECTS:pointreceiver_obj>)
-add_library(pointreceiver::shared ALIAS pointreceiver)
+if(RECEIVER_LIB_SHARED)
+  add_library(pointreceiver SHARED $<TARGET_OBJECTS:pointreceiver_obj>)
+  target_compile_features(pointreceiver PRIVATE cxx_std_20)
+  target_include_directories(pointreceiver PRIVATE ${RECEIVER_INCLUDE_DIRS})
 
-add_library(pointreceiver_static STATIC $<TARGET_OBJECTS:pointreceiver_obj>)
-add_library(pointreceiver::static ALIAS pointreceiver_static)
+  if (WIN32)
+    target_compile_options(pointreceiver PRIVATE -fdeclspec)
+  endif()
 
-target_compile_features(pointreceiver_static PRIVATE cxx_std_20)
-target_compile_features(pointreceiver PRIVATE cxx_std_20)
+  set_target_properties(pointreceiver PROPERTIES DEBUG_POSTFIX "d")
+  target_link_libraries(pointreceiver PRIVATE ${RECEIVER_LINK_LIBS} ${RECEIVER_SHARED_LIBS})
 
-target_include_directories(pointreceiver_static
-  PRIVATE ${RECEIVER_INCLUDE_DIRS})
-target_include_directories(pointreceiver
-  PRIVATE ${RECEIVER_INCLUDE_DIRS})
-
-if (WIN32)
-  target_compile_options(pointreceiver PRIVATE -fdeclspec)
+  set_property(TARGET pointreceiver PROPERTY
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+else()
+  add_library(pointreceiver STATIC $<TARGET_OBJECTS:pointreceiver_obj>)
+  target_compile_features(pointreceiver PRIVATE cxx_std_20)
+  target_include_directories(pointreceiver PRIVATE ${RECEIVER_INCLUDE_DIRS})
+  
+  set_target_properties(pointreceiver PROPERTIES DEBUG_POSTFIX "d")
+  target_link_libraries(pointreceiver PRIVATE ${RECEIVER_LINK_LIBS} ${RECEIVER_STATIC_LIBS})
 endif()
-
-set_target_properties(pointreceiver PROPERTIES DEBUG_POSTFIX "d")
-set_target_properties(pointreceiver_static PROPERTIES DEBUG_POSTFIX "d")
-
-target_link_libraries(pointreceiver_static
-  PRIVATE ${RECEIVER_LINK_LIBS} ${RECEIVER_STATIC_LIBS})
-target_link_libraries(pointreceiver
-  PRIVATE ${RECEIVER_LINK_LIBS} ${RECEIVER_SHARED_LIBS})
 
 if (WITH_TESTS)
   add_executable(pointreceiver-test ${RECEIVER_SOURCE_FILES})
-  target_link_libraries(pointreceiver-test
-    PRIVATE ${RECEIVER_LINK_LIBS} ${RECEIVER_STATIC_LIBS})
-endif()
-
-# set msvc runtime
-if(${VCPKG_TARGET_TRIPLET} STREQUAL "x64-windows")
-  set_property(TARGET pointreceiver PROPERTY
-    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  target_link_libraries(pointreceiver-test PRIVATE ${RECEIVER_LINK_LIBS} 
+    $<$<BOOL:${RECEIVER_LIB_SHARED}>:${RECEIVER_SHARED_LIBS}>
+    $<$<NOT:$<BOOL:${RECEIVER_LIB_SHARED}>>:${RECEIVER_STATIC_LIBS}>)
 endif()

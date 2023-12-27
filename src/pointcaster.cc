@@ -173,8 +173,10 @@ protected:
   std::unique_ptr<MqttClient> _mqtt;
   std::unique_ptr<MidiClient> _midi;
 
+#ifndef WIN32
   std::unique_ptr<UsbMonitor> _usb_monitor;
   std::mutex _usb_config_mutex;
+#endif
 
   ImGuiIntegration::Context _imgui_context{NoCreate};
 
@@ -284,10 +286,10 @@ PointCaster::PointCaster(const Arguments &args)
   // load fonts from resources
   Utility::Resource rs("data");
 
-  auto font = rs.getRaw("SpaceGrotesk");
+  auto font = rs.getRaw("AtkinsonHyperlegibleRegular");
   ImFontConfig font_config;
   font_config.FontDataOwnedByAtlas = false;
-  const auto font_size = 14.0f;
+  const auto font_size = 14.5f;
   _font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(font.data()), font.size(),
       font_size * framebufferSize().x() / size.x(), &font_config);
@@ -295,7 +297,7 @@ PointCaster::PointCaster(const Arguments &args)
   auto mono_font = rs.getRaw("IosevkaArtisan");
   ImFontConfig mono_font_config;
   mono_font_config.FontDataOwnedByAtlas = false;
-  const auto mono_font_size = 16.0f;
+  const auto mono_font_size = 14.5f;
   _mono_font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(mono_font.data()), mono_font.size(),
       mono_font_size * framebufferSize().x() / size.x(), &mono_font_config);
@@ -348,19 +350,18 @@ PointCaster::PointCaster(const Arguments &args)
   _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
                           Matrix4::translation(Vector3(0, 0, 0)));
 
-  // init the usb device monitor, it takes a function that is able to return the
-  // current usb configuration (so it can grab that on it's own USB thread when
-  // needed)
-
-  const auto fetch_usb_config = [this] {
-    std::lock_guard lock(this->_usb_config_mutex);
-    return this->_session.usb;
-  };
   const auto fetch_session_devices = [this] {
     std::lock_guard lock(this->_session_devices_mutex);
     return this->_session.devices;
   };
+
+#ifndef WIN32
+  const auto fetch_usb_config = [this] {
+    std::lock_guard lock(this->_usb_config_mutex);
+    return this->_session.usb;
+  };
   _usb_monitor = std::make_unique<UsbMonitor>(fetch_usb_config, fetch_session_devices);
+#endif
 
   // load last session
   auto data_dir = path::get_or_create_data_directory();
@@ -451,7 +452,7 @@ PointCaster::PointCaster(const Arguments &args)
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  _radio = std::make_unique<Radio>(_session.radio);
+  _radio = std::make_unique<Radio>(_session.radio, *_session_operator_host);
   _mqtt = std::make_unique<MqttClient>(_session.mqtt);
   _midi = std::make_unique<MidiClient>(_session.midi);
 
@@ -629,8 +630,7 @@ void PointCaster::render_cameras() {
     // - make sure to cache already synthesised configurations
     if (points.empty()) {
 
-      OperatorList operator_list = {*_session_operator_host};
-      points = devices::synthesized_point_cloud(operator_list);
+      points = devices::synthesized_point_cloud({*_session_operator_host});
       if (rendering_config.snapshots)
         points += snapshots::point_cloud();
       _point_cloud_renderer->points = points;
@@ -696,6 +696,7 @@ void PointCaster::open_kinect_sensors() {
     loading_device = true;
     const auto open_device_count = Device::attached_devices.size();
     const auto attached_device_count = k4a::device::get_installed_count();
+    pc::logger->info("Found {} attached k4a devices", (int)attached_device_count);
     for (std::size_t i = open_device_count; i < attached_device_count; i++) {
       load_device({});
     }
@@ -1085,11 +1086,14 @@ void PointCaster::draw_devices_window() {
   ImGui::Begin("Devices", nullptr);
 
   {
+
+#ifndef WIN32
     auto &usb = _session.usb;
     std::lock_guard lock(_usb_config_mutex);
 
     ImGui::Checkbox("Open on launch", &usb.open_on_launch);
     ImGui::Checkbox("Open on hotplug", &usb.open_on_hotplug);
+#endif
 
     if (ImGui::Button("Open")) open_kinect_sensors();
     ImGui::SameLine();
@@ -1259,7 +1263,7 @@ void PointCaster::drawEvent() {
 
   // _secondary_window->_shader.bind_texture(frame).draw(_secondary_window->_mesh);
 
-  _secondary_window->redraw();
+  if (_secondary_window.has_value()) _secondary_window->redraw();
 
   redraw();
 
@@ -1417,6 +1421,11 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
       !_interacting_camera_controller) {
     event.setAccepted(true);
     return;
+  }
+
+  if (!_interacting_camera_controller) {
+	  event.setAccepted(true);
+	  return;
   }
 
   auto& camera_controller = _interacting_camera_controller->get();
