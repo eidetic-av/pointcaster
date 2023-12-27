@@ -15,7 +15,16 @@ option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_MQTT "Enable MQTT client support" ON)
 option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
+
+option(WITH_POINTCASTER "Build main application" ON)
+
 option(WITH_RECEIVER_LIB "Build pointreceiver client library" OFF)
+if(WIN32)
+  option(RECEIVER_LIB_SHARED "Build pointreceiver client library with dynamic linkage" ON)
+else()
+  option(RECEIVER_LIB_SHARED "Build pointreceiver client library with dynamic linkage" OFF)
+endif()
+
 option(WITH_TESTS "Build tests" OFF)
 
 option(WITH_TRACY "Enable profiling using Tracy" OFF)
@@ -37,9 +46,11 @@ endif()
 # link time optimisation for release builds
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION $<$<CONFIG:Release>:TRUE>)
 
-if (WIN32)
+if (WIN32 AND WITH_POINTCASTER)
   set(Boost_INCLUDE_DIR ${_VCPKG_INSTALLED_DIR}/x64-windows-static/include)
 endif()
+
+if (WITH_POINTCASTER)
 
 # ----- Geometry -----
 
@@ -184,8 +195,6 @@ if (TRACY_ENABLE)
   add_compile_definitions(TRACY_ON_DEMAND)
 endif()
 
-# ----- Pointcloud library -----
-
 # ----- Pointcaster application -----
 
 set(SOURCE_FILES
@@ -242,6 +251,8 @@ if (WITH_THREAD_SANITIZER)
 elseif(WITH_ADDRESS_SANITIZER)
   target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
   target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
+endif()
+
 endif()
 
 # ----- Pointreceiver library -----
