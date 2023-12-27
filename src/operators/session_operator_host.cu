@@ -1,5 +1,7 @@
 #include "../logger.h"
 #include "noise_operator.cuh"
+#include "rotate_operator.cuh"
+#include "rake_operator.cuh"
 #include "session_operator_host.h"
 #include <variant>
 
@@ -15,6 +17,14 @@ void SessionOperatorHost::run_operators(operator_in_out_t begin,
           if constexpr (std::is_same_v<T, NoiseOperatorConfiguration>) {
             if (config.enabled)
               thrust::transform(begin, end, begin, NoiseOperator(config));
+          }
+          else if constexpr (std::is_same_v<T, RotateOperatorConfiguration>) {
+            if (config.enabled)
+              thrust::transform(begin, end, begin, RotateOperator(config));
+          }
+          else if constexpr (std::is_same_v<T, RakeOperatorConfiguration>) {
+            if (config.enabled)
+              thrust::transform(begin, end, begin, RakeOperator(config));
           }
           // You can handle other types here as well with further if constexpr
           // blocks

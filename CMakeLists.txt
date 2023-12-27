@@ -212,6 +212,8 @@ set(SOURCE_FILES
   src/operators/session_operator_host.cc
   src/operators/session_operator_host.cu
   src/operators/noise_operator.cc
+  src/operators/rotate_operator.cc
+  src/operators/rake_operator.cc
   ${POINTCASTER_SRC}
   ${OPTIONAL_SRC})
 

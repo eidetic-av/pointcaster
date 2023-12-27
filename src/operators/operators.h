@@ -3,12 +3,17 @@
 #include "../serialization.h"
 #include "../structs.h"
 #include "noise_operator.h"
+#include "rotate_operator.h"
+#include "rake_operator.h"
 #include "operator_types.h"
 #include <variant>
 
 namespace pc::operators {
 
-using OperatorConfigurationVariant = std::variant<NoiseOperatorConfiguration>;
+using OperatorConfigurationVariant = std::variant<
+	NoiseOperatorConfiguration,
+	RotateOperatorConfiguration,
+	RakeOperatorConfiguration>;
 
 struct OperatorHostConfiguration {
   bool enabled = true;
