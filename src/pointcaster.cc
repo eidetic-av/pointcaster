@@ -360,10 +360,6 @@ PointCaster::PointCaster(const Arguments &args)
     std::lock_guard lock(this->_usb_config_mutex);
     return this->_session.usb;
   };
-  const auto fetch_session_devices = [this] {
-    std::lock_guard lock(this->_session_devices_mutex);
-    return this->_session.devices;
-  };
   _usb_monitor = std::make_unique<UsbMonitor>(fetch_usb_config, fetch_session_devices);
 #endif
 
