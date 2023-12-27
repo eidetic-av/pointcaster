@@ -11,7 +11,8 @@
 namespace pc::devices {
 
 typedef thrust::tuple<Short3, color, int> point_in_t;
-typedef thrust::tuple<position, color> point_out_t;
+typedef thrust::tuple<position, color> point_t;
+typedef thrust::tuple<position, color, int> indexed_point_t;
 
 __host__ __device__ static inline float as_rad(float deg) {
   constexpr auto mult = 3.141592654f / 180.0f;
@@ -87,7 +88,7 @@ struct input_filter {
 };
 
 struct point_transformer
-    : public thrust::unary_function<point_in_t, point_out_t> {
+    : public thrust::unary_function<point_in_t, indexed_point_t> {
 
   DeviceConfiguration config;
   Eigen::Vector3f alignment_center;
@@ -105,7 +106,7 @@ struct point_transformer
         position_offset.x, position_offset.y, position_offset.z);
   }
 
-  __device__ point_out_t operator()(point_in_t point) const {
+  __device__ indexed_point_t operator()(point_in_t point) const {
 
     // we reinterpret our point in Eigen containers so we have easy maths
     using namespace Eigen;
@@ -155,7 +156,9 @@ struct point_transformer
     color col = thrust::get<1>(point);
     // TODO apply color transformations here
 
-    return thrust::make_tuple(pos_out, col);
+    int index = thrust::get<2>(point);
+
+    return thrust::make_tuple(pos_out, col, index);
   }
 };
 
@@ -174,7 +177,7 @@ struct output_filter {
            z >= config.bound_z.min && z <= config.bound_z.max;
   }
 
-  __device__ bool operator()(point_out_t point) const {
+  __device__ bool operator()(indexed_point_t point) const {
     auto pos = thrust::get<0>(point);
     return check_bounds(pos);
   }
@@ -238,23 +241,24 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
 
   // transform the filtered points, placing them into transformed_points
   auto transformed_points_begin = thrust::make_zip_iterator(
-      thrust::make_tuple(transformed_positions.begin(), transformed_colors.begin()));
+      thrust::make_tuple(transformed_positions.begin(),
+			 transformed_colors.begin(), indices.begin()));
 
   thrust::transform(
       filtered_points_begin, filtered_points_end, transformed_points_begin,
       point_transformer(config, _alignment_center, _aligned_position_offset,
-                        auto_tilt_value));
+			auto_tilt_value));
 
-  auto final_output_begin = thrust::make_zip_iterator(
-      thrust::make_tuple(output_positions.begin(), output_colors.begin()));
+  auto operator_output_begin = thrust::make_zip_iterator(thrust::make_tuple(
+      output_positions.begin(), output_colors.begin(), indices.begin()));
 
-  // copy transformed_points into final_output if they pass the output_filter
-  auto final_output_end = thrust::copy_if(
+  // copy transformed_points into operator_output if they pass the output_filter
+  auto operator_output_end = thrust::copy_if(
       transformed_points_begin, transformed_points_begin + filtered_point_count,
-      final_output_begin, output_filter{config});
+      operator_output_begin, output_filter{config});
 
   for (auto &operators : operator_list) {
-    operators.get().run_operators(final_output_begin, final_output_end);
+    operator_output_end = operators.get().run_operators(operator_output_begin, operator_output_end);
   }
 
   // wait for the kernels to complete
@@ -266,7 +270,7 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   // we can determine the output count using the resulting output iterator
   // from running the kernels
   auto output_point_count =
-      std::distance(final_output_begin, final_output_end);
+      std::distance(operator_output_begin, operator_output_end);
 
   auto output_positions_size = sizeof(position) * output_point_count;
   auto output_colors_size = sizeof(color) * output_point_count;

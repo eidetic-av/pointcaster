@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22.0)
 project(bob-pointcaster LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 20)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX TRUE)
@@ -223,6 +223,7 @@ set(SOURCE_FILES
   src/operators/noise_operator.cc
   src/operators/rotate_operator.cc
   src/operators/rake_operator.cc
+  src/operators/sample_filter_operator.cc
   ${POINTCASTER_SRC}
   ${OPTIONAL_SRC})
 

@@ -8,10 +8,11 @@ namespace pc::operators {
 using pc::types::color;
 using pc::types::position;
 
-__device__ point_t NoiseOperator::operator()(point_t point) const {
+__device__ indexed_point_t NoiseOperator::operator()(indexed_point_t point) const {
 
   position pos = thrust::get<0>(point);
   color col = thrust::get<1>(point);
+  int index = thrust::get<2>(point);
 
   float3 pos_f = {(float)pos.x, (float)pos.y, (float)pos.z};
 
@@ -32,7 +33,7 @@ __device__ point_t NoiseOperator::operator()(point_t point) const {
                                      repeat, lacunarity, decay) *
            magnitude;
 
-  return thrust::make_tuple(pos, col);
+  return thrust::make_tuple(pos, col, index);
 };
 
 } // namespace pc::operators
