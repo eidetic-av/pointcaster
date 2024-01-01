@@ -36,8 +36,8 @@ Radio::Radio(RadioConfiguration &config, pc::operators::SessionOperatorHost& ses
         // and don't keep excess frames in memory
         radio.set(zmq::sockopt::linger, 0);
 
+        // auto destination = fmt::format("tcp://127.0.0.1:{}", _config.port);
         auto destination = fmt::format("tcp://*:{}", _config.port);
-        // auto destination = fmt::format("tcp://192.168.1.10:{}", port);
         radio.bind(destination);
         pc::logger->info("Radio broadcasting on port {}", _config.port);
 
@@ -65,7 +65,7 @@ Radio::Radio(RadioConfiguration &config, pc::operators::SessionOperatorHost& ses
 
           std::size_t packet_bytes = 0;
           {
-            ZoneScopedN("Serialization and ZMQ Send");
+            ZoneScopedN("Serialization and send");
             auto start_send_time = steady_clock::now();
 
             // if (snapshots::frames.size() != broadcast_snapshot_frame_count) {
@@ -96,8 +96,11 @@ Radio::Radio(RadioConfiguration &config, pc::operators::SessionOperatorHost& ses
               auto bytes = live_point_cloud.serialize(_config.compress_frames);
               zmq::message_t point_cloud_msg(bytes);
               point_cloud_msg.set_group("live");
-              radio.send(point_cloud_msg, zmq::send_flags::none);
-              packet_bytes += point_cloud_msg.size();
+              {
+		ZoneScopedN("Send");
+                radio.send(point_cloud_msg, zmq::send_flags::none);
+                packet_bytes += point_cloud_msg.size();
+              }
             }
 
             delta_ms = duration_cast<milliseconds>(steady_clock::now() -
