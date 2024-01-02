@@ -1,7 +1,7 @@
-#include "drag_slider.h"
 #include "widgets.h"
 #include "../logger.h"
 #include "../string_utils.h"
+#include "drag_slider.h"
 #include <array>
 #include <cmath>
 #include <tweeny/easing.h>
@@ -10,9 +10,7 @@ namespace pc::gui {
 
 unsigned int _parameter_index;
 
-void begin_gui_helpers() { 
-    _parameter_index = 0;
-}
+void begin_gui_helpers() { _parameter_index = 0; }
 
 std::string format_label(std::string_view label) {
   return strings::sentence_case(strings::last_element(label));
@@ -21,7 +19,7 @@ std::string format_label(std::string_view label) {
 static bool inside_widget_container = false;
 
 bool begin_widget_container(std::string_view widget_label = "",
-			    std::size_t row_count = 0) {
+                            std::size_t row_count = 0) {
   constexpr auto outer_horizontal_padding = 4;
   constexpr auto table_background_color = IM_COL32(22, 27, 34, 255);
   // constexpr auto table_background_color = IM_COL32(255, 27, 34, 255);
@@ -32,13 +30,13 @@ bool begin_widget_container(std::string_view widget_label = "",
   const auto table_height = (row_height * (row_count + 1)) + 14;
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-		      {outer_horizontal_padding, 0});
+                      {outer_horizontal_padding, 0});
   ImGui::PushStyleColor(ImGuiCol_ChildBg, table_background_color);
 
   const auto child_id = "##widget_container_border." + parameter_index_string;
 
-  ImGui::BeginChild(child_id.data(), ImVec2 { 0, table_height },
-	 ImGuiChildFlags_Border, ImGuiWindowFlags_NoScrollbar);
+  ImGui::BeginChild(child_id.data(), ImVec2{0, table_height},
+                    ImGuiChildFlags_Border, ImGuiWindowFlags_NoScrollbar);
 
   ImGui::Dummy({0, outer_horizontal_padding});
   ImGui::Dummy({outer_horizontal_padding, 0});
@@ -53,17 +51,18 @@ bool begin_widget_container(std::string_view widget_label = "",
   const auto table_id = "##table." + std::to_string(_parameter_index);
 
   if (ImGui::BeginTable(table_id.c_str(), 3, ImGuiTableFlags_SizingFixedFit)) {
-      ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthStretch, 0.3f);
-      ImGui::TableSetupColumn("##slider", ImGuiTableColumnFlags_WidthStretch, 0.7f);
-      ImGui::TableSetupColumn("##reset_button", ImGuiTableColumnFlags_WidthFixed);
-      return true;
-  }
-  else {
-	  ImGui::PopStyleVar();
-	  ImGui::EndChild();
-	  ImGui::PopStyleColor();
-	  ImGui::PopStyleVar();
-      return false;
+    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthStretch,
+                            0.3f);
+    ImGui::TableSetupColumn("##slider", ImGuiTableColumnFlags_WidthStretch,
+                            0.7f);
+    ImGui::TableSetupColumn("##reset_button", ImGuiTableColumnFlags_WidthFixed);
+    return true;
+  } else {
+    ImGui::PopStyleVar();
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+    return false;
   }
 }
 
@@ -79,15 +78,16 @@ void end_widget_container() {
 
 template <typename T>
 bool slider(std::string_view parameter_id, T &value, T min, T max,
-	    T reset_value, bool is_disabled, std::string_view label) {
+            T reset_value, bool is_disabled, std::string_view label) {
 
-  //if (!begin_widget_container()) return false;
+  // if (!begin_widget_container()) return false;
 
   ImGui::PushID(parameter_id.data());
 
-  //ImGui::TableNextRow();
+  // ImGui::TableNextRow();
 
-  if (is_disabled) ImGui::BeginDisabled();
+  if (is_disabled)
+    ImGui::BeginDisabled();
 
   auto &state = parameter_states[parameter_id];
   auto new_state = state;
@@ -108,11 +108,12 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
     ImGui::PushStyleColor(ImGuiCol_Button, {0.7f, 0.4f, 0.4f, 0.25f});
     // if we *were* recording this slider and we're not anymore,
     // set its status
-    if (!learning_parameter) new_state = recording_result;
+    if (!learning_parameter)
+      new_state = recording_result;
   }
 
   // Label Column
-  //ImGui::TableSetColumnIndex(0);
+  // ImGui::TableSetColumnIndex(0);
   std::string label_text;
   if (label.empty()) {
     label_text = format_label(parameter_id).data();
@@ -121,22 +122,23 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
   }
 
   // align text right
-  //auto pos_x = (ImGui::GetCursorPosX() + ImGui::GetColumnWidth() -
-		//ImGui::CalcTextSize(label_text.c_str()).x -
-		//ImGui::GetScrollX() - 2 * ImGui::GetStyle().ItemSpacing.x);
-  //if (pos_x > ImGui::GetCursorPosX()) ImGui::SetCursorPosX(pos_x);
+  // auto pos_x = (ImGui::GetCursorPosX() + ImGui::GetColumnWidth() -
+  // ImGui::CalcTextSize(label_text.c_str()).x -
+  // ImGui::GetScrollX() - 2 * ImGui::GetStyle().ItemSpacing.x);
+  // if (pos_x > ImGui::GetCursorPosX()) ImGui::SetCursorPosX(pos_x);
 
-  //ImGui::Text("%s", label_text.data());
+  // ImGui::Text("%s", label_text.data());
 
   // Slider Column
-  //ImGui::TableSetColumnIndex(1);
-  //ImGui::SetNextItemWidth(-1);
+  // ImGui::TableSetColumnIndex(1);
+  // ImGui::SetNextItemWidth(-1);
 
   bool updated = false;
 
   if (state != ParameterState::Bound) {
     if constexpr (std::is_same_v<T, float>) {
-      updated = ImGui::DragFloat(parameter_id.data(), &value, 0.01f, min, max, "%.5g");
+      updated = ImGui::DragFloat(parameter_id.data(), &value, 0.01f, min, max,
+                                 "%.5g");
     } else if constexpr (std::is_same_v<T, int>) {
       updated = ImGui::DragInt(parameter_id.data(), &value, 1.0f, min, max);
     }
@@ -145,8 +147,9 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
     ImGui::SetNextItemWidth(-1);
     auto &binding = parameter_bindings.at(parameter_id);
     auto old_binding = binding;
-    if (ImGui::RangeSliderFloat(("##" + std::string(parameter_id) + ".minmax").data(),
-                                &binding.min, &binding.max, min, max)) {
+    if (ImGui::RangeSliderFloat(
+            ("##" + std::string(parameter_id) + ".minmax").data(), &binding.min,
+            &binding.max, min, max)) {
       // if the mapping range is updated, update the value itself to the new
       // range
       if (std::holds_alternative<FloatReference>(binding.value)) {
@@ -187,33 +190,37 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
   }
 
   // Reset Button Column
-  //ImGui::TableSetColumnIndex(2);
+  // ImGui::TableSetColumnIndex(2);
   ImGui::SameLine();
-  if (state == ParameterState::Bound) ImGui::BeginDisabled();
+  if (state == ParameterState::Bound)
+    ImGui::BeginDisabled();
   if (ImGui::Button("·", {15, 18})) {
     value = reset_value;
     updated = true;
   }
-  if (state == ParameterState::Bound) ImGui::EndDisabled();
+  if (state == ParameterState::Bound)
+    ImGui::EndDisabled();
 
   ImGui::PopStyleColor(state != ParameterState::Unbound ? 5 : 0);
 
-  if (is_disabled) ImGui::EndDisabled();
+  if (is_disabled)
+    ImGui::EndDisabled();
 
   state = new_state;
 
-  if (unbind_current) unbind_parameter(parameter_id);
+  if (unbind_current)
+    unbind_parameter(parameter_id);
 
   ImGui::PopID();
 
-  //end_widget_container();
+  // end_widget_container();
 
   return updated;
 }
 
 template bool slider(std::string_view parameter_id, float &value, float min,
-		     float max, float reset_value, bool is_disabled,
-		     std::string_view label);
+                     float max, float reset_value, bool is_disabled,
+                     std::string_view label);
 
 template bool slider(std::string_view parameter_id, int &value, int min,
                      int max, int reset_value, bool is_disabled,
@@ -230,7 +237,7 @@ bool vector_table(
 
   constexpr auto vector_size = types::VectorSize<T>::value;
 
-  constexpr std::array<const char*, 4> elements = { "x", "y", "z", "w" };
+  constexpr std::array<const char *, 4> elements = {"x", "y", "z", "w"};
 
   const auto parameter_label = format_label(parameter_id);
 
@@ -238,46 +245,43 @@ bool vector_table(
 
   // Float vectors
   if constexpr (std::is_same<typename T::vector_type, float>::value) {
-      if constexpr (vector_size == 1) {
-          pc::gui::DragFloat(parameter_label.data(), vec.data(), 0.01f, min, max);
-      }
-	  else if constexpr (vector_size == 2) {
-          pc::gui::DragFloat2(parameter_label.data(), vec.data(), 0.01f, min, max);
-	  }
-	  else if constexpr (vector_size == 3) {
-		  pc::gui::DragFloat3(parameter_label.data(), vec.data(), 0.01f, min, max);
-	  }
-	  else if constexpr (vector_size == 4) {
-		  // pc::gui::DragFloat4(parameter_label.data(), vec.data(), 0.01f, min, max);
-	  }
+    if constexpr (vector_size == 1) {
+      pc::gui::DragFloat(parameter_label.data(), vec.data(), 0.01f, min, max);
+    } else if constexpr (vector_size == 2) {
+      pc::gui::DragFloat2(parameter_label.data(), vec.data(), 0.01f, min, max);
+    } else if constexpr (vector_size == 3) {
+      pc::gui::DragFloat3(parameter_label.data(), vec.data(), 0.01f, min, max);
+    } else if constexpr (vector_size == 4) {
+      // pc::gui::DragFloat4(parameter_label.data(), vec.data(), 0.01f, min,
+      // max);
+    }
   }
 
   else {
-	  // Legacy remove?
-	  auto use_labels = !labels.at(0).empty();
+    // Legacy remove?
+    auto use_labels = !labels.at(0).empty();
 
-	  for (std::size_t i = 0; i < vector_size; ++i) {
-		  const auto& row_label = use_labels ? labels[i] : elements[i];
-		  auto vector_parameter_id =
-			  fmt::format("{}.{}.{}", group_id, parameter_id, elements[i]);
-		  slider(vector_parameter_id, vec[i], min, max, reset_values[i], disabled[i],
-			  row_label);
-	  }
+    for (std::size_t i = 0; i < vector_size; ++i) {
+      const auto &row_label = use_labels ? labels[i] : elements[i];
+      auto vector_parameter_id =
+          fmt::format("{}.{}.{}", group_id, parameter_id, elements[i]);
+      slider(vector_parameter_id, vec[i], min, max, reset_values[i],
+             disabled[i], row_label);
+    }
   }
 
-  //if (begin_widget_container(parameter_id, vector_size))
+  // if (begin_widget_container(parameter_id, vector_size))
   //{
-	  auto original_vec = vec;
+  auto original_vec = vec;
 
+  // end_widget_container();
 
-	  // end_widget_container();
-
-      ImGui::PopID();
-      return vec != original_vec;
+  ImGui::PopID();
+  return vec != original_vec;
   //}
 
-  //ImGui::PopID();
-  //return false;
+  // ImGui::PopID();
+  // return false;
 }
 
 template bool vector_table(std::string_view group_id,
@@ -324,7 +328,7 @@ bool begin_tree_node(std::string_view name, bool &open) {
 }
 
 void tween_config(std::string_view group_id, std::string_view parameter_id,
-		  pc::tween::TweenConfiguration &config) {
+                  pc::tween::TweenConfiguration &config) {
   ImGui::PushID(_parameter_index++);
 
   slider(parameter_id, config.duration_ms, 0, 2000, 300);
