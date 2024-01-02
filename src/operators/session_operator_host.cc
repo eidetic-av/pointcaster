@@ -30,14 +30,6 @@ void SessionOperatorHost::draw_imgui_window() {
 
     ImGui::EndPopup();
   }
-  ImGui::SameLine();
-  if (ImGui::Button("Rotate")) {
-    _config.operators.push_back(RotateOperatorConfiguration());
-  }
-  ImGui::SameLine();
-  if (ImGui::Button("Rake")) {
-    _config.operators.push_back(RakeOperatorConfiguration());
-  }
 
   for (auto &operator_config : _config.operators) {
     std::visit(

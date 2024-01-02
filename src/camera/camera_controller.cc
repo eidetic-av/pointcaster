@@ -327,7 +327,7 @@ void CameraController::draw_imgui_controls() {
   if (ImGui::CollapsingHeader("Transform", _config.transform.unfolded)) {
     _config.transform.unfolded = true;
 
-    ImGui::Checkbox("transform.show_anchor", &_config.transform.show_anchor);
+    // ImGui::Checkbox("transform.show_anchor", &_config.transform.show_anchor);
 
     vector_table(name(), "transform.translation", _config.transform.translation,
 		 -10.f, 10.f, 0.0f);

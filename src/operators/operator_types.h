@@ -15,4 +15,5 @@ typedef thrust::zip_iterator<
 		  thrust::device_vector<pc::types::color>::iterator,
 		  thrust::device_vector<int>::iterator>>
     operator_in_out_t;
+
 } // namespace pc::operators

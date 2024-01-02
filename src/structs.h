@@ -25,6 +25,7 @@ template <typename T> struct VectorSize;
 struct Float2 {
   using vector_type = float;
   vector_type x, y = 0;
+
   vector_type& operator[](std::size_t index) {
     switch(index) {
       case 0: return x;
@@ -39,10 +40,19 @@ struct Float2 {
       default: throw std::out_of_range("Index out of range for Float3");
     }
   }
+
   bool operator==(const Float2 other) const {
     return x == other.x && y == other.y;
   }
   bool operator!=(const Float2 other) const { return !operator==(other); }
+  
+  vector_type* data() {
+	  return reinterpret_cast<vector_type*>(this);
+  }
+  const vector_type* data() const {
+	  return reinterpret_cast<const vector_type*>(this);
+  }
+
   DERIVE_SERDE(Float2, (&Self::x, "x")(&Self::y, "y"))
 };
 
@@ -53,6 +63,7 @@ template <> struct VectorSize<Float2> {
 struct Float3 {
   using vector_type = float;
   vector_type x, y, z = 0;
+
   vector_type& operator[](std::size_t index) {
     switch(index) {
       case 0: return x;
@@ -69,10 +80,19 @@ struct Float3 {
       default: throw std::out_of_range("Index out of range for Float3");
     }
   }
+
   bool operator==(const Float3 other) const {
     return x == other.x && y == other.y && z == other.z;
   }
   bool operator!=(const Float3 other) const { return !operator==(other); }
+
+  vector_type* data() {
+	  return reinterpret_cast<vector_type*>(this);
+  }
+  const vector_type* data() const {
+	  return reinterpret_cast<const vector_type*>(this);
+  }
+
   DERIVE_SERDE(Float3,
 	       (&Self::x, "x")(&Self::y, "y")(&Self::z, "z"))
 };
@@ -84,6 +104,7 @@ template <> struct VectorSize<Float3> {
 struct Float4 {
   using vector_type = float;
   vector_type w, x, y, z = 0;
+
   vector_type& operator[](std::size_t index) {
     switch(index) {
       case 0: return x;
@@ -102,10 +123,19 @@ struct Float4 {
       default: throw std::out_of_range("Index out of range for Float4");
     }
   }
+
   bool operator==(const Float4 other) const {
     return x == other.x && y == other.y && z == other.z && w == other.w;
   }
   bool operator!=(const Float4 other) const { return !operator==(other); }
+
+  vector_type* data() {
+	  return reinterpret_cast<vector_type*>(this);
+  }
+  const vector_type* data() const {
+	  return reinterpret_cast<const vector_type*>(this);
+  }
+
   DERIVE_SERDE(Float4,(&Self::w, "w")(&Self::x, "x")(
 			   &Self::y, "y")(&Self::z, "z"))
 };
@@ -117,6 +147,7 @@ template <> struct VectorSize<Float4> {
 struct Int2 {
   using vector_type = int;
   vector_type x, y = 0;
+
   vector_type& operator[](std::size_t index) {
     switch(index) {
       case 0: return x;
@@ -131,10 +162,19 @@ struct Int2 {
       default: throw std::out_of_range("Index out of range for int2");
     }
   }
+
   bool operator==(const Int2 other) const {
     return x == other.x && y == other.y;
   }
   bool operator!=(const Int2 other) const { return !operator==(other); }
+
+  vector_type* data() {
+	  return reinterpret_cast<vector_type*>(this);
+  }
+  const vector_type* data() const {
+	  return reinterpret_cast<const vector_type*>(this);
+  }
+
   DERIVE_SERDE(Int2,(&Self::x, "x")(&Self::y, "y"))
 };
 
@@ -145,6 +185,7 @@ template <> struct VectorSize<Int2> {
 struct Int3 {
   using vector_type = int;
   vector_type x, y, z = 0;
+
   vector_type& operator[](std::size_t index) {
     switch(index) {
       case 0: return x;
@@ -161,10 +202,19 @@ struct Int3 {
       default: throw std::out_of_range("Index out of range for Int3");
     }
   }
+
   bool operator==(const Int3 other) const {
     return x == other.x && y == other.y && z == other.z;
   }
   bool operator!=(const Int3 other) const { return !operator==(other); }
+
+  vector_type* data() {
+	  return reinterpret_cast<vector_type*>(this);
+  }
+  const vector_type* data() const {
+	  return reinterpret_cast<const vector_type*>(this);
+  }
+
   DERIVE_SERDE(Int3, 
 	       (&Self::x, "x")(&Self::y, "y")(&Self::z, "z"))
 };
@@ -176,6 +226,7 @@ template <> struct VectorSize<Int3> {
 struct Uint2 {
   using vector_type = unsigned int;
   vector_type x, y = 0;
+
   vector_type& operator[](std::size_t index) {
     switch(index) {
       case 0: return x;
@@ -190,10 +241,19 @@ struct Uint2 {
       default: throw std::out_of_range("Index out of range for Uint2");
     }
   }
+
   bool operator==(const Uint2 other) const {
     return x == other.x && y == other.y;
   }
   bool operator!=(const Uint2 other) const { return !operator==(other); }
+
+  vector_type* data() {
+	  return reinterpret_cast<vector_type*>(this);
+  }
+  const vector_type* data() const {
+	  return reinterpret_cast<const vector_type*>(this);
+  }
+
   DERIVE_SERDE(Uint2,(&Self::x, "x")(&Self::y, "y"))
 };
 
@@ -204,6 +264,7 @@ template <> struct VectorSize<Uint2> {
 struct Short3 {
   using vector_type = short;
   vector_type x, y, z = 0;
+
   vector_type& operator[](std::size_t index) {
     switch(index) {
       case 0: return x;
@@ -220,10 +281,19 @@ struct Short3 {
       default: throw std::out_of_range("Index out of range for Short3");
     }
   }
+
   bool operator==(const Short3 other) const {
     return x == other.x && y == other.y && z == other.z;
   }
   bool operator!=(const Short3 other) const { return !operator==(other); }
+
+  vector_type* data() {
+	  return reinterpret_cast<vector_type*>(this);
+  }
+  const vector_type* data() const {
+	  return reinterpret_cast<const vector_type*>(this);
+  }
+
   DERIVE_SERDE(Short3,
 	       (&Self::x, "x")(&Self::y, "y")(&Self::z, "z"))
 };
