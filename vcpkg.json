@@ -21,8 +21,9 @@
     "libremidi",
     "imgui",
     {
-      "name": "opencv",
-      "features": ["cuda"]
+      "name": "opencv4",
+      "default-features": false,
+      "features": ["contrib", "cuda"]
     },
     {
       "name": "imgui",
@@ -63,6 +64,7 @@
       "name": "magnum-integration",
       "features": ["imgui", "eigen"]
     },
+    "nanoflann",
     "sdl2",
     "nativefiledialog",
     "tweeny",
