@@ -1,7 +1,5 @@
 #include "../logger.h"
 #include "noise_operator.cuh"
-#include "operator_utils.cuh"
-#include "outlier_filter_operator.cuh"
 #include "sample_filter_operator.cuh"
 #include "rotate_operator.cuh"
 #include "rake_operator.cuh"
@@ -86,7 +84,7 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
               // filter.filter(cloud);
 
             // }
-          }
+          // }
         },
         operator_config);
   }

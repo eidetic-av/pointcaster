@@ -17,16 +17,18 @@ struct RotateOperatorConfiguration {
 
   using MemberTypes = pc::reflect::type_list<bool, bool, pc::types::Float3>;
   static const std::size_t MemberCount = 3;
+  
+  static constexpr const char* Name = "Rotate";
 };
 
-struct RotateOperator : public thrust::unary_function<point_t, point_t> {
+struct RotateOperator : public thrust::unary_function<indexed_point_t, indexed_point_t> {
 
   RotateOperatorConfiguration _config;
 
   RotateOperator(const RotateOperatorConfiguration &config)
       : _config(config){};
 
-  __device__ point_t operator()(point_t point) const;
+  __device__ indexed_point_t operator()(indexed_point_t point) const;
 
   static void draw_imgui_controls(RotateOperatorConfiguration& config);
 };

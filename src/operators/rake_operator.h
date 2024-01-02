@@ -20,16 +20,18 @@ struct RakeOperatorConfiguration {
 
   using MemberTypes = pc::reflect::type_list<bool, bool, pc::types::MinMax<short>, pc::types::MinMax<short>>;
   static const std::size_t MemberCount = 4;
+  
+  static constexpr const char* Name = "Rake";
 };
 
-struct RakeOperator : public thrust::unary_function<point_t, point_t> {
+struct RakeOperator : public thrust::unary_function<indexed_point_t, indexed_point_t> {
 
   RakeOperatorConfiguration _config;
 
   RakeOperator(const RakeOperatorConfiguration &config)
       : _config(config){};
 
-  __device__ point_t operator()(point_t point) const;
+  __device__ indexed_point_t operator()(indexed_point_t point) const;
 
   static void draw_imgui_controls(RakeOperatorConfiguration& config);
 };

@@ -13,7 +13,7 @@ __host__ __device__ static inline float as_rad(float deg) {
   return deg * mult;
 };
 
-__device__ point_t RotateOperator::operator()(point_t point) const {
+__device__ indexed_point_t RotateOperator::operator()(indexed_point_t point) const {
 
   position pos = thrust::get<0>(point);
   color col = thrust::get<1>(point);
@@ -35,7 +35,7 @@ __device__ point_t RotateOperator::operator()(point_t point) const {
 					  (short)__float2int_rd(pos_f.y()),
 					  (short)__float2int_rd(pos_f.z()), 0 };
 
-  return thrust::make_tuple(pos_out, col);
+  return thrust::make_tuple(pos_out, col, thrust::get<2>(point));
 };
 
 } // namespace pc::operators
