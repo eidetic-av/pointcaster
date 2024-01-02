@@ -124,9 +124,9 @@ if (WITH_POINTCASTER)
   # ----- Sensor driver libraries -----
 
   if (NOT WIN32)
-    find_package(libusb CONFIG REQUIRED)
-    list(APPEND LINK_LIBS ${LIBUSB_LIBRARIES})
-    list(APPEND INCLUDE_DIRS ${LIBUSB_INCLUDE_DIRS})
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(libusb REQUIRED IMPORTED_TARGET libusb-1.0)
+    list(APPEND LINK_LIBS PkgConfig::libusb)
   endif()
 
   # Azure Kinect
