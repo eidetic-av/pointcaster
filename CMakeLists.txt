@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22.0)
 project(bob-pointcaster LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 17)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX TRUE)
