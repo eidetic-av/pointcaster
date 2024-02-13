@@ -11,7 +11,8 @@ namespace ImGui {
 // data_type, float v);
 float RoundScalarWithFormatFloat(const char *format, ImGuiDataType data_type,
 				 float v) {
-  return ImGui::RoundScalarWithFormatT<float>(format, data_type, v);
+  // return ImGui::RoundScalarWithFormatT<float>(format, data_type, v);
+  return v;
 }
 
 // extern float SliderCalcRatioFromValueFloat(ImGuiDataType data_type, float v,
@@ -19,8 +20,9 @@ float RoundScalarWithFormatFloat(const char *format, ImGuiDataType data_type,
 float SliderCalcRatioFromValueFloat(ImGuiDataType data_type, float v,
                                     float v_min, float v_max, float power,
                                     float linear_zero_pos) {
-  return ImGui::ScaleRatioFromValueT<float, float, float>(
-      data_type, v, v_min, v_max, false, power, linear_zero_pos);
+  // return ImGui::ScaleRatioFromValueT<float, float, float>(
+  //     data_type, v, v_min, v_max, false, power, linear_zero_pos);
+  return v;
 }
 
 // ~80% common code with ImGui::SliderBehavior
@@ -117,8 +119,7 @@ bool RangeSliderBehavior(const ImRect &frame_bb, ImGuiID id, float *v1,
 
       // Round past decimal precision
       new_value =
-	  // RoundScalarWithFormatFloat(fmt, ImGuiDataType_Float, new_value);
-	  RoundScalarWithFormatT<float>(fmt, ImGuiDataType_Float, new_value);
+	  RoundScalarWithFormatFloat(fmt, ImGuiDataType_Float, new_value);
 
       if (*v1 != new_value || *v2 != new_value) {
         if (fabsf(*v1 - new_value) < fabsf(*v2 - new_value)) {
@@ -135,12 +136,12 @@ bool RangeSliderBehavior(const ImRect &frame_bb, ImGuiID id, float *v1,
 
   // Calculate slider grab positioning
   float grab_t =
-      // SliderCalcRatioFromValueFloat(ImGuiDataType_Float, *v1, v_min,
-      //                                            v_max, power,
-      //                                            linear_zero_pos);
-      ScaleRatioFromValueT<float, float, float>(ImGuiDataType_Float, *v1, v_min,
-						v_max, false, power,
-						linear_zero_pos);
+      SliderCalcRatioFromValueFloat(ImGuiDataType_Float, *v1, v_min,
+                                                 v_max, power,
+                                                 linear_zero_pos);
+      // ScaleRatioFromValueT<float, float, float>(ImGuiDataType_Float, *v1, v_min,
+      // 						v_max, false, power,
+      // 						linear_zero_pos);
 
   // Draw
   if (!is_horizontal)
@@ -163,11 +164,11 @@ bool RangeSliderBehavior(const ImRect &frame_bb, ImGuiID id, float *v1,
 
   // Calculate slider grab positioning
   grab_t =
-      // SliderCalcRatioFromValueFloat(ImGuiDataType_Float, *v2, v_min, v_max,
-      //                                      power, linear_zero_pos);
-      ScaleRatioFromValueT<float, float, float>(ImGuiDataType_Float, *v2, v_min,
-						v_max, false, power,
-						linear_zero_pos);
+      SliderCalcRatioFromValueFloat(ImGuiDataType_Float, *v2, v_min, v_max,
+                                           power, linear_zero_pos);
+      // ScaleRatioFromValueT<float, float, float>(ImGuiDataType_Float, *v2, v_min,
+      // 						v_max, false, power,
+      // 						linear_zero_pos);
 
   // Draw
   if (!is_horizontal)

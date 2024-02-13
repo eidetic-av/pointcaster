@@ -1,5 +1,5 @@
 #include "../structs.h"
-#include "noise_operator.h"
+#include "noise_operator.gen.h"
 #include <cuda_noise.cuh>
 #include <thrust/functional.h>
 

@@ -17,7 +17,9 @@
 #include <string>
 #include <tuple>
 #include <typeinfo>
+#include <type_traits>
 #include <variant>
+#include <map>
 
 namespace pc {
 
@@ -26,100 +28,240 @@ using pc::types::Float3;
 using pc::types::Float4;
 using pc::types::Int2;
 using pc::types::Int3;
+using pc::types::MinMax;
+using pc::types::Short2;
+using pc::types::Short3;
 
-struct ParameterBinding;
+template <typename T>
+concept is_float_vector_t =
+    std::disjunction<std::is_same<T, Float2>, std::is_same<T, Float3>,
+  std::is_same<T, Float4>, std::is_same<T, MinMax<float>>>::value;
+
+template <typename T>
+concept is_int_vector_t =
+    std::disjunction<std::is_same<T, Int2>, std::is_same<T, Int3>,
+		     std::is_same<T, MinMax<int>>>::value;
+
+template <typename T>
+concept is_short_vector_t =
+    std::disjunction<std::is_same<T, Short2>, std::is_same<T, Short3>,
+		     std::is_same<T, MinMax<short>>>::value;
+
+struct Parameter;
 
 using FloatReference = std::reference_wrapper<float>;
+using Float2Reference = std::reference_wrapper<Float2>;
+using Float3Reference = std::reference_wrapper<Float3>;
 using IntReference = std::reference_wrapper<int>;
+using Int2Reference = std::reference_wrapper<Int2>;
+using Int3Reference = std::reference_wrapper<Int3>;
+using ShortReference = std::reference_wrapper<short>;
+using Short2Reference = std::reference_wrapper<Short2>;
+using Short3Reference = std::reference_wrapper<Short3>;
 
-using ParameterReference = std::variant<FloatReference, IntReference>;
+using MinMaxFloatReference = std::reference_wrapper<MinMax<float>>;
+using MinMaxIntReference = std::reference_wrapper<MinMax<int>>;
+using MinMaxShortReference = std::reference_wrapper<MinMax<short>>;
+
+using BoolReference = std::reference_wrapper<bool>;
+using StringReference = std::reference_wrapper<std::string>;
+
+using ParameterReference =
+    std::variant<FloatReference, Float2Reference, Float3Reference, IntReference,
+		 Int2Reference, Int3Reference, ShortReference, Short2Reference, Short3Reference, MinMaxFloatReference,
+		 MinMaxIntReference, MinMaxShortReference, BoolReference,
+		 StringReference>;
+
+using ParameterValue =
+    std::variant<float, Float2, Float3, Float4, int, Int2, Int3, short, Short2,
+		 Short3, MinMax<float>, MinMax<int>, MinMax<short>, bool,
+		 std::string>;
 
 using ParameterUpdateCallback =
-    std::function<void(const ParameterBinding &, ParameterBinding &)>;
+    std::function<void(const Parameter &, Parameter &)>;
 
-struct ParameterBinding {
+struct Parameter {
   ParameterReference value; 
-  float min;
-  float max;
+  ParameterValue min;
+  ParameterValue max;
+  ParameterValue default_value;
+
+  std::string parent_struct_name = "";
 
   std::vector<ParameterUpdateCallback> update_callbacks;
   std::vector<ParameterUpdateCallback> minmax_update_callbacks;
   std::vector<std::function<void()>> erase_callbacks;
 
-  ParameterBinding(float &val, float min_val = -10, float max_val = 10)
-      : value(FloatReference(val)), min(min_val), max(max_val) {}
+  Parameter(float &_value, float _min = -10, float _max = 10,
+            float _default_value = 0)
+      : value(FloatReference(_value)), min(_min), max(_max),
+	default_value(_default_value) {}
 
-  ParameterBinding(int &val, float min_val = -10, float max_val = 10)
-      : value(IntReference(val)), min(min_val), max(max_val) {}
+  Parameter(Float2 &_value, float _min = -10, float _max = 10,
+            float _default_value = 0)
+      : value(Float2Reference(_value)), min(_min), max(_max),
+        default_value(_default_value) {}
+
+  Parameter(Float3 &_value, float _min = -10, float _max = 10,
+            float _default_value = 0)
+      : value(Float3Reference(_value)), min(_min), max(_max),
+        default_value(_default_value) {}
+
+  Parameter(int &_value, int _min = -10, int _max = 10, int _default_value = 0)
+      : value(IntReference(_value)), min(_min), max(_max),
+        default_value(_default_value) {}
+
+  Parameter(Int2 &_value, int _min = -10, int _max = 10, int _default_value = 0)
+      : value(Int2Reference(_value)), min(_min), max(_max),
+	default_value(_default_value) {}
+
+  Parameter(short &_value, short _min = -10, short _max = 10,
+            short _default_value = 0)
+      : value(ShortReference(_value)), min(_min), max(_max),
+        default_value(_default_value) {}
+
+  Parameter(Short2 &_value, short _min = -10, short _max = 10,
+            short _default_value = 0)
+      : value(Short2Reference(_value)), min(_min), max(_max),
+        default_value(_default_value) {}
+
+  Parameter(Short3 &_value, short _min = -10, short _max = 10,
+            short _default_value = 0)
+      : value(Short3Reference(_value)), min(_min), max(_max),
+        default_value(_default_value) {}
+
+  Parameter(MinMax<float> &_value, float _min = -10, float _max = 10,
+            float _default_value = 0)
+      : value(MinMaxFloatReference(_value)), min(_min), max(_max),
+        default_value(_default_value) {}
+
+  Parameter(MinMax<int> &_value, int _min = -10, int _max = 10,
+            int _default_value = 0)
+      : value(MinMaxIntReference(_value)), min(_min), max(_max),
+        default_value(_default_value) {}
+
+  Parameter(MinMax<short> &_value, short _min = -10, short _max = 10,
+	    short _default_value = 0)
+      : value(MinMaxShortReference(_value)), min(_min), max(_max),
+	default_value(_default_value) {}
+
+  Parameter(bool &_value)
+      : value(BoolReference(_value)), min(false), max(true),
+	default_value(false) {}
+
+  Parameter(std::string &_value)
+      : value(StringReference(_value)), min(""), max(""), default_value("") {}
 
   float current() const {
     if (std::holds_alternative<FloatReference>(value)) {
       return std::get<FloatReference>(value).get();
-    } else {
+    } else if (std::holds_alternative<IntReference>(value)) {
       return std::get<IntReference>(value).get();
+    } else {
+      pc::logger->warn(
+          "Attempted to retrieve 'current' value of complex parameter type.");
+      return 0.0f;
     }
   }
 };
 
 enum class ParameterState { Unbound, Bound, Learning };
 
-inline pc::string_map<ParameterBinding> parameter_bindings;
+inline pc::string_map<Parameter> parameter_bindings;
 inline pc::string_map<ParameterState> parameter_states;
 
-struct ReflectedParameterInfo {
-  std::string name;
-  std::any ref;
-  ReflectedParameterInfo(std::string_view _name, ParameterReference _ref)
-      : name(_name), ref(_ref){};
-};
+struct ParameterMap;
+
+using NestedParameterMap = std::pair<std::string, ParameterMap>;
+using ParameterMapEntry = std::variant<std::string, NestedParameterMap>;
+
+struct ParameterMap : public std::vector<ParameterMapEntry> {};
+
+inline std::map<std::string, ParameterMap> struct_parameters;
 
 void declare_parameter(std::string_view parameter_id,
-		       const ParameterBinding &parameter_binding);
+		       const Parameter &parameter_binding);
 
 template <typename T>
-void declare_parameters(std::string_view parameter_id,
-                        T &basic_value) {
-  // ignore strings -- they can't be externally updated
-  if constexpr (std::is_same_v<T, std::string>) return;
+void declare_parameters(std::string_view parameter_id, T &basic_value,
+			T default_value, std::optional<MinMax<float>> min_max,
+			std::string_view parent_struct_name) {
 
-  // TODO we should probably handle bools and enums, but ignore them for now
-  if constexpr (std::is_enum_v<T> || std::is_same_v<T, bool>) return;
-
-  // Handle floats and integers
-  if constexpr (std::is_same_v<T, float>) {
-    // pc::logger->debug("declare float: {}", parameter_id);
-    declare_parameter(parameter_id, ParameterBinding(basic_value));
-  } else if constexpr (std::is_same_v<T, int>) {
-    // pc::logger->debug("declare int: {}", parameter_id);
-    declare_parameter(parameter_id, ParameterBinding(basic_value));
+  // numeric values
+  if constexpr (std::is_same_v<T, float> || std::is_same_v<T, int> ||
+		std::is_same_v<T, short>) {
+    Parameter p(basic_value);
+    p.parent_struct_name = parent_struct_name;
+    p.default_value = default_value;
+    if (min_max.has_value()) {
+      p.min = static_cast<T>(min_max->min);
+      p.max = static_cast<T>(min_max->max);
+    } else {
+      p.min = T(-10);
+      p.max = T(10);
+    }
+    declare_parameter(parameter_id, std::move(p));
   }
+  // bools and strings
+  else if constexpr (std::is_same_v<T, bool> ||
+                     std::is_same_v<T, std::string>) {
+    Parameter p(basic_value);
+    p.parent_struct_name = parent_struct_name;
+    p.default_value = default_value;
+    declare_parameter(parameter_id, std::move(p));
+  }
+  // ignore enums for now
+  else if constexpr (std::is_enum_v<T>)
+    return;
 }
 
 template <typename T>
-  requires pc::types::IsVectorType<T>
-void declare_parameters(std::string_view parameter_id, T &vector_value) {
+  requires pc::types::VectorType<T>
+void declare_parameters(std::string_view parameter_id, T &vector_value,
+			T default_value, std::optional<MinMax<float>> min_max,
+			std::string_view parent_struct_name) {
 
   constexpr auto vector_size = types::VectorSize<T>::value;
   constexpr std::array<const char *, 4> element = {"x", "y", "z", "w"};
 
-  // for a vector type, we just loop through each element and sent the reference
-  // to the basic_value overload as a float or int
+  // we declare the vector itself as a parameter, as it is
+  // considered one parameter when rendering the gui
+  Parameter p(vector_value);
+  p.parent_struct_name = parent_struct_name;
+  p.default_value = default_value;
+  if (min_max.has_value()) {
+    p.min = static_cast<typename T::vector_type>(min_max->min);
+    p.max = static_cast<typename T::vector_type>(min_max->max);
+  } else {
+    p.min = (typename T::vector_type)(-10);
+    p.max = (typename T::vector_type)(10);
+  }
+  declare_parameter(parameter_id, std::move(p));
+
+  // we also declare the vector elements as individual parameters,
+  // which can be targetted individually by inputs like MIDI, etc.
   for (int i = 0; i < vector_size; i++) {
     auto element_id = fmt::format("{}.{}", parameter_id, element[i]);
     // pc::logger->debug("declare vector: {}", element_id);
-    declare_parameters(element_id, vector_value[i]);
+    declare_parameters(element_id, vector_value[i], default_value[i], min_max,
+		       parent_struct_name);
   }
 }
 
 template <typename T>
   requires pc::reflect::IsSerializable<T>
-void declare_parameters(std::string_view parameter_id, T &complex_value) {
+void declare_parameters(std::string_view parameter_id, T &complex_value,
+			T default_value = {},
+			std::optional<MinMax<float>> min_max = {},
+			std::string_view parent_struct_name = "") {
 
   // retrieve type info at compile-time
   constexpr auto type_info = serde::type_info<T>;
+  constexpr auto struct_name = T::Name;
 
-  // member names are determined at runtime
   const auto member_names = type_info.member_names().members();
+  const auto member_defaults = T::Defaults;
+  const auto member_min_max_values = T::MinMaxValues;
 
   // create an integer sequence to iterate through the type's members at
   // compile-time... this is required because the index to the member is used
@@ -127,8 +269,9 @@ void declare_parameters(std::string_view parameter_id, T &complex_value) {
   constexpr auto index_sequence = std::make_index_sequence<T::MemberCount>{};
 
   // Function to apply on each type member.
-  auto handle_member = [parameter_id, &complex_value,
-                        &type_info](std::string_view member_name, auto index) {
+  auto handle_member = [parameter_id, struct_name, &complex_value, &type_info,
+			&member_defaults, &member_min_max_values](
+			   std::string_view member_name, auto index) {
     using MemberType =
         pc::reflect::type_at_t<typename T::MemberTypes, decltype(index)::value>;
 
@@ -136,11 +279,15 @@ void declare_parameters(std::string_view parameter_id, T &complex_value) {
     auto &member_ref =
         type_info.template member<decltype(index)::value>(complex_value);
 
+    // and any more metadata (default value, min+max values)
+    auto member_default = std::get<index>(member_defaults);
+    auto member_min_max = member_min_max_values.at(index);
+
     // recursively call declare_parameters for each member, delegating to the
     // appropriate overload based on type
     auto member_parameter_id = fmt::format("{}.{}", parameter_id, member_name);
-    // pc::logger->debug("declare: {}", member_parameter_id);
-    declare_parameters(member_parameter_id, member_ref);
+    declare_parameters(member_parameter_id, member_ref, member_default, member_min_max,
+		       struct_name);
   };
 
   // using an immediately invoked lambda to provide member names and
@@ -154,7 +301,7 @@ void declare_parameters(std::string_view parameter_id, T &complex_value) {
 }
 
 void bind_parameter(std::string_view parameter_id,
-		    const ParameterBinding &parameter_binding);
+		    const Parameter &parameter);
 
 void unbind_parameter(std::string_view parameter_id);
 

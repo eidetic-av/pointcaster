@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../analysis/analyser_2d_config.h"
-#include "../point_cloud_renderer_config.h"
+#include "../analysis/analyser_2d_config.gen.h"
+#include "../point_cloud_renderer_config.gen.h"
 #include "../serialization.h"
 #include "../structs.h"
 #include <Magnum/Math/Angle.h>
@@ -12,6 +12,8 @@
 
 namespace pc::camera {
 
+using pc::types::Int;
+using pc::types::Float;
 using pc::types::Float3;
 using pc::types::Int2;
 using pc::types::MinMax;
@@ -25,7 +27,7 @@ namespace defaults {
 
 static constexpr float distance = 3.5f;
 static constexpr Float2 orbit = {0.0f, 15.0f};
-static constexpr float roll = 0.0f;
+static constexpr Float roll{0.0f};
 static constexpr Float3 translation{0.0f, 0.0f, 0.0f};
 static constexpr float fov = 45;
 
@@ -38,50 +40,22 @@ static constexpr MinMax<float> orthographic_clipping = {-15, 15};
 } // namespace defaults
 
 struct TransformConfiguration {
-  bool unfolded = true;
-  bool show_anchor = false;
-  float distance = defaults::distance;
-  Float2 orbit = defaults::orbit;
-  float roll = defaults::roll;
-  Float3 translation = defaults::translation;
-
-  DERIVE_SERDE(TransformConfiguration,
-	       (&Self::unfolded, "unfolded")
-	       (&Self::show_anchor, "show_anchor")
-	       (&Self::distance, "distance")
-	       (&Self::orbit, "orbit")
-	       (&Self::roll, "roll")
-	       (&Self::translation, "translation"))
-
-  using MemberTypes = pc::reflect::type_list<bool, bool, float, Float2, float, Float3>;
-  static const std::size_t MemberCount = 6;
+  bool show_anchor;
+  float distance = 3.5;
+  Float2 orbit{0.0f, 15.0f}; // @minmax(-360, 360)
+  float roll; // @minmax(-180, 180)
+  Float3 translation;
 };
 
 struct CameraConfiguration {
   std::string id;
   std::string name;
-  bool show_window;
+  bool show_window{true};
   float fov = defaults::fov;
-  int scroll_precision = 1;
-  TransformConfiguration transform;
-  PointCloudRendererConfiguration rendering;
-  analysis::Analyser2DConfiguration analysis;
-
-  DERIVE_SERDE(CameraConfiguration,
-	       (&Self::id, "id")
-	       (&Self::name, "name")
-	       (&Self::show_window, "show_window")
-	       (&Self::fov, "fov")
-	       (&Self::scroll_precision, "scroll_precision")
-	       (&Self::transform, "transform")
-	       (&Self::rendering, "rendering")
-	       (&Self::analysis, "analysis"))
-
-  using MemberTypes = pc::reflect::type_list<
-      std::string, std::string, bool, float, int, TransformConfiguration,
-      PointCloudRendererConfiguration, pc::analysis::Analyser2DConfiguration>;
-
-  static const std::size_t MemberCount = 8;
+  int scroll_precision{1};
+  TransformConfiguration transform; // @optional
+  PointCloudRendererConfiguration rendering; // @optional
+  analysis::Analyser2DConfiguration analysis; // @optional
 };
 
 } // namespace pc::camera

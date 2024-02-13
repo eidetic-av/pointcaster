@@ -22,9 +22,9 @@ std::pair<unsigned int, unsigned int> minmax_duration;
 float avg_size = 0;
 std::pair<float, float> minmax_size;
 
-Radio::Radio(RadioConfiguration &config, pc::operators::SessionOperatorHost& session_operator_host)
-    : _config(config),
-      _session_operator_host(session_operator_host),
+Radio::Radio(RadioConfiguration &config,
+             pc::operators::SessionOperatorHost &session_operator_host)
+    : _config(config), _session_operator_host(session_operator_host),
       _radio_thread(std::make_unique<std::jthread>([this](std::stop_token st) {
         using namespace std::chrono;
         using namespace std::chrono_literals;
@@ -120,9 +120,17 @@ Radio::Radio(RadioConfiguration &config, pc::operators::SessionOperatorHost& ses
         }
 
         pc::logger->info("Ended radio thread");
-      })) {}
+      })) {
+  declare_parameters("radio", _config);
+}
 
 void Radio::draw_imgui_window() {
+
+  ImGui::Begin("Radio", nullptr);
+  pc::gui::draw_parameters("radio", struct_parameters.at("radio"));
+  ImGui::End();
+
+  return;
   ImGui::PushID("Radio");
   ImGui::SetNextWindowPos({350.0f, 200.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize({200.0f, 100.0f}, ImGuiCond_FirstUseEver);

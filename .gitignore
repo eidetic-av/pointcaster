@@ -12,3 +12,7 @@ imgui.ini
 \#*
 .\#*
 /~build
+.gdb_history
+run.log
+.vscode/
+*.gen.h

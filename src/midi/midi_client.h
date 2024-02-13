@@ -3,12 +3,14 @@
 #include "../logger.h"
 #include "../publisher/publishable_traits.h"
 #include "../publisher/publisher_utils.h"
+#include "../string_utils.h"
 #include "../structs.h"
-#include "midi_client_config.h"
+#include "midi_client_config.gen.h"
 #include <array>
 #include <atomic>
 #include <concurrentqueue/blockingconcurrentqueue.h>
 #include <expected>
+#include <format>
 #include <future>
 #include <libremidi/client.hpp>
 #include <libremidi/libremidi.hpp>
@@ -21,6 +23,8 @@
 #include <type_traits>
 
 namespace pc::midi {
+
+static inline MidiOutputRoute last_output_route{1, 1};
 
 class MidiClient {
 public:
@@ -35,38 +39,40 @@ public:
   void publish(const std::string_view topic, const uint8_t channel_num,
 	       const uint8_t cc_num, const float value);
 
-  // TODO generic length array
-
-  void publish(const std::string_view topic, const uint8_t channel_num,
-               const std::array<float, 2> values);
-
-  void publish(const std::string_view topic, const uint8_t channel_num,
-               const std::array<float, 3> values);
-
-  void publish(const std::string_view topic, const uint8_t channel_num,
-               const std::array<float, 4> values);
-
   template <typename T>
   std::enable_if_t<is_publishable_container_v<T>, void>
   publish(const std::string_view topic, const T &data,
           std::initializer_list<std::string_view> topic_nodes = {}) {
 
-    if constexpr (std::is_same_v<typename T::value_type,
-				 std::vector<std::array<float, 2>>>) {
-      pc::logger->debug(
-	  "MIDI publishing not yet implemented for nested containers");
-      return;
-    } else {
+    std::size_t i = 0;
+    for (auto &element : data) {
+      auto element_topic = pc::strings::concat(topic, std::format("/{}", i++));
+      if constexpr (is_publishable_container<typename T::value_type>()) {
+	publish(element_topic, element, topic_nodes);
+      } else {
+	auto flattened_topic =
+	    publisher::construct_topic_string(element_topic, topic_nodes);
 
-      auto flattened_topic =
-          publisher::construct_topic_string(topic, topic_nodes);
-      // for publishable containers, send out each element on a unique channel
-      // for testing
-      auto channel_num = 1;
-      for (auto &element : data) {
-        publish(flattened_topic, channel_num, element);
-        if (++channel_num > 16)
-          break;
+	auto [route_itr, created_new_route] =
+	    _config.output_routes.try_emplace(flattened_topic);
+
+        auto &route = route_itr->second;
+
+        if (created_new_route) {
+          // New route created for this topic, set it to use last_output_route
+          // and increment that
+          route = last_output_route;
+          if (last_output_route.cc == 129) {
+            last_output_route.cc = 1;
+            if (++last_output_route.channel == 17)
+              last_output_route.channel = 1;
+          } else {
+            last_output_route.cc++;
+          }
+        }
+	route.last_value = element;
+
+	publish(flattened_topic, route.channel, route.cc, route.last_value);
       }
     }
   }

@@ -6,7 +6,7 @@
 
 #include "../operators/session_operator_host.h"
 #include "../pointer.h"
-#include "device_config.h"
+#include "device_config.gen.h"
 #include "driver.h"
 #include <Corrade/Containers/Pointer.h>
 #include <filesystem>
@@ -46,7 +46,7 @@ public:
     return _driver->point_cloud(_config, operators);
   };
 
-  const DeviceConfiguration config() { return _config; };
+  DeviceConfiguration& config() { return _config; };
 
   void draw_imgui_controls();
 

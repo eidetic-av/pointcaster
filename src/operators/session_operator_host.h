@@ -1,6 +1,6 @@
 #pragma once
 #include "../structs.h"
-#include "operators.h"
+#include "operator_host_config.gen.h"
 #include <functional>
 #include <optional>
 #include <vector>

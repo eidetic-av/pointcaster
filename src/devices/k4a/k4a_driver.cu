@@ -67,7 +67,7 @@ struct input_filter {
 
   __device__ bool check_crop(Short3 value) const {
     auto x = config.flip_x ? -value.x : value.x;
-    auto y = config.flip_y ? -value.y : value.y;
+    auto y = config.flip_y ? value.y : -value.y;
     auto z = config.flip_z ? -value.z : value.z;
     return x >= config.crop_x.min && x <= config.crop_x.max &&
            y >= config.crop_y.min && y <= config.crop_y.max &&
@@ -117,6 +117,10 @@ struct point_transformer
     // transform it by other float types (e.g. matrices, quaternions)
     Vector3f pos_f(pos.x, pos.y, pos.z);
 
+    Vector3f flip(config.flip_x ? -1 : 1,
+		  config.flip_y ? -1 : 1,
+		  config.flip_z ? -1 : 1);
+
     // perform any auto-tilt
     pos_f = auto_tilt_rotation * pos_f;
 
@@ -124,26 +128,31 @@ struct point_transformer
     pos_f = Vector3f(pos_f[0], -pos_f[1], -pos_f[2]);
 
     // All K4A inputs seem to be rotated by ~7degrees amount for some reason...
-    const AngleAxisf inbuilt_rot(as_rad(-7.0f), Vector3f::UnitX());
+    // const AngleAxisf inbuilt_rot(as_rad(-7.0f), Vector3f::UnitX());
+
+    // input translation
+    pos_f = pos_f + Vector3f{ config.translate.x * flip.x(),
+			      config.translate.y * flip.y(),
+			      config.translate.z * flip.z() };
+
 
     // create the rotation around our center
     AngleAxisf rot_x(as_rad(config.rotation_deg.x), Vector3f::UnitX());
-    AngleAxisf rot_y(as_rad(config.rotation_deg.y), Vector3f::UnitY());
+    AngleAxisf rot_y(as_rad(-config.rotation_deg.y), Vector3f::UnitY());
     AngleAxisf rot_z(as_rad(config.rotation_deg.z), Vector3f::UnitZ());
-    Quaternionf q = rot_z * rot_y * rot_x * inbuilt_rot;
+    Quaternionf q = rot_z * rot_y * rot_x;
     Affine3f rot_transform =
-        Translation3f(-alignment_center) * q * Translation3f(alignment_center);
+      Translation3f(-alignment_center) * q * Translation3f(alignment_center);
 
     // specified axis flips
-    if (config.flip_x) pos_f.x() = -pos_f.x();
-    if (config.flip_y) pos_f.y() = -pos_f.y();
-    if (config.flip_z) pos_f.z() = -pos_f.z();
+    pos_f = { pos_f.x() * flip.x(), pos_f.y() * flip.y(),
+	      pos_f.z() * flip.z() };
 
     // perform alignment transformation along with manual rotation
     pos_f =
         (rot_transform * pos_f) + alignment_center + aligned_position_offset;
 
-    // perform our manual translation
+    // perform our alignment offset translation
     pos_f += Vector3f(config.offset.x, config.offset.y, config.offset.z);
 
     // and scaling
@@ -272,8 +281,9 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   auto output_point_count =
       std::distance(operator_output_begin, operator_output_end);
 
-  auto output_positions_size = sizeof(position) * output_point_count;
-  auto output_colors_size = sizeof(color) * output_point_count;
+  // auto output_positions_size = sizeof(position) * output_point_count;
+  // auto output_colors_size = sizeof(color) * output_point_count;
+
   _point_cloud.positions.resize(output_point_count);
   _point_cloud.colors.resize(output_point_count);
 

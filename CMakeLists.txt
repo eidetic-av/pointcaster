@@ -1,7 +1,12 @@
 cmake_minimum_required(VERSION 3.22.0)
 project(bob-pointcaster LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CUDA_STANDARD 17)
+
+if(WIN32)
+  set(CMAKE_CUDA_STANDARD 17)
+else()
+  set(CMAKE_CUDA_STANDARD 20)
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX TRUE)
@@ -15,6 +20,7 @@ option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_MQTT "Enable MQTT client support" ON)
 option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
+option(WITH_MARCH_NATIVE "Enable -march=native builds" OFF)
 
 option(WITH_POINTCASTER "Build main application" ON)
 
@@ -26,6 +32,8 @@ else()
 endif()
 
 option(WITH_TESTS "Build tests" OFF)
+
+option(GENERATE_REFLECTIONS ON)
 
 option(WITH_TRACY "Enable profiling using Tracy" OFF)
 option(TRACY_ENABLE "Enable profiling using Tracy" OFF)
@@ -48,6 +56,46 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION $<$<CONFIG:Release>:TRUE>)
 
 if (WIN32 AND WITH_POINTCASTER)
   set(Boost_INCLUDE_DIR ${_VCPKG_INSTALLED_DIR}/x64-windows-static/include)
+endif()
+
+if (GENERATE_REFLECTIONS)
+
+  set(REFLECTED_TYPES
+    src/session.h
+    src/point_cloud_renderer_config.h
+    src/analysis/analyser_2d_config.h
+    src/camera/camera_config.h
+    src/devices/device_config.h
+    src/devices/usb_config.h
+    src/midi/midi_client_config.h
+    src/mqtt/mqtt_client_config.h
+    src/radio/radio_config.h
+    src/tween/tween_config.h
+    src/operators/operator_host_config.h
+    src/operators/rake_operator.h
+    src/operators/noise_operator.h
+    src/operators/rotate_operator.h
+    src/operators/sample_filter_operator.h
+  )
+
+  foreach(HEADER IN LISTS REFLECTED_TYPES)
+    cmake_path(GET HEADER STEM FILE_NAME)
+    cmake_path(GET HEADER PARENT_PATH FILE_DIR)
+    list(APPEND GENERATED_HEADERS "${FILE_DIR}/${FILE_NAME}.gen.h")
+  endforeach()
+
+  add_custom_command(
+    OUTPUT ${GENERATED_HEADERS}
+    COMMAND python ${CMAKE_SOURCE_DIR}/scripts/generate_reflections.py ${REFLECTED_TYPES}
+    DEPENDS ${REFLECTED_TYPES}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating reflection information"
+    VERBATIM
+  )
+
+  add_custom_target(generate_reflections ALL DEPENDS ${GENERATED_HEADERS})
+  list(APPEND POINTCASTER_DEPENDENCIES generate_reflections)
+  
 endif()
 
 if (WITH_POINTCASTER)
@@ -211,6 +259,7 @@ if (WITH_POINTCASTER)
     src/shaders/texture_display.cc
     src/gui/widgets.cc
     src/gui/range_slider.cc
+    src/gui/drag_slider.cc
     src/parameters.cc
     src/path.cc
     src/uuid.cc
@@ -234,10 +283,15 @@ if (WITH_POINTCASTER)
   endif()
 
   add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
+
   set_target_properties(pointcaster PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
   set_property(TARGET pointcaster PROPERTY 
     MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+  if (POINTCASTER_DEPENDENCIES)
+    add_dependencies(pointcaster ${POINTCASTER_DEPENDENCIES})
+  endif()
 
   target_include_directories(pointcaster PRIVATE
     ${INCLUDE_DIRS} ${OPTIONAL_INCLUDE_DIRS} 
@@ -245,6 +299,10 @@ if (WITH_POINTCASTER)
 
   target_link_libraries(pointcaster PRIVATE 
     ${LINK_LIBS} ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
+  
+  if (WITH_MARCH_NATIVE)
+    target_compile_options(pointcaster PRIVATE "-march=native")
+  endif()
 
   if (WITH_THREAD_SANITIZER)
     target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")

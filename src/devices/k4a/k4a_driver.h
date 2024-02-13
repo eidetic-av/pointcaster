@@ -2,7 +2,7 @@
 
 #include "../device.h"
 #include "../driver.h"
-#include "../device_config.h"
+#include "../device_config.gen.h"
 
 #include <Eigen/Geometry>
 #include <array>

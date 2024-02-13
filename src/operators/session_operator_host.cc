@@ -1,17 +1,20 @@
 #include "session_operator_host.h"
 #include "../gui/widgets.h"
 #include "../logger.h"
-#include "sample_filter_operator.h"
-#include "noise_operator.h"
-#include "rotate_operator.h"
-#include "rake_operator.h"
-#include "operators.h"
+#include "../parameters.h"
+#include "../uuid.h"
+#include "noise_operator.gen.h"
+#include "rake_operator.gen.h"
+#include "rotate_operator.gen.h"
+#include "sample_filter_operator.gen.h"
 
 namespace pc::operators {
 
 void SessionOperatorHost::draw_imgui_window() {
-  ImGui::SetNextWindowBgAlpha(0.8f);
+  ImGui::SetNextWindowSize({600, 400}, ImGuiCond_FirstUseEver);
   ImGui::Begin("Session Operators", nullptr);
+
+  static bool select_node = false;
 
   if (ImGui::Button("Add session operator")) {
     ImGui::OpenPopup("Add session operator");
@@ -23,7 +26,17 @@ void SessionOperatorHost::draw_imgui_window() {
     apply_to_all_operators([this](auto &&operator_type) {
       using T = std::remove_reference_t<decltype(operator_type)>;
       if (ImGui::Selectable(T::Name)) {
-	_config.operators.push_back(T());
+
+        auto operator_config = T();
+        operator_config.id = pc::uuid::word();
+	// create a new instance of our operator configuration and add it to our
+	// session operator list
+	auto &variant_ref = _config.operators.emplace_back(operator_config);
+
+	// declare the instance as parameters to bind to this new operator's id
+	auto &config_instance = std::get<T>(variant_ref);
+	declare_parameters(operator_config.id, config_instance);
+
         ImGui::CloseCurrentPopup();
       }
     });
@@ -32,28 +45,23 @@ void SessionOperatorHost::draw_imgui_window() {
   }
 
   for (auto &operator_config : _config.operators) {
+    ImGui::PushID(gui::_parameter_index++);
     std::visit(
-	[](auto &&operator_config) {
+	[](auto &&config) {
+	  using T = std::decay_t<decltype(config)>;
 
-	  using T = std::decay_t<decltype(operator_config)>;
-
-	  if constexpr (std::is_same_v<T, NoiseOperatorConfiguration>) {
-	    NoiseOperator::draw_imgui_controls(operator_config);
-	  }
-	  else if constexpr (std::is_same_v<T, SampleFilterOperatorConfiguration>) {
-	    SampleFilterOperator::draw_imgui_controls(operator_config);
-	  }
-	  else if constexpr (std::is_same_v<T, RotateOperatorConfiguration>) {
-	    RotateOperator::draw_imgui_controls(operator_config);
-	  }
-	  else if constexpr (std::is_same_v<T, RakeOperatorConfiguration>) {
-	    RakeOperator::draw_imgui_controls(operator_config);
-	  }
-	},
-	operator_config);
+          if (ImGui::CollapsingHeader(T::Name, config.unfolded)) {
+            config.unfolded = true;
+            pc::gui::draw_parameters(config.id, struct_parameters[config.id]);
+          } else {
+            config.unfolded = false;
+          }
+        },
+        operator_config);
+    ImGui::PopID();
   }
 
   ImGui::End();
 }
 
-}
+} // namespace pc::operators

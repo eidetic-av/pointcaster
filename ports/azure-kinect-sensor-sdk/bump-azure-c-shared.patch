@@ -1,0 +1,6 @@
+diff --git a/extern/azure_c_shared/src b/extern/azure_c_shared/src
+--- a/extern/azure_c_shared/src
++++ b/extern/azure_c_shared/src
+@@ -1 +1 @@
+-Subproject commit 5a70f27709a2d4869b7db6794887481db28260d0
++Subproject commit 5a70f27709a2d4869b7db6794887481db28260d0-dirty

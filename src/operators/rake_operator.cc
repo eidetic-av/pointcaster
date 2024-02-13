@@ -1,4 +1,4 @@
-#include "rake_operator.h"
+#include "rake_operator.gen.h"
 #include "../gui/widgets.h"
 
 namespace pc::operators {

@@ -4,6 +4,7 @@
 #include <chrono>
 #include <memory>
 #include <optional>
+#include <spdlog/spdlog.h>
 #include <spdlog/sinks/ringbuffer_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <string_view>
@@ -49,7 +50,6 @@ namespace pc {
   inline std::vector<log_entry> logger_lines(std::size_t n, std::optional<std::chrono::system_clock::duration> duration = std::nullopt) {
     auto raw_msgs = pc::log::detail::ringbuffer_sink->last_raw(n);
     std::vector<log_entry> log_entries;
-
     std::chrono::system_clock::time_point now;
     if (duration.has_value()) {
       now = std::chrono::system_clock::now();

@@ -1,93 +1,95 @@
 #include "widgets.h"
 #include "../logger.h"
 #include "../string_utils.h"
+#include "catpuccin.h"
 #include "drag_slider.h"
 #include <array>
-#include <cmath>
 #include <tweeny/easing.h>
 
 namespace pc::gui {
 
 unsigned int _parameter_index;
+Mode _current_mode;
+std::string_view _modeline_input;
 
-void begin_gui_helpers() { _parameter_index = 0; }
+void begin_gui_helpers(const Mode current_mode,
+		       const std::array<char, modeline_buffer_size>& modeline_input) {
+  _parameter_index = 0;
+  _current_mode = current_mode;
+  if (current_mode == Mode::Find) {
+    // find the first element equal to null terminator to get the actual input length
+    constexpr char default_initialised_char = {};
+    const auto modeline_input_end =
+	std::find(modeline_input.begin(), modeline_input.end(),
+		  default_initialised_char);
+    const std::size_t input_length =
+        std::distance(modeline_input.begin(), modeline_input_end);
+    _modeline_input = std::string_view(modeline_input.data(), input_length);
+  }
+}
+
+void init_parameter_styles() {
+  ImGui::StyleColorsDark();
+  auto &style = ImGui::GetStyle();
+  style.WindowPadding = {0, 10};
+  style.FramePadding = {2, 3.5};
+  style.ItemInnerSpacing = {5, 4};
+  style.ItemSpacing = {1, 0};
+
+  constexpr auto transparent = ImColor(0, 0, 0, 0);
+
+  using namespace catpuccin;
+
+  style.Colors[ImGuiCol_WindowBg] = rgba(mocha_crust, 0.9f);
+  style.Colors[ImGuiCol_Border] = mocha_surface2;
+
+  style.Colors[ImGuiCol_Text] = mocha_text;
+  style.Colors[ImGuiCol_TitleBg] = mocha_crust;
+  style.Colors[ImGuiCol_TitleBgActive] = mocha_base;
+
+  style.Colors[ImGuiCol_Header] = mocha_base;
+  style.Colors[ImGuiCol_HeaderHovered] = mocha_surface;
+  style.Colors[ImGuiCol_HeaderActive] = mocha_surface1;
+
+  style.Colors[ImGuiCol_Tab] = mocha_surface;
+  style.Colors[ImGuiCol_TabActive] = mocha_surface1;
+  style.Colors[ImGuiCol_TabUnfocusedActive] = macchiato_surface1;
+  style.Colors[ImGuiCol_TabHovered] = mocha_surface2;
+
+  // TableHeaderBg is used for Parameter labels
+  // style.Colors[ImGuiCol_TableHeaderBg] = mocha_crust;
+  style.Colors[ImGuiCol_TableHeaderBg] = transparent;
+
+  style.Colors[ImGuiCol_FrameBg] = mocha_base;
+  style.Colors[ImGuiCol_FrameBgHovered] = mocha_surface;
+  style.Colors[ImGuiCol_FrameBgActive] = mocha_surface1;
+
+  style.Colors[ImGuiCol_Button] = mocha_base;
+  style.Colors[ImGuiCol_ButtonHovered] = mocha_surface1;
+  style.Colors[ImGuiCol_ButtonActive] = mocha_surface;
+
+  style.Colors[ImGuiCol_CheckMark] = mocha_overlay;
+
+  style.Colors[ImGuiCol_NavHighlight] = mocha_blue;
+
+  style.Colors[ImGuiCol_ScrollbarGrab] = mocha_surface;
+  style.Colors[ImGuiCol_ScrollbarGrabHovered] = mocha_surface1;
+  style.Colors[ImGuiCol_ScrollbarGrabActive] = macchiato_surface2;
+
+  style.Colors[ImGuiCol_PopupBg] = mocha_mantle;
+};
 
 std::string format_label(std::string_view label) {
   return strings::sentence_case(strings::last_element(label));
 };
 
-static bool inside_widget_container = false;
-
-bool begin_widget_container(std::string_view widget_label = "",
-                            std::size_t row_count = 0) {
-  constexpr auto outer_horizontal_padding = 4;
-  constexpr auto table_background_color = IM_COL32(22, 27, 34, 255);
-  // constexpr auto table_background_color = IM_COL32(255, 27, 34, 255);
-
-  const auto parameter_index_string = std::to_string(_parameter_index++);
-
-  const auto row_height = ImGui::GetTextLineHeightWithSpacing() * 1.33f;
-  const auto table_height = (row_height * (row_count + 1)) + 14;
-
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                      {outer_horizontal_padding, 0});
-  ImGui::PushStyleColor(ImGuiCol_ChildBg, table_background_color);
-
-  const auto child_id = "##widget_container_border." + parameter_index_string;
-
-  ImGui::BeginChild(child_id.data(), ImVec2{0, table_height},
-                    ImGuiChildFlags_Border, ImGuiWindowFlags_NoScrollbar);
-
-  ImGui::Dummy({0, outer_horizontal_padding});
-  ImGui::Dummy({outer_horizontal_padding, 0});
-  ImGui::SameLine(0, 0);
-
-  if (!widget_label.empty()) {
-    ImGui::Text("%s", format_label(widget_label).data());
-    ImGui::Dummy({0, 0});
-  }
-  ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {0, 2});
-
-  const auto table_id = "##table." + std::to_string(_parameter_index);
-
-  if (ImGui::BeginTable(table_id.c_str(), 3, ImGuiTableFlags_SizingFixedFit)) {
-    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthStretch,
-                            0.3f);
-    ImGui::TableSetupColumn("##slider", ImGuiTableColumnFlags_WidthStretch,
-                            0.7f);
-    ImGui::TableSetupColumn("##reset_button", ImGuiTableColumnFlags_WidthFixed);
-    return true;
-  } else {
-    ImGui::PopStyleVar();
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar();
-    return false;
-  }
-}
-
-void end_widget_container() {
-  ImGui::EndTable();
-  ImGui::PopStyleVar();
-  ImGui::EndChild();
-  ImGui::PopStyleColor();
-  ImGui::PopStyleVar();
-
-  inside_widget_container = false;
-}
-
 template <typename T>
 bool slider(std::string_view parameter_id, T &value, T min, T max,
             T reset_value, bool is_disabled, std::string_view label) {
 
-  // if (!begin_widget_container()) return false;
-
   ImGui::PushID(parameter_id.data());
 
-  // ImGui::TableNextRow();
-
-  if (is_disabled)
-    ImGui::BeginDisabled();
+  if (is_disabled) ImGui::BeginDisabled();
 
   auto &state = parameter_states[parameter_id];
   auto new_state = state;
@@ -112,26 +114,12 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
       new_state = recording_result;
   }
 
-  // Label Column
-  // ImGui::TableSetColumnIndex(0);
   std::string label_text;
   if (label.empty()) {
     label_text = format_label(parameter_id).data();
   } else {
     label_text = label;
   }
-
-  // align text right
-  // auto pos_x = (ImGui::GetCursorPosX() + ImGui::GetColumnWidth() -
-  // ImGui::CalcTextSize(label_text.c_str()).x -
-  // ImGui::GetScrollX() - 2 * ImGui::GetStyle().ItemSpacing.x);
-  // if (pos_x > ImGui::GetCursorPosX()) ImGui::SetCursorPosX(pos_x);
-
-  // ImGui::Text("%s", label_text.data());
-
-  // Slider Column
-  // ImGui::TableSetColumnIndex(1);
-  // ImGui::SetNextItemWidth(-1);
 
   bool updated = false;
 
@@ -147,29 +135,6 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
     ImGui::SetNextItemWidth(-1);
     auto &binding = parameter_bindings.at(parameter_id);
     auto old_binding = binding;
-    if (ImGui::RangeSliderFloat(
-            ("##" + std::string(parameter_id) + ".minmax").data(), &binding.min,
-            &binding.max, min, max)) {
-      // if the mapping range is updated, update the value itself to the new
-      // range
-      if (std::holds_alternative<FloatReference>(binding.value)) {
-        float &value = std::get<FloatReference>(binding.value).get();
-        float &old_value = std::get<FloatReference>(old_binding.value).get();
-        value = math::remap(old_binding.min, old_binding.max, binding.min,
-                            binding.max, old_value);
-      } else {
-        int &value = std::get<IntReference>(binding.value).get();
-        int &old_value = std::get<IntReference>(old_binding.value).get();
-        auto float_value =
-            math::remap(old_binding.min, old_binding.max, binding.min,
-                        binding.max, static_cast<float>(old_value));
-        value = static_cast<int>(std::round(float_value));
-      }
-      // and trigger any update callbacks
-      for (const auto &cb : binding.minmax_update_callbacks) {
-        cb(old_binding, binding);
-      }
-    }
   }
 
   bool unbind_current = false;
@@ -190,7 +155,6 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
   }
 
   // Reset Button Column
-  // ImGui::TableSetColumnIndex(2);
   ImGui::SameLine();
   if (state == ParameterState::Bound)
     ImGui::BeginDisabled();
@@ -213,8 +177,6 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
 
   ImGui::PopID();
 
-  // end_widget_container();
-
   return updated;
 }
 
@@ -226,96 +188,250 @@ template bool slider(std::string_view parameter_id, int &value, int min,
                      int max, int reset_value, bool is_disabled,
                      std::string_view label);
 
+bool bool_param(std::string_view group_id, std::string_view parameter_id,
+		bool &value, const bool &reset_value) {
+
+  using namespace ImGui;
+
+  ImGuiContext &g = *GImGui;
+  auto* window = ImGui::GetCurrentWindow();
+
+  const auto original_value = value;
+
+  const auto parameter_label = fmt::format("{}.{}", group_id, parameter_id);
+  const auto imgui_parameter_id =
+      parameter_label + "." + std::to_string(_parameter_index++);
+  const auto formatted_label =
+      strings::sentence_case(strings::last_element(parameter_label));
+
+  
+
+  ImGui::PushID(imgui_parameter_id.c_str());
+
+  const auto label_width = std::min(window->Size.x / 3.0f, 130.0f);
+
+  const auto frame_start = window->DC.CursorPos;
+  const auto text_width = label_width - 1;
+  const auto frame_end = frame_start +
+			 ImVec2{text_width, GetTextLineHeightWithSpacing()} +
+			 g.Style.ItemInnerSpacing + ImVec2{0, 3};
+  const auto frame_width = frame_end.x - frame_start.x;
+  const ImRect frame_bb(frame_start, frame_end);
+  const ImRect text_bb(ImVec2{frame_end.x, frame_start.y} -
+			   ImVec2{text_width, 0} + g.Style.ItemInnerSpacing,
+		       frame_end - g.Style.ItemInnerSpacing * 0.5f);
+
+  ImGui::ItemAdd(text_bb, GetID(fmt::format("{}.{}", parameter_id, "label").c_str()));
+  if (ImGui::IsItemHovered()) {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{11, 6});
+    ImGui::SetTooltip("%s", parameter_id.data());
+    ImGui::PopStyleVar();
+  }
+
+  Dummy({text_width + g.Style.ItemInnerSpacing.x, 0});
+  RenderFrame(frame_bb.Min, frame_bb.Max, GetColorU32(ImGuiCol_TableHeaderBg));
+
+  RenderTextClipped(text_bb.Min, text_bb.Max, &*formatted_label.begin(),
+                    &*formatted_label.end(), NULL, ImVec2(1.0f, 0.5f));
+  SameLine();
+  Dummy(g.Style.ItemSpacing);
+  SameLine();
+
+  Checkbox(fmt::format("##{}", parameter_id).c_str(), &value);
+
+  Dummy(g.Style.FramePadding);
+
+  ImGui::PopID();
+
+  return value != original_value;
+}
+
+bool string_param(std::string_view group_id, std::string_view parameter_id,
+		  std::string &value, const std::string &reset_value) {
+
+  using namespace ImGui;
+
+  ImGuiContext &g = *GImGui;
+  auto* window = ImGui::GetCurrentWindow();
+
+  const auto original_value = value;
+
+  const auto parameter_label = fmt::format("{}.{}", group_id, parameter_id);
+  const auto imgui_parameter_id =
+      parameter_label + "." + std::to_string(_parameter_index++);
+  const auto formatted_label =
+      strings::sentence_case(strings::last_element(parameter_label));
+
+  ImGui::PushID(imgui_parameter_id.c_str());
+
+  const auto label_width = std::min(window->Size.x / 3.0f, 130.0f);
+
+  const auto frame_start = window->DC.CursorPos;
+  const auto text_width = label_width - 1;
+  const auto frame_end = frame_start +
+			 ImVec2{text_width, GetTextLineHeightWithSpacing()} +
+			 g.Style.ItemInnerSpacing + ImVec2{0, 3};
+  const auto frame_width = frame_end.x - frame_start.x;
+  const ImRect frame_bb(frame_start, frame_end);
+  const ImRect text_bb(ImVec2{frame_end.x, frame_start.y} -
+			   ImVec2{text_width, 0} + g.Style.ItemInnerSpacing,
+		       frame_end - g.Style.ItemInnerSpacing * 0.5f);
+
+  ImGui::ItemAdd(text_bb, GetID(fmt::format("{}.{}", parameter_id, "label").c_str()));
+  if (ImGui::IsItemHovered()) {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{11, 6});
+    ImGui::SetTooltip("%s", parameter_id.data());
+    ImGui::PopStyleVar();
+  }
+
+  Dummy({text_width + g.Style.ItemInnerSpacing.x, 0});
+  RenderFrame(frame_bb.Min, frame_bb.Max, GetColorU32(ImGuiCol_TableHeaderBg));
+
+  RenderTextClipped(text_bb.Min, text_bb.Max, &*formatted_label.begin(),
+                    &*formatted_label.end(), NULL, ImVec2(1.0f, 0.5f));
+  SameLine();
+  Dummy(g.Style.ItemSpacing);
+  SameLine();
+
+  // TODO investigate arbitrary string length
+  InputText(fmt::format("##{}", parameter_id).c_str(), value.data(), 32);
+
+  Dummy(g.Style.FramePadding);
+
+  ImGui::PopID();
+
+  return value != original_value;
+}
+
+template <pc::types::ScalarType T>
+bool scalar_param(std::string_view group_id, std::string_view parameter_id,
+		  T &value, T min, T max, T reset_value, bool disabled,
+		  std::string_view label) {
+
+  auto original_value = value;
+
+  auto imgui_parameter_id = fmt::format("{}.{}", parameter_id, _parameter_index++);
+  ImGui::PushID(imgui_parameter_id.c_str());
+
+  if constexpr (std::floating_point<T>) {
+    pc::gui::DragFloat(parameter_id, &value, 0.0001f, min, max, reset_value);
+  } else if constexpr (std::same_as<T, int>) {
+    pc::gui::DragInt(parameter_id, &value, 1, min, max, reset_value);
+  } else if constexpr (std::same_as<T, short>) {
+    pc::logger->debug("right sport here");
+  }
+
+  ImGui::PopID();
+
+  return value != original_value;
+}
+
+template bool scalar_param(std::string_view group_id,
+			   std::string_view parameter_id, float &value,
+			   float min, float max, float reset_value,
+			   bool disabled, std::string_view label);
+
+template bool scalar_param(std::string_view group_id,
+                           std::string_view parameter_id, int &value, int min,
+                           int max, int reset_value, bool disabled,
+                           std::string_view label);
+
 template <typename T>
-bool vector_table(
-    std::string_view group_id, std::string_view parameter_id, T &vec,
-    typename T::vector_type min, typename T::vector_type max,
-    std::array<typename T::vector_type, types::VectorSize<T>::value>
-        reset_values,
-    std::array<bool, types::VectorSize<T>::value> disabled,
-    std::array<std::string, types::VectorSize<T>::value> labels) {
+bool vector_param(std::string_view group_id, std::string_view parameter_id,
+		  T &vec, typename T::vector_type min,
+		  typename T::vector_type max, T reset_values,
+		  std::array<bool, types::VectorSize<T>::value> disabled,
+                  std::array<std::string, types::VectorSize<T>::value> labels) {
 
   constexpr auto vector_size = types::VectorSize<T>::value;
 
-  constexpr std::array<const char *, 4> elements = {"x", "y", "z", "w"};
-
-  const auto parameter_label = format_label(parameter_id);
-
-  ImGui::PushID(_parameter_index++);
-
-  // Float vectors
-  if constexpr (std::is_same<typename T::vector_type, float>::value) {
-    if constexpr (vector_size == 1) {
-      pc::gui::DragFloat(parameter_label.data(), vec.data(), 0.01f, min, max);
-    } else if constexpr (vector_size == 2) {
-      pc::gui::DragFloat2(parameter_label.data(), vec.data(), 0.01f, min, max);
-    } else if constexpr (vector_size == 3) {
-      pc::gui::DragFloat3(parameter_label.data(), vec.data(), 0.01f, min, max);
-    } else if constexpr (vector_size == 4) {
-      // pc::gui::DragFloat4(parameter_label.data(), vec.data(), 0.01f, min,
-      // max);
-    }
-  }
-
-  else {
-    // Legacy remove?
-    auto use_labels = !labels.at(0).empty();
-
-    for (std::size_t i = 0; i < vector_size; ++i) {
-      const auto &row_label = use_labels ? labels[i] : elements[i];
-      auto vector_parameter_id =
-          fmt::format("{}.{}.{}", group_id, parameter_id, elements[i]);
-      slider(vector_parameter_id, vec[i], min, max, reset_values[i],
-             disabled[i], row_label);
-    }
-  }
-
-  // if (begin_widget_container(parameter_id, vector_size))
-  //{
   auto original_vec = vec;
 
-  // end_widget_container();
+  auto imgui_parameter_id = fmt::format("{}.{}", parameter_id, _parameter_index++);
+  ImGui::PushID(imgui_parameter_id.c_str());
+
+  if constexpr (std::is_same<typename T::vector_type, float>::value) {
+    if constexpr (vector_size == 2) {
+      pc::gui::DragFloat2(parameter_id, vec.data(), 0.01f, min, max, reset_values);
+    } else if constexpr (vector_size == 3) {
+      pc::gui::DragFloat3(parameter_id, vec.data(), 0.01f, min, max, reset_values);
+    } else if constexpr (vector_size == 4) {
+      pc::logger->warn("implement Float4 parameters");
+      // pc::gui::DragFloat4(parameter_label, vec.data(), 0.01f, min, max);
+    }
+  } else if constexpr (std::is_same<typename T::vector_type, int>::value) {
+    if constexpr (vector_size == 2) {
+      pc::gui::DragInt2(parameter_id, vec.data(), 1, min, max, reset_values);
+    } else if constexpr (vector_size == 3) {
+      pc::gui::DragInt3(parameter_id, vec.data(), 1, min, max, reset_values);
+    } else if constexpr (vector_size == 4) {
+      pc::logger->warn("implement Int4 parameters");
+      //pc::gui::DragInt4(parameter_label, vec.data(), 0.01f, min, max, reset_values);
+    }
+  } else if constexpr (std::is_same<typename T::vector_type, short>::value) {
+    if constexpr (vector_size == 2) {
+      pc::gui::DragShort2(parameter_id, vec.data(), 1, min, max, reset_values);
+    }
+  }
 
   ImGui::PopID();
-  return vec != original_vec;
-  //}
 
-  // ImGui::PopID();
-  // return false;
+  return vec != original_vec;
 }
 
-template bool vector_table(std::string_view group_id,
-                           std::string_view parameter_id, Int2 &vec, int min,
-                           int max, std::array<int, 2> reset_values,
-                           std::array<bool, 2> disabled,
-                           std::array<std::string, 2> labels);
+template bool vector_param(std::string_view group_id,
+			   std::string_view parameter_id, Int2 &vec, int min,
+			   int max, Int2 reset_values,
+			   std::array<bool, 2> disabled,
+			   std::array<std::string, 2> labels);
 
-template bool vector_table(std::string_view group_id,
+template bool vector_param(std::string_view group_id,
                            std::string_view parameter_id, Int3 &vec, int min,
-                           int max, std::array<int, 3> reset_values,
+                           int max, Int3 reset_values,
                            std::array<bool, 3> disabled,
                            std::array<std::string, 3> labels);
 
-template bool vector_table(std::string_view group_id,
+template bool vector_param(std::string_view group_id,
+			   std::string_view parameter_id, MinMax<int> &vec, int min,
+			   int max, MinMax<int> reset_values,
+			   std::array<bool, 2> disabled,
+			   std::array<std::string, 2> labels);
+
+template bool vector_param(std::string_view group_id,
                            std::string_view parameter_id, Float2 &vec,
-                           float min, float max,
-                           std::array<float, 2> reset_values,
+                           float min, float max, Float2 reset_values,
                            std::array<bool, 2> disabled,
                            std::array<std::string, 2> labels);
 
-template bool vector_table(std::string_view group_id,
+template bool vector_param(std::string_view group_id,
                            std::string_view parameter_id, Float3 &vec,
-                           float min, float max,
-                           std::array<float, 3> reset_values,
+                           float min, float max, Float3 reset_values,
                            std::array<bool, 3> disabled,
                            std::array<std::string, 3> labels);
 
-template bool vector_table(std::string_view group_id,
+template bool vector_param(std::string_view group_id,
                            std::string_view parameter_id, Float4 &vec,
-                           float min, float max,
-                           std::array<float, 4> reset_values,
+                           float min, float max, Float4 reset_values,
                            std::array<bool, 4> disabled,
                            std::array<std::string, 4> labels);
+
+template bool vector_param(std::string_view group_id,
+                           std::string_view parameter_id, MinMax<float> &vec,
+                           float min, float max, MinMax<float> reset_values,
+                           std::array<bool, 2> disabled,
+                           std::array<std::string, 2> labels);
+
+template bool vector_param(std::string_view group_id,
+			   std::string_view parameter_id, MinMax<short> &vec, short min,
+			   short max, MinMax<short> reset_values,
+			   std::array<bool, 2> disabled,
+			   std::array<std::string, 2> labels);
+
+template bool vector_param(std::string_view group_id,
+			   std::string_view parameter_id, MinMax<short> &vec,
+			   short min, short max, short reset_value,
+			   std::array<bool, 2> disabled,
+			   std::array<std::string, 2> labels);
 
 bool begin_tree_node(std::string_view name, bool &open) {
   ImGui::PushID(_parameter_index++);
@@ -394,6 +510,91 @@ void tween_config(std::string_view group_id, std::string_view parameter_id,
   }
 
   ImGui::PopID();
+}
+
+bool draw_parameter(std::string_view structure_name,
+                    std::string_view parameter_id) {
+
+  static constexpr std::array<std::string, 2> ignored_suffixes = {
+      "unfolded", ".show_window"};
+  if (pc::strings::ends_with_any(parameter_id, ignored_suffixes.begin(),
+                                 ignored_suffixes.end())) {
+    return false;
+  }
+
+  auto param = parameter_bindings.at(parameter_id);
+
+  return std::visit(
+      [parameter_id, structure_name, &param](auto &&ref) {
+        using T = std::decay_t<decltype(ref.get())>;
+        // bools are drawn as check boxes
+        if constexpr (std::is_same_v<T, bool>) {
+          return pc::gui::bool_param(structure_name, parameter_id, ref.get(),
+                              std::get<bool>(param.default_value));
+        } else if constexpr (std::is_same_v<T, std::string>) {
+          return pc::gui::string_param(structure_name, parameter_id, ref.get(),
+                                std::get<std::string>(param.default_value));
+        }
+        // floats and ints are drawn individually
+        else if constexpr (std::floating_point<T> || std::integral<T>) {
+          return pc::gui::scalar_param(structure_name, parameter_id, ref.get(),
+                                std::get<T>(param.min), std::get<T>(param.max),
+                                std::get<T>(param.default_value));
+        }
+        // vector multi-parameters are drawn together
+        else if constexpr (is_float_vector_t<T> || is_int_vector_t<T> || is_short_vector_t<T>) {
+          return pc::gui::vector_param(structure_name, parameter_id, ref.get(),
+                                       std::get<typename T::vector_type>(param.min),
+                                       std::get<typename T::vector_type>(param.max),
+                                       std::get<T>(param.default_value));
+        }
+      },
+      param.value);
+}
+
+bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
+                     const std::string &map_prefix) {
+  auto changed = false;
+  for (const auto &entry : map) {
+    if (std::holds_alternative<std::string>(entry)) {
+      changed |= draw_parameter(structure_name, std::get<std::string>(entry));
+      ImGui::Dummy({0, 1});
+    } else {
+      // this entry holds a nested map,
+      // draw nested params inside a collapsing header
+      const auto &nested_entry = std::get<NestedParameterMap>(entry);
+      const auto &entry_name = nested_entry.first;
+      const auto &nested_map = nested_entry.second;
+      const auto header_text = pc::strings::sentence_case(entry_name);
+
+      // grab the 'unfolded' entry to determine whether the collapsing header is
+      // open or closed
+
+      const auto unfolded_entry_id = std::string(structure_name) + "." +
+                                     map_prefix + entry_name + ".unfolded";
+      const auto &unfolded_param = parameter_bindings.at(unfolded_entry_id);
+      auto &unfolded = std::get<BoolReference>(unfolded_param.value).get();
+
+      ImGui::SetNextItemOpen(unfolded);
+      if (ImGui::CollapsingHeader(header_text.data())) {
+        ImGui::Dummy({0, 4});
+        // call draw recursively inside the header this time
+	changed |= draw_parameters(structure_name, nested_map,
+				   map_prefix + entry_name + ".");
+        ImGui::Dummy({0, 1});
+        unfolded = true;
+      } else {
+        unfolded = false;
+        ImGui::Dummy({0, 0});
+      }
+    }
+  }
+  return changed;
+}
+
+bool draw_parameters(std::string_view structure_id) {
+  // TODO std::string creation every frame
+  return draw_parameters(structure_id, struct_parameters.at(std::string{structure_id}));
 }
 
 } // namespace pc::gui

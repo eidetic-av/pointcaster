@@ -5,6 +5,7 @@
 #include <string_view>
 #include <cctype>
 #include <unordered_map>
+#include <iterator>
 
 namespace pc::strings {
 
@@ -88,11 +89,35 @@ inline std::string sentence_case(std::string_view input) noexcept {
 }
 
 inline constexpr std::string_view last_element(std::string_view str,
-				     char delimiter = '.') noexcept {
+					       char delimiter = '.') noexcept {
   if (auto pos = str.rfind(delimiter); pos != std::string_view::npos) {
     return str.substr(pos + 1);
   }
   return str;
+}
+
+inline constexpr std::string_view
+remove_last_element(std::string_view str, char delimiter = '.') noexcept {
+  if (auto pos = str.rfind(delimiter); pos != std::string_view::npos) {
+    return str.substr(0, pos);
+  }
+  return str;
+}
+
+inline constexpr bool ends_with(const std::string_view str,
+				const std::string_view suffix) {
+  return str.size() >= suffix.size() &&
+	 str.substr(str.size() - suffix.size()) == suffix;
+}
+
+template <typename Iter>
+inline constexpr bool ends_with_any(const std::string_view str, Iter begin,
+				    Iter end) {
+  for (auto it = begin; it != end; ++it) {
+    if (ends_with(str, *it))
+      return true;
+  }
+  return false;
 }
 
 } // namespace pc::strings

@@ -1,5 +1,5 @@
 #include "../structs.h"
-#include "sample_filter_operator.h"
+#include "sample_filter_operator.gen.h"
 #include <thrust/functional.h>
 
 namespace pc::operators {

@@ -1,4 +1,4 @@
-#include "radio_config.h"
+#include "radio_config.gen.h"
 #include "../operators/session_operator_host.h"
 #include <memory>
 #include <thread>

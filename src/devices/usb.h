@@ -9,7 +9,7 @@
 #include <optional>
 #include <thread>
 #include <vector>
-#include "usb_config.h"
+#include "usb_config.gen.h"
 
 namespace pc::devices {
 

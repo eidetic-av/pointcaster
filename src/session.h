@@ -1,63 +1,48 @@
 #pragma once
 
-#include "camera/camera_config.h"
-#include "devices/device_config.h"
-#include "devices/usb_config.h"
-#include "mqtt/mqtt_client_config.h"
-#include "midi/midi_client_config.h"
-#include "radio/radio_config.h"
-#include "operators/operators.h"
+#include "camera/camera_config.gen.h"
+#include "devices/device_config.gen.h"
+#include "devices/usb_config.gen.h"
+#include "midi/midi_client_config.gen.h"
+#include "mqtt/mqtt_client_config.gen.h"
+#include "operators/operator_host_config.gen.h"
+#include "radio/radio_config.gen.h"
 #include "serialization.h"
+#include <atomic>
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
-#include <atomic>
 
 namespace pc {
 
 struct PointCasterSessionLayout {
-  bool fullscreen = false;
-  bool hide_ui = false;
-  bool show_log = true;
-  bool show_devices_window = true;
-  bool show_radio_window = false;
-  bool show_snapshots_window = false;
-  bool show_global_transform_window = false;
-  bool show_stats = false;
-
-  DERIVE_SERDE(PointCasterSessionLayout,
-               (&Self::fullscreen, "fullscreen")
-               (&Self::hide_ui, "hide_ui")
-               (&Self::show_log, "show_log")
-               (&Self::show_devices_window, "show_devices_window")
-               (&Self::show_radio_window, "show_radio_window")
-               (&Self::show_snapshots_window, "show_snapshots_window")
-               (&Self::show_global_transform_window, "show_global_transform_window")
-               (&Self::show_stats, "show_stats"))
+  bool fullscreen = false; // @optional
+  bool hide_ui = false; // @optional
+  bool show_log = true; // @optional
+  bool show_devices_window = false; // @optional
+  bool show_radio_window = false; // @optional
+  bool show_snapshots_window = false; // @optional
+  bool show_global_transform_window = false; // @optional
+  bool show_stats = false; // @optional
 };
+
+using DeviceMap = std::map<std::string, devices::DeviceConfiguration>;
+using CameraMap = std::map<std::string, camera::CameraConfiguration>;
 
 struct PointCasterSession {
   std::string id;
-  std::map<std::string, devices::DeviceConfiguration> devices;
-  std::map<std::string, camera::CameraConfiguration> cameras;
-  radio::RadioConfiguration radio;
-  devices::UsbConfiguration usb;
-  MqttClientConfiguration mqtt;
-  midi::MidiClientConfiguration midi;
-  PointCasterSessionLayout layout;
-  operators::OperatorHostConfiguration session_operator_host;
 
-  DERIVE_SERDE(
-      PointCasterSession,
-      (&Self::id, "id")
-      [attributes(make_optional)] (&Self::devices, "devices")
-      [attributes(make_optional)] (&Self::cameras, "cameras")
-      (&Self::radio, "radio")
-      (&Self::usb, "usb")
-      (&Self::mqtt, "mqtt")
-      (&Self::midi, "midi")
-      (&Self::session_operator_host, "session_operator_host")
-      (&Self::layout, "layout"))
+  DeviceMap devices; // @optional
+  CameraMap cameras; // @optional
+
+  std::optional<radio::RadioConfiguration> radio;
+  std::optional<devices::UsbConfiguration> usb;
+  std::optional<mqtt::MqttClientConfiguration> mqtt;
+  std::optional<midi::MidiClientConfiguration> midi;
+
+  PointCasterSessionLayout layout; // @optional
+
+  operators::OperatorHostConfiguration session_operator_host; // @optional
 };
 
 } // namespace pc

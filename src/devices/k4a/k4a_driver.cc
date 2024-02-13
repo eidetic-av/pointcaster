@@ -22,7 +22,7 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config, std::string_view target_
 
   _k4a_config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
   _k4a_config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
-  _k4a_config.color_resolution = K4A_COLOR_RESOLUTION_720P;
+  _k4a_config.color_resolution = K4A_COLOR_RESOLUTION_1080P;
   _k4a_config.synchronized_images_only = true;
 
   _k4a_config.depth_mode = (k4a_depth_mode_t)config.k4a.depth_mode;

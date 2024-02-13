@@ -1,0 +1,7 @@
+diff --git a/extern/libuvc/src b/extern/libuvc/src
+index 5fc483d5..1613ac65 160000
+--- a/extern/libuvc/src
++++ b/extern/libuvc/src
+@@ -1 +1 @@
+-Subproject commit 5fc483d596c63f1bcd36be35d512468c0b75c5f3
++Subproject commit 1613ac6531b7a97be1fce626925466e6ca955db9

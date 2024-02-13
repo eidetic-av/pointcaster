@@ -26,6 +26,7 @@ K4ADevice::K4ADevice(DeviceConfiguration config, std::string_view target_id) : D
   // _config.k4a.gain = driver->get_gain();
 
   count++;
+
   declare_parameters(_driver->id(), _config);
 }
 
@@ -50,79 +51,81 @@ void K4ADevice::update_device_control(int *target, int value,
 
 void K4ADevice::draw_device_controls() {
 
-  using pc::gui::slider;
+  pc::gui::draw_parameters(_driver->id(), struct_parameters.at(_driver->id()));
+
+  // using pc::gui::slider;
   
-  auto driver = dynamic_cast<K4ADriver *>(_driver.get());
+  // auto driver = dynamic_cast<K4ADriver *>(_driver.get());
 
-  if (gui::begin_tree_node("K4A Configuration", _config.k4a.unfolded)) {
+  // if (gui::begin_tree_node("K4A Configuration", _config.k4a.unfolded)) {
 
-    static const std::map<k4a_depth_mode_t, std::pair<int, std::string>>
-	depth_mode_to_combo_item = {
-	    {K4A_DEPTH_MODE_NFOV_2X2BINNED, {0, "NFOV Binned"}},
-	    {K4A_DEPTH_MODE_NFOV_UNBINNED, {1, "NFOV Unbinned"}},
-	    {K4A_DEPTH_MODE_WFOV_2X2BINNED, {2, "WFOV Binned"}},
-	    {K4A_DEPTH_MODE_WFOV_UNBINNED, {3, "WFOV Unbinned"}}};
+  //   static const std::map<k4a_depth_mode_t, std::pair<int, std::string>>
+  // 	depth_mode_to_combo_item = {
+  // 	    {K4A_DEPTH_MODE_NFOV_2X2BINNED, {0, "NFOV Binned"}},
+  // 	    {K4A_DEPTH_MODE_NFOV_UNBINNED, {1, "NFOV Unbinned"}},
+  // 	    {K4A_DEPTH_MODE_WFOV_2X2BINNED, {2, "WFOV Binned"}},
+  // 	    {K4A_DEPTH_MODE_WFOV_UNBINNED, {3, "WFOV Unbinned"}}};
 
-    static const std::string combo_item_string = [] {
-      std::string items;
-      for (const auto &[mode, item] : depth_mode_to_combo_item) {
-	items += item.second + '\0';
-      }
-      return items;
-    }();
+  //   static const std::string combo_item_string = [] {
+  //     std::string items;
+  //     for (const auto &[mode, item] : depth_mode_to_combo_item) {
+  // 	items += item.second + '\0';
+  //     }
+  //     return items;
+  //   }();
 
-	auto [selected_item_index, label] =
-		depth_mode_to_combo_item.at((k4a_depth_mode_t)_config.k4a.depth_mode);
+  // 	auto [selected_item_index, label] =
+  // 		depth_mode_to_combo_item.at((k4a_depth_mode_t)_config.k4a.depth_mode);
 
-    if (ImGui::Combo("Depth Mode", &selected_item_index,
-		     combo_item_string.c_str())) {
-      for (const auto &[mode, item] : depth_mode_to_combo_item) {
-	if (item.first == selected_item_index) {
-	  _config.k4a.depth_mode = mode;
-	  auto driver = dynamic_cast<K4ADriver *>(_driver.get());
-	  driver->set_depth_mode(mode);
-	  break;
-	}
-      }
-    }
+  //   if (ImGui::Combo("Depth Mode", &selected_item_index,
+  // 		     combo_item_string.c_str())) {
+  //     for (const auto &[mode, item] : depth_mode_to_combo_item) {
+  // 	if (item.first == selected_item_index) {
+  // 	  _config.k4a.depth_mode = mode;
+  // 	  auto driver = dynamic_cast<K4ADriver *>(_driver.get());
+  // 	  driver->set_depth_mode(mode);
+  // 	  break;
+  // 	}
+  //     }
+  //   }
 
-    if (slider(id(), "k4a.exposure", _config.k4a.exposure, 0, 1000000, 10000)) {
-      driver->set_exposure(_config.k4a.exposure);
-    }
-    if (slider(id(), "k4a.brightness", _config.k4a.brightness, 0, 255, 128)) {
-      driver->set_brightness(_config.k4a.brightness);
-    }
-    if (slider(id(), "k4a.contrast", _config.k4a.contrast, 0, 10, 5)) {
-      driver->set_contrast(_config.k4a.contrast);
-    }
-    if (slider(id(), "k4a.saturation", _config.k4a.saturation, 0, 63, 31)) {
-      driver->set_saturation(_config.k4a.saturation);
-    }
-    if (slider(id(), "k4a.gain", _config.k4a.gain, 0, 255, 128)) {
-      driver->set_gain(_config.k4a.gain);
-    }
+  //   if (slider(id(), "k4a.exposure", _config.k4a.exposure, 0, 1000000, 10000)) {
+  //     driver->set_exposure(_config.k4a.exposure);
+  //   }
+  //   if (slider(id(), "k4a.brightness", _config.k4a.brightness, 0, 255, 128)) {
+  //     driver->set_brightness(_config.k4a.brightness);
+  //   }
+  //   if (slider(id(), "k4a.contrast", _config.k4a.contrast, 0, 10, 5)) {
+  //     driver->set_contrast(_config.k4a.contrast);
+  //   }
+  //   if (slider(id(), "k4a.saturation", _config.k4a.saturation, 0, 63, 31)) {
+  //     driver->set_saturation(_config.k4a.saturation);
+  //   }
+  //   if (slider(id(), "k4a.gain", _config.k4a.gain, 0, 255, 128)) {
+  //     driver->set_gain(_config.k4a.gain);
+  //   }
 
-    ImGui::TreePop();
-  }
+  //   ImGui::TreePop();
+  // }
 
-  if (gui::begin_tree_node("Body tracking", _config.body.unfolded)) {
-    auto &body = _config.body;
-    if (ImGui::Checkbox("Enabled", &body.enabled)) {
-      driver->enable_body_tracking(body.enabled);
-    }
-    ImGui::TreePop();
-  }
+  // if (gui::begin_tree_node("Body tracking", _config.body.unfolded)) {
+  //   auto &body = _config.body;
+  //   if (ImGui::Checkbox("Enabled", &body.enabled)) {
+  //     driver->enable_body_tracking(body.enabled);
+  //   }
+  //   ImGui::TreePop();
+  // }
 
-  ImGui::Checkbox("Auto tilt", &_config.k4a.auto_tilt.enabled);
-  ImGui::SameLine();
-  if (ImGui::Button("Clear")) driver->clear_auto_tilt();
+  // ImGui::Checkbox("Auto tilt", &_config.k4a.auto_tilt.enabled);
+  // ImGui::SameLine();
+  // if (ImGui::Button("Clear")) driver->clear_auto_tilt();
 
-  if (_config.k4a.auto_tilt.enabled) {
-    slider(id(), "k4a.auto_tilt.lerp_factor", _config.k4a.auto_tilt.lerp_factor,
-	   0.0f, 1.0f, 0.025f);
-    slider(id(), "k4a.auto_tilt.threshold", _config.k4a.auto_tilt.threshold,
-	   0.0f, 5.0f, 1.0f);
-  }
+  // if (_config.k4a.auto_tilt.enabled) {
+  //   slider(id(), "k4a.auto_tilt.lerp_factor", _config.k4a.auto_tilt.lerp_factor,
+  // 	   0.0f, 1.0f, 0.025f);
+  //   slider(id(), "k4a.auto_tilt.threshold", _config.k4a.auto_tilt.threshold,
+  // 	   0.0f, 5.0f, 1.0f);
+  // }
 }
 
 std::string K4ADevice::get_serial_number(const std::size_t device_index) {

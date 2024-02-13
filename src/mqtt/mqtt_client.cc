@@ -2,6 +2,8 @@
 #include "../logger.h"
 #include "../publisher/publisher.h"
 #include "../publisher/publisher_utils.h"
+#include "../parameters.h"
+#include "../gui/widgets.h"
 #include <chrono>
 #include <fmt/format.h>
 #include <functional>
@@ -29,6 +31,7 @@ MqttClient::MqttClient(MqttClientConfiguration &config)
   set_uri(config.broker_uri);
   if (_config.auto_connect) connect();
   publisher::add(this);
+  declare_parameters("mqtt", _config);
 }
 
 MqttClient::~MqttClient() {
@@ -178,6 +181,13 @@ void MqttClient::send_messages(std::stop_token st) {
 }
 
 void MqttClient::draw_imgui_window() {
+
+  ImGui::Begin("MQTT", nullptr);
+  pc::gui::draw_parameters("mqtt", struct_parameters.at("mqtt"));
+  ImGui::End();
+
+  return;
+
   ImGui::SetNextWindowBgAlpha(0.8f);
   ImGui::Begin("MQTT", nullptr);
   ImGui::InputText("Broker hostname", &input_hostname);

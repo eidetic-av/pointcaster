@@ -1,4 +1,4 @@
-#include "sample_filter_operator.h"
+#include "sample_filter_operator.gen.h"
 #include "../gui/widgets.h"
 
 namespace pc::operators {

@@ -2,7 +2,7 @@
 
 #include "../structs.h"
 #include "../operators/session_operator_host.h"
-#include "device_config.h"
+#include "device_config.gen.h"
 #include <Magnum/Magnum.h>
 #include <Magnum/Math/Vector3.h>
 #include <string>

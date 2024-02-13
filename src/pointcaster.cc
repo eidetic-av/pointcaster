@@ -1,5 +1,7 @@
 #include <algorithm>
 #include <chrono>
+#include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -11,9 +13,6 @@
 #include <span>
 #include <thread>
 #include <vector>
-
-#include <filesystem>
-#include <fstream>
 
 #include <serdepp/adaptor/toml11.hpp>
 #include <serdepp/serde.hpp>
@@ -33,8 +32,8 @@
 #include "logger.h"
 #include "path.h"
 #include "pointer.h"
-#include "session.h"
 #include "structs.h"
+#include "session.gen.h"
 
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/GL/Context.h>
@@ -76,19 +75,16 @@
 #include "uuid.h"
 #include "wireframe_objects.h"
 #include "shaders/texture_display.h"
+#include "modes.h"
 
 // TODO these need to be removed when initialisation loop is made generic
 #include "devices/k4a/k4a_device.h"
 #include <k4a/k4a.h>
 
 #include "mqtt/mqtt_client.h"
-#include "mqtt/mqtt_client_config.h"
+#include "mqtt/mqtt_client_config.gen.h"
 
 #include "midi/midi_client.h"
-
-#if WITH_SKYBRIDGE
-#include "skybridge.h"
-#endif
 
 #include <tracy/Tracy.hpp>
 
@@ -150,7 +146,12 @@ protected:
   PointCasterSession _session;
   std::mutex _session_devices_mutex;
 
-  std::vector<std::jthread> _async_tasks;
+  Mode _current_mode{Mode::Normal};
+  std::array<char, modeline_buffer_size> _modeline_input =
+      std::array<char, modeline_buffer_size>({});
+
+  std::vector<std::jthread>
+      _async_tasks;
 
   std::unique_ptr<Scene3D> _scene;
   std::unique_ptr<SceneGraph::DrawableGroup3D> _drawable_group;
@@ -182,6 +183,7 @@ protected:
 
   ImFont *_font;
   ImFont *_mono_font;
+  ImFont *_icon_font;
 
   /* Spheres rendering */
   GL::Mesh _sphere_mesh{NoCreate};
@@ -208,6 +210,7 @@ protected:
   void draw_camera_control_windows();
   void draw_devices_window();
   void draw_onscreen_log();
+  void draw_modeline();
 
   Vector2i _restore_window_size;
   Vector2i _restore_window_position;
@@ -223,8 +226,12 @@ protected:
 
   void drawEvent() override;
   void viewportEvent(ViewportEvent &event) override;
+
   void keyPressEvent(KeyEvent &event) override;
   void keyReleaseEvent(KeyEvent &event) override;
+
+  void find_mode_keypress(KeyEvent &event);
+
   void textInputEvent(TextInputEvent &event) override;
   void mousePressEvent(MouseEvent &event) override;
   void mouseReleaseEvent(MouseEvent &event) override;
@@ -272,14 +279,10 @@ PointCaster::PointCaster(const Arguments &args)
 
   // Set up ImGui
   ImGui::CreateContext();
+  pc::gui::init_parameter_styles();
+
   // Don't save imgui layout to a file, handle it manually
   ImGui::GetIO().IniFilename = nullptr;
-
-  ImGui::StyleColorsDark();
-
-#if WITH_SKYBRIDGE
-  /* skybridge::initConnection(); */
-#endif
 
   const auto size = Vector2(windowSize()) / dpiScaling();
 
@@ -289,7 +292,7 @@ PointCaster::PointCaster(const Arguments &args)
   auto font = rs.getRaw("AtkinsonHyperlegibleRegular");
   ImFontConfig font_config;
   font_config.FontDataOwnedByAtlas = false;
-  const auto font_size = 14.5f;
+  constexpr auto font_size = 16.0f;
   _font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(font.data()), font.size(),
       font_size * framebufferSize().x() / size.x(), &font_config);
@@ -308,12 +311,12 @@ PointCaster::PointCaster(const Arguments &args)
   icons_config.MergeMode = true;
   icons_config.PixelSnapH = true;
   icons_config.FontDataOwnedByAtlas = false;
-  const auto icon_font_size = font_size * 2.0f / 3.0f;
+  const auto icon_font_size = 13.0f;
   icons_config.GlyphMinAdvanceX = icon_font_size;
   const auto icon_font_size_pixels =
-      font_size * framebufferSize().x() / size.x();
+      icon_font_size * framebufferSize().x() / size.x();
 
-  ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+  _icon_font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(font_icons.data()), font_icons.size(),
       icon_font_size_pixels, &icons_config, icons_ranges);
 
@@ -321,6 +324,9 @@ PointCaster::PointCaster(const Arguments &args)
   ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
   // ImGui::GetIO().ConfigFlags |= ImGuiDockNodeFlags_PassthruCentralNode;
   // ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
+  // enable keyboard tab & arrows navigation
+  ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
   // for editing parameters with the keyboard
   auto backspace = ImGui::GetIO().KeyMap[ImGuiKey_Backspace];
@@ -358,7 +364,7 @@ PointCaster::PointCaster(const Arguments &args)
 #ifndef WIN32
   const auto fetch_usb_config = [this] {
     std::lock_guard lock(this->_usb_config_mutex);
-    return this->_session.usb;
+    return this->_session.usb.value();
   };
   _usb_monitor = std::make_unique<UsbMonitor>(fetch_usb_config, fetch_session_devices);
 #endif
@@ -399,6 +405,12 @@ PointCaster::PointCaster(const Arguments &args)
     _camera_controllers.push_back(std::move(_default_camera_controller));
   }
 
+  // if there is no usb configuration, initialise a default
+  if (!_session.usb.has_value()) {
+    _session.usb = pc::devices::UsbConfiguration{};
+  }
+  declare_parameters("usb", _session.usb.value());
+
   const auto viewport_size = GL::defaultFramebuffer.viewport().size();
 
   GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
@@ -428,8 +440,9 @@ PointCaster::PointCaster(const Arguments &args)
           Matrix4::translation(start_pos) * Matrix4::scaling(joint_size);
       _sphere_instance_data[i].normalMatrix =
           _sphere_instance_data[i].transformationMatrix.normalMatrix();
-      _sphere_instance_data[i].color = Color3{
-          Vector3(std::rand(), std::rand(), std::rand()) / Float(RAND_MAX)};
+      _sphere_instance_data[i].color =
+	  Color3{Vector3(std::rand(), std::rand(), std::rand()) /
+		 Magnum::Float(RAND_MAX)};
     }
 
     _sphere_shader =
@@ -452,9 +465,20 @@ PointCaster::PointCaster(const Arguments &args)
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  _radio = std::make_unique<Radio>(_session.radio, *_session_operator_host);
-  _mqtt = std::make_unique<MqttClient>(_session.mqtt);
-  _midi = std::make_unique<MidiClient>(_session.midi);
+  if (!_session.radio.has_value()) {
+    _session.radio = RadioConfiguration {};
+  }
+  _radio = std::make_unique<Radio>(*_session.radio, *_session_operator_host);
+
+  if (!_session.mqtt.has_value()) {
+    _session.mqtt = MqttClientConfiguration{};
+  }
+  _mqtt = std::make_unique<MqttClient>(*_session.mqtt);
+
+  if (!_session.midi.has_value()) {
+    _session.midi = MidiClientConfiguration{};
+  }
+  _midi = std::make_unique<MidiClient>(*_session.midi);
 
   _snapshots_context = std::make_unique<Snapshots>();
 
@@ -524,19 +548,61 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   std::ofstream layout_file(layout_file_path, std::ios::binary);
   layout_file.write(layout_data.data(), layout_data.size());
 
-  // save device configurations
-  _session.devices.clear();
+  auto output_session = _session;
+
+  output_session.devices.clear();
   for (auto &device : Device::attached_devices) {
-    _session.devices.emplace(device->id(), device->config());
+    output_session.devices.emplace(device->id(), device->config());
   }
 
-  // save camera configurations
-  _session.cameras.clear();
+  const auto uninitialized_or_default = [](auto &optional_obj) {
+    if (!optional_obj.has_value()) {
+      return true;
+    }
+    using T = typename std::decay<decltype(optional_obj.value())>::type;
+    const auto type_info = serde::type_info<T>;
+    const auto index_sequence = std::make_index_sequence<T::MemberCount>{};
+
+    const auto is_default_member = [&](auto index) {
+      auto &member_ref = type_info.template member<decltype(index)::value>(
+          optional_obj.value());
+      return member_ref == std::get<index>(T::Defaults);
+    };
+
+    return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+      return (... &&
+              is_default_member(std::integral_constant<std::size_t, Is>{}));
+    }(index_sequence);
+  };
+
+  // remove the value from any optional configuration structures that are
+  // uninitialised or default. to not store unneeded values in our save file
+
+  if (uninitialized_or_default(output_session.radio)) {
+    output_session.radio.reset();
+  }
+  if (uninitialized_or_default(output_session.usb)) {
+    output_session.usb.reset();
+  }
+  if (uninitialized_or_default(output_session.mqtt)) {
+    output_session.mqtt.reset();
+  }
+  if (uninitialized_or_default(output_session.midi)) {
+    output_session.midi.reset();
+  }
+
+  output_session.cameras.clear();
   for (auto &camera : _camera_controllers) {
-    _session.cameras.emplace(camera->name(), camera->config());
+    auto config = camera->config();
+    config.name = {};
+    config.id = {};
+    config.show_window = true;
+    if (!config.empty()) {
+      output_session.cameras.emplace(camera->name(), camera->config());
+    }
   }
 
-  auto session_toml = serde::serialize<toml::value>(_session);
+  auto session_toml = serde::serialize<serde::toml_v>(output_session);
   std::ofstream(file_path, std::ios::binary) << toml::format(session_toml);
 }
 
@@ -551,13 +617,12 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   }
 
   try {
-  toml::value file_toml = toml::parse(file);
-  _session = serde::deserialize<PointCasterSession>(file_toml);
-  }
-  catch (const toml::syntax_error& e) {
-      pc::logger->warn("Failed to parse config file toml");
-      pc::logger->warn(e.what());
-      return;
+    toml::value file_toml = toml::parse(file);
+    _session = serde::deserialize<PointCasterSession>(file_toml);
+  } catch (const toml::syntax_error &e) {
+    pc::logger->warn("Failed to parse config file toml");
+    pc::logger->warn(e.what());
+    return;
   }
 
   // check if there is an adjacent .layout file
@@ -589,8 +654,11 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     _camera_controllers.push_back(std::move(saved_camera));
   }
 
-  if (_session.usb.open_on_launch) {
-    pc::logger->info(_session.devices.size());
+  if (!_session.usb.has_value()) {
+    _session.usb = UsbConfiguration {};
+  }
+
+  if ((*_session.usb).open_on_launch) {
     if (_session.devices.empty()) {
       open_kinect_sensors();
     } else {
@@ -599,7 +667,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
 	for (auto &[device_id, device_config] : _session.devices) {
 	  pc::logger->info("Loading device '{}' from config file", device_id);
 	  load_device(device_config, device_id);
-        }
+	}
       });
     }
   }
@@ -728,7 +796,9 @@ void PointCaster::draw_menu_bar() {
       window_item("Global Transform", "g", _session.layout.show_global_transform_window);
       window_item("Devices", "d", _session.layout.show_devices_window);
       window_item("RenderStats", "f", _session.layout.show_stats);
-      window_item("MQTT", "m", _session.mqtt.show_window);
+      // if (_session.mqtt.has_value()) {
+      // 	window_item("MQTT", "m", (*_session.mqtt).show_window : false);
+      // }
 
       ImGui::EndMenu();
     }
@@ -842,6 +912,66 @@ void PointCaster::draw_onscreen_log() {
     ImGui::End();
     ImGui::PopFont();
     ImGui::PopStyleVar();
+  }
+}
+
+void PointCaster::draw_modeline() {
+  constexpr auto modeline_height = 20;
+  constexpr auto modeline_color = catpuccin::mocha_crust;
+
+  ImGui::PushID("modeline");
+
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, modeline_color);
+  ImGui::PushStyleColor(ImGuiCol_Border, modeline_color);
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0, 0});
+
+  const auto viewport_size = ImGui::GetMainViewport()->Size;
+  const ImVec2 modeline_size{viewport_size.x, modeline_height};
+  const ImVec2 modeline_min {0, viewport_size.y - modeline_size.y};
+  const ImVec2 modeline_max {viewport_size.x, viewport_size.y};
+
+  ImGui::SetNextWindowPos(modeline_min);
+  ImGui::SetNextWindowSize(modeline_size);
+
+  auto window_flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings;
+  if (_current_mode != Mode::Find) window_flags |= ImGuiWindowFlags_NoInputs;
+
+  ImGui::Begin("modeline", nullptr, window_flags);
+
+  if (_current_mode == Mode::Find) {
+    ImGui::Text("/");
+    ImGui::SameLine();
+    ImGui::SetKeyboardFocusHere();
+
+    if (ImGui::InputText("##modeline.find", _modeline_input.data(),
+			 modeline_buffer_size)) {
+    };
+  }
+
+  ImGui::End();
+
+  ImGui::PopStyleVar();
+  ImGui::PopStyleVar();
+
+  ImGui::PopStyleColor();
+  ImGui::PopStyleColor();
+
+  ImGui::PopID();;
+}
+
+void PointCaster::find_mode_keypress(KeyEvent &event) {
+  const auto &key = event.key();
+  if (key == KeyEvent::Key::Enter) {
+    _current_mode = Mode::NavigateMatch;
+    _modeline_input.fill({});
+  } else if (key == KeyEvent::Key::Esc) {
+    _current_mode = Mode::Normal;
+    _modeline_input.fill({});
+  } else if (_imgui_context.handleKeyPressEvent(event)) {
+    event.setAccepted(true);
   }
 }
 
@@ -995,7 +1125,7 @@ void PointCaster::draw_main_viewport() {
 	  }
 
           if (!_session.layout.hide_ui) {
-            draw_viewport_controls(*camera_controller);
+            // draw_viewport_controls(*camera_controller);
 	    if (_session.layout.show_log) {
 	      draw_onscreen_log();
 	    }
@@ -1045,22 +1175,30 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
       ImGui::PushStyleColor(ImGuiCol_Button, toggled_color);
     }
 
-    if (ImGui::Button(content, button_size)) action();
+    if (ImGui::Button(content, button_size))
+      action();
 
-    if (toggled) ImGui::PopStyleColor();
+    if (toggled)
+      ImGui::PopStyleColor();
 
     ImGui::PopStyleVar();
   };
 
+  ImGui::PushFont(_icon_font);
+
   draw_button(ICON_FA_SLIDERS, [&] {
     camera_config.show_window = !camera_config.show_window;
    }, camera_config.show_window);
+
+  ImGui::Dummy({0, 7});
 
   draw_button(ICON_FA_ENVELOPE, [&] {
     if (camera_config.rendering.scale_mode == (int)ScaleMode::Span)
       camera_config.rendering.scale_mode = (int)ScaleMode::Letterbox;
     else camera_config.rendering.scale_mode = (int)ScaleMode::Span;
   }, camera_config.rendering.scale_mode == (int)ScaleMode::Letterbox);
+
+  ImGui::PopFont();
 
   ImGui::SetWindowPos({viewport_window_pos.x + control_inset.x,
 		       viewport_window_pos.y + control_inset.y});
@@ -1088,25 +1226,50 @@ void PointCaster::draw_devices_window() {
   {
 
 #ifndef WIN32
-    auto &usb = _session.usb;
-    std::lock_guard lock(_usb_config_mutex);
-
-    ImGui::Checkbox("Open on launch", &usb.open_on_launch);
-    ImGui::Checkbox("Open on hotplug", &usb.open_on_hotplug);
+    {
+      std::lock_guard lock(_usb_config_mutex);
+      pc::gui::draw_parameters("usb", struct_parameters.at("usb"));
+    }
 #endif
-
-    if (ImGui::Button("Open")) open_kinect_sensors();
+    ImGui::Dummy({0, 4});
+    ImGui::Dummy({10, 0});
     ImGui::SameLine();
-    if (ImGui::Button("Close")) Device::attached_devices.clear();
+    if (ImGui::Button("Open")) {
+      open_kinect_sensors();
+    }
+    ImGui::SameLine();
+    ImGui::Dummy({4, 0});
+    ImGui::SameLine();
+    if (ImGui::Button("Close")) {
+      Device::attached_devices.clear();
+    }
+    ImGui::Dummy({0, 12});
   }
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
+  
   for (auto &device : Device::attached_devices) {
-    device->draw_imgui_controls();
+    auto& config = device->config();
+    ImGui::SetNextItemOpen(config.unfolded);
+    if (ImGui::CollapsingHeader(device->name.c_str())) {
+      config.unfolded = true;
+      ImGui::Dummy({0, 8});
+      ImGui::Dummy({8, 0});
+      ImGui::SameLine();
+      ImGui::TextDisabled("%s", device->id().c_str());
+      ImGui::Dummy({0, 6});
+      device->draw_imgui_controls();
+    } else {
+      config.unfolded = false;
+    }
   }
   ImGui::PopItemWidth();
 
-  if (loading_device) ImGui::TextDisabled("Loading device...");
+  if (loading_device) {
+    ImGui::Dummy({8, 0});
+    ImGui::SameLine();
+    ImGui::TextDisabled("Loading device...");
+  }
 
   ImGui::End();
 }
@@ -1188,7 +1351,7 @@ void PointCaster::drawEvent() {
   render_cameras();
 
   _imgui_context.newFrame();
-  pc::gui::begin_gui_helpers();
+  pc::gui::begin_gui_helpers(_current_mode, _modeline_input);
 
   // Enable text input, if needed/
   if (ImGui::GetIO().WantTextInput && !isTextInputActive())
@@ -1215,10 +1378,13 @@ void PointCaster::drawEvent() {
       _snapshots_context->draw_imgui_window();
     if (_session.layout.show_global_transform_window)
       _session_operator_host->draw_imgui_window();
-    if (_session.mqtt.show_window)
+
+    if (_session.mqtt.has_value() && (*_session.mqtt).show_window)
       _mqtt->draw_imgui_window();
-    if (_session.midi.show_window)
+    if (_session.midi.has_value() && (*_session.midi).show_window)
       _midi->draw_imgui_window();
+
+    draw_modeline();
   }
 
   _imgui_context.updateApplicationCursor(*this);
@@ -1327,6 +1493,22 @@ void CameraDisplayWindow::viewportEvent(ViewportEvent &event) {
 }
 
 void PointCaster::keyPressEvent(KeyEvent &event) {
+
+  if (_current_mode == Mode::Find) {
+    find_mode_keypress(event);
+    if (_imgui_context.handleKeyPressEvent(event))
+      event.setAccepted(true);
+    return;
+  }
+  if (_current_mode != Mode::Normal && event.key() == KeyEvent::Key::Esc) {
+    _current_mode = Mode::Normal;
+    return;
+  } else if (_current_mode == Mode::Normal &&
+	     event.key() == KeyEvent::Key::Slash) {
+    _current_mode = Mode::Find;
+    return;
+  }
+
   switch (event.key()) {
   case KeyEvent::Key::C: {
     CameraController &active_camera_controller =
@@ -1355,9 +1537,15 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   }
   case KeyEvent::Key::M: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
-      _session.mqtt.show_window = !_session.mqtt.show_window;
+      if (_session.mqtt.has_value()) {
+	auto& mqtt_conf = _session.mqtt.value();
+        mqtt_conf.show_window = !mqtt_conf.show_window;
+      }
     } else {
-      _session.midi.show_window = !_session.midi.show_window;
+      if (_session.midi.has_value()) {
+	auto& midi_conf = _session.midi.value();
+        midi_conf.show_window = !midi_conf.show_window;
+      }
     }
     break;
   }
@@ -1453,7 +1641,7 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
 
   auto& camera_controller = _interacting_camera_controller->get();
 
-  const Float delta = event.offset().y();
+  const Magnum::Float delta = event.offset().y();
   if (Math::abs(delta) < 1.0e-2f) return;
 
   camera_controller.dolly(event);

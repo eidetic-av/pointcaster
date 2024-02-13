@@ -1,5 +1,5 @@
 #include "../structs.h"
-#include "rotate_operator.h"
+#include "rotate_operator.gen.h"
 #include <thrust/functional.h>
 #include <Eigen/Geometry>
 

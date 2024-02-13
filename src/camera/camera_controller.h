@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../analysis/analyser_2d.h"
-#include "camera_config.h"
+#include "camera_config.gen.h"
 #include <Magnum/GL/Framebuffer.h>
 #include <Magnum/GL/Renderbuffer.h>
 #include <Magnum/GL/RenderbufferFormat.h>

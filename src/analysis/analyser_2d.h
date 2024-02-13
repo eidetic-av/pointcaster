@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../gui/overlay_text.h"
-#include "analyser_2d_config.h"
+#include "analyser_2d_config.gen.h"
 #include <Magnum/GL/Texture.h>
 #include <Magnum/Image.h>
 #include <Magnum/Magnum.h>
@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <opencv2/opencv.hpp>
 #include <thread>
+#include <optional>
 
 namespace pc::analysis {
 

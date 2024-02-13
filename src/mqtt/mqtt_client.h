@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../publisher/publishable_traits.h"
-#include "mqtt_client_config.h"
+#include "mqtt_client_config.gen.h"
 #include <atomic>
 #include <concurrentqueue/blockingconcurrentqueue.h>
 #include <expected>

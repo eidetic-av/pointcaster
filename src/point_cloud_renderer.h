@@ -1,6 +1,6 @@
 #pragma once
 
-#include "point_cloud_renderer_config.h"
+#include "point_cloud_renderer_config.gen.h"
 #include "shaders/particle_sphere.h"
 #include "structs.h"
 #include <Corrade/Containers/Pointer.h>

@@ -1,5 +1,5 @@
 #include "../structs.h"
-#include "rake_operator.h"
+#include "rake_operator.gen.h"
 #include <thrust/functional.h>
 #include <Eigen/Geometry>
 

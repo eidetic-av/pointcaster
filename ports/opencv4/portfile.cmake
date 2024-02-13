@@ -372,6 +372,9 @@ if("contrib" IN_LIST FEATURES)
   endif()
 endif()
 
+set(CPU_BASELINE "AVX2" CACHE STRING "Set baseline CPU features")
+set(CPU_DISPATCH "AVX2;AVX512" CACHE STRING "Set dispatched CPU features")
+
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -443,17 +446,18 @@ vcpkg_cmake_configure(
         ###### customized properties
         ## Options from vcpkg_check_features()
         ${FEATURE_OPTIONS}
-        -DWITH_GTK=${WITH_GTK}
-        -DWITH_QT=${WITH_QT}
-        -DWITH_IPP=${WITH_IPP}
+        ###### Pointcaster specific build features
+        -DWITH_GTK=OFF
+        -DWITH_QT=OFF
+        -DWITH_IPP=OFF
         -DWITH_MATLAB=OFF
-        -DWITH_MSMF=${WITH_MSMF}
-        -DWITH_OPENMP=${WITH_OPENMP}
-        -DWITH_PROTOBUF=${BUILD_opencv_dnn}
-        -DWITH_PYTHON=${WITH_PYTHON}
+        -DWITH_MSMF=OFF
+        -DWITH_OPENMP=OFF
+        -DWITH_PROTOBUF=OFF
+        -DWITH_PYTHON=OFF
         -DWITH_OPENCLAMDBLAS=OFF
-        -DWITH_OPENVINO=${WITH_OPENVINO}
-        -DWITH_TBB=${WITH_TBB}
+        -DWITH_OPENVINO=OFF
+        -DWITH_TBB=OFF
         -DWITH_CPUFEATURES=OFF
         ###### BUILD_options (mainly modules which require additional libraries)
         -DBUILD_opencv_ovis=${BUILD_opencv_ovis}
@@ -464,26 +468,88 @@ vcpkg_cmake_configure(
         -DBUILD_opencv_gapi=${BUILD_opencv_gapi}
         ###### The following module is disabled because it's broken #https://github.com/opencv/opencv_contrib/issues/2307
         -DBUILD_opencv_rgbd=OFF
+        ###### Pointcaster specific contrib features
+        -DBUILD_opencv_alphamat=OFF
+        -DBUILD_opencv_aruco=OFF
+        -DBUILD_opencv_bgsegm=OFF
+        -DBUILD_opencv_bioinspired=OFF
+        -DBUILD_opencv_ccalib=OFF
+        -DBUILD_opencv_cnn_3dobj=OFF
+        -DBUILD_opencv_cvv=OFF
+        -DBUILD_opencv_datasets=OFF
+        -DBUILD_opencv_dnn_objdetect=OFF
+        -DBUILD_opencv_dnn_superres=OFF
+        -DBUILD_opencv_dnns_easily_fooled=OFF
+        -DBUILD_opencv_dpm=OFF
+        -DBUILD_opencv_face=OFF
+        -DBUILD_opencv_freetype=OFF
+        -DBUILD_opencv_fuzzy=OFF
+        -DBUILD_opencv_hdf=OFF
+        -DBUILD_opencv_hfs=OFF
+        -DBUILD_opencv_img_hash=OFF
+        -DBUILD_opencv_intensity_transform=OFF
+        -DBUILD_opencv_julia=OFF
+        -DBUILD_opencv_line_descriptor=OFF
+        -DBUILD_opencv_matlab=OFF
+        -DBUILD_opencv_mcc=OFF
+        -DBUILD_opencv_optflow=ON
+        -DBUILD_opencv_ovis=OFF
+        -DBUILD_opencv_phase_unwrapping=OFF
+        -DBUILD_opencv_plot=OFF
+        -DBUILD_opencv_quality=OFF
+        -DBUILD_opencv_rapid=OFF
+        -DBUILD_opencv_reg=OFF
+        -DBUILD_opencv_rgbd=OFF
+        -DBUILD_opencv_saliency=OFF
+        -DBUILD_opencv_signal=OFF
+        -DBUILD_opencv_sfm=OFF
+        -DBUILD_opencv_shape=OFF
+        -DBUILD_opencv_stereo=OFF
+        -DBUILD_opencv_structured_light=OFF
+        -DBUILD_opencv_superres=OFF
+        -DBUILD_opencv_surface_matching=OFF
+        -DBUILD_opencv_text=OFF
+        -DBUILD_opencv_tracking=OFF
+        -DBUILD_opencv_videostab=OFF
+        -DBUILD_opencv_viz=OFF
+        -DBUILD_opencv_wechat_qrcode=OFF
+        -DBUILD_opencv_xfeatures2d=OFF
+        -DBUILD_opencv_ximgproc=ON
+        -DBUILD_opencv_xobjdetect=OFF
+        -DBUILD_opencv_xphoto=OFF
+        ###### CUDA contrib build flags for Pointcaster
+        -DBUILD_opencv_cudaarithm=ON
+        -DBUILD_opencv_cudabgsegm=OFF
+        -DBUILD_opencv_cudacodec=OFF
+        -DBUILD_opencv_cudafeatures2d=ON
+        -DBUILD_opencv_cudafilters=ON
+        -DBUILD_opencv_cudaimgproc=ON
+        -DBUILD_opencv_cudalegacy=OFF
+        -DBUILD_opencv_cudaobjdetect=OFF
+        -DBUILD_opencv_cudaoptflow=ON
+        -DBUILD_opencv_cudastereo=OFF
+        -DBUILD_opencv_cudawarping=ON
+        -DBUILD_opencv_cudev=ON
         ###### Additional build flags
         ${ADDITIONAL_BUILD_FLAGS}
         -DBUILD_IPP_IW=${WITH_IPP}
         -DOPENCV_LAPACK_FIND_PACKAGE_ONLY=ON
         -DCUDA_HOST_COMPILER=$ENV{CUDA_HOST_COMPILER}
-)
+        )
 
-vcpkg_cmake_install()
-vcpkg_cmake_config_fixup()
-vcpkg_copy_pdbs()
+      vcpkg_cmake_install()
+      vcpkg_cmake_config_fixup()
+      vcpkg_copy_pdbs()
 
-if (NOT VCPKG_BUILD_TYPE)
-  # Update debug paths for libs in Android builds (e.g. sdk/native/staticlibs/armeabi-v7a)
-  vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/share/opencv4/OpenCVModules-debug.cmake"
-      "\${_IMPORT_PREFIX}/sdk"
-      "\${_IMPORT_PREFIX}/debug/sdk"
-  )
-endif()
+      if (NOT VCPKG_BUILD_TYPE)
+        # Update debug paths for libs in Android builds (e.g. sdk/native/staticlibs/armeabi-v7a)
+        vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/share/opencv4/OpenCVModules-debug.cmake"
+          "\${_IMPORT_PREFIX}/sdk"
+          "\${_IMPORT_PREFIX}/debug/sdk"
+          )
+      endif()
 
-  file(READ "${CURRENT_PACKAGES_DIR}/share/opencv4/OpenCVModules.cmake" OPENCV_MODULES)
+      file(READ "${CURRENT_PACKAGES_DIR}/share/opencv4/OpenCVModules.cmake" OPENCV_MODULES)
   set(DEPS_STRING "include(CMakeFindDependencyMacro)
 if(${BUILD_opencv_dnn})
   find_dependency(Protobuf CONFIG REQUIRED)

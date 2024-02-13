@@ -1,24 +1,16 @@
 #pragma once
 #include "../serialization.h"
-#include "operator_types.h"
+#include "operator.h"
 
 namespace pc::operators {
 
-struct RotateOperatorConfiguration {
+using pc::types::Float3;
 
+struct RotateOperatorConfiguration {
+  std::string id;
   bool unfolded = false;
   bool enabled = true;
-  pc::types::Float3 euler_angles{0, 0, 0};
-
-  DERIVE_SERDE(RotateOperatorConfiguration,
-	       (&Self::unfolded, "unfolded")
-	       (&Self::enabled, "enabled")
-	       (&Self::euler_angles, "euler_angles"))
-
-  using MemberTypes = pc::reflect::type_list<bool, bool, pc::types::Float3>;
-  static const std::size_t MemberCount = 3;
-  
-  static constexpr const char* Name = "Rotate";
+  Float3 euler_angles;
 };
 
 struct RotateOperator : public thrust::unary_function<indexed_point_t, indexed_point_t> {

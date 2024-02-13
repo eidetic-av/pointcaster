@@ -44,7 +44,9 @@ int startNetworkThread(const char *point_caster_address, int timeout_ms) {
 	constexpr auto recv_timeout_ms = 1000;
 	dish.set(zmq::sockopt::rcvtimeo, recv_timeout_ms);
 
-        auto endpoint = fmt::format("tcp://{}", point_caster_address);
+        //auto endpoint = fmt::format("tcp://{}", point_caster_address);
+	      auto endpoint = "tcp://127.0.0.1:9999";
+	      // auto endpoint = "tcp://192.168.2.200:9999";
         log(fmt::format("Attempting to connect to '{}'", endpoint));
         dish.connect(endpoint);
 
@@ -132,7 +134,6 @@ bob::types::color *pointColors() { return point_cloud.colors.data(); }
 }
 
 void testLoop() {
-  startNetworkThread();
   int i = 0;
   while (i++ < 6000) {
     using namespace std::chrono_literals;
@@ -147,12 +148,14 @@ void testLoop() {
     // auto o = buffer[200];
     // log(fmt::format("x {}, y {}, z {}, p {}", o.x, o.y, o.z, o.__pad));
   }
-  stopNetworkThread();
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+  if (argc < 2) startNetworkThread();
+  else startNetworkThread(argv[1]);
   for (int i = 0; i < 3; i++) {
     testLoop();
   }
+  stopNetworkThread();
   return 0;
 }

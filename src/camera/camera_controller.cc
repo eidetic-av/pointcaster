@@ -1,11 +1,7 @@
 #include "camera_controller.h"
-#include "../analysis/analyser_2d_config.h"
-#include "../gui/widgets.h"
-#include "../logger.h"
-#include "../math.h"
 #include "../parameters.h"
 #include "../uuid.h"
-#include "camera_config.h"
+#include "../gui/widgets.h"
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/ArrayView.h>
 #include <Magnum/GL/Buffer.h>
@@ -23,15 +19,8 @@
 #include <Magnum/Math/Vector3.h>
 #include <Magnum/PixelFormat.h>
 #include <Magnum/Trade/ImageData.h>
-#include <algorithm>
-#include <numbers>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgproc.hpp>
-#include <vector>
-
-#if WITH_MQTT
-#include "../mqtt/mqtt_client.h"
-#endif
 
 namespace pc::camera {
 
@@ -302,7 +291,7 @@ CameraController::unproject(const Magnum::Vector2i &window_position,
   return _camera->projectionMatrix().inverted().transformPoint(in);
 }
 
-Float CameraController::depth_at(const Vector2i &window_position) {
+Magnum::Float CameraController::depth_at(const Vector2i &window_position) {
   const Vector2i position = window_position * Vector2{_app->framebufferSize()} /
                             Vector2{_app->windowSize()};
   const Vector2i fbPosition{position.x(),
@@ -315,221 +304,308 @@ Float CameraController::depth_at(const Vector2i &window_position) {
       Range2Di::fromSize(fbPosition, Vector2i{1}).padded(Vector2i{2}),
       {GL::PixelFormat::DepthComponent, GL::PixelType::Float});
 
-  return Math::min<Float>(data.pixels<Float>().asContiguous());
+  return Math::min<Magnum::Float>(data.pixels<Magnum::Float>().asContiguous());
 }
 
 void CameraController::draw_imgui_controls() {
 
-  using pc::gui::slider;
-  using pc::gui::vector_table;
+  if (pc::gui::draw_parameters(name(),
+                               struct_parameters.at(std::string{name()}))) {
+    reset_projection_matrix();
+  };
 
-  ImGui::SetNextItemOpen(_config.transform.unfolded);
-  if (ImGui::CollapsingHeader("Transform", _config.transform.unfolded)) {
-    _config.transform.unfolded = true;
+  // auto draw_current_group = true;
+  // std::string latest_group_id{name()};
+  // std::string latest_parent_group_id {};
+  // auto group_level = -1;
 
-    // ImGui::Checkbox("transform.show_anchor", &_config.transform.show_anchor);
+  // for (auto parameter_id : struct_parameters.at(name())) {
+  //   auto param = parameter_bindings.at(parameter_id);
 
-    vector_table(name(), "transform.translation", _config.transform.translation,
-		 -10.f, 10.f, 0.0f);
+  //   // ignore any vector parameter's individual elements,
+  //   // as they are drawn as a group instead.
+  //   // also ignore a select members that are not exposed to the gui
+  //   static constexpr std::array<std::string, 5> ignored_suffixes = {
+  // 	".x", ".y", ".z", ".w", ".show_window"};
+  //   if (pc::strings::ends_with_any(parameter_id, ignored_suffixes.begin(),
+  // 				   ignored_suffixes.end())) {
+  //     continue;
+  //   }
 
-    vector_table(name(), "transform.orbit", _config.transform.orbit, -360.f,
-                 360.f, 0.0f);
+  //   // the first parameter of a serializable struct is always
+  //   // "unfolded" -- so if we find one, we know to create a new
+  //   // partition in the gui for the parameter group
+  //   if (pc::strings::ends_with(parameter_id, ".unfolded")) {
+  //     // first group has no header
+  //     if (group_level == -1) {
+  // 	group_level++;
+  //       continue;
+  //     }
 
-    slider(name(), "transform.roll", _config.transform.roll, -360.f, 360.f,
-           0.0f);
+  //     auto group_id = pc::strings::remove_last_element(parameter_id);
+  //     auto parent_group_id = pc::strings::remove_last_element(group_id);
+  //     // pc::logger->debug("{}, {}, {}", group_id, parent_group_id, latest_group_id);
 
-    slider(name(), "scroll_precision", _config.scroll_precision, 1, 30, 1);
+  //     if (latest_group_id == parent_group_id) {
+  // 	group_level++;
+  //     } else if (latest_parent_group_id == parent_group_id) {
+  // 	// adjascent group
+  //     } else {
+  // 	group_level--;
+  //     }
 
-  } else {
-    _config.transform.unfolded = false;
-  }
+  //     if (group_level == 1) {
+  // 	auto &unfolded = std::get<BoolReference>(param.value).get();
+  // 	ImGui::SetNextItemOpen(unfolded);
+  // 	draw_current_group =
+  // 	    ImGui::CollapsingHeader(param.parent_struct_name.c_str());
+  // 	unfolded = draw_current_group;
+  //     } else if (group_level > 1) {
+  // 	draw_current_group = false;
+  //     }
 
-  ImGui::SetNextItemOpen(_config.rendering.unfolded);
-  if (ImGui::CollapsingHeader("Rendering")) {
-    _config.rendering.unfolded = true;
-    auto &rendering = _config.rendering;
+  //     latest_group_id = group_id;
+  //     latest_parent_group_id = parent_group_id;
 
-    auto current_scale_mode = rendering.scale_mode;
-    if (current_scale_mode == (int)ScaleMode::Letterbox) {
+  //     continue;
+  //   }
 
-      vector_table(name(), "rendering.resolution", rendering.resolution, 2,
-                   7680, pc::camera::defaults::rendering_resolution);
+  //   if (!draw_current_group) continue;
 
-    } else if (current_scale_mode == (int)ScaleMode::Span) {
-      // disable setting y resolution manually in span mode,
-      // it's inferred from the x resolution and window size
-      vector_table(name(), "rendering.resolution", rendering.resolution, 2,
-                   7680, pc::camera::defaults::rendering_resolution,
-                   {false, true});
-    }
+  //   std::visit(
+  //       [parameter_id, structure_name = name(), &param](auto &&ref) {
+  //         using T = std::decay_t<decltype(ref.get())>;
+  //         // bools are drawn as check boxes
+  //         if constexpr (std::is_same_v<T, bool>) {
+  //           ImGui::Checkbox(parameter_id.c_str(), &ref.get());
+  //         }
+  //         // floats and ints are drawn individually
+  //         else if constexpr (std::floating_point<T> || std::integral<T>) {
+  //           slider(parameter_id, ref.get(), std::get<T>(param.min),
+  //                  std::get<T>(param.max), std::get<T>(param.default_value));
+  //         }
+  //         // vector multi-parameters are drawn together
+  // 	  else if constexpr (is_float_vector_t<T>) {
+  //           vector_param(structure_name, parameter_id, ref.get(),
+  //                        std::get<float>(param.min), std::get<float>(param.max),
+  // 			 std::get<T>(param.default_value));
+  // 	  } else if constexpr (is_int_vector_t<T>) {
+  // 	    vector_param(structure_name, parameter_id, ref.get(),
+  // 			 std::get<int>(param.min), std::get<int>(param.max),
+  // 			 std::get<T>(param.default_value));
+  // 	  }
+  //       },
+  //       param.value);
+  // }
 
-    auto scale_mode_i = static_cast<int>(current_scale_mode);
-    const char *options[] = {"Span", "Letterbox"};
-    ImGui::Combo("Scale mode", &scale_mode_i, options,
-                 static_cast<int>(ScaleMode::Count));
-    rendering.scale_mode = scale_mode_i;
-    if (rendering.scale_mode != current_scale_mode) {
-      const auto aspect_ratio_policy =
-	rendering.scale_mode == (int)ScaleMode::Letterbox
-              ? SceneGraph::AspectRatioPolicy::NotPreserved
-              : SceneGraph::AspectRatioPolicy::Extend;
-      _camera->setAspectRatioPolicy(aspect_ratio_policy);
-    }
-    ImGui::Spacing();
+  // return;
 
-    auto was_ortho = rendering.orthographic;
-    if (ImGui::Checkbox("rendering.orthographic", &rendering.orthographic)) {
-      MinMax<float> from;
-      MinMax<float> to;
-      if (was_ortho && !rendering.orthographic) {
-	from = defaults::orthographic_clipping;
-	to = defaults::perspective_clipping;
-      } else if (!was_ortho && rendering.orthographic) {
-	from = defaults::perspective_clipping;
-	to = defaults::orthographic_clipping;
-      }
-      rendering.clipping.min = math::remap(from.min, from.max, to.min, to.max,
-					   rendering.clipping.min);
-      rendering.clipping.max = math::remap(from.min, from.max, to.min, to.max,
-					   rendering.clipping.max);
-      reset_projection_matrix();
-    }
+  // ImGui::SetNextItemOpen(_config.transform.unfolded);
+  // if (ImGui::CollapsingHeader("Transform", _config.transform.unfolded)) {
+  //   _config.transform.unfolded = true;
 
-    ImGui::Spacing();
+  //   // ImGui::Checkbox("transform.show_anchor", &_config.transform.show_anchor);
 
-    auto clipping_minmax = rendering.orthographic
-                               ? defaults::orthographic_clipping
-                               : defaults::perspective_clipping;
+  //   vector_param(name(), "transform.translation", _config.transform.translation,
+  // 		 -10.f, 10.f, 0.0f);
 
-    if (slider(name(), "rendering.clipping.min", rendering.clipping.min,
-	       clipping_minmax.min, clipping_minmax.max, clipping_minmax.min)) {
-      reset_projection_matrix();
-    };
-    if (slider(name(), "rendering.clipping.max", rendering.clipping.max,
-	       clipping_minmax.min, clipping_minmax.max, clipping_minmax.max)) {
-      reset_projection_matrix();
-    };
+  //   vector_param(name(), "transform.orbit", _config.transform.orbit, -360.f,
+  // 		 360.f, 0.0f);
 
-    ImGui::Spacing();
+  //   // vector_param(name(), "transform.roll", _config.transform.roll, -360.f, 360.f, 0.0f);
 
-    ImGui::Checkbox("rendering.ground_grid", &rendering.ground_grid);
-    ImGui::Checkbox("rendering.skeletons", &rendering.skeletons);
+  //   // vector_param(name(), "scroll_precision", _config.scroll_precision, 1, 30, 1);
 
-    slider(name(), "rendering.point_size", rendering.point_size, 0.0f, 0.01f,
-	   0.0015f);
+  // } else {
+  //   _config.transform.unfolded = false;
+  // }
 
-  } else {
-    _config.rendering.unfolded = false;
-  }
+  // ImGui::SetNextItemOpen(_config.rendering.unfolded);
+  // if (ImGui::CollapsingHeader("Rendering")) {
+  //   _config.rendering.unfolded = true;
+  //   auto &rendering = _config.rendering;
 
-  ImGui::SetNextItemOpen(_config.analysis.unfolded);
-  if (ImGui::CollapsingHeader("Analysis", _config.analysis.unfolded)) {
-    _config.analysis.unfolded = true;
+  //   auto current_scale_mode = rendering.scale_mode;
+  //   if (current_scale_mode == (int)ScaleMode::Letterbox) {
 
-    auto &analysis = _config.analysis;
-    ImGui::Checkbox("Enabled", &analysis.enabled);
-    if (analysis.enabled) {
-      ImGui::SameLine();
-      ImGui::Checkbox("analysis.use_cuda", &analysis.use_cuda);
+  //     vector_param(name(), "rendering.resolution", rendering.resolution, 2,
+  //                  7680, pc::camera::defaults::rendering_resolution);
 
-      vector_table(name(), "analysis.resolution", analysis.resolution, 2, 3840,
-                   pc::camera::defaults::analysis_resolution, {},
-                   {"width", "height"});
+  //   } else if (current_scale_mode == (int)ScaleMode::Span) {
+  //     // disable setting y resolution manually in span mode,
+  //     // it's inferred from the x resolution and window size
+  //     vector_param(name(), "rendering.resolution", rendering.resolution, 2,
+  //                  7680, pc::camera::defaults::rendering_resolution,
+  //                  {false, true});
+  //   }
 
-      vector_table(name(), "analysis.binary_threshold",
-                   analysis.binary_threshold, 1, 255, Int2{50, 255}, {},
-                   {"min", "max"});
+  //   auto scale_mode_i = static_cast<int>(current_scale_mode);
+  //   const char *options[] = {"Span", "Letterbox"};
+  //   ImGui::Combo("Scale mode", &scale_mode_i, options,
+  //                static_cast<int>(ScaleMode::Count));
+  //   rendering.scale_mode = scale_mode_i;
+  //   if (rendering.scale_mode != current_scale_mode) {
+  //     const auto aspect_ratio_policy =
+  // 	rendering.scale_mode == (int)ScaleMode::Letterbox
+  //             ? SceneGraph::AspectRatioPolicy::NotPreserved
+  //             : SceneGraph::AspectRatioPolicy::Extend;
+  //     _camera->setAspectRatioPolicy(aspect_ratio_policy);
+  //   }
+  //   ImGui::Spacing();
 
-      slider(name(), "analysis.blur_size", analysis.blur_size, 0, 40, 1);
+  //   auto was_ortho = rendering.orthographic;
+  //   if (ImGui::Checkbox("rendering.orthographic", &rendering.orthographic)) {
+  //     MinMax<float> from;
+  //     MinMax<float> to;
+  //     if (was_ortho && !rendering.orthographic) {
+  // 	from = defaults::orthographic_clipping;
+  // 	to = defaults::perspective_clipping;
+  //     } else if (!was_ortho && rendering.orthographic) {
+  // 	from = defaults::perspective_clipping;
+  // 	to = defaults::orthographic_clipping;
+  //     }
+  //     rendering.clipping.min = math::remap(from.min, from.max, to.min, to.max,
+  // 					   rendering.clipping.min);
+  //     rendering.clipping.max = math::remap(from.min, from.max, to.min, to.max,
+  // 					   rendering.clipping.max);
+  //     reset_projection_matrix();
+  //   }
 
-      auto &canny = analysis.canny;
-      ImGui::Checkbox("Canny edge detection", &canny.enabled);
-      if (canny.enabled) {
-	slider(name(), "analysis.canny.min_threshold", canny.min_threshold, 0,
-	       255, 100);
-	slider(name(), "analysis.canny.max_threshold", canny.max_threshold, 0,
-	       255, 255);
-	int aperture_in = (canny.aperture_size - 1) / 2;
-	slider(name(), "analysis.canny.aperture_size", aperture_in, 1, 3, 1);
-	canny.aperture_size = aperture_in * 2 + 1;
-      }
+  //   ImGui::Spacing();
 
-      if (gui::begin_tree_node("Contours", analysis.contours.unfolded)) {
-        auto &contours = analysis.contours;
+  //   auto clipping_minmax = rendering.orthographic
+  //                              ? defaults::orthographic_clipping
+  //                              : defaults::perspective_clipping;
 
-        ImGui::Checkbox("analysis.contours.draw", &contours.draw);
+  //   if (slider(name(), "rendering.clipping.min", rendering.clipping.min,
+  // 	       clipping_minmax.min, clipping_minmax.max, clipping_minmax.min)) {
+  //     reset_projection_matrix();
+  //   };
+  //   if (slider(name(), "rendering.clipping.max", rendering.clipping.max,
+  // 	       clipping_minmax.min, clipping_minmax.max, clipping_minmax.max)) {
+  //     reset_projection_matrix();
+  //   };
 
-        ImGui::Checkbox("analysis.contours.label", &contours.label);
-        ImGui::Spacing();
+  //   ImGui::Spacing();
 
-        ImGui::Checkbox("analysis.contours.simplify", &contours.simplify);
-        if (contours.simplify) {
-	  slider(name(), "analysis.contours.simplify_arc_scale",
-		 contours.simplify_arc_scale, 0.000001f, 0.15f, 0.01f);
-	  slider(name(), "analysis.contours.simplify_min_area",
-		 contours.simplify_min_area, 0.0001f, 2.0f, 0.0001f);
-        }
-        ImGui::Spacing();
+  //   ImGui::Checkbox("rendering.ground_grid", &rendering.ground_grid);
+  //   ImGui::Checkbox("rendering.skeletons", &rendering.skeletons);
 
-        ImGui::Checkbox("analysis.contours.publish", &contours.publish);
-        ImGui::Checkbox("analysis.contours.publish_centroids", &contours.publish_centroids);
-        ImGui::Spacing();
+  //   slider(name(), "rendering.point_size", rendering.point_size, 0.0f, 0.01f,
+  // 	   0.0015f);
 
-        ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
-        if (contours.triangulate.enabled) {
-          ImGui::Checkbox("analysis.contours.triangulate.draw",
-                          &contours.triangulate.draw);
-          ImGui::Checkbox("analysis.contours.triangulate.publish",
-                          &contours.triangulate.publish);
-	  slider(name(), "analysis.contours.triangulate.minimum_area",
-		 contours.triangulate.minimum_area, 0.0f, 0.02f, 0.0f);
-        }
-        ImGui::TreePop();
-      }
+  // } else {
+  //   _config.rendering.unfolded = false;
+  // }
 
-      if (gui::begin_tree_node("Optical Flow",
-                               analysis.optical_flow.unfolded)) {
-        auto &optical_flow = analysis.optical_flow;
-        ImGui::Checkbox("analysis.optical_flow.enabled", &optical_flow.enabled);
-        ImGui::Checkbox("analysis.optical_flow.draw", &optical_flow.draw);
-		ImGui::Checkbox("analysis.optical_flow.publish", &optical_flow.publish);
+  // ImGui::SetNextItemOpen(_config.analysis.unfolded);
+  // if (ImGui::CollapsingHeader("Analysis", _config.analysis.unfolded)) {
+  //   _config.analysis.unfolded = true;
 
-		slider(name(), "analysis.optical_flow.feature_point_count",
-			optical_flow.feature_point_count, 25, 1000, 250);
-		slider(name(), "analysis.optical_flow.feature_point_distance",
-			optical_flow.feature_point_distance, 0.001f, 30.0f, 10.0f);
+  //   auto &analysis = _config.analysis;
+  //   ImGui::Checkbox("Enabled", &analysis.enabled);
+  //   if (analysis.enabled) {
+  //     ImGui::SameLine();
+  //     ImGui::Checkbox("analysis.use_cuda", &analysis.use_cuda);
 
-		if (analysis.use_cuda) {
-			float quality_level =
-				optical_flow.cuda_feature_detector_quality_cutoff * 10.0f;
-			slider(name(), "analysis.optical_flow.quality_level", quality_level,
-				0.01f, 1.0f, 0.1f);
-			optical_flow.cuda_feature_detector_quality_cutoff =
-				quality_level / 10.0f;
-		}
-		slider(name(), "analysis.optical_flow.magnitude_scale",
-			optical_flow.magnitude_scale, 0.1f, 5.0f, 1.0f);
-		slider(name(), "analysis.optical_flow.magnitude_exponent",
-			optical_flow.magnitude_exponent, 0.001f, 2.5f, 1.0f);
-		slider(name(), "analysis.optical_flow.minimum_distance",
-			optical_flow.minimum_distance, 0.0f, 0.2f, 0.0f);
-		slider(name(), "analysis.optical_flow.maximum_distance",
-			optical_flow.maximum_distance, 0.0f, 0.8f, 0.8f);
+  //     vector_param(name(), "analysis.resolution", analysis.resolution, 2, 3840,
+  //                  pc::camera::defaults::analysis_resolution, {},
+  //                  {"width", "height"});
 
-        ImGui::TreePop();
-      }
+  //     vector_param(name(), "analysis.binary_threshold",
+  //                  analysis.binary_threshold, 1, 255, Int2{50, 255}, {},
+  //                  {"min", "max"});
 
-      if (gui::begin_tree_node("Output", analysis.output.unfolded)) {
-        vector_table(name(), "analysis.output.scale", analysis.output.scale,
-                     0.0f, 2.0f, 1.0f);
-        vector_table(name(), "analysis.output.offset", analysis.output.offset,
-                     -1.0f, 1.0f, 0.0f);
-        ImGui::TreePop();
-      }
-    }
-  } else {
-    _config.analysis.unfolded = false;
-  }
+  //     slider(name(), "analysis.blur_size", analysis.blur_size, 0, 40, 1);
+
+  //     auto &canny = analysis.canny;
+  //     ImGui::Checkbox("Canny edge detection", &canny.enabled);
+  //     if (canny.enabled) {
+  // 	slider(name(), "analysis.canny.min_threshold", canny.min_threshold, 0,
+  // 	       255, 100);
+  // 	slider(name(), "analysis.canny.max_threshold", canny.max_threshold, 0,
+  // 	       255, 255);
+  // 	int aperture_in = (canny.aperture_size - 1) / 2;
+  // 	slider(name(), "analysis.canny.aperture_size", aperture_in, 1, 3, 1);
+  // 	canny.aperture_size = aperture_in * 2 + 1;
+  //     }
+
+  //     if (gui::begin_tree_node("Contours", analysis.contours.unfolded)) {
+  //       auto &contours = analysis.contours;
+
+  //       ImGui::Checkbox("analysis.contours.draw", &contours.draw);
+
+  //       ImGui::Checkbox("analysis.contours.label", &contours.label);
+  //       ImGui::Spacing();
+
+  //       ImGui::Checkbox("analysis.contours.simplify", &contours.simplify);
+  //       if (contours.simplify) {
+  // 	  slider(name(), "analysis.contours.simplify_arc_scale",
+  // 		 contours.simplify_arc_scale, 0.000001f, 0.15f, 0.01f);
+  // 	  slider(name(), "analysis.contours.simplify_min_area",
+  // 		 contours.simplify_min_area, 0.0001f, 2.0f, 0.0001f);
+  //       }
+  //       ImGui::Spacing();
+
+  //       ImGui::Checkbox("analysis.contours.publish", &contours.publish);
+  //       ImGui::Checkbox("analysis.contours.publish_centroids", &contours.publish_centroids);
+  //       ImGui::Spacing();
+
+  //       ImGui::Checkbox("Triangulate", &contours.triangulate.enabled);
+  //       if (contours.triangulate.enabled) {
+  //         ImGui::Checkbox("analysis.contours.triangulate.draw",
+  //                         &contours.triangulate.draw);
+  //         ImGui::Checkbox("analysis.contours.triangulate.publish",
+  //                         &contours.triangulate.publish);
+  // 	  slider(name(), "analysis.contours.triangulate.minimum_area",
+  // 		 contours.triangulate.minimum_area, 0.0f, 0.02f, 0.0f);
+  //       }
+  //       ImGui::TreePop();
+  //     }
+
+  //     if (gui::begin_tree_node("Optical Flow",
+  //                              analysis.optical_flow.unfolded)) {
+  //       auto &optical_flow = analysis.optical_flow;
+  //       ImGui::Checkbox("analysis.optical_flow.enabled", &optical_flow.enabled);
+  //       ImGui::Checkbox("analysis.optical_flow.draw", &optical_flow.draw);
+  // 		ImGui::Checkbox("analysis.optical_flow.publish", &optical_flow.publish);
+
+  // 		slider(name(), "analysis.optical_flow.feature_point_count",
+  // 			optical_flow.feature_point_count, 25, 1000, 250);
+  // 		slider(name(), "analysis.optical_flow.feature_point_distance",
+  // 			optical_flow.feature_point_distance, 0.001f, 30.0f, 10.0f);
+
+  // 		if (analysis.use_cuda) {
+  // 			float quality_level =
+  // 				optical_flow.cuda_feature_detector_quality_cutoff * 10.0f;
+  // 			slider(name(), "analysis.optical_flow.quality_level", quality_level,
+  // 				0.01f, 1.0f, 0.1f);
+  // 			optical_flow.cuda_feature_detector_quality_cutoff =
+  // 				quality_level / 10.0f;
+  // 		}
+  // 		slider(name(), "analysis.optical_flow.magnitude_scale",
+  // 			optical_flow.magnitude_scale, 0.1f, 5.0f, 1.0f);
+  // 		slider(name(), "analysis.optical_flow.magnitude_exponent",
+  // 			optical_flow.magnitude_exponent, 0.001f, 2.5f, 1.0f);
+  // 		slider(name(), "analysis.optical_flow.minimum_distance",
+  // 			optical_flow.minimum_distance, 0.0f, 0.2f, 0.0f);
+  // 		slider(name(), "analysis.optical_flow.maximum_distance",
+  // 			optical_flow.maximum_distance, 0.0f, 0.8f, 0.8f);
+
+  //       ImGui::TreePop();
+  //     }
+
+  //     if (gui::begin_tree_node("Output", analysis.output.unfolded)) {
+  //       vector_param(name(), "analysis.output.scale", analysis.output.scale,
+  //                    0.0f, 2.0f, 1.0f);
+  //       vector_param(name(), "analysis.output.offset", analysis.output.offset,
+  //                    -1.0f, 1.0f, 0.0f);
+  //       ImGui::TreePop();
+  //     }
+  //   }
+  // } else {
+  //   _config.analysis.unfolded = false;
+  // }
 }
 
 std::vector<gui::OverlayText> CameraController::labels() {
