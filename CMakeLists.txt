@@ -1,16 +1,22 @@
 cmake_minimum_required(VERSION 3.22.0)
-project(bob-pointcaster LANGUAGES CXX CUDA)
-set(CMAKE_CXX_STANDARD 20)
 
+set(CMAKE_CXX_STANDARD 20)
 if(WIN32)
   set(CMAKE_CUDA_STANDARD 17)
 else()
   set(CMAKE_CUDA_STANDARD 20)
 endif()
 
+# set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
+# set(CMAKE_CUDA_HOST_COMPILER /usr/bin/g++-12)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX TRUE)
 endif()
+
+########################################################
+
+project(bob-pointcaster LANGUAGES CXX CUDA)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -76,6 +82,7 @@ if (GENERATE_REFLECTIONS)
     src/operators/noise_operator.h
     src/operators/rotate_operator.h
     src/operators/sample_filter_operator.h
+    src/operators/range_filter_operator.h
   )
 
   foreach(HEADER IN LISTS REFLECTED_TYPES)
@@ -273,6 +280,7 @@ if (WITH_POINTCASTER)
     src/operators/rotate_operator.cc
     src/operators/rake_operator.cc
     src/operators/sample_filter_operator.cc
+    src/operators/range_filter_operator.cc
     ${POINTCASTER_SRC}
     ${OPTIONAL_SRC})
 

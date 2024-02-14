@@ -37,7 +37,10 @@ def ensure_headers(file_content, header_paths):
 
 def process_cpp_header(input_text, file_path):
     # structs = re.findall(r"struct (\w+Configuration) {([\s\S]*?^\};)",
-    structs = re.findall(r"struct (\w+(?:Configuration|Session|SessionLayout|BindingTarget|OutputRoute)) {([\s\S]*?^\};)",
+
+    # TODO: replace this explicit string search with a search for a meta comment
+    # which instructs to serialize the struct
+    structs = re.findall(r"struct (\w+(?:Configuration|Session|SessionLayout|BindingTarget|OutputRoute|ABB)) {([\s\S]*?^\};)",
     # structs = re.findall(r"struct (\w+Configuration) {([\s\S]*?^\};)",
                          input_text, re.MULTILINE)
 
@@ -82,8 +85,9 @@ def process_cpp_header(input_text, file_path):
                             f"{{{init_value}}}", min_max, optional))
 
          # ensure there is an 'unfolded' bool member for the gui system
-        if not any(member[1] == "unfolded" for member in members):
-            members.insert(0, ("bool", "unfolded", "{false}", "", False))
+        if "Configuration" in struct_name:
+            if not any(member[1] == "unfolded" for member in members):
+                members.insert(0, ("bool", "unfolded", "{false}", "", False))
 
         generated_struct = f"struct {struct_name} {{\n"
 

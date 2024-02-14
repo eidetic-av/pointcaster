@@ -1,8 +1,9 @@
 #pragma once
 
-#include <pointclouds.h>
 #include "serialization.h"
+#include <stdexcept>
 #include <optional>
+#include <pointclouds.h>
 
 namespace pc::types {
 

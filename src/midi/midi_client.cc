@@ -55,7 +55,7 @@ MidiClient::MidiClient(MidiClientConfiguration &config)
   pc::logger->info("MIDI: Listening for MIDI hotplug events");
 
   // Create a virtual MIDI output to publish to
-  _virtual_output.open_virtual_port("pointcaster output 1");
+  _virtual_output.open_virtual_port("pointcaster 1");
   publisher::add(this);
 
   // for any MIDI cc bindings to UI parameters saved in the config,

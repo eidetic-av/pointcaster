@@ -309,10 +309,9 @@ Magnum::Float CameraController::depth_at(const Vector2i &window_position) {
 
 void CameraController::draw_imgui_controls() {
 
-  if (pc::gui::draw_parameters(name(),
-                               struct_parameters.at(std::string{name()}))) {
+  if (pc::gui::draw_parameters(name())) {
     reset_projection_matrix();
-  };
+  }
 
   // auto draw_current_group = true;
   // std::string latest_group_id{name()};

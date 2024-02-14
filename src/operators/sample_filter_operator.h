@@ -4,8 +4,10 @@
 
 namespace pc::operators {
 
+using uid = unsigned long int;
+
 struct SampleFilterOperatorConfiguration {
-  std::string id;
+  uid id;
   bool unfolded = false;
   bool enabled = true;
   int sample_count = 1;

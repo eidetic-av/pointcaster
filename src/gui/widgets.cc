@@ -557,8 +557,10 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
   auto changed = false;
   for (const auto &entry : map) {
     if (std::holds_alternative<std::string>(entry)) {
+      ImGui::PushID(std::to_string(_parameter_index++).c_str());
       changed |= draw_parameter(structure_name, std::get<std::string>(entry));
       ImGui::Dummy({0, 1});
+      ImGui::PopID();
     } else {
       // this entry holds a nested map,
       // draw nested params inside a collapsing header
@@ -568,23 +570,36 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
       const auto header_text = pc::strings::sentence_case(entry_name);
 
       // grab the 'unfolded' entry to determine whether the collapsing header is
-      // open or closed
+      // open or closed (if that unfolded param exists in the structure)
+
+      std::optional<BoolReference> unfolded;
 
       const auto unfolded_entry_id = std::string(structure_name) + "." +
                                      map_prefix + entry_name + ".unfolded";
-      const auto &unfolded_param = parameter_bindings.at(unfolded_entry_id);
-      auto &unfolded = std::get<BoolReference>(unfolded_param.value).get();
+      auto unfolded_it = parameter_bindings.find(unfolded_entry_id);
 
-      ImGui::SetNextItemOpen(unfolded);
+      if (unfolded_it != parameter_bindings.end()) {
+        const auto &unfolded_param = parameter_bindings.at(unfolded_entry_id);
+	unfolded = std::get<BoolReference>(unfolded_param.value);
+      }
+
+      if (unfolded.has_value()) {
+        ImGui::SetNextItemOpen(unfolded.value().get());
+      }
+
       if (ImGui::CollapsingHeader(header_text.data())) {
         ImGui::Dummy({0, 4});
         // call draw recursively inside the header this time
 	changed |= draw_parameters(structure_name, nested_map,
 				   map_prefix + entry_name + ".");
         ImGui::Dummy({0, 1});
-        unfolded = true;
+        if (unfolded.has_value()) {
+          unfolded.value().get() = true;
+        }
       } else {
-        unfolded = false;
+	if (unfolded.has_value()) {
+	  unfolded.value().get() = false;
+	}
         ImGui::Dummy({0, 0});
       }
     }
@@ -594,7 +609,14 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
 
 bool draw_parameters(std::string_view structure_id) {
   // TODO std::string creation every frame
-  return draw_parameters(structure_id, struct_parameters.at(std::string{structure_id}));
+
+  auto id = std::string{structure_id};
+  return draw_parameters(structure_id,
+                         struct_parameters.at(std::string{structure_id}));
+}
+
+bool draw_parameters(unsigned long int structure_id) {
+  return draw_parameters(std::to_string(structure_id));
 }
 
 } // namespace pc::gui

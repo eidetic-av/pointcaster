@@ -10,6 +10,22 @@
 
 namespace pc::operators {
 
+SessionOperatorHost::SessionOperatorHost(OperatorHostConfiguration &config)
+    : _config(config) {
+
+  // for loading an existing list of operators
+  for (auto &operator_config : _config.operators) {
+    // we need to visit each possible operator variant
+    std::visit(
+        [](auto &&operator_instance) {
+	  // and declare it's saved ID with its parameters
+	  declare_parameters(std::to_string(operator_instance.id),
+			     operator_instance);
+        },
+        operator_config);
+  }
+};
+
 void SessionOperatorHost::draw_imgui_window() {
   ImGui::SetNextWindowSize({600, 400}, ImGuiCond_FirstUseEver);
   ImGui::Begin("Session Operators", nullptr);
@@ -28,14 +44,14 @@ void SessionOperatorHost::draw_imgui_window() {
       if (ImGui::Selectable(T::Name)) {
 
         auto operator_config = T();
-        operator_config.id = pc::uuid::word();
+        operator_config.id = pc::uuid::digit();
 	// create a new instance of our operator configuration and add it to our
 	// session operator list
 	auto &variant_ref = _config.operators.emplace_back(operator_config);
 
 	// declare the instance as parameters to bind to this new operator's id
 	auto &config_instance = std::get<T>(variant_ref);
-	declare_parameters(operator_config.id, config_instance);
+	declare_parameters(std::to_string(operator_config.id), config_instance);
 
         ImGui::CloseCurrentPopup();
       }
@@ -50,12 +66,14 @@ void SessionOperatorHost::draw_imgui_window() {
 	[](auto &&config) {
 	  using T = std::decay_t<decltype(config)>;
 
+	  ImGui::PushID(gui::_parameter_index++);
           if (ImGui::CollapsingHeader(T::Name, config.unfolded)) {
-            config.unfolded = true;
-            pc::gui::draw_parameters(config.id, struct_parameters[config.id]);
+	    config.unfolded = true;
+	    pc::gui::draw_parameters(config.id);
           } else {
             config.unfolded = false;
           }
+	  ImGui::PopID();
         },
         operator_config);
     ImGui::PopID();

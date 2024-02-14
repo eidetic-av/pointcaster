@@ -141,4 +141,6 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
 
 bool draw_parameters(std::string_view structure_id);
 
+bool draw_parameters(unsigned long int structure_id);
+
 } // namespace pc::gui

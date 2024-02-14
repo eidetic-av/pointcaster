@@ -4,8 +4,10 @@
 
 namespace pc::operators {
 
+using uid = unsigned long int;
+
 struct RakeOperatorConfiguration {
-  std::string id;
+  uid id;
   bool unfolded = false;
   bool enabled = true;
   pc::types::MinMax<short> depth_min_max {0, 0};

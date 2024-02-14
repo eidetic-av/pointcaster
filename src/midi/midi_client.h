@@ -10,7 +10,7 @@
 #include <atomic>
 #include <concurrentqueue/blockingconcurrentqueue.h>
 #include <expected>
-#include <format>
+#include <fmt/format.h>
 #include <future>
 #include <libremidi/client.hpp>
 #include <libremidi/libremidi.hpp>
@@ -46,7 +46,7 @@ public:
 
     std::size_t i = 0;
     for (auto &element : data) {
-      auto element_topic = pc::strings::concat(topic, std::format("/{}", i++));
+      auto element_topic = pc::strings::concat(topic, fmt::format("/{}", i++));
       if constexpr (is_publishable_container<typename T::value_type>()) {
 	publish(element_topic, element, topic_nodes);
       } else {

@@ -8,6 +8,9 @@
 #include <thrust/sequence.h>
 #include <tracy/Tracy.hpp>
 
+// #include "../../operators/noise_operator.gen.h"
+// #include "../../operators/noise_operator.cuh"
+
 namespace pc::devices {
 
 typedef thrust::tuple<Short3, color, int> point_in_t;
@@ -171,7 +174,6 @@ struct point_transformer
   }
 };
 
-
 struct output_filter {
   DeviceConfiguration config;
 
@@ -191,7 +193,6 @@ struct output_filter {
     return check_bounds(pos);
   }
 };
-
 
 PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
                                   OperatorList operator_list) {
@@ -266,8 +267,13 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
       transformed_points_begin, transformed_points_begin + filtered_point_count,
       operator_output_begin, output_filter{config});
 
-  for (auto &operators : operator_list) {
-    operator_output_end = operators.get().run_operators(operator_output_begin, operator_output_end);
+  // operator_output_end = pc::operators::apply(
+  //     operator_output_begin, operator_output_end, operator_list);
+
+  for (auto &operator_host_ref : operator_list) {
+    auto &operator_host = operator_host_ref.get();
+    operator_output_end = pc::operators::SessionOperatorHost::run_operators(
+	operator_output_begin, operator_output_end, operator_host._config);
   }
 
   // wait for the kernels to complete

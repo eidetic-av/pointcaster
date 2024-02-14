@@ -115,6 +115,10 @@ struct Parameter {
       : value(Int2Reference(_value)), min(_min), max(_max),
 	default_value(_default_value) {}
 
+  Parameter(Int3 &_value, int _min = -10, int _max = 10, int _default_value = 0)
+      : value(Int3Reference(_value)), min(_min), max(_max),
+	default_value(_default_value) {}
+
   Parameter(short &_value, short _min = -10, short _max = 10,
             short _default_value = 0)
       : value(ShortReference(_value)), min(_min), max(_max),
@@ -254,6 +258,7 @@ void declare_parameters(std::string_view parameter_id, T &complex_value,
 			T default_value = {},
 			std::optional<MinMax<float>> min_max = {},
 			std::string_view parent_struct_name = "") {
+  pc::logger->info("Declaring parameter: {}", parameter_id);
 
   // retrieve type info at compile-time
   constexpr auto type_info = serde::type_info<T>;

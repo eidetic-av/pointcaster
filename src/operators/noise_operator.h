@@ -5,8 +5,10 @@
 
 namespace pc::operators {
 
+using uid = unsigned long int;
+
 struct NoiseOperatorConfiguration {
-  std::string id;
+  uid id;
   bool enabled = true;
   float scale = 0.001f;
   float magnitude = 500.0f;
@@ -20,8 +22,8 @@ struct NoiseOperator : public Operator {
 
   NoiseOperatorConfiguration _config;
 
-  NoiseOperator(const NoiseOperatorConfiguration &config) : _config{config} {};
-
+  NoiseOperator(const NoiseOperatorConfiguration &config);
+  
   __device__ indexed_point_t operator()(indexed_point_t point) const;
 };
 

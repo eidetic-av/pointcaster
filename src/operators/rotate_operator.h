@@ -5,9 +5,10 @@
 namespace pc::operators {
 
 using pc::types::Float3;
+using uid = unsigned long int;
 
 struct RotateOperatorConfiguration {
-  std::string id;
+  uid id;
   bool unfolded = false;
   bool enabled = true;
   Float3 euler_angles;
