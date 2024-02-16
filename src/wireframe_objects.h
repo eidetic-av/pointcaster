@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Corrade/Containers/Pointer.h>
 #include <Magnum/GL/Mesh.h>
 #include <Magnum/MeshTools/Compile.h>
@@ -7,8 +9,8 @@
 #include <Magnum/SceneGraph/Scene.h>
 #include <Magnum/Shaders/Flat.h>
 #include <Magnum/Trade/MeshData.h>
-
 #include "flat_shade_object.h"
+#include "gui/catpuccin.h"
 
 namespace pc {
 
@@ -24,7 +26,7 @@ public:
       : _parent_group(parent_group) {
     _object.reset(new Object3D{scene});
     _shader = Shaders::FlatGL3D{};
-    _drawable.reset(new FlatShadeObject{*_object, _shader, Color3{0.75f}, _mesh,
+    _drawable.reset(new FlatShadeObject{*_object, _shader, Color3{1.0f}, _mesh,
 					_parent_group});
   }
 
@@ -79,8 +81,8 @@ public:
       : WireframeObject{scene, parent_group} {
     using namespace Magnum::Math::Literals;
 
-    _mesh = MeshTools::compile(Primitives::grid3DWireframe({10, 10}));
-    _object->scale(Vector3(3.0f));
+    _mesh = MeshTools::compile(Primitives::grid3DWireframe({5, 5}));
+    _object->scale(Vector3(1.0f));
     _object->rotateX(90.0_degf);
   }
 };

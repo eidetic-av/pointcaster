@@ -469,17 +469,68 @@ template <> struct VectorSize<Short3> {
   static constexpr std::size_t value = 3;
 };
 
-#ifndef __CUDACC__
-
-// concept to check if a type can be considered a vector type.
+// concept to check if a type can be considered a custom vector type.
+// (it requires a vector_type definition, a vector size definition, and a index
+// operator definition)
 template <typename T>
-concept VectorType = requires { typename T::vector_type; };
+concept VectorType = requires(T a, std::size_t i) {
+  typename T::vector_type;
+  { VectorSize<T>::value } -> std::convertible_to<std::size_t>;
+  { a[i] } -> std::convertible_to<typename T::vector_type>;
+};
 
 template <typename T>
 concept ScalarType = std::is_same_v<T, int> || std::is_same_v<T, short> ||
-		       std::is_same_v<T, float> || std::is_same_v<T, double>;
+                     std::is_same_v<T, float> || std::is_same_v<T, double>;
 
-#endif
+// concept based generic way to implement Vector type arithmetic operators
+template <VectorType T> T operator+(const T &lhs, const T &rhs) {
+  T result;
+  for (std::size_t el = 0; el < VectorSize<T>::value; ++el) {
+	  result[el] = lhs[el] + rhs[el];
+  }
+  return result;
+}
+
+template <VectorType T> T operator-(const T &lhs, const T &rhs) {
+  T result;
+  for (std::size_t el = 0; el < VectorSize<T>::value; ++el) {
+          result[el] = lhs[el] - rhs[el];
+  }
+  return result;
+}
+
+template <VectorType T> T operator/(const T &lhs, const T &rhs) {
+  T result;
+  for (std::size_t el = 0; el < VectorSize<T>::value; ++el) {
+          result[el] = lhs[el] / rhs[el];
+  }
+  return result;
+}
+
+template <VectorType T> T operator*(const T &lhs, const T &rhs) {
+  T result;
+  for (std::size_t el = 0; el < VectorSize<T>::value; ++el) {
+          result[el] = lhs[el] * rhs[el];
+  }
+  return result;
+}
+
+template <VectorType T, ScalarType S> T operator/(const T &lhs, const S &rhs) {
+  T result;
+  for (std::size_t el = 0; el < VectorSize<T>::value; ++el) {
+          result[el] = lhs[el] / rhs;
+  }
+  return result;
+}
+
+template <VectorType T, ScalarType S> T operator*(const T &lhs, const S &rhs) {
+  T result;
+  for (std::size_t el = 0; el < VectorSize<T>::value; ++el) {
+          result[el] = lhs[el] * rhs;
+  }
+  return result;
+}
 
 // just alias these for now before refactoring bob-pointclouds library
 using PointCloud = bob::types::PointCloud;

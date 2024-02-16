@@ -154,7 +154,7 @@ protected:
       _async_tasks;
 
   std::unique_ptr<Scene3D> _scene;
-  std::unique_ptr<SceneGraph::DrawableGroup3D> _drawable_group;
+  std::unique_ptr<SceneGraph::DrawableGroup3D> _scene_root;
 
   std::optional<Vector2i> _display_resolution;
 
@@ -349,10 +349,10 @@ PointCaster::PointCaster(const Arguments &args)
   // Set up scene
   // TODO should drawable groups go inside each camera controller?
   _scene = std::make_unique<Scene3D>();
-  _drawable_group = std::make_unique<SceneGraph::DrawableGroup3D>();
+  _scene_root = std::make_unique<SceneGraph::DrawableGroup3D>();
 
   _ground_grid =
-      std::make_unique<WireframeGrid>(_scene.get(), _drawable_group.get());
+      std::make_unique<WireframeGrid>(_scene.get(), _scene_root.get());
   _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
                           Matrix4::translation(Vector3(0, 0, 0)));
 
@@ -458,8 +458,8 @@ PointCaster::PointCaster(const Arguments &args)
   }
 
   // initialise point cloud operator hosts
-  _session_operator_host =
-      std::make_unique<SessionOperatorHost>(_session.session_operator_host);
+  _session_operator_host = std::make_unique<SessionOperatorHost>(
+      _session.session_operator_host, *_scene.get(), *_scene_root.get());
 
   // Start the timer, loop at 144 Hz max
   setSwapInterval(1);
@@ -738,7 +738,7 @@ void PointCaster::render_cameras() {
     }
 
     // render camera
-    camera_controller->camera().draw(*_drawable_group);
+    camera_controller->camera().draw(*_scene_root);
 
     camera_controller->dispatch_analysis();
   }
@@ -916,8 +916,10 @@ void PointCaster::draw_onscreen_log() {
 }
 
 void PointCaster::draw_modeline() {
+  using namespace catpuccin::imgui;
+
   constexpr auto modeline_height = 20;
-  constexpr auto modeline_color = catpuccin::mocha_crust;
+  constexpr auto modeline_color = mocha_crust;
 
   ImGui::PushID("modeline");
 

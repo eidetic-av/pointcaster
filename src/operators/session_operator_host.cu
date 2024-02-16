@@ -54,22 +54,33 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
           } else if constexpr (std::is_same_v<
                                    T, RangeFilterOperatorConfiguration>) {
 
-            auto input_count = 0;
+	    auto starting_point_count = std::distance(begin, end);
+            auto fill_count = 0;
+
             if (!config.bypass) {
               end = thrust::copy_if(begin, end, begin,
                                     RangeFilterOperator{config});
-              input_count = std::distance(begin, end);
+              fill_count = std::distance(begin, end);
             } else {
-              input_count =
+              fill_count =
                   thrust::count_if(begin, end, RangeFilterOperator{config});
             }
+
+	    // TODO: this is RangeFilter Operator behaviour,
+	    // probs needs to be inside that class somehow
             config.fill.fill_value =
-                input_count / static_cast<float>(config.fill.max_fill);
+                fill_count / static_cast<float>(config.fill.max_fill);
+	    config.fill.proportion = fill_count / static_cast<float>(starting_point_count);
 
 	    if (config.fill.publish) {
-	      publisher::publish_all(
+              publisher::publish_all(
 		  "fill_value", std::array<float, 1>{config.fill.fill_value},
-		  {"operator", "range_filter", std::to_string(config.id)});
+		  {"operator", "range_filter", std::to_string(config.id),
+		   "fill"});
+              publisher::publish_all(
+		  "proportion", std::array<float, 1>{config.fill.proportion},
+		  {"operator", "range_filter", std::to_string(config.id),
+		   "fill"});
             }
           }
           // else if constexpr (std::is_same_v<

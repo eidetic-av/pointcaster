@@ -4,8 +4,15 @@
 #include <functional>
 #include <optional>
 #include <vector>
+#include <Magnum/SceneGraph/Drawable.h>
+#include <Magnum/SceneGraph/Object.h>
 
 namespace pc::operators {
+
+using Scene3D =
+    Magnum::SceneGraph::Scene<Magnum::SceneGraph::MatrixTransformation3D>;
+using Object3D =
+    Magnum::SceneGraph::Object<Magnum::SceneGraph::MatrixTransformation3D>;
 
 class SessionOperatorHost {
 public:
@@ -14,13 +21,16 @@ public:
 					 operator_in_out_t end,
 					 OperatorHostConfiguration &host_config);
 
-  SessionOperatorHost(OperatorHostConfiguration &config);
+  SessionOperatorHost(OperatorHostConfiguration &config, Scene3D &scene,
+		      Magnum::SceneGraph::DrawableGroup3D &parent_group);
 
   void draw_imgui_window();
 
   OperatorHostConfiguration &_config;
 
 private:
+  Scene3D &_scene;
+  Magnum::SceneGraph::DrawableGroup3D &_parent_group;
 
   void add_operator(OperatorConfigurationVariant operator_config) {
     _config.operators.push_back(operator_config);

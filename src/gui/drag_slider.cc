@@ -10,6 +10,7 @@
 namespace pc::gui {
 
 using namespace ImGui;
+using namespace catpuccin::imgui;
 
 static const float DRAG_MOUSE_THRESHOLD_FACTOR =
     0.50f; // Multiplier for the default value of io.MouseDragThreshold to make
@@ -54,10 +55,10 @@ bool DragScalar(int component_index, int component_count,
   auto unbind_param = false;
 
   if (param_state == ParameterState::Bound) {
-    ImGui::PushStyleColor(ImGuiCol_Text, catpuccin::mocha_lavender);
+    ImGui::PushStyleColor(ImGuiCol_Text, mocha_lavender);
 
   } else if (param_state == ParameterState::Learning) {
-    ImGui::PushStyleColor(ImGuiCol_Text, catpuccin::mocha_red);
+    ImGui::PushStyleColor(ImGuiCol_Text, mocha_red);
 
     if (!pc::gui::learning_parameter) {
       // if we *were* recording a param and we're not anymore,
@@ -196,7 +197,7 @@ bool DragScalarN(std::string_view parameter_id, ImGuiDataType data_type, void *p
     if (render_disabled)
       ImGui::EndDisabled();
   } else {
-    ImGui::PushStyleColor(ImGuiCol_Text, catpuccin::mocha_maroon);
+    ImGui::PushStyleColor(ImGuiCol_Text, mocha_maroon);
 
     ImVec2 text_pos = text_bb.Max;
 
