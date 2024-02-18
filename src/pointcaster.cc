@@ -85,6 +85,8 @@
 #include "mqtt/mqtt_client_config.gen.h"
 
 #include "midi/midi_client.h"
+#include "osc/osc_client.h"
+#include "osc/osc_server.h"
 
 #include <tracy/Tracy.hpp>
 
@@ -97,6 +99,7 @@ using namespace pc::camera;
 using namespace pc::radio;
 using namespace pc::snapshots;
 using namespace pc::midi;
+using namespace pc::osc;
 using namespace pc::mqtt;
 using namespace pc::tween;
 using namespace pc::operators;
@@ -173,6 +176,8 @@ protected:
   std::unique_ptr<Radio> _radio;
   std::unique_ptr<MqttClient> _mqtt;
   std::unique_ptr<MidiClient> _midi;
+  std::unique_ptr<OscClient> _osc_client;
+  std::unique_ptr<OscServer> _osc_server;
 
 #ifndef WIN32
   std::unique_ptr<UsbMonitor> _usb_monitor;
@@ -479,6 +484,16 @@ PointCaster::PointCaster(const Arguments &args)
     _session.midi = MidiClientConfiguration{};
   }
   _midi = std::make_unique<MidiClient>(*_session.midi);
+
+  if (!_session.osc_client.has_value()) {
+    _session.osc_client = OscClientConfiguration{};
+  }
+  _osc_client = std::make_unique<OscClient>(*_session.osc_client);
+
+  if (!_session.osc_server.has_value()) {
+    _session.osc_server = OscServerConfiguration{};
+  }
+  _osc_server = std::make_unique<OscServer>(*_session.osc_server);
 
   _snapshots_context = std::make_unique<Snapshots>();
 
@@ -1383,8 +1398,15 @@ void PointCaster::drawEvent() {
 
     if (_session.mqtt.has_value() && (*_session.mqtt).show_window)
       _mqtt->draw_imgui_window();
+
     if (_session.midi.has_value() && (*_session.midi).show_window)
       _midi->draw_imgui_window();
+
+    if (_session.osc_client.has_value() && (*_session.osc_client).show_window)
+      _osc_client->draw_imgui_window();
+
+    if (_session.osc_server.has_value() && (*_session.osc_server).show_window)
+      _osc_server->draw_imgui_window();
 
     draw_modeline();
   }
@@ -1547,6 +1569,20 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
       if (_session.midi.has_value()) {
 	auto& midi_conf = _session.midi.value();
         midi_conf.show_window = !midi_conf.show_window;
+      }
+    }
+    break;
+  }
+  case KeyEvent::Key::O: {
+    if (event.modifiers() == InputEvent::Modifier::Shift) {
+      if (_session.osc_client.has_value()) {
+        auto &osc_client_conf = _session.osc_client.value();
+        osc_client_conf.show_window = !osc_client_conf.show_window;
+      }
+    } else {
+      if (_session.osc_server.has_value()) {
+        auto &osc_server_conf = _session.osc_server.value();
+        osc_server_conf.show_window = !osc_server_conf.show_window;
       }
     }
     break;

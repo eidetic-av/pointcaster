@@ -566,6 +566,7 @@ bool draw_parameter(std::string_view structure_name,
 bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
                      const std::string &map_prefix) {
   auto changed = false;
+  ImGui::PushID(std::to_string(_parameter_index++).c_str());
   for (const auto &entry : map) {
     if (std::holds_alternative<std::string>(entry)) {
       ImGui::PushID(std::to_string(_parameter_index++).c_str());
@@ -594,6 +595,8 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
         unfolded = std::get<BoolReference>(unfolded_param.value);
       }
 
+      ImGui::PushID(std::to_string(_parameter_index++).c_str());
+
       if (unfolded.has_value()) {
         ImGui::SetNextItemOpen(unfolded.value().get());
       }
@@ -613,8 +616,11 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
         }
         ImGui::Dummy({0, 0});
       }
+
+      ImGui::PopID();
     }
   }
+  ImGui::PopID();;
   return changed;
 }
 

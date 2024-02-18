@@ -80,35 +80,5 @@ void unbind_parameter(std::string_view parameter_id) {
   parameter_states[parameter_id] = ParameterState::Unbound;
 }
 
-void set_parameter_value(std::string_view parameter_id, float new_value,
-			 float input_min, float input_max) {
-
-  auto &parameter = parameter_bindings.at(parameter_id);
-  auto old_binding = parameter;
-
-  if (std::holds_alternative<FloatReference>(parameter.value)) {
-    float &value = std::get<FloatReference>(parameter.value).get();
-    value = math::remap(input_min, input_max, std::get<float>(parameter.min),
-			std::get<float>(parameter.max), new_value, true);
-  } else if (std::holds_alternative<IntReference>(parameter.value)) {
-    int &value = std::get<IntReference>(parameter.value).get();
-    auto min = static_cast<float>(std::get<int>(parameter.min));
-    auto max = static_cast<float>(std::get<int>(parameter.max));
-    auto float_value =
-	math::remap(input_min, input_max, min, max, new_value, true);
-    value = static_cast<int>(std::round(float_value));
-  } else if (std::holds_alternative<ShortReference>(parameter.value)) {
-    short &value = std::get<ShortReference>(parameter.value).get();
-    auto min = static_cast<float>(std::get<short>(parameter.min));
-    auto max = static_cast<float>(std::get<short>(parameter.max));
-    auto float_value =
-	math::remap(input_min, input_max, min, max, new_value, true);
-    value = static_cast<short>(std::round(float_value));
-  }
-
-  for (const auto &cb : parameter.update_callbacks) {
-    cb(old_binding, parameter);
-  }
-}
 
 } // namespace pc

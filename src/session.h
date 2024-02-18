@@ -4,6 +4,8 @@
 #include "devices/device_config.gen.h"
 #include "devices/usb_config.gen.h"
 #include "midi/midi_client_config.gen.h"
+#include "osc/osc_client_config.gen.h"
+#include "osc/osc_server_config.gen.h"
 #include "mqtt/mqtt_client_config.gen.h"
 #include "operators/operator_host_config.gen.h"
 #include "radio/radio_config.gen.h"
@@ -39,6 +41,8 @@ struct PointCasterSession {
   std::optional<devices::UsbConfiguration> usb;
   std::optional<mqtt::MqttClientConfiguration> mqtt;
   std::optional<midi::MidiClientConfiguration> midi;
+  std::optional<osc::OscClientConfiguration> osc_client;
+  std::optional<osc::OscServerConfiguration> osc_server;
 
   PointCasterSessionLayout layout; // @optional
 

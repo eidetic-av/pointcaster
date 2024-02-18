@@ -70,6 +70,8 @@ if (GENERATE_REFLECTIONS)
     src/devices/device_config.h
     src/devices/usb_config.h
     src/midi/midi_client_config.h
+    src/osc/osc_client_config.h
+    src/osc/osc_server_config.h
     src/mqtt/mqtt_client_config.h
     src/radio/radio_config.h
     src/tween/tween_config.h
@@ -145,6 +147,13 @@ if (WITH_POINTCASTER)
   find_package(libremidi CONFIG REQUIRED)
   list(APPEND LINK_LIBS libremidi)
   list(APPEND POINTCASTER_SRC src/midi/midi_client.cc)
+
+  find_package(liblo CONFIG REQUIRED)
+  pkg_check_modules(LIBLO REQUIRED liblo)
+  list(APPEND INCLUDE_DIRS ${LIBLO_INCLUDE_DIRS})
+  list(APPEND LINK_LIBS ${LIBLO_LDFLAGS})
+  list(APPEND POINTCASTER_SRC 
+    src/osc/osc_client.cc src/osc/osc_server.cc)
 
   # ----- Dear ImGui lib -----
 

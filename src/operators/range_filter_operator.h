@@ -5,6 +5,7 @@
 
 namespace pc::operators {
 
+using pc::types::Float2;
 using pc::types::Float3;
 
 struct AABB {
@@ -23,13 +24,25 @@ struct RangeFilterOperatorFillConfiguration {
   bool publish = false;
 };
 
+struct RangeFilterOperatorMinMaxConfiguration {
+  float min_x;
+  float max_x;
+  float min_y;
+  float max_y;
+  float min_z;
+  float max_z;
+  bool publish = false;
+};
+
 struct RangeFilterOperatorConfiguration {
   uid id;
   bool enabled = true;
   bool bypass = false;
+  bool draw = true;
   Float3 position {0, 0, 0}; // @minmax(-10, 10)
   Float3 size {1, 1, 1}; // @minmax(0.01f, 10)
   RangeFilterOperatorFillConfiguration fill;
+  RangeFilterOperatorMinMaxConfiguration minmax;
 };
 
 struct RangeFilterOperator : Operator {
@@ -40,7 +53,18 @@ struct RangeFilterOperator : Operator {
       : _config(config){};
 
   __device__ bool operator()(indexed_point_t point) const;
+};
 
+struct MinMaxXComparator {
+  __device__ bool operator()(indexed_point_t lhs, indexed_point_t rhs) const;
+};
+
+struct MinMaxYComparator {
+  __device__ bool operator()(indexed_point_t lhs, indexed_point_t rhs) const;
+};
+
+struct MinMaxZComparator {
+  __device__ bool operator()(indexed_point_t lhs, indexed_point_t rhs) const;
 };
 
 } // namespace pc::operators

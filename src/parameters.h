@@ -310,15 +310,70 @@ void bind_parameter(std::string_view parameter_id,
 
 void unbind_parameter(std::string_view parameter_id);
 
-void set_parameter_value(std::string_view parameter_id,
-                                float new_value, float input_min,
-				float input_max);
+template <typename T>
+void set_parameter_value(std::string_view parameter_id, T new_value,
+			 float input_min, float input_max) {
+
+  auto &parameter = parameter_bindings.at(parameter_id);
+  auto old_binding = parameter;
+
+  if (std::holds_alternative<FloatReference>(parameter.value)) {
+    float &value = std::get<FloatReference>(parameter.value).get();
+    value = math::remap(input_min, input_max, std::get<float>(parameter.min),
+			std::get<float>(parameter.max), new_value, true);
+  } else if (std::holds_alternative<IntReference>(parameter.value)) {
+    int &value = std::get<IntReference>(parameter.value).get();
+    auto min = static_cast<float>(std::get<int>(parameter.min));
+    auto max = static_cast<float>(std::get<int>(parameter.max));
+    auto float_value =
+	math::remap(input_min, input_max, min, max, new_value, true);
+    value = static_cast<int>(std::round(float_value));
+  } else if (std::holds_alternative<ShortReference>(parameter.value)) {
+    short &value = std::get<ShortReference>(parameter.value).get();
+    auto min = static_cast<float>(std::get<short>(parameter.min));
+    auto max = static_cast<float>(std::get<short>(parameter.max));
+    auto float_value =
+	math::remap(input_min, input_max, min, max, new_value, true);
+    value = static_cast<short>(std::round(float_value));
+  }
+
+  for (const auto &cb : parameter.update_callbacks) {
+    cb(old_binding, parameter);
+  }
+}
 
 inline void set_parameter_value(std::string_view parameter_id, int new_value,
 				int input_min, int input_max) {
   set_parameter_value(parameter_id, static_cast<float>(new_value),
 		      static_cast<float>(input_min),
 		      static_cast<float>(input_max));
+}
+
+template <typename T>
+void set_parameter_value(std::string_view parameter_id, T new_value) {
+
+  auto &parameter = parameter_bindings.at(parameter_id);
+  auto old_binding = parameter;
+
+  // if (std::holds_alternative<FloatReference>(parameter.value)) {
+  //   float &value = std::get<FloatReference>(parameter.value).get();
+  //   value = static_cast<float>(new_value);
+  // } else if (std::holds_alternative<IntReference>(parameter.value)) {
+  //   int &value = std::get<IntReference>(parameter.value).get();
+  //   value = static_cast<int>(new_value);
+  // } else if (std::holds_alternative<IntReference>(parameter.value)) {
+  //   short &value = std::get<ShortReference>(parameter.value).get();
+  //   value = static_cast<short>(new_value);
+  // }
+
+  if (std::holds_alternative<Float3Reference>(parameter.value)) {
+    Float3 &value = std::get<Float3Reference>(parameter.value).get();
+    value = new_value;
+  }
+
+  for (const auto &cb : parameter.update_callbacks) {
+    cb(old_binding, parameter);
+  }
 }
 
 /* Returns a copy of the current parameter value */

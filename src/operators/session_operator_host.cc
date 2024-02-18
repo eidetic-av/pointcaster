@@ -21,6 +21,21 @@ using namespace catpuccin::magnum;
 
 static std::map<uid, std::unique_ptr<WireframeBox>> operator_bounding_boxes;
 
+static constexpr std::array<Vector4, 6> bounding_box_colors{
+  mocha_red,
+  mocha_blue,
+  mocha_peach,
+  mocha_yellow,
+  mocha_lavender,
+  mocha_rosewater
+};
+
+static Vector3 next_bounding_box_color() {
+  static auto current_index = -1;
+  current_index = (current_index + 1) % bounding_box_colors.size();
+  return bounding_box_colors[current_index].rgb();
+}
+
 template <typename T>
 static void
 set_or_create_bounding_box(const T &operator_config, Scene3D &scene,
@@ -39,6 +54,9 @@ set_or_create_bounding_box(const T &operator_config, Scene3D &scene,
   box->transform(Matrix4::translation({position.x, position.y, position.z}));
   if (color.has_value()) {
     box->set_color(color.value().rgb());
+  }
+  if constexpr (std::same_as<T, RangeFilterOperatorConfiguration>) {
+    box->set_visible(operator_config.draw);
   }
 }
 
@@ -60,7 +78,7 @@ SessionOperatorHost::SessionOperatorHost(
 
 	  if constexpr (std::is_same_v<T, RangeFilterOperatorConfiguration>) {
 	    set_or_create_bounding_box(operator_config, scene, parent_group,
-				       mocha_red);
+				       next_bounding_box_color());
           }
 
         },
@@ -72,6 +90,7 @@ bool operator_collapsing_header(
     const char *label,
     std::optional<std::function<void()>> delete_callback = {}) {
   using namespace ImGui;
+  PushID(gui::_parameter_index++);
   PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
   bool *p_open = GetStateStorage()->GetBoolRef(GetID(label), false);
   ImGuiStyle &style = ImGui::GetStyle();
@@ -95,6 +114,7 @@ bool operator_collapsing_header(
     }
   }
   PopStyleVar();
+  ImGui::PopID();
   return *p_open;
 }
 
@@ -127,7 +147,7 @@ void SessionOperatorHost::draw_imgui_window() {
 
           if constexpr (std::is_same_v<T, RangeFilterOperatorConfiguration>) {
 	    set_or_create_bounding_box(operator_config, _scene, _parent_group,
-				       mocha_red);
+				       next_bounding_box_color());
 	  }
 
         ImGui::CloseCurrentPopup();
@@ -147,8 +167,9 @@ void SessionOperatorHost::draw_imgui_window() {
 	  using T = std::decay_t<decltype(config)>;
 
           ImGui::PushID(gui::_parameter_index++);
-          if (operator_collapsing_header(
-                  T::Name, [&] { marked_for_delete = config.id; })) {
+          if (ImGui::CollapsingHeader(T::Name)) {
+          // if (operator_collapsing_header(
+          //         T::Name, [&] { marked_for_delete = config.id; })) {
 	    config.unfolded = true;
 
             if (pc::gui::draw_parameters(config.id)) {
