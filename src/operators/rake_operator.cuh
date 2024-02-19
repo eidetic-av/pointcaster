@@ -13,7 +13,8 @@ __device__ indexed_point_t RakeOperator::operator()(indexed_point_t point) const
   position pos = thrust::get<0>(point);
   color col = thrust::get<1>(point);
 
-  pc::types::Float3 pos_f{pos.x, pos.y, pos.z};
+  pc::types::Float3 pos_f{static_cast<float>(pos.x), static_cast<float>(pos.y),
+                          static_cast<float>(pos.z)};
 
   auto& depth = _config.depth_min_max;
   auto& height = _config.height_min_max;
