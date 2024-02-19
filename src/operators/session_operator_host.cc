@@ -1,14 +1,15 @@
 #include "session_operator_host.h"
-#include "../gui/widgets.h"
 #include "../gui/catpuccin.h"
+#include "../gui/widgets.h"
 #include "../logger.h"
 #include "../parameters.h"
+#include "../string_utils.h"
 #include "../uuid.h"
 #include "noise_operator.gen.h"
 #include "rake_operator.gen.h"
+#include "range_filter_operator.gen.h"
 #include "rotate_operator.gen.h"
 #include "sample_filter_operator.gen.h"
-#include "range_filter_operator.gen.h"
 #include <functional>
 #include <optional>
 
@@ -166,11 +167,13 @@ void SessionOperatorHost::draw_imgui_window() {
 	[&](auto &&config) {
 	  using T = std::decay_t<decltype(config)>;
 
-          ImGui::PushID(gui::_parameter_index++);
-          if (ImGui::CollapsingHeader(T::Name)) {
-          // if (operator_collapsing_header(
-          //         T::Name, [&] { marked_for_delete = config.id; })) {
-	    config.unfolded = true;
+	  auto id = std::to_string(gui::_parameter_index++);
+	  ImGui::PushID(gui::_parameter_index++);
+	  ImGui::BeginGroup();
+	  if (operator_collapsing_header(
+		  pc::strings::concat(T::Name, "##" + id).c_str(),
+		  [&] { marked_for_delete = config.id; })) {
+            config.unfolded = true;
 
             if (pc::gui::draw_parameters(config.id)) {
 	      if constexpr (std::is_same_v<T,
@@ -181,6 +184,7 @@ void SessionOperatorHost::draw_imgui_window() {
           } else {
             config.unfolded = false;
           }
+          ImGui::EndGroup();
           ImGui::PopID();
         },
         operator_config);

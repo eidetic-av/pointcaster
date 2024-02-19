@@ -18,6 +18,7 @@ using uid = unsigned long int;
 
 struct RangeFilterOperatorFillConfiguration {
   int fill_count;
+  int count_threshold = 5;
   int max_fill = 5000;
   float fill_value;
   float proportion;
