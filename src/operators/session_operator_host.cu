@@ -56,130 +56,133 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
           } else if constexpr (std::is_same_v<
                                    T, RangeFilterOperatorConfiguration>) {
 
-            // TODO: this is RangeFilter Operator behaviour,
+	    // TODO: this is RangeFilter Operator behaviour,
 	    // probs needs to be inside that class somehow
 
-	    // the operator host should really not contain logic relating to
-	    // individual operators, it should simply call them
+            // the operator host should really not contain logic relating to
+            // individual operators, it should simply call them
 
             // perhaps we completely replace the thrust::copy_if with an
             // operator calling function that returns a new end if the config
             // requires it
 
-	    auto starting_point_count = thrust::distance(begin, end);
+            auto starting_point_count = thrust::distance(begin, end);
 
-	    thrust::device_vector<position> filtered_positions(
-		starting_point_count);
-	    thrust::device_vector<color> filtered_colors(starting_point_count);
-	    thrust::device_vector<int> filtered_indices(starting_point_count);
+            thrust::device_vector<position> filtered_positions(
+                starting_point_count);
+            thrust::device_vector<color> filtered_colors(starting_point_count);
+            thrust::device_vector<int> filtered_indices(starting_point_count);
 
             auto filtered_begin = thrust::make_zip_iterator(thrust::make_tuple(
-		filtered_positions.begin(), filtered_colors.begin(),
-		filtered_indices.begin()));
-	    auto filtered_end = thrust::copy_if(begin, end, filtered_begin,
+                filtered_positions.begin(), filtered_colors.begin(),
+                filtered_indices.begin()));
+            auto filtered_end = thrust::copy_if(begin, end, filtered_begin,
                                                 RangeFilterOperator{config});
 
-	    auto &fill_count = config.fill.fill_count;
-	    fill_count = thrust::distance(filtered_begin, filtered_end);
+            auto &fill_count = config.fill.fill_count;
+            fill_count = thrust::distance(filtered_begin, filtered_end);
 
-	    if (fill_count > config.fill.count_threshold) {
+            if (!config.bypass) {
+              end = thrust::copy(filtered_begin, filtered_end, begin);
+            }
 
-	    if (!config.bypass) {
-	      end = thrust::copy(filtered_begin, filtered_end, begin);
-	    }
-
-            config.fill.fill_value =
-                fill_count / static_cast<float>(config.fill.max_fill);
-            config.fill.proportion = fill_count / static_cast<float>(starting_point_count);
+            if (fill_count > config.fill.count_threshold) {
+              config.fill.fill_value =
+                  fill_count / static_cast<float>(config.fill.max_fill);
+              config.fill.proportion =
+                  fill_count / static_cast<float>(starting_point_count);
+	    } else {
+	      config.fill.fill_value = 0;
+	      config.fill.proportion = 0;
+            }
 
             if (config.fill.publish) {
               publisher::publish_all(
-		  "fill_value", std::array<float, 1>{config.fill.fill_value},
-		  {"operator", "range_filter", std::to_string(config.id),
-		   "fill"});
+                  "fill_value", std::array<float, 1>{config.fill.fill_value},
+                  {"operator", "range_filter", std::to_string(config.id),
+                   "fill"});
               publisher::publish_all(
-		  "proportion", std::array<float, 1>{config.fill.proportion},
-		  {"operator", "range_filter", std::to_string(config.id),
-		   "fill"});
+                  "proportion", std::array<float, 1>{config.fill.proportion},
+                  {"operator", "range_filter", std::to_string(config.id),
+                   "fill"});
             }
 
-              // TODO these three kernels could probably be fused into one
+            // TODO these three kernels could probably be fused into one
 
-	      auto minmax_x_points = thrust::minmax_element(
-		  filtered_begin, filtered_end, MinMaxXComparator{});
-	      auto minmax_y_points = thrust::minmax_element(
-		  filtered_begin, filtered_end, MinMaxYComparator{});
-	      auto minmax_z_points = thrust::minmax_element(
-		  filtered_begin, filtered_end, MinMaxZComparator{});
+            auto minmax_x_points = thrust::minmax_element(
+                filtered_begin, filtered_end, MinMaxXComparator{});
+            auto minmax_y_points = thrust::minmax_element(
+                filtered_begin, filtered_end, MinMaxYComparator{});
+            auto minmax_z_points = thrust::minmax_element(
+							  filtered_begin, filtered_end, MinMaxZComparator{});
 
-              const auto &min_x =
-                  thrust::get<0>(*minmax_x_points.first).operator position().x /
-                  1000.0f;
-              const auto &max_x = thrust::get<0>(*minmax_x_points.second)
-                                      .
-                                      operator position()
-                                      .x /
-                                  1000.0f;
-              const auto &min_y =
-                  thrust::get<0>(*minmax_y_points.first).operator position().y /
-                  1000.0f;
-              const auto &max_y = thrust::get<0>(*minmax_y_points.second)
-                                      .
-                                      operator position()
-                                      .y /
-                                  1000.0f;
-              const auto &min_z =
-                  thrust::get<0>(*minmax_z_points.first).operator position().z /
-                  1000.0f;
-              const auto &max_z = thrust::get<0>(*minmax_z_points.second)
-                                      .
-                                      operator position()
-                                      .z /
-                                  1000.0f;
+	    const auto &min_x =
+	      thrust::get<0>(*minmax_x_points.first).operator position().x /
+	      1000.0f;
+	    const auto &max_x = thrust::get<0>(*minmax_x_points.second)
+	      .
+	      operator position()
+	      .x /
+	      1000.0f;
+	    const auto &min_y =
+	      thrust::get<0>(*minmax_y_points.first).operator position().y /
+	      1000.0f;
+	    const auto &max_y = thrust::get<0>(*minmax_y_points.second)
+	      .
+	      operator position()
+	      .y /
+	      1000.0f;
+	    const auto &min_z =
+	      thrust::get<0>(*minmax_z_points.first).operator position().z /
+	      1000.0f;
+	    const auto &max_z = thrust::get<0>(*minmax_z_points.second)
+	      .
+	      operator position()
+	      .z /
+	      1000.0f;
 
-              float box_min_x = config.position.x - config.size.x;
-              float box_max_x = config.position.x + config.size.x;
-              float box_min_y = config.position.y - config.size.y;
-              float box_max_y = config.position.y + config.size.y;
-              float box_min_z = config.position.z - config.size.z;
-              float box_max_z = config.position.z + config.size.z;
+	    float box_min_x = config.position.x - config.size.x;
+	    float box_max_x = config.position.x + config.size.x;
+	    float box_min_y = config.position.y - config.size.y;
+	    float box_max_y = config.position.y + config.size.y;
+	    float box_min_z = config.position.z - config.size.z;
+	    float box_max_z = config.position.z + config.size.z;
 
-              config.minmax.min_x = pc::math::remap(box_min_x, box_max_x, 0.0f,
-                                                    1.0f, min_x, true);
-              config.minmax.max_x = pc::math::remap(box_min_x, box_max_x, 0.0f,
-                                                    1.0f, max_x, true);
-              config.minmax.min_y = pc::math::remap(box_min_y, box_max_y, 0.0f,
-                                                    1.0f, min_y, true);
-              config.minmax.max_y = pc::math::remap(box_min_y, box_max_y, 0.0f,
-                                                    1.0f, max_y, true);
-              config.minmax.min_z = pc::math::remap(box_min_z, box_max_z, 0.0f,
-                                                    1.0f, min_z, true);
-              config.minmax.max_z = pc::math::remap(box_min_z, box_max_z, 0.0f,
-                                                    1.0f, max_z, true);
+	    config.minmax.min_x = pc::math::remap(box_min_x, box_max_x, 0.0f,
+						  1.0f, min_x, true);
+	    config.minmax.max_x = pc::math::remap(box_min_x, box_max_x, 0.0f,
+						  1.0f, max_x, true);
+	    config.minmax.min_y = pc::math::remap(box_min_y, box_max_y, 0.0f,
+						  1.0f, min_y, true);
+	    config.minmax.max_y = pc::math::remap(box_min_y, box_max_y, 0.0f,
+						  1.0f, max_y, true);
+	    config.minmax.min_z = pc::math::remap(box_min_z, box_max_z, 0.0f,
+						  1.0f, min_z, true);
+	    config.minmax.max_z = pc::math::remap(box_min_z, box_max_z, 0.0f,
+						  1.0f, max_z, true);
 
-              if (config.minmax.publish) {
-                auto &mm = config.minmax;
-                auto id = std::to_string(config.id);
-                publisher::publish_all(
-                    "min_x", std::array<float, 1>{mm.min_x},
-                    {"operator", "range_filter", id, "minmax"});
-                publisher::publish_all(
-                    "max_x", std::array<float, 1>{mm.max_x},
-                    {"operator", "range_filter", id, "minmax"});
-                publisher::publish_all(
-                    "min_y", std::array<float, 1>{mm.min_y},
-                    {"operator", "range_filter", id, "minmax"});
-                publisher::publish_all(
-                    "max_y", std::array<float, 1>{mm.max_y},
-                    {"operator", "range_filter", id, "minmax"});
-                publisher::publish_all(
-                    "min_z", std::array<float, 1>{mm.min_z},
-                    {"operator", "range_filter", id, "minmax"});
-                publisher::publish_all(
-                    "max_z", std::array<float, 1>{mm.max_z},
-                    {"operator", "range_filter", id, "minmax"});
-              }
-            }
+	    if (config.minmax.publish) {
+	      auto &mm = config.minmax;
+	      auto id = std::to_string(config.id);
+	      publisher::publish_all(
+				     "min_x", std::array<float, 1>{mm.min_x},
+				     {"operator", "range_filter", id, "minmax"});
+	      publisher::publish_all(
+				     "max_x", std::array<float, 1>{mm.max_x},
+				     {"operator", "range_filter", id, "minmax"});
+	      publisher::publish_all(
+				     "min_y", std::array<float, 1>{mm.min_y},
+				     {"operator", "range_filter", id, "minmax"});
+	      publisher::publish_all(
+				     "max_y", std::array<float, 1>{mm.max_y},
+				     {"operator", "range_filter", id, "minmax"});
+	      publisher::publish_all(
+				     "min_z", std::array<float, 1>{mm.min_z},
+				     {"operator", "range_filter", id, "minmax"});
+	      publisher::publish_all(
+				     "max_z", std::array<float, 1>{mm.max_z},
+				     {"operator", "range_filter", id, "minmax"});
+	    }
           }
           // else if constexpr (std::is_same_v<
           //                        T, OutlierFilterOperatorConfiguration>) {
