@@ -22,7 +22,7 @@ option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_MQTT "Enable MQTT client support" ON)
 option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
-option(WITH_MARCH_NATIVE "Enable -march=native builds" OFF)
+option(WITH_MARCH_NATIVE "Enable -march=native builds" ON)
 
 option(WITH_POINTCASTER "Build main application" ON)
 
@@ -53,7 +53,6 @@ if(LINUX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive -Wfatal-errors")
 endif()
 
-# link time optimisation for release builds
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION $<$<CONFIG:Release>:TRUE>)
 
 if (WIN32 AND WITH_POINTCASTER)
@@ -312,10 +311,22 @@ if (WITH_POINTCASTER)
 
   target_link_libraries(pointcaster PRIVATE 
     ${LINK_LIBS} ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
-  
-  if (WITH_MARCH_NATIVE)
-    target_compile_options(pointcaster PRIVATE "-march=native")
+
+  # optimisations
+
+  if (LINUX)
+
+    if (WITH_MARCH_NATIVE)
+      target_compile_options(pointcaster 
+        PRIVATE "-march=native")
+    endif()
+
+    target_compile_options(pointcaster 
+      PRIVATE "$<$<CONFIG:Release>:-O3>")
+
   endif()
+
+  
 
   if (WITH_THREAD_SANITIZER)
     target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")

@@ -714,6 +714,7 @@ void PointCaster::render_cameras() {
     if (points.empty()) {
 
       points = devices::synthesized_point_cloud({*_session_operator_host});
+
       if (rendering_config.snapshots)
         points += snapshots::point_cloud();
       _point_cloud_renderer->points = points;
