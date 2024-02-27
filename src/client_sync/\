@@ -1,0 +1,97 @@
+#pragma once
+
+#include "../logger.h"
+#include "../publisher/publishable_traits.h"
+#include "../publisher/publisher_utils.h"
+#include "../string_utils.h"
+#include "../structs.h"
+#include "sync_server_config.gen.h"
+#include <thread>
+#include <type_traits>
+#include <variant>
+#include <zmq.hpp>
+#ifndef __CUDACC__
+#include <zpp_bits.h>
+#include <concurrentqueue/blockingconcurrentqueue.h>
+#endif
+
+// TODO: put these in a util class
+// Helper template to extract types from a variant
+template <typename... Ts> struct extract_variant_types {};
+
+template <typename T, typename... Ts>
+struct extract_variant_types<std::variant<T, Ts...>> {
+  using type = std::tuple<T, Ts...>;
+};
+
+// Helper function to check if a type exists within a tuple of types
+template <typename T, typename Tuple> constexpr bool is_in_tuple = false;
+
+template <typename T, typename Head, typename... Tail>
+constexpr bool is_in_tuple<T, std::tuple<Head, Tail...>> =
+    std::is_same_v<T, Head> || is_in_tuple<T, std::tuple<Tail...>>;
+
+/////////////////
+
+namespace pc::client_sync {
+
+struct ParameterUpdate {
+  std::string id;
+  std::variant<float, pc::types::Float3> value;
+};
+
+class SyncServer {
+public:
+  SyncServer(SyncServerConfiguration &config);
+  ~SyncServer();
+
+  SyncServer(const SyncServer &) = delete;
+  SyncServer &operator=(const SyncServer &) = delete;
+
+  SyncServer(SyncServer &&) = delete;
+  SyncServer &operator=(SyncServer &&) = delete;
+
+  template <typename T>
+  std::enable_if_t<!is_publishable_container_v<T>, void>
+  publish(const std::string_view topic, const T &data,
+	  std::initializer_list<std::string_view> topic_nodes = {}) {
+    if constexpr (std::disjunction_v<std::is_same<T, float>,
+				     std::is_same<T, pc::types::Float3>>) {
+      const auto id = publisher::construct_topic_string(topic, topic_nodes);
+      enqueue(ParameterUpdate{id, {data}});
+    }
+  }
+
+  template <typename T>
+  std::enable_if_t<is_publishable_container_v<T>, void>
+  publish(const std::string_view topic, const T &data,
+          std::initializer_list<std::string_view> topic_nodes = {}) {
+    pc::logger->debug("attempted container type {}", topic);
+    std::size_t i = 0;
+    for (auto &element_data : data) {
+      auto element_topic = pc::strings::concat(topic, fmt::format("/{}", i++));
+      if constexpr (is_publishable_container<typename T::value_type>()) {
+	publish(element_topic, element_data, topic_nodes);
+      } else {
+	auto flattened_topic =
+	    publisher::construct_topic_string(element_topic, topic_nodes);
+	publish(flattened_topic, element_data);
+      }
+    }
+  }
+
+  void draw_imgui_window();
+
+private:
+  SyncServerConfiguration &_config;
+  std::unique_ptr<std::jthread> _publish_thread;
+
+#ifndef __CUDACC__
+  moodycamel::BlockingConcurrentQueue<const ParameterUpdate>
+      _messages_to_publish;
+#endif
+
+  void enqueue(ParameterUpdate update);
+};
+
+} // namespace pc::client_sync

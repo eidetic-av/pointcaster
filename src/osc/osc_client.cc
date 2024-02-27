@@ -16,7 +16,7 @@ namespace pc::osc {
 OscClient::OscClient(OscClientConfiguration &config)
     : _config(config), _sender_thread([this](auto st) { send_messages(st); }) {
   // publisher::add(this);
-  declare_parameters("oscclient", _config);
+  parameters::declare_parameters("oscclient", _config);
 }
 
 OscClient::~OscClient() {
@@ -52,8 +52,8 @@ void OscClient::draw_imgui_window() {
 
   ImGui::Begin("OSC Client", nullptr);
 
-  pc::gui::draw_parameters("oscclient",
-                           struct_parameters.at(std::string{"oscclient"}));
+  pc::gui::draw_parameters(
+      "oscclient", parameters::struct_parameters.at(std::string{"oscclient"}));
 
   ImGui::End();
 }

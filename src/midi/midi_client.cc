@@ -18,6 +18,7 @@
 namespace pc::midi {
 
 using pc::tween::TweenManager;
+using namespace pc::parameters;
 
 static std::unordered_map<std::string, std::string> _port_keys;
 
@@ -115,6 +116,8 @@ void MidiClient::send_messages(std::stop_token st) {
       _virtual_output.send_message(status_byte, message.cc_num, message.value);
     }
   }
+
+  pc::logger->info("Closed MIDI Client thread");
 }
 
 void MidiClient::handle_input_added(const libremidi::input_port &port,

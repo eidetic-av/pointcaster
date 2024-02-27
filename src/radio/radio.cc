@@ -12,6 +12,8 @@
 
 namespace pc::radio {
 
+using namespace pc::parameters;
+
 static std::mutex stats_access;
 static std::vector<unsigned int> send_durations;
 static std::vector<float> frame_sizes;
@@ -36,9 +38,10 @@ Radio::Radio(RadioConfiguration &config,
         // and don't keep excess frames in memory
         radio.set(zmq::sockopt::linger, 0);
 
-        // auto destination = fmt::format("tcp://127.0.0.1:{}", _config.port);
-        auto destination = fmt::format("tcp://*:{}", _config.port);
-        radio.bind(destination);
+        // auto destination = fmt::format("tcp://:{}", _config.port);
+        // auto destination = "tcp://*:9999";
+        // radio.bind(destination);
+        radio.bind("tcp://127.0.0.1:9992");
         pc::logger->info("Radio broadcasting on port {}", _config.port);
 
         using delta_time = duration<unsigned int, milliseconds>;

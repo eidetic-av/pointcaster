@@ -1,9 +1,12 @@
 #include "parameters.h"
 #include "logger.h"
 #include "string_utils.h"
+#include "utils/lru_cache.h"
+#include <algorithm>
 #include <stack>
+#include <type_traits>
 
-namespace pc {
+namespace pc::parameters {
 
 void declare_parameter(std::string_view parameter_id,
                        const Parameter &parameter) {
@@ -76,9 +79,61 @@ void unbind_parameter(std::string_view parameter_id) {
       erase_cb();
     }
   }
-  // parameter_bindings.erase(parameter_id);
   parameter_states[parameter_id] = ParameterState::Unbound;
 }
 
+void publish_parameter(std::string_view parameter_id) {
+  pc::logger->debug("running publish parameter: {}", parameter_id);
+  parameter_states[parameter_id] = ParameterState::Publish;
+}
 
-} // namespace pc
+template <typename T> cache::lru_cache<std::string, T> &get_cache() {
+  static constexpr auto parameter_cache_size = 50;
+  static cache::lru_cache<std::string, T> cache(parameter_cache_size);
+  return cache;
+}
+
+void publish() {
+  for (const auto &kvp : parameter_states) {
+    const auto &[parameter_id, state] = kvp;
+
+    if (state == ParameterState::Publish) {
+      std::visit(
+          [parameter_id](auto &&parameter_ref) {
+
+	    const auto &p = parameter_ref.get();
+            using T = std::decay_t<decltype(p)>;
+
+	    auto& param_cache = get_cache<T>();
+
+	    bool value_updated = true;
+	    if (param_cache.exists(parameter_id)) {
+	      const auto &cached_value = param_cache.get(parameter_id);
+	      value_updated = p != cached_value;
+	    }
+
+	    if (value_updated) {
+
+	      if constexpr (is_publishable_container_v<T>) {
+		publisher::publish_all(parameter_id, p);
+	      } else if constexpr (pc::types::VectorType<T>) {
+		constexpr auto vector_size = types::VectorSize<T>::value;
+		std::array<typename T::vector_type, vector_size> array;
+		std::copy_n(p.data(), vector_size, array.begin());
+		publisher::publish_all(parameter_id, array);
+	      }
+	      // TODO MQTT doesn't implement single parameter publishing
+	      // else if constexpr (std::is_same_v<float, T>) {
+	      // 	publisher::publish_all(parameter_id, p);
+	      // } else if constexpr (std::is_same_v<int, T>) {
+	      // 	publisher::publish_all(parameter_id, p);
+	      // }
+	      param_cache.put(parameter_id, p);
+            }
+          },
+          parameter_bindings.at(parameter_id).value);
+    }
+  }
+}
+
+} // namespace pc::parameters

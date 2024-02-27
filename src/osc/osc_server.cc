@@ -13,6 +13,8 @@
 
 namespace pc::osc {
 
+using namespace pc::parameters;
+
 OscServer::OscServer(OscServerConfiguration &config) : _config(config) {
   _config.port = std::clamp(_config.port, 1024, 49151);
   create_server(_config.port);

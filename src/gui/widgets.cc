@@ -94,7 +94,7 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
   if (is_disabled)
     ImGui::BeginDisabled();
 
-  auto &state = parameter_states[parameter_id];
+  const auto state = parameter_states[parameter_id];
   auto new_state = state;
 
   if (state == ParameterState::Bound) {
@@ -173,7 +173,7 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
   if (is_disabled)
     ImGui::EndDisabled();
 
-  state = new_state;
+  parameter_states[parameter_id] = new_state;
 
   if (unbind_current)
     unbind_parameter(parameter_id);

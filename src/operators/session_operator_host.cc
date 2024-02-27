@@ -19,6 +19,7 @@ namespace pc::operators {
 
 using namespace catpuccin;
 using namespace catpuccin::magnum;
+using namespace pc::parameters;
 
 static std::map<uid, std::unique_ptr<WireframeBox>> operator_bounding_boxes;
 

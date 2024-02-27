@@ -5,6 +5,7 @@
 #include "serialization.h"
 #include "string_map.h"
 #include "structs.h"
+#include "publisher/publisher.h"
 #include <any>
 #include <cmath>
 #include <concepts>
@@ -21,7 +22,7 @@
 #include <variant>
 #include <map>
 
-namespace pc {
+namespace pc::parameters {
 
 using pc::types::Float2;
 using pc::types::Float3;
@@ -35,17 +36,18 @@ using pc::types::Short3;
 template <typename T>
 concept is_float_vector_t =
     std::disjunction<std::is_same<T, Float2>, std::is_same<T, Float3>,
-  std::is_same<T, Float4>, std::is_same<T, MinMax<float>>>::value;
+                     std::is_same<T, Float4>,
+                     std::is_same<T, MinMax<float>>>::value;
 
 template <typename T>
 concept is_int_vector_t =
     std::disjunction<std::is_same<T, Int2>, std::is_same<T, Int3>,
-		     std::is_same<T, MinMax<int>>>::value;
+                     std::is_same<T, MinMax<int>>>::value;
 
 template <typename T>
 concept is_short_vector_t =
     std::disjunction<std::is_same<T, Short2>, std::is_same<T, Short3>,
-		     std::is_same<T, MinMax<short>>>::value;
+                     std::is_same<T, MinMax<short>>>::value;
 
 struct Parameter;
 
@@ -68,20 +70,20 @@ using StringReference = std::reference_wrapper<std::string>;
 
 using ParameterReference =
     std::variant<FloatReference, Float2Reference, Float3Reference, IntReference,
-		 Int2Reference, Int3Reference, ShortReference, Short2Reference, Short3Reference, MinMaxFloatReference,
-		 MinMaxIntReference, MinMaxShortReference, BoolReference,
-		 StringReference>;
+                 Int2Reference, Int3Reference, ShortReference, Short2Reference,
+                 Short3Reference, MinMaxFloatReference, MinMaxIntReference,
+                 MinMaxShortReference, BoolReference, StringReference>;
 
 using ParameterValue =
     std::variant<float, Float2, Float3, Float4, int, Int2, Int3, short, Short2,
-		 Short3, MinMax<float>, MinMax<int>, MinMax<short>, bool,
-		 std::string>;
+                 Short3, MinMax<float>, MinMax<int>, MinMax<short>, bool,
+                 std::string>;
 
 using ParameterUpdateCallback =
     std::function<void(const Parameter &, Parameter &)>;
 
 struct Parameter {
-  ParameterReference value; 
+  ParameterReference value;
   ParameterValue min;
   ParameterValue max;
   ParameterValue default_value;
@@ -95,7 +97,7 @@ struct Parameter {
   Parameter(float &_value, float _min = -10, float _max = 10,
             float _default_value = 0)
       : value(FloatReference(_value)), min(_min), max(_max),
-	default_value(_default_value) {}
+        default_value(_default_value) {}
 
   Parameter(Float2 &_value, float _min = -10, float _max = 10,
             float _default_value = 0)
@@ -113,11 +115,11 @@ struct Parameter {
 
   Parameter(Int2 &_value, int _min = -10, int _max = 10, int _default_value = 0)
       : value(Int2Reference(_value)), min(_min), max(_max),
-	default_value(_default_value) {}
+        default_value(_default_value) {}
 
   Parameter(Int3 &_value, int _min = -10, int _max = 10, int _default_value = 0)
       : value(Int3Reference(_value)), min(_min), max(_max),
-	default_value(_default_value) {}
+        default_value(_default_value) {}
 
   Parameter(short &_value, short _min = -10, short _max = 10,
             short _default_value = 0)
@@ -145,13 +147,13 @@ struct Parameter {
         default_value(_default_value) {}
 
   Parameter(MinMax<short> &_value, short _min = -10, short _max = 10,
-	    short _default_value = 0)
+            short _default_value = 0)
       : value(MinMaxShortReference(_value)), min(_min), max(_max),
-	default_value(_default_value) {}
+        default_value(_default_value) {}
 
   Parameter(bool &_value)
       : value(BoolReference(_value)), min(false), max(true),
-	default_value(false) {}
+        default_value(false) {}
 
   Parameter(std::string &_value)
       : value(StringReference(_value)), min(""), max(""), default_value("") {}
@@ -169,7 +171,7 @@ struct Parameter {
   }
 };
 
-enum class ParameterState { Unbound, Bound, Learning };
+enum class ParameterState : uint8_t { Unbound, Bound, Learning, Publish };
 
 inline pc::string_map<Parameter> parameter_bindings;
 inline pc::string_map<ParameterState> parameter_states;
@@ -184,16 +186,16 @@ struct ParameterMap : public std::vector<ParameterMapEntry> {};
 inline std::map<std::string, ParameterMap> struct_parameters;
 
 void declare_parameter(std::string_view parameter_id,
-		       const Parameter &parameter_binding);
+                       const Parameter &parameter_binding);
 
 template <typename T>
 void declare_parameters(std::string_view parameter_id, T &basic_value,
-			T default_value, std::optional<MinMax<float>> min_max,
-			std::string_view parent_struct_name) {
+                        T default_value, std::optional<MinMax<float>> min_max,
+                        std::string_view parent_struct_name) {
 
   // numeric values
   if constexpr (std::is_same_v<T, float> || std::is_same_v<T, int> ||
-		std::is_same_v<T, short>) {
+                std::is_same_v<T, short>) {
     Parameter p(basic_value);
     p.parent_struct_name = parent_struct_name;
     p.default_value = default_value;
@@ -222,8 +224,8 @@ void declare_parameters(std::string_view parameter_id, T &basic_value,
 template <typename T>
   requires pc::types::VectorType<T>
 void declare_parameters(std::string_view parameter_id, T &vector_value,
-			T default_value, std::optional<MinMax<float>> min_max,
-			std::string_view parent_struct_name) {
+                        T default_value, std::optional<MinMax<float>> min_max,
+                        std::string_view parent_struct_name) {
 
   constexpr auto vector_size = types::VectorSize<T>::value;
   constexpr std::array<const char *, 4> element = {"x", "y", "z", "w"};
@@ -248,16 +250,16 @@ void declare_parameters(std::string_view parameter_id, T &vector_value,
     auto element_id = fmt::format("{}.{}", parameter_id, element[i]);
     // pc::logger->debug("declare vector: {}", element_id);
     declare_parameters(element_id, vector_value[i], default_value[i], min_max,
-		       parent_struct_name);
+                       parent_struct_name);
   }
 }
 
 template <typename T>
   requires pc::reflect::IsSerializable<T>
 void declare_parameters(std::string_view parameter_id, T &complex_value,
-			T default_value = {},
-			std::optional<MinMax<float>> min_max = {},
-			std::string_view parent_struct_name = "") {
+                        T default_value = {},
+                        std::optional<MinMax<float>> min_max = {},
+                        std::string_view parent_struct_name = "") {
   pc::logger->info("Declaring parameter: {}", parameter_id);
 
   // retrieve type info at compile-time
@@ -275,8 +277,8 @@ void declare_parameters(std::string_view parameter_id, T &complex_value,
 
   // Function to apply on each type member.
   auto handle_member = [parameter_id, struct_name, &complex_value, &type_info,
-			&member_defaults, &member_min_max_values](
-			   std::string_view member_name, auto index) {
+                        &member_defaults, &member_min_max_values](
+                           std::string_view member_name, auto index) {
     using MemberType =
         pc::reflect::type_at_t<typename T::MemberTypes, decltype(index)::value>;
 
@@ -291,8 +293,8 @@ void declare_parameters(std::string_view parameter_id, T &complex_value,
     // recursively call declare_parameters for each member, delegating to the
     // appropriate overload based on type
     auto member_parameter_id = fmt::format("{}.{}", parameter_id, member_name);
-    declare_parameters(member_parameter_id, member_ref, member_default, member_min_max,
-		       struct_name);
+    declare_parameters(member_parameter_id, member_ref, member_default,
+                       member_min_max, struct_name);
   };
 
   // using an immediately invoked lambda to provide member names and
@@ -305,14 +307,17 @@ void declare_parameters(std::string_view parameter_id, T &complex_value,
   }(index_sequence);
 }
 
-void bind_parameter(std::string_view parameter_id,
-		    const Parameter &parameter);
+void bind_parameter(std::string_view parameter_id, const Parameter &parameter);
 
 void unbind_parameter(std::string_view parameter_id);
 
+void publish_parameter(std::string_view parameter_id);
+
+void publish();
+
 template <typename T>
 void set_parameter_value(std::string_view parameter_id, T new_value,
-			 float input_min, float input_max) {
+                         float input_min, float input_max) {
 
   auto &parameter = parameter_bindings.at(parameter_id);
   auto old_binding = parameter;
@@ -320,20 +325,20 @@ void set_parameter_value(std::string_view parameter_id, T new_value,
   if (std::holds_alternative<FloatReference>(parameter.value)) {
     float &value = std::get<FloatReference>(parameter.value).get();
     value = math::remap(input_min, input_max, std::get<float>(parameter.min),
-			std::get<float>(parameter.max), new_value, true);
+                        std::get<float>(parameter.max), new_value, true);
   } else if (std::holds_alternative<IntReference>(parameter.value)) {
     int &value = std::get<IntReference>(parameter.value).get();
     auto min = static_cast<float>(std::get<int>(parameter.min));
     auto max = static_cast<float>(std::get<int>(parameter.max));
     auto float_value =
-	math::remap(input_min, input_max, min, max, new_value, true);
+        math::remap(input_min, input_max, min, max, new_value, true);
     value = static_cast<int>(std::round(float_value));
   } else if (std::holds_alternative<ShortReference>(parameter.value)) {
     short &value = std::get<ShortReference>(parameter.value).get();
     auto min = static_cast<float>(std::get<short>(parameter.min));
     auto max = static_cast<float>(std::get<short>(parameter.max));
     auto float_value =
-	math::remap(input_min, input_max, min, max, new_value, true);
+        math::remap(input_min, input_max, min, max, new_value, true);
     value = static_cast<short>(std::round(float_value));
   }
 
@@ -343,10 +348,10 @@ void set_parameter_value(std::string_view parameter_id, T new_value,
 }
 
 inline void set_parameter_value(std::string_view parameter_id, int new_value,
-				int input_min, int input_max) {
+                                int input_min, int input_max) {
   set_parameter_value(parameter_id, static_cast<float>(new_value),
-		      static_cast<float>(input_min),
-		      static_cast<float>(input_max));
+                      static_cast<float>(input_min),
+                      static_cast<float>(input_max));
 }
 
 template <typename T>
@@ -382,26 +387,27 @@ inline float get_parameter_value(std::string_view parameter_id) {
 }
 
 inline void set_parameter_minmax(std::string_view parameter_id, float min,
-                              float max) {
+                                 float max) {
   auto &binding = parameter_bindings.at(parameter_id);
   binding.min = min;
   binding.max = max;
 }
 
 inline void add_parameter_update_callback(std::string_view parameter_id,
-                                       ParameterUpdateCallback callback) {
+                                          ParameterUpdateCallback callback) {
   auto &binding = parameter_bindings.at(parameter_id);
   binding.update_callbacks.push_back(std::move(callback));
 }
 
-inline void add_parameter_minmax_update_callback(std::string_view parameter_id,
-                                              ParameterUpdateCallback callback) {
+inline void
+add_parameter_minmax_update_callback(std::string_view parameter_id,
+                                     ParameterUpdateCallback callback) {
   auto &binding = parameter_bindings.at(parameter_id);
   binding.minmax_update_callbacks.push_back(std::move(callback));
 }
 
 inline void add_parameter_erase_callback(std::string_view parameter_id,
-					 std::function<void()> callback) {
+                                         std::function<void()> callback) {
   auto &binding = parameter_bindings.at(parameter_id);
   binding.erase_callbacks.push_back(std::move(callback));
 }
@@ -413,4 +419,4 @@ inline void clear_parameter_callbacks(std::string_view parameter_id) {
   binding.erase_callbacks.clear();
 }
 
-} // namespace pc
+} // namespace pc::parameters

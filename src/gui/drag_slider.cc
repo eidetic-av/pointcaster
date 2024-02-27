@@ -50,7 +50,7 @@ bool DragScalar(int component_index, int component_count,
 
   //parameter learning
 
-  auto &param_state = parameter_states[parameter_id];
+  const auto param_state = parameter_states[parameter_id];
   auto new_param_state = param_state;
   auto unbind_param = false;
 
@@ -65,6 +65,8 @@ bool DragScalar(int component_index, int component_count,
       // set its state to the result of the recording
       new_param_state = pc::gui::recording_result;
     }
+  } else if (param_state == ParameterState::Publish) {
+    ImGui::PushStyleColor(ImGuiCol_Text, mocha_blue);
   }
 
   // draw the control
@@ -103,20 +105,25 @@ bool DragScalar(int component_index, int component_count,
 	auto max = reinterpret_cast<const float*>(p_max);
 	store_learning_parameter_info(parameter_id, *min, *max, *f);
       } else {
-	// if we were learning and we right clicked, return the slider to an
-	// unbound state
-	new_param_state = ParameterState::Unbound;
-	pc::gui::learning_parameter = false;
-	unbind_param = true;
+        // if we were learning and we right clicked, return the slider to an
+        // unbound state
+        new_param_state = ParameterState::Unbound;
+        pc::gui::learning_parameter = false;
+        unbind_param = true;
       }
     }
   }
 
-  ImGui::PopStyleColor(param_state != ParameterState::Unbound ? 1 : 0);
+  if (param_state == ParameterState::Bound ||
+      param_state == ParameterState::Learning ||
+      param_state == ParameterState::Publish) {
+    ImGui::PopStyleColor();
+  }
 
-  param_state = new_param_state;
-  if (unbind_param) {
-    unbind_parameter(parameter_id);
+  parameter_states[parameter_id] = new_param_state;
+
+if (unbind_param) {
+  unbind_parameter(parameter_id);
   }
 
   return value_changed;
@@ -178,6 +185,13 @@ bool DragScalarN(std::string_view parameter_id, ImGuiDataType data_type, void *p
     PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{11, 6});
     SetTooltip("%s", parameter_id.data());
     PopStyleVar();
+  }
+
+  if (IsItemClicked() && IsMouseDoubleClicked(0)) {
+    auto& t = parameter_states[parameter_id];
+    t = ParameterState::Publish;
+    // parameter_states[parameter_id] = ParameterState::Publish;
+    // publish_parameter(parameter_id);
   }
 
   Dummy({text_width + g.Style.ItemInnerSpacing.x, 0});

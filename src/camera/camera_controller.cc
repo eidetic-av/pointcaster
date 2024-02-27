@@ -32,6 +32,8 @@ using Magnum::Quaternion;
 using Magnum::Vector3;
 using Magnum::Math::Deg;
 
+using namespace pc::parameters;
+
 std::atomic<std::size_t> CameraController::count = 0;
 
 CameraController::CameraController(Magnum::Platform::Application *app,

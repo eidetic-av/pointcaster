@@ -1,7 +1,5 @@
 #pragma once
 
-#define ZMQ_BUILD_DRAFT_API
-#include <zmq.hpp>
 #include <spdlog/spdlog.h>
 #include <pointclouds.h>
 

@@ -27,7 +27,7 @@ K4ADevice::K4ADevice(DeviceConfiguration config, std::string_view target_id) : D
 
   count++;
 
-  declare_parameters(_driver->id(), _config);
+  parameters::declare_parameters(_driver->id(), _config);
 }
 
 K4ADevice::~K4ADevice() {
@@ -51,7 +51,8 @@ void K4ADevice::update_device_control(int *target, int value,
 
 void K4ADevice::draw_device_controls() {
 
-  pc::gui::draw_parameters(_driver->id(), struct_parameters.at(_driver->id()));
+  pc::gui::draw_parameters(_driver->id(),
+                           parameters::struct_parameters.at(_driver->id()));
 
   // using pc::gui::slider;
   

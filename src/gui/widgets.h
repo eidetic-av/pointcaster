@@ -30,6 +30,8 @@ using pc::types::Int;
 using pc::types::Int2;
 using pc::types::Int3;
 
+using namespace pc::parameters;
+
 /* Must be called at the start of the application */
 void init_parameter_styles();
 

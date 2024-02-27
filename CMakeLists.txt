@@ -73,6 +73,7 @@ if (GENERATE_REFLECTIONS)
     src/osc/osc_server_config.h
     src/mqtt/mqtt_client_config.h
     src/radio/radio_config.h
+    src/client_sync/sync_server.h
     src/tween/tween_config.h
     src/operators/operator_host_config.h
     src/operators/rake_operator.h
@@ -263,6 +264,7 @@ if (WITH_POINTCASTER)
     src/camera/camera_controller.cc
     src/analysis/analyser_2d.cc
     src/radio/radio.cc
+    src/client_sync/sync_server.cc
     src/snapshots.cc
     src/point_cloud_renderer.cc
     src/sphere_renderer.cc

@@ -6,6 +6,8 @@
 #include <readerwriterqueue/readerwritercircularbuffer.h>
 #include <thread>
 #include <vector>
+#define ZMQ_BUILD_DRAFT_API
+#include <zmq.hpp>
 
 extern "C" {
 
@@ -34,18 +36,20 @@ int startNetworkThread(const char *point_caster_address, int timeout_ms) {
         zmq::context_t ctx;
         zmq::socket_t dish(ctx, zmq::socket_type::dish);
 
+	// TODO something in the set calls here is crashing Unity
+
         // don't retain frames in memory
-        dish.set(zmq::sockopt::linger, 0);
-        dish.set(zmq::sockopt::rcvhwm, 10);
+        // dish.set(zmq::sockopt::linger, 0);
+        // dish.set(zmq::sockopt::rcvhwm, 10);
 
         // connection attempt should time out if requested
-        if (timeout_ms != 0) dish.set(zmq::sockopt::connect_timeout, timeout_ms);
+        // if (timeout_ms != 0) dish.set(zmq::sockopt::connect_timeout, timeout_ms);
 
-	constexpr auto recv_timeout_ms = 1000;
-	dish.set(zmq::sockopt::rcvtimeo, recv_timeout_ms);
+	// constexpr auto recv_timeout_ms = 1000;
+	// dish.set(zmq::sockopt::rcvtimeo, recv_timeout_ms);
 
         //auto endpoint = fmt::format("tcp://{}", point_caster_address);
-	      auto endpoint = "tcp://127.0.0.1:9999";
+	auto endpoint = "tcp://127.0.0.1:9992";
 	      // auto endpoint = "tcp://192.168.2.200:9999";
         log(fmt::format("Attempting to connect to '{}'", endpoint));
         dish.connect(endpoint);

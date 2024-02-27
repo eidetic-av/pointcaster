@@ -20,6 +20,7 @@
 namespace pc::mqtt {
 
 using namespace std::chrono_literals;
+using namespace pc::parameters;
 
 static const std::regex uri_pattern(R"(^([a-zA-Z]+):\/\/([^:\/]+):(\d+)$)");
 

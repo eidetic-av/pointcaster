@@ -9,6 +9,7 @@
 #include "mqtt/mqtt_client_config.gen.h"
 #include "operators/operator_host_config.gen.h"
 #include "radio/radio_config.gen.h"
+#include "client_sync/sync_server_config.gen.h"
 #include "serialization.h"
 #include <atomic>
 #include <map>
@@ -43,6 +44,7 @@ struct PointCasterSession {
   std::optional<midi::MidiClientConfiguration> midi;
   std::optional<osc::OscClientConfiguration> osc_client;
   std::optional<osc::OscServerConfiguration> osc_server;
+  std::optional<client_sync::SyncServerConfiguration> sync_server;
 
   PointCasterSessionLayout layout; // @optional
 

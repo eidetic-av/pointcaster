@@ -32,8 +32,8 @@
 #include "logger.h"
 #include "path.h"
 #include "pointer.h"
-#include "structs.h"
 #include "session.gen.h"
+#include "structs.h"
 
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/GL/Context.h>
@@ -63,19 +63,21 @@
 #include <pointclouds.h>
 
 #include "camera/camera_controller.h"
+#include "client_sync/sync_server.h"
 #include "devices/device.h"
 #include "devices/usb.h"
 #include "gui/widgets.h"
+#include "modes.h"
+#include "operators/session_operator_host.h"
 #include "point_cloud_renderer.h"
+#include "publisher/publisher.h"
 #include "radio/radio.h"
+#include "shaders/texture_display.h"
 #include "snapshots.h"
 #include "sphere_renderer.h"
-#include "operators/session_operator_host.h"
 #include "tween/tween_manager.h"
 #include "uuid.h"
 #include "wireframe_objects.h"
-#include "shaders/texture_display.h"
-#include "modes.h"
 
 // TODO these need to be removed when initialisation loop is made generic
 #include "devices/k4a/k4a_device.h"
@@ -97,12 +99,14 @@ using namespace pc::types;
 using namespace pc::devices;
 using namespace pc::camera;
 using namespace pc::radio;
+using namespace pc::client_sync;
 using namespace pc::snapshots;
 using namespace pc::midi;
 using namespace pc::osc;
 using namespace pc::mqtt;
 using namespace pc::tween;
 using namespace pc::operators;
+using namespace pc::parameters;
 using namespace Magnum;
 using namespace Math::Literals;
 
@@ -178,6 +182,7 @@ protected:
   std::unique_ptr<MidiClient> _midi;
   std::unique_ptr<OscClient> _osc_client;
   std::unique_ptr<OscServer> _osc_server;
+  std::unique_ptr<SyncServer> _sync_server;
 
 #ifndef WIN32
   std::unique_ptr<UsbMonitor> _usb_monitor;
@@ -207,6 +212,7 @@ protected:
   void open_kinect_sensors();
 
   void render_cameras();
+  void publish_parameters();
 
   void draw_menu_bar();
   void draw_control_bar();
@@ -494,6 +500,11 @@ PointCaster::PointCaster(const Arguments &args)
     _session.osc_server = OscServerConfiguration{};
   }
   _osc_server = std::make_unique<OscServer>(*_session.osc_server);
+
+  if (!_session.sync_server.has_value()) {
+    _session.sync_server = SyncServerConfiguration{};
+  }
+  _sync_server = std::make_unique<SyncServer>(*_session.sync_server);
 
   _snapshots_context = std::make_unique<Snapshots>();
 
@@ -1368,6 +1379,7 @@ void PointCaster::drawEvent() {
 
   render_cameras();
 
+
   _imgui_context.newFrame();
   pc::gui::begin_gui_helpers(_current_mode, _modeline_input);
 
@@ -1463,8 +1475,9 @@ void PointCaster::drawEvent() {
 
   swapBuffers();
 
-  _timeline.nextFrame();
+  parameters::publish();
 
+  _timeline.nextFrame();
   FrameMark;
 }
 
