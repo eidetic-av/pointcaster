@@ -243,8 +243,9 @@ bool RangeSliderFloat(const char *label, float *v1, float *v2, float v_min,
 
   // Tabbing or CTRL-clicking on Slider turns it into an input box
   bool start_text_input = false;
-  const bool tab_focus_requested =
-      (GetItemStatusFlags() & ImGuiItemStatusFlags_FocusedByTabbing) != 0;
+  const bool tab_focus_requested = GetItemStatusFlags() != 0;
+  // const bool tab_focus_requested =
+      // (GetItemStatusFlags() & ImGuiItemStatusFlags_FocusedByTabbing) != 0;
   if (tab_focus_requested || (hovered && g.IO.MouseClicked[0])) {
     SetActiveID(id, window);
     FocusWindow(window);

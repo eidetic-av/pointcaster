@@ -3,7 +3,7 @@
 #include "camera/camera_config.gen.h"
 #include "devices/device_config.gen.h"
 #include "devices/usb_config.gen.h"
-#include "midi/midi_client_config.gen.h"
+#include "midi/midi_device_config.gen.h"
 #include "osc/osc_client_config.gen.h"
 #include "osc/osc_server_config.gen.h"
 #include "mqtt/mqtt_client_config.gen.h"
@@ -31,6 +31,7 @@ struct PointCasterSessionLayout {
 
 using DeviceMap = std::map<std::string, devices::DeviceConfiguration>;
 using CameraMap = std::map<std::string, camera::CameraConfiguration>;
+using PublishedParameterList = std::vector<std::string>;
 
 struct PointCasterSession {
   std::string id;
@@ -41,10 +42,11 @@ struct PointCasterSession {
   std::optional<radio::RadioConfiguration> radio;
   std::optional<devices::UsbConfiguration> usb;
   std::optional<mqtt::MqttClientConfiguration> mqtt;
-  std::optional<midi::MidiClientConfiguration> midi;
+  std::optional<midi::MidiDeviceConfiguration> midi;
   std::optional<osc::OscClientConfiguration> osc_client;
   std::optional<osc::OscServerConfiguration> osc_server;
   std::optional<client_sync::SyncServerConfiguration> sync_server;
+  std::optional<PublishedParameterList> published_params;
 
   PointCasterSessionLayout layout; // @optional
 

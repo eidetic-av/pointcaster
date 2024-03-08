@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../logger.h"
 #include "../publisher/publishable_traits.h"
 #include "mqtt_client_config.gen.h"
 #include <atomic>
@@ -13,7 +14,6 @@
 #include <span>
 #include <string_view>
 #include <type_traits>
-#include "../logger.h"
 
 namespace pc::mqtt {
 
@@ -40,19 +40,27 @@ public:
 
   void publish(const std::string_view topic, const std::string_view message,
                std::initializer_list<std::string_view> topic_nodes = {});
+
   void publish(const std::string_view topic, const void *payload,
 	       const std::size_t size,
 	       std::initializer_list<std::string_view> topic_nodes = {},
 	       bool empty = false);
 
   template <typename T>
-  std::enable_if_t<is_publishable_container_v<T>, void>
-  publish(const std::string_view topic, const T &data,
-	  std::initializer_list<std::string_view> topic_nodes = {}) {
+  void publish(const std::string_view topic, const T &data,
+	       std::initializer_list<std::string_view> topic_nodes = {}) {
     msgpack::sbuffer send_buffer;
     msgpack::pack(send_buffer, data);
-    publish(topic, send_buffer.data(), send_buffer.size(),
-            std::move(topic_nodes), data.empty());
+    if constexpr (is_publishable_container_v<T>) {
+      publish(topic, send_buffer.data(), send_buffer.size(),
+	      std::move(topic_nodes), data.empty());
+    } else if (pc::types::ScalarType<T>) {
+      publish(topic, send_buffer.data(), send_buffer.size(),
+	      std::move(topic_nodes));
+    } else {
+      pc::logger->error(
+	  "Attempting to publish an unimplemented type through MQTT");
+    }
   }
 
   void draw_imgui_window();

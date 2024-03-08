@@ -1,6 +1,0 @@
-{
-  "name": "libremidi",
-  "version": "1.0.0",
-  "description": "A cross-platform C++17 library for real-tim and MIDI file input and output",
-  "homepage": "https://github.com/jcelerier/libremidi"
-}

@@ -6,6 +6,7 @@
 
 #include "../operators/session_operator_host.h"
 #include "../pointer.h"
+#include "../profiling.h"
 #include "device_config.gen.h"
 #include "driver.h"
 #include <Corrade/Containers/Pointer.h>

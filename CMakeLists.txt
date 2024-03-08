@@ -68,7 +68,7 @@ if (GENERATE_REFLECTIONS)
     src/camera/camera_config.h
     src/devices/device_config.h
     src/devices/usb_config.h
-    src/midi/midi_client_config.h
+    src/midi/midi_device_config.h
     src/osc/osc_client_config.h
     src/osc/osc_server_config.h
     src/mqtt/mqtt_client_config.h
@@ -146,7 +146,28 @@ if (WITH_POINTCASTER)
 
   find_package(libremidi CONFIG REQUIRED)
   list(APPEND LINK_LIBS libremidi)
-  list(APPEND POINTCASTER_SRC src/midi/midi_client.cc)
+  list(APPEND POINTCASTER_SRC src/midi/midi_device.cc)
+
+  # TODO find_package rtpmidid
+  # find_package(rtpmidid CONFIG REQUIRED)
+  # list(APPEND LINK_LIBS rtpmidid::rtpmidid-static)
+  list(APPEND POINTCASTER_SRC 
+    src/midi/rtpmidi_device.cc src/midi/rtp_peer.cc)
+
+  list(APPEND LINK_LIBS "/opt/libRtpMidiSDK/targets/Linux/x64/libRtpMidi.so")
+
+  # find_path(MDNS_INCLUDE_DIRS "mdns.h")
+  # target_include_directories(main PRIVATE ${MDNS_INCLUDE_DIRS})
+
+  # list(APPEND INCLUDE_DIRS "/opt/libRtpMidiSDK/C-Binding/")
+
+  add_subdirectory(thirdparty/mdns_cpp)
+  list(APPEND LINK_LIBS mdns_cpp::mdns_cpp)
+
+  # find_package(libmicrodns CONFIG REQUIRED)
+  pkg_check_modules(MICRODNS REQUIRED microdns)
+  list(APPEND INCLUDE_DIRS ${MICRODNS_INCLUDE_DIRS})
+  list(APPEND LINK_LIBS ${MICRODNS_LIBRARIES})
 
   find_package(liblo CONFIG REQUIRED)
   pkg_check_modules(LIBLO REQUIRED liblo)

@@ -7,7 +7,6 @@
 #include "../structs.h"
 #include "../tween/tween_config.gen.h"
 #include "catpuccin.h"
-#include "range_slider.h"
 #include <array>
 #include <atomic>
 #include <functional>

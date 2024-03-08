@@ -1,26 +1,27 @@
 #pragma once
 
 #include "logger.h"
+#include "main_thread_dispatcher.h"
 #include "math.h"
+#include "publisher/publisher.h"
 #include "serialization.h"
 #include "string_map.h"
 #include "structs.h"
-#include "publisher/publisher.h"
 #include <any>
 #include <cmath>
 #include <concepts>
 #include <fmt/format.h>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <serdepp/adaptor/reflection.hpp>
 #include <stdexcept>
 #include <string>
 #include <tuple>
-#include <typeinfo>
 #include <type_traits>
+#include <typeinfo>
 #include <variant>
-#include <map>
 
 namespace pc::parameters {
 
@@ -342,9 +343,12 @@ void set_parameter_value(std::string_view parameter_id, T new_value,
     value = static_cast<short>(std::round(float_value));
   }
 
-  for (const auto &cb : parameter.update_callbacks) {
-    cb(old_binding, parameter);
-  }
+  MainThreadDispatcher::enqueue([&] {
+    for (const auto &cb : parameter.update_callbacks) {
+      pc::logger->info("Running cb from parameters:348");
+      cb(old_binding, parameter);
+    }
+  });
 }
 
 inline void set_parameter_value(std::string_view parameter_id, int new_value,
@@ -376,9 +380,12 @@ void set_parameter_value(std::string_view parameter_id, T new_value) {
     value = new_value;
   }
 
-  for (const auto &cb : parameter.update_callbacks) {
-    cb(old_binding, parameter);
-  }
+  MainThreadDispatcher::enqueue([&] {
+    for (const auto &cb : parameter.update_callbacks) {
+      pc::logger->info("Running cb from parameters:385");
+      cb(old_binding, parameter);
+    }
+  });
 }
 
 /* Returns a copy of the current parameter value */
@@ -417,6 +424,17 @@ inline void clear_parameter_callbacks(std::string_view parameter_id) {
   binding.update_callbacks.clear();
   binding.minmax_update_callbacks.clear();
   binding.erase_callbacks.clear();
+}
+
+inline std::vector<std::string> published_parameter_topics() {
+  std::vector<std::string> result;
+  for (const auto &kvp : parameter_states) {
+    const auto &[parameter_id, state] = kvp;
+    if (state == ParameterState::Publish) {
+      result.push_back(parameter_id);
+    }
+  }
+  return result;
 }
 
 } // namespace pc::parameters

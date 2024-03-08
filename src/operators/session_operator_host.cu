@@ -1,6 +1,5 @@
 #include "../logger.h"
 #include "../math.h"
-#include "../publisher/publisher.h"
 #include "noise_operator.cuh"
 #include "rake_operator.cuh"
 #include "range_filter_operator.cuh"
@@ -96,16 +95,16 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
 	      config.fill.proportion = 0;
             }
 
-            if (config.fill.publish) {
-              publisher::publish_all(
-                  "fill_value", std::array<float, 1>{config.fill.fill_value},
-                  {"operator", "range_filter", std::to_string(config.id),
-                   "fill"});
-              publisher::publish_all(
-                  "proportion", std::array<float, 1>{config.fill.proportion},
-                  {"operator", "range_filter", std::to_string(config.id),
-                   "fill"});
-            }
+            // if (config.fill.publish) {
+              // publisher::publish_all(
+              //     "fill_value", std::array<float, 1>{config.fill.fill_value},
+              //     {"operator", "range_filter", std::to_string(config.id),
+              //      "fill"});
+              // publisher::publish_all(
+              //     "proportion", std::array<float, 1>{config.fill.proportion},
+              //     {"operator", "range_filter", std::to_string(config.id),
+              //      "fill"});
+            // }
 
             // TODO these three kernels could probably be fused into one
 
@@ -161,28 +160,28 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
 	    config.minmax.max_z = pc::math::remap(box_min_z, box_max_z, 0.0f,
 						  1.0f, max_z, true);
 
-	    if (config.minmax.publish) {
-	      auto &mm = config.minmax;
-	      auto id = std::to_string(config.id);
-	      publisher::publish_all(
-				     "min_x", std::array<float, 1>{mm.min_x},
-				     {"operator", "range_filter", id, "minmax"});
-	      publisher::publish_all(
-				     "max_x", std::array<float, 1>{mm.max_x},
-				     {"operator", "range_filter", id, "minmax"});
-	      publisher::publish_all(
-				     "min_y", std::array<float, 1>{mm.min_y},
-				     {"operator", "range_filter", id, "minmax"});
-	      publisher::publish_all(
-				     "max_y", std::array<float, 1>{mm.max_y},
-				     {"operator", "range_filter", id, "minmax"});
-	      publisher::publish_all(
-				     "min_z", std::array<float, 1>{mm.min_z},
-				     {"operator", "range_filter", id, "minmax"});
-	      publisher::publish_all(
-				     "max_z", std::array<float, 1>{mm.max_z},
-				     {"operator", "range_filter", id, "minmax"});
-	    }
+	    // if (config.minmax.publish) {
+	    //   auto &mm = config.minmax;
+	    //   auto id = std::to_string(config.id);
+	    //   publisher::publish_all(
+	    // 			     "min_x", std::array<float, 1>{mm.min_x},
+	    // 			     {"operator", "range_filter", id, "minmax"});
+	    //   publisher::publish_all(
+	    // 			     "max_x", std::array<float, 1>{mm.max_x},
+	    // 			     {"operator", "range_filter", id, "minmax"});
+	    //   publisher::publish_all(
+	    // 			     "min_y", std::array<float, 1>{mm.min_y},
+	    // 			     {"operator", "range_filter", id, "minmax"});
+	    //   publisher::publish_all(
+	    // 			     "max_y", std::array<float, 1>{mm.max_y},
+	    // 			     {"operator", "range_filter", id, "minmax"});
+	    //   publisher::publish_all(
+	    // 			     "min_z", std::array<float, 1>{mm.min_z},
+	    // 			     {"operator", "range_filter", id, "minmax"});
+	    //   publisher::publish_all(
+	    // 			     "max_z", std::array<float, 1>{mm.max_z},
+	    // 			     {"operator", "range_filter", id, "minmax"});
+	    // }
           }
           // else if constexpr (std::is_same_v<
           //                        T, OutlierFilterOperatorConfiguration>) {
@@ -239,6 +238,7 @@ operator_in_out_t apply(operator_in_out_t begin, operator_in_out_t end,
     end = pc::operators::SessionOperatorHost::run_operators(
         begin, end, operator_host._config);
   }
+  return end;
 }
 
 } // namespace pc::operators

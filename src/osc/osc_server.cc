@@ -1,6 +1,7 @@
 #include "osc_server.h"
 #include "../gui/widgets.h"
 #include "../logger.h"
+#include "../main_thread_dispatcher.h"
 #include "../parameters.h"
 #include "../publisher/publisher.h"
 #include "../string_utils.h"
@@ -53,8 +54,16 @@ template <typename T> void receive_msg(std::string_view address, T value) {
     }
     if (!vector_element) return;
     topic = topic.substr(0, topic.length() - 2);
+    if (!parameter_bindings.contains(std::string_view{topic})) {
+      pc::logger->warn(
+	 "Received parameter update for non-existent parameter topic '{}'",
+	  topic);
+      return;
+    }
+    auto& binding = parameter_bindings.at(topic);
+    const auto old_param_binding = binding;
     std::visit(
-	[&](auto &&parameter_value_ref) {
+        [&](auto &&parameter_value_ref) {
 	  auto &parameter = parameter_value_ref.get();
 	  using ParamType = std::decay_t<decltype(parameter)>;
 	  if constexpr (types::VectorType<ParamType>) {
@@ -63,15 +72,23 @@ template <typename T> void receive_msg(std::string_view address, T value) {
               // and we are setting it with the element type of the vector,
 	      // then we can get the vector and set just the element
 	      parameter[*vector_element] = value;
-	    }
+
+              // run any update callbacks from the main thread
+	      MainThreadDispatcher::enqueue([&] {
+		for (const auto &cb : binding.update_callbacks) {
+		  cb(old_param_binding, binding);
+		}
+	      });
+            }
           }
 	},
-	parameter_bindings.at(topic).value);
+	binding.value);
   }
 }
 
 void OscServer::create_server(int port) {
   _server_thread = std::make_unique<lo::ServerThread>(_config.port);
+
   // adding a nullptr, nullpt method means it just matches on all messages
   _server_thread->add_method(
       nullptr, nullptr,
@@ -95,6 +112,7 @@ void OscServer::create_server(int port) {
         //   }
         // }
       });
+
   _server_thread->start();
   pc::logger->info("OSC Server listening on port {}", port);
 }
@@ -112,7 +130,9 @@ void OscServer::draw_imgui_window() {
 
     if (enabled && !_config.enable) {
       _server_thread->stop();
+      pc::logger->info("Stopped OSC server thread");
     } else if (!enabled && _config.enable) {
+      pc::logger->info("Starting OSC server thread");
       _server_thread->start();
     }
 

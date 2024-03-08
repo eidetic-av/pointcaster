@@ -10,57 +10,13 @@
 #include "range_filter_operator.gen.h"
 #include "rotate_operator.gen.h"
 #include "sample_filter_operator.gen.h"
+#include "session_bounding_boxes.h"
 #include <functional>
 #include <optional>
 
-#include "../wireframe_objects.h"
-
 namespace pc::operators {
 
-using namespace catpuccin;
-using namespace catpuccin::magnum;
 using namespace pc::parameters;
-
-static std::map<uid, std::unique_ptr<WireframeBox>> operator_bounding_boxes;
-
-static constexpr std::array<Vector4, 6> bounding_box_colors{
-  mocha_red,
-  mocha_blue,
-  mocha_peach,
-  mocha_yellow,
-  mocha_lavender,
-  mocha_rosewater
-};
-
-static Vector3 next_bounding_box_color() {
-  static auto current_index = -1;
-  current_index = (current_index + 1) % bounding_box_colors.size();
-  return bounding_box_colors[current_index].rgb();
-}
-
-template <typename T>
-static void
-set_or_create_bounding_box(const T &operator_config, Scene3D &scene,
-			   SceneGraph::DrawableGroup3D &parent_group,
-			   std::optional<Color4> color = {}) {
-  // get or create the bounding box in the scene
-  auto [itr, _] = operator_bounding_boxes.emplace(
-      operator_config.id,
-      std::make_unique<WireframeBox>(&scene, &parent_group));
-  auto &box = itr->second;
-  // and set its updated position / scale
-  const auto &size = operator_config.size;
-  const auto &position = operator_config.position;
-  box->set_transformation(Matrix4::scaling({size.x, size.y, size.z}) *
-			  Matrix4::translation({0, 0, 0}));
-  box->transform(Matrix4::translation({position.x, position.y, position.z}));
-  if (color.has_value()) {
-    box->set_color(color.value().rgb());
-  }
-  if constexpr (std::same_as<T, RangeFilterOperatorConfiguration>) {
-    box->set_visible(operator_config.draw);
-  }
-}
 
 SessionOperatorHost::SessionOperatorHost(
     OperatorHostConfiguration &config, Scene3D &scene,
@@ -79,9 +35,9 @@ SessionOperatorHost::SessionOperatorHost(
           using T = std::decay_t<decltype(operator_config)>;
 
 	  if constexpr (std::is_same_v<T, RangeFilterOperatorConfiguration>) {
-	    set_or_create_bounding_box(operator_config, scene, parent_group,
-				       next_bounding_box_color());
-          }
+	    RangeFilterOperator::init(operator_config, _scene, _parent_group,
+				      next_bounding_box_color());
+	  }
 
         },
         operator_instance);
@@ -129,6 +85,7 @@ void SessionOperatorHost::draw_imgui_window() {
   if (ImGui::Button("Add session operator")) {
     ImGui::OpenPopup("Add session operator");
   }
+  ImGui::Spacing();
 
   if (ImGui::BeginPopup("Add session operator")) {
     // populate menu with all Operator types
@@ -147,10 +104,10 @@ void SessionOperatorHost::draw_imgui_window() {
 	auto &config_instance = std::get<T>(variant_ref);
 	declare_parameters(std::to_string(operator_config.id), config_instance);
 
-          if constexpr (std::is_same_v<T, RangeFilterOperatorConfiguration>) {
-	    set_or_create_bounding_box(operator_config, _scene, _parent_group,
-				       next_bounding_box_color());
-	  }
+	  if constexpr (std::is_same_v<T, RangeFilterOperatorConfiguration>) {
+	    RangeFilterOperator::init(operator_config, _scene, _parent_group,
+				      next_bounding_box_color());
+          }
 
         ImGui::CloseCurrentPopup();
       }
@@ -179,7 +136,8 @@ void SessionOperatorHost::draw_imgui_window() {
             if (pc::gui::draw_parameters(config.id)) {
 	      if constexpr (std::is_same_v<T,
 					   RangeFilterOperatorConfiguration>) {
-		set_or_create_bounding_box(config, _scene, _parent_group);
+		RangeFilterOperator::init(config, _scene, _parent_group,
+					  next_bounding_box_color());
 	      }
             }
           } else {

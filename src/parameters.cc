@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <stack>
 #include <type_traits>
+#include <unordered_map>
 
 namespace pc::parameters {
 
@@ -83,7 +84,6 @@ void unbind_parameter(std::string_view parameter_id) {
 }
 
 void publish_parameter(std::string_view parameter_id) {
-  pc::logger->debug("running publish parameter: {}", parameter_id);
   parameter_states[parameter_id] = ParameterState::Publish;
 }
 
@@ -96,7 +96,6 @@ template <typename T> cache::lru_cache<std::string, T> &get_cache() {
 void publish() {
   for (const auto &kvp : parameter_states) {
     const auto &[parameter_id, state] = kvp;
-
     if (state == ParameterState::Publish) {
       std::visit(
           [parameter_id](auto &&parameter_ref) {
@@ -121,13 +120,9 @@ void publish() {
 		std::array<typename T::vector_type, vector_size> array;
 		std::copy_n(p.data(), vector_size, array.begin());
 		publisher::publish_all(parameter_id, array);
+	      } else if constexpr (pc::types::ScalarType<T>) {
+		publisher::publish_all(parameter_id, p);
 	      }
-	      // TODO MQTT doesn't implement single parameter publishing
-	      // else if constexpr (std::is_same_v<float, T>) {
-	      // 	publisher::publish_all(parameter_id, p);
-	      // } else if constexpr (std::is_same_v<int, T>) {
-	      // 	publisher::publish_all(parameter_id, p);
-	      // }
 	      param_cache.put(parameter_id, p);
             }
           },

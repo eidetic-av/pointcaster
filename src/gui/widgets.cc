@@ -4,6 +4,7 @@
 #include "catpuccin.h"
 #include "drag_slider.h"
 #include <array>
+#include <imgui_internal.h>
 #include <tweeny/easing.h>
 
 namespace pc::gui {

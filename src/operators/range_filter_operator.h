@@ -2,11 +2,20 @@
 #include "../serialization.h"
 #include "../structs.h"
 #include "operator.h"
+#include <Magnum/Magnum.h>
+#include <Magnum/SceneGraph/SceneGraph.h>
 
 namespace pc::operators {
 
 using pc::types::Float2;
 using pc::types::Float3;
+
+using Object3D =
+    Magnum::SceneGraph::Object<Magnum::SceneGraph::MatrixTransformation3D>;
+using Scene3D =
+    Magnum::SceneGraph::Scene<Magnum::SceneGraph::MatrixTransformation3D>;
+using Magnum::Vector3;
+using Magnum::SceneGraph::DrawableGroup3D;
 
 struct AABB {
   bool unfolded = true;
@@ -54,6 +63,10 @@ struct RangeFilterOperator : Operator {
       : _config(config){};
 
   __device__ bool operator()(indexed_point_t point) const;
+
+  static void init(const RangeFilterOperatorConfiguration &config,
+                   Scene3D &scene, DrawableGroup3D &parent_group,
+                   Vector3 bounding_box_color);
 };
 
 struct MinMaxXComparator {

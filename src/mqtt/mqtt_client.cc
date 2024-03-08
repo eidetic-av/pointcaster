@@ -1,9 +1,10 @@
 #include "mqtt_client.h"
+#include "../gui/widgets.h"
 #include "../logger.h"
+#include "../parameters.h"
 #include "../publisher/publisher.h"
 #include "../publisher/publisher_utils.h"
-#include "../parameters.h"
-#include "../gui/widgets.h"
+#include "../string_utils.h"
 #include <chrono>
 #include <fmt/format.h>
 #include <functional>
@@ -124,17 +125,24 @@ void MqttClient::publish(const std::string_view topic, const void *payload,
 
   auto topic_string = publisher::construct_topic_string(topic, topic_nodes);
 
+  // for mqtt we use a forward-slash delimeted uri for the topic,
+  // and elsewhere throughout the application the parameter id's and topics are
+  // all period delimited
+  std::string topic_uri{topic_string.data(), topic_string.size()};
+  std::replace(topic_uri.begin(), topic_uri.end(), '.', '/');
+
   if (_config.publish_empty_once) {
     static std::unordered_map<std::string, bool> published_empty_once;
     static std::mutex published_empty_once_mutex;
     std::lock_guard lock(published_empty_once_mutex);
-    if (empty && published_empty_once[topic_string]) return;
-    published_empty_once[topic_string] = empty;
+    if (empty && published_empty_once[topic_uri])
+      return;
+    published_empty_once[topic_uri] = empty;
   }
 
   auto data = static_cast<const std::byte *>(payload);
   std::vector<std::byte> buffer(data, data + size);
-  _messages_to_publish.enqueue({std::move(topic_string), std::move(buffer)});
+  _messages_to_publish.enqueue({std::move(topic_uri), std::move(buffer)});
 }
 
 void MqttClient::set_uri(const std::string_view uri) {

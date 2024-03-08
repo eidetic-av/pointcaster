@@ -19,6 +19,8 @@
     "cppzmq",
     "libusb",
     "libremidi",
+    "rtpmidid",
+    "libmicrodns",
     "liblo",
     "imgui",
     {

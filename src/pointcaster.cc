@@ -30,6 +30,8 @@
 #include <zmq.hpp>
 
 #include "logger.h"
+#include "profiling.h"
+#include "main_thread_dispatcher.h"
 #include "path.h"
 #include "pointer.h"
 #include "session.gen.h"
@@ -86,7 +88,8 @@
 #include "mqtt/mqtt_client.h"
 #include "mqtt/mqtt_client_config.gen.h"
 
-#include "midi/midi_client.h"
+#include "midi/midi_device.h"
+
 #include "osc/osc_client.h"
 #include "osc/osc_server.h"
 
@@ -140,7 +143,7 @@ private:
 
 class PointCaster : public Platform::Application {
   friend CameraDisplayWindow;
-  
+
 public:
   explicit PointCaster(const Arguments &args);
 
@@ -179,7 +182,7 @@ protected:
 
   std::unique_ptr<Radio> _radio;
   std::unique_ptr<MqttClient> _mqtt;
-  std::unique_ptr<MidiClient> _midi;
+  std::unique_ptr<MidiDevice> _midi;
   std::unique_ptr<OscClient> _osc_client;
   std::unique_ptr<OscServer> _osc_server;
   std::unique_ptr<SyncServer> _sync_server;
@@ -254,6 +257,8 @@ PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
 
   pc::logger->info("This is pointcaster");
+
+  MainThreadDispatcher::init();
 
   // Get OS resolution
   SDL_DisplayMode dm;
@@ -487,9 +492,9 @@ PointCaster::PointCaster(const Arguments &args)
   _mqtt = std::make_unique<MqttClient>(*_session.mqtt);
 
   if (!_session.midi.has_value()) {
-    _session.midi = MidiClientConfiguration{};
+    _session.midi = MidiDeviceConfiguration{};
   }
-  _midi = std::make_unique<MidiClient>(*_session.midi);
+  _midi = std::make_unique<MidiDevice>(*_session.midi);
 
   if (!_session.osc_client.has_value()) {
     _session.osc_client = OscClientConfiguration{};
@@ -628,6 +633,8 @@ void PointCaster::save_session(std::filesystem::path file_path) {
     }
   }
 
+  output_session.published_params = published_parameter_topics();
+
   auto session_toml = serde::serialize<serde::toml_v>(output_session);
   std::ofstream(file_path, std::ios::binary) << toml::format(session_toml);
 }
@@ -695,6 +702,12 @@ void PointCaster::load_session(std::filesystem::path file_path) {
 	  load_device(device_config, device_id);
 	}
       });
+    }
+  }
+
+  if (_session.published_params.has_value()) {
+    for (auto &parameter_id : *_session.published_params) {
+      parameter_states.emplace(parameter_id, ParameterState::Publish);
     }
   }
 
@@ -1374,6 +1387,11 @@ void PointCaster::drawEvent() {
   const auto delta_ms = static_cast<int>(delta_time * 1000);
   TweenManager::instance()->tick(delta_ms);
 
+  std::function<void()> main_thread_callback;
+  while (MainThreadDispatcher::try_dequeue(main_thread_callback)) {
+    main_thread_callback();
+  }
+
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
 			       GL::FramebufferClear::Depth);
 
@@ -1412,8 +1430,12 @@ void PointCaster::drawEvent() {
     if (_session.mqtt.has_value() && (*_session.mqtt).show_window)
       _mqtt->draw_imgui_window();
 
-    if (_session.midi.has_value() && (*_session.midi).show_window)
+    if (_session.midi.has_value() && (*_session.midi).show_window) {
+      ImGui::SetNextWindowSize({600, 400}, ImGuiCond_FirstUseEver);
+      ImGui::Begin("MIDI");
       _midi->draw_imgui_window();
+      ImGui::End();
+    }
 
     if (_session.osc_client.has_value() && (*_session.osc_client).show_window)
       _osc_client->draw_imgui_window();

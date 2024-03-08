@@ -1,12 +1,14 @@
-#include "midi_client.h"
+#include "midi_device.h"
 #include "../gui/widgets.h"
 #include "../logger.h"
+#include "../math.h"
 #include "../parameters.h"
 #include "../publisher/publisher.h"
 #include "../string_utils.h"
 #include "../tween/tween_manager.h"
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <imgui.h>
 #include <libremidi/client.hpp>
 #include <libremidi/libremidi.hpp>
@@ -22,7 +24,7 @@ using namespace pc::parameters;
 
 static std::unordered_map<std::string, std::string> _port_keys;
 
-MidiClient::MidiClient(MidiClientConfiguration &config)
+MidiDevice::MidiDevice(MidiDeviceConfiguration &config)
     : _config(config), _sender_thread([this](auto st) { send_messages(st); }) {
 
   for (auto api : libremidi::available_apis()) {
@@ -55,9 +57,14 @@ MidiClient::MidiClient(MidiClientConfiguration &config)
   }
   pc::logger->info("MIDI: Listening for MIDI hotplug events");
 
-  // Create a virtual MIDI output to publish to
+  // Create a virtual MIDI port
   _virtual_output.open_virtual_port("pointcaster 1");
-  publisher::add(this);
+
+  // And an RTP Midi (Apple Network Midi) port
+  if (!_config.rtp.has_value()) {
+    _config.rtp = RtpMidiDeviceConfiguration{};
+  }
+  _rtp_midi = std::make_unique<RtpMidiDevice>(*config.rtp);
 
   // for any MIDI cc bindings to UI parameters saved in the config,
   // notify the parameter its been 'bound'
@@ -80,25 +87,86 @@ MidiClient::MidiClient(MidiClientConfiguration &config)
                           cc_binding.max);
     }
   }
+
   declare_parameters("midi", _config);
+  publisher::add(this);
 }
 
-MidiClient::~MidiClient() {
+MidiDevice::~MidiDevice() {
   _sender_thread.request_stop();
   _sender_thread.join();
   publisher::remove(this);
 }
 
-void MidiClient::publish(const std::string_view topic,
-                         const uint8_t channel_num, const uint8_t cc_num,
-                         const float value) {
-  auto mapped_value = static_cast<uint8_t>(
-      std::round(std::max(std::min(value, 1.0f), 0.0f) * 127));
+void MidiDevice::publish(libremidi::message_type message_type,
+			 const uint8_t channel_num,
+			 const uint8_t cc_or_note_num, const uint8_t value) {
   _messages_to_publish.enqueue(
-      {std::string(topic), channel_num, cc_num, mapped_value});
+      {message_type, channel_num, cc_or_note_num, value});
 }
 
-void MidiClient::send_messages(std::stop_token st) {
+void MidiDevice::publish(const std::string_view topic,
+                         const MidiOutputRoute &route) {
+  const auto& value = route.last_value;
+  const auto& channel_num = route.channel;
+  const auto& cc_num = route.cc;
+
+  uint8_t mapped_value;
+
+  // if a custom midi output mapping has been specified, calculate the output
+  // MIDI value
+  if (route.output_mapping.has_value()) {
+    const auto &m = *route.output_mapping;
+    auto mapped_float =
+	math::remap(m.min_in, m.max_in, static_cast<float>(m.min_out),
+		    static_cast<float>(m.max_out), value, true);
+    mapped_value = static_cast<uint8_t>(std::round(mapped_float));
+
+    // if we're implementing change detection
+    if (m.change_detection.has_value()) {
+      static std::unordered_map<std::string, std::tuple<float, float>>
+	  value_cache;
+
+      using namespace std::chrono;
+      static const auto start_time = duration_cast<milliseconds>(
+	  high_resolution_clock::now().time_since_epoch());
+      const auto now = duration_cast<milliseconds>(
+	  high_resolution_clock::now().time_since_epoch());
+      const float elapsed_seconds =
+	  (now.count() - start_time.count()) / 1000.0f;
+
+      auto topic_key = std::string{topic.data(), topic.size()};
+      if (value_cache.contains(topic_key)) {
+	const auto [cache_time, last_value] = value_cache[topic_key];
+
+        bool change_detected = false;
+	if (elapsed_seconds - cache_time >= m.change_detection->timespan) {
+          change_detected = std::abs(mapped_float - last_value) >=
+			    m.change_detection->threshold;
+	  value_cache[topic_key] = {elapsed_seconds, mapped_float};
+        }
+        if (change_detected) {
+	  const auto &cd = *m.change_detection;
+	  _messages_to_publish.enqueue({libremidi::message_type::NOTE_ON,
+					static_cast<uint8_t>(cd.channel),
+					static_cast<uint8_t>(cd.note_num),
+					127});
+        }
+      } else {
+	value_cache[topic_key] = {elapsed_seconds, mapped_float};
+      }
+    }
+  }
+  // if no custom mapping is specified, map float from 0-1 to 0-127 midi
+  else {
+    mapped_value = static_cast<uint8_t>(
+	std::round(std::max(std::min(value, 1.0f), 0.0f) * 127));
+  }
+  _messages_to_publish.enqueue({libremidi::message_type::CONTROL_CHANGE,
+                                channel_num, cc_num, mapped_value});
+}
+
+void MidiDevice::send_messages(std::stop_token st) {
   using namespace std::chrono_literals;
 
   static constexpr auto thread_wait_time = 50ms;
@@ -111,16 +179,20 @@ void MidiClient::send_messages(std::stop_token st) {
     MidiOutMessage message;
     while (_messages_to_publish.wait_dequeue_timed(message, thread_wait_time)) {
       auto status_byte =
-          static_cast<uint8_t>(libremidi::message_type::CONTROL_CHANGE) +
-          (message.channel_num - 1); // convert channel num to zero-indexed
-      _virtual_output.send_message(status_byte, message.cc_num, message.value);
+	  static_cast<uint8_t>(message.type) + (message.channel_num - 1);
+      _virtual_output.send_message(status_byte, message.cc_or_note_num,
+				   message.value);
+      if (_config.rtp->enable) {
+	_rtp_midi->send_message(status_byte, message.cc_or_note_num,
+				message.value);
+      }
     }
   }
 
   pc::logger->info("Closed MIDI Client thread");
 }
 
-void MidiClient::handle_input_added(const libremidi::input_port &port,
+void MidiDevice::handle_input_added(const libremidi::input_port &port,
                                     const libremidi::API &api) {
   auto api_config = libremidi::midi_in_configuration_for(api);
 
@@ -144,7 +216,7 @@ void MidiClient::handle_input_added(const libremidi::input_port &port,
   }
 }
 
-void MidiClient::handle_input_removed(const libremidi::input_port &port) {
+void MidiDevice::handle_input_removed(const libremidi::input_port &port) {
   if (!_midi_inputs.contains(port.port_name))
     return;
   _midi_inputs.at(port.port_name).close_port();
@@ -153,7 +225,7 @@ void MidiClient::handle_input_removed(const libremidi::input_port &port) {
                    port.port_name);
 }
 
-void MidiClient::handle_input_message(const std::string &port_name,
+void MidiDevice::handle_input_message(const std::string &port_name,
                                       const libremidi::message &msg) {
 
   using libremidi::message_type;
@@ -323,7 +395,7 @@ void MidiClient::handle_input_message(const std::string &port_name,
   }
 }
 
-void MidiClient::handle_output_added(const libremidi::output_port &port,
+void MidiDevice::handle_output_added(const libremidi::output_port &port,
                                      const libremidi::API &api) {
   // auto api_config = libremidi::midi_out_configuration_for(api);
 
@@ -342,7 +414,7 @@ void MidiClient::handle_output_added(const libremidi::output_port &port,
   // }
 }
 
-void MidiClient::handle_output_removed(const libremidi::output_port &port) {
+void MidiDevice::handle_output_removed(const libremidi::output_port &port) {
   // if (!_midi_outputs.contains(port.port_name)) return;
   // _midi_outputs.at(port.port_name).close_port();
   // _midi_outputs.erase(port.port_name);
@@ -350,16 +422,23 @@ void MidiClient::handle_output_removed(const libremidi::output_port &port) {
   // 		   port.port_name);
 }
 
-void MidiClient::draw_imgui_window() {
-
-  ImGui::Begin("MIDI", nullptr);
+void MidiDevice::draw_imgui_window() {
 
   pc::gui::draw_parameters("midi", struct_parameters.at(std::string{"midi"}));
 
-  ImGui::SetNextItemOpen(_config.show_routes);
+  bool &rtp_unfolded = _config.rtp.value().unfolded;
+  ImGui::SetNextItemOpen(rtp_unfolded);
+  if (ImGui::CollapsingHeader("Network MIDI")) {
+    _rtp_midi->draw_imgui();
+    rtp_unfolded = true;
+  } else {
+    rtp_unfolded = false;
+  }
 
-  if (ImGui::CollapsingHeader("Existing Routes##midi")) {
-    _config.show_routes = true;
+  ImGui::SetNextItemOpen(_config.show_output_routes);
+
+  if (ImGui::CollapsingHeader("Output Routes##midi")) {
+    _config.show_output_routes = true;
 
     if (ImGui::BeginTable("Routing", 5,
                           ImGuiTableFlags_SizingStretchProp |
@@ -377,7 +456,9 @@ void MidiClient::draw_imgui_window() {
 
       for (auto &route_kvp : _config.output_routes) {
         auto &key = route_kvp.first;
-        auto &route = route_kvp.second;
+	auto &route = route_kvp.second;
+	auto selected_route = _selected_output_route.has_value() &&
+			      *_selected_output_route == route;
 
         auto param_id = std::to_string(gui::_parameter_index++);
 
@@ -386,7 +467,9 @@ void MidiClient::draw_imgui_window() {
         ImGui::TableNextColumn();
 
 	ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(1.0f, 0.5f));
-	ImGui::Selectable(key.c_str(), false);
+	if (ImGui::Selectable(key.c_str(), selected_route)) {
+	  _selected_output_route = route;
+	}
 	ImGui::PopStyleVar();
 
         ImGui::TableNextColumn();
@@ -421,50 +504,113 @@ void MidiClient::draw_imgui_window() {
       }
       ImGui::EndTable();
 
-      if (marked_for_delete.has_value()) {
-        _config.output_routes.erase(marked_for_delete.value());
+      if (_selected_output_route.has_value()) {
+
+	ImGui::PushID(gui::_parameter_index++);
+
+        auto &selected_route = (*_selected_output_route).get();
+
+        if (selected_route.output_mapping.has_value()) {
+
+          if (ImGui::BeginTable("##Selected output route", 2)) {
+
+	    ImGui::TableSetupColumn("##mapping");
+	    ImGui::TableSetupColumn("##change detection");
+
+	    ImGui::TableNextRow();
+	    ImGui::TableNextColumn();
+
+	    static bool t = true;
+	    ImGui::Checkbox("Remap", &t);
+
+            auto &m = *selected_route.output_mapping;
+            ImGui::InputFloat("Input min", &m.min_in);
+            ImGui::InputFloat("Input max", &m.max_in);
+            int min_out = static_cast<int>(m.min_out);
+            int max_out = static_cast<int>(m.max_out);
+            ImGui::InputInt("Output min", &min_out);
+            ImGui::InputInt("Output max", &max_out);
+            m.min_out = std::clamp(min_out, 0, 127);
+            m.max_out = std::clamp(max_out, 0, 127);
+
+            ImGui::TableNextColumn();
+
+            auto &change_detection_conf =
+                selected_route.output_mapping->change_detection;
+
+            bool change_detection_initialised =
+		change_detection_conf.has_value();
+	    bool change_detection_enabled =
+		change_detection_initialised && change_detection_conf->enabled;
+
+            ImGui::Checkbox("Change detection", &change_detection_enabled);
+	    change_detection_conf->enabled = change_detection_enabled;
+
+            if (change_detection_enabled && !change_detection_initialised) {
+              selected_route.output_mapping->change_detection =
+                  MidiOutputChangeDetection{.timespan = 0.03f,
+                                            .threshold = 1,
+                                            .channel = selected_route.channel,
+                                            .note_num = 1};
+            }
+
+            if (!change_detection_enabled) {
+              ImGui::BeginDisabled();
+            }
+
+            float timespan{};
+            float threshold{};
+            int channel{};
+            int note_num{};
+
+            if (change_detection_initialised) {
+	      timespan = change_detection_conf->timespan;
+	      threshold = change_detection_conf->threshold;
+	      channel = change_detection_conf->channel;
+	      note_num = change_detection_conf->note_num;
+	    }
+
+            ImGui::InputFloat("Timespan", &timespan);
+	    ImGui::InputFloat("Threshold", &threshold);
+            ImGui::InputInt("Channel", &channel);
+            ImGui::InputInt("Note", &note_num);
+
+	    if (change_detection_initialised && change_detection_enabled) {
+	      change_detection_conf->timespan =
+		  std::clamp(timespan, 0.001f, 1.0f);
+	      change_detection_conf->threshold = threshold;
+              change_detection_conf->channel = std::clamp(channel, 0, 16);
+              change_detection_conf->note_num = std::clamp(note_num, 0, 127);
+	    }
+
+            if (!change_detection_enabled) {
+              ImGui::EndDisabled();
+            }
+
+            ImGui::EndTable();
+          }
+
+        } else {
+          if (ImGui::Button("Remap selected route")) {
+            selected_route.output_mapping = MidiOutputMapping{
+                .min_in = 0.0f,
+                .max_in = 1.0f,
+                .min_out = 0,
+                .max_out = 127,
+            };
+          }
+        }
+
+        ImGui::PopID();
+
+        if (marked_for_delete.has_value()) {
+          _config.output_routes.erase(marked_for_delete.value());
+        }
       }
+    } else {
+      _config.show_output_routes = false;
     }
-  } else {
-    _config.show_routes = false;
   }
-
-  ImGui::End();
-
-  return;
-
-  using pc::gui::slider;
-
-  ImGui::SetNextWindowBgAlpha(0.8f);
-
-  slider("midi", "input_lerp", _config.input_lerp, 0.0f, 1.0f, 0.65f);
-
-  // ImGui::SetNextItemOpen(_config.outputs.unfolded);
-  // if (ImGui::CollapsingHeader("Outputs", _config.outputs.unfolded)) {
-  //   _config.outputs.unfolded = true;
-
-  // for (auto &[output_device_name, output] : _midi_outputs) {
-  //   if (!output.is_port_open())
-  // 	continue;
-  //   ImGui::TextDisabled("%s", output_device_name.c_str());
-  //   if (ImGui::Button("Send test CC")) {
-  // 	uint8_t channel = 1;
-  // 	uint8_t cc_number = 10;
-  // 	uint8_t cc_value = 50;
-  // 	uint8_t status_byte =
-  // 	    static_cast<uint8_t>(libremidi::message_type::CONTROL_CHANGE) +
-  // 	    (channel - 1); // channel num is zero indexed
-  //     output.send_message(status_byte, cc_number, cc_value);
-  // 	pc::logger->debug("Sent test byte");
-  //   }
-  //   ImGui::Spacing();
-  // }
-
-  // } else {
-  //   _config.outputs.unfolded = false;
-  // }
-
-  ImGui::End();
 }
 
 } // namespace pc::midi

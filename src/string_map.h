@@ -128,6 +128,14 @@ public:
       return _inner_map[std::string(key)];
     }
   }
+
+  MapType inner_map() {
+    std::unordered_map<std::string, ValueType> result;
+    for (auto &entry : _inner_map) {
+      result.emplace(entry);
+    }
+    return result;
+  }
 };
 
 } // namespace pc

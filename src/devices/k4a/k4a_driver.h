@@ -4,7 +4,6 @@
 #include "../driver.h"
 #include "../device_config.gen.h"
 
-#include <Eigen/Geometry>
 #include <array>
 #include <exception>
 #include <k4a/k4a.h>
@@ -12,6 +11,9 @@
 #include <k4abt.hpp>
 #include <thread>
 #include <atomic>
+
+#define EIGEN_DONT_VECTORIZE
+#include <Eigen/Geometry>
 
 namespace pc::devices {
 
