@@ -1554,6 +1554,12 @@ void CameraDisplayWindow::viewportEvent(ViewportEvent &event) {
 
 void PointCaster::keyPressEvent(KeyEvent &event) {
 
+  if (ImGui::GetIO().WantTextInput) {
+    if (_imgui_context.handleKeyPressEvent(event))
+      event.setAccepted(true);
+    return;
+  }
+
   if (_current_mode == Mode::Find) {
     find_mode_keypress(event);
     if (_imgui_context.handleKeyPressEvent(event))

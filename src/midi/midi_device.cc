@@ -65,6 +65,7 @@ MidiDevice::MidiDevice(MidiDeviceConfiguration &config)
     _config.rtp = RtpMidiDeviceConfiguration{};
   }
   _rtp_midi = std::make_unique<RtpMidiDevice>(*config.rtp);
+  _rtp_midi->on_receive = [this](auto buffer) { on_receive(*this, buffer); };
 
   // for any MIDI cc bindings to UI parameters saved in the config,
   // notify the parameter its been 'bound'
@@ -150,7 +151,8 @@ void MidiDevice::publish(const std::string_view topic,
 	  _messages_to_publish.enqueue({libremidi::message_type::NOTE_ON,
 					static_cast<uint8_t>(cd.channel),
 					static_cast<uint8_t>(cd.note_num),
-					127});
+					100});
+	  // TODO: note off here with a delay
         }
       } else {
 	value_cache[topic_key] = {elapsed_seconds, mapped_float};
@@ -190,6 +192,94 @@ void MidiDevice::send_messages(std::stop_token st) {
   }
 
   pc::logger->info("Closed MIDI Client thread");
+}
+
+void MidiDevice::on_receive(MidiDevice &device,
+			    const std::vector<unsigned char> &buffer) {
+  if (buffer.size() == 3) {
+
+    uint8_t status_byte = buffer[0];
+    uint8_t message_type = status_byte & 0xF0;
+    uint8_t channel = status_byte & 0x0F;
+    uint8_t cc_num = buffer[1];
+
+    uint16_t cache_key = (static_cast<uint16_t>(status_byte) << 8) |
+			 static_cast<uint16_t>(cc_num);
+
+    // TODO this store from uint16_t to string can be precomputed
+    std::string route_key{fmt::format("{:04X}", cache_key)};
+
+    auto &input_route = device.get_or_create_input_route(route_key);
+
+    float new_value;
+
+    if (input_route.input_mapping.has_value()) {
+      auto &m = *input_route.input_mapping;
+      new_value = math::remap(
+	  static_cast<float>(m.min_in), static_cast<float>(m.max_in),
+	  static_cast<float>(m.min_out), static_cast<float>(m.max_out),
+          static_cast<float>(buffer[2]), true);
+    } else {
+      new_value = static_cast<float>(buffer[2]) / 127.0f;
+    }
+
+    const auto& parameter_id = input_route.parameter_id;
+
+    std::string topic{input_route.parameter_id};
+
+      // if the osc message is setting individual elements of a vector
+    std::optional<int> vector_element;
+    if (strings::ends_with(topic, ".0") || strings::ends_with(topic, ".x")) {
+      vector_element = 0;
+    } else if (strings::ends_with(topic, ".1") ||
+	       strings::ends_with(topic, ".y")) {
+      vector_element = 1;
+    } else if (strings::ends_with(topic, ".2") ||
+	       strings::ends_with(topic, ".z")) {
+      vector_element = 2;
+    } else if (strings::ends_with(topic, ".3") ||
+	       strings::ends_with(topic, ".w")) {
+      vector_element = 3;
+    }
+    if (vector_element.has_value()) {
+      topic = topic.substr(0, topic.length() - 2);
+    }
+
+    if (!parameter_bindings.contains(std::string_view{topic})) {
+      pc::logger->debug("Parameter '{}' not found", topic);
+      input_route.last_value = static_cast<int>(buffer[2]);
+      return;
+    }
+
+    auto &binding = parameter_bindings.at(topic);
+    const auto old_param_binding = binding;
+    std::visit(
+        [&](auto &&parameter_value_ref) {
+	  auto &parameter = parameter_value_ref.get();
+	  using ParamType = std::decay_t<decltype(parameter)>;
+	  if constexpr (types::VectorType<ParamType>) {
+	    if constexpr (std::is_same_v<typename ParamType::vector_type,
+					 float>) {
+              parameter[*vector_element] = new_value;
+            } else if constexpr (std::is_same_v<typename ParamType::vector_type,
+                                                int>) {
+	      parameter[*vector_element] =
+		  static_cast<int>(std::round(new_value));
+	    }
+	  } else if constexpr (types::ScalarType<ParamType>) {
+	    parameter = new_value;
+	  }
+	  // run any update callbacks from the main thread
+	  MainThreadDispatcher::enqueue([&] {
+	    for (const auto &cb : binding.update_callbacks) {
+	      cb(old_param_binding, binding);
+	    }
+	  });
+	},
+	binding.value);
+
+    input_route.last_value = static_cast<int>(buffer[2]);
+  }
 }
 
 void MidiDevice::handle_input_added(const libremidi::input_port &port,
@@ -440,7 +530,7 @@ void MidiDevice::draw_imgui_window() {
   if (ImGui::CollapsingHeader("Output Routes##midi")) {
     _config.show_output_routes = true;
 
-    if (ImGui::BeginTable("Routing", 5,
+    if (ImGui::BeginTable("Output Routing", 5,
                           ImGuiTableFlags_SizingStretchProp |
                               ImGuiTableFlags_Resizable)) {
 
@@ -611,6 +701,129 @@ void MidiDevice::draw_imgui_window() {
       _config.show_output_routes = false;
     }
   }
+
+  ImGui::PushID(gui::_parameter_index++);
+
+  ImGui::SetNextItemOpen(_config.show_input_routes);
+
+  if (ImGui::CollapsingHeader("Input Routes##midi")) {
+    _config.show_input_routes = true;
+
+    if (ImGui::BeginTable("Input Routing", 4,
+                          ImGuiTableFlags_SizingStretchProp |
+                              ImGuiTableFlags_Resizable)) {
+
+      std::optional<std::string> marked_for_delete;
+
+      ImGui::TableSetupColumn("MIDI Control");
+      ImGui::TableSetupColumn("Route");
+      ImGui::TableSetupColumn("Last Value");
+      ImGui::TableSetupColumn("##Delete");
+
+      ImGui::TableHeadersRow();
+
+      for (auto &route_kvp : _config.input_routes) {
+        auto &key = route_kvp.first;
+	auto &route = route_kvp.second;
+	auto selected_route = _selected_input_route.has_value() &&
+			      *_selected_input_route == route;
+
+        auto param_id = std::to_string(gui::_parameter_index++);
+
+        ImGui::TableNextRow();
+
+        ImGui::TableNextColumn();
+
+	ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(1.0f, 0.5f));
+	if (ImGui::Selectable(key.c_str(), selected_route)) {
+	  _selected_input_route = route;
+	}
+	ImGui::PopStyleVar();
+
+        ImGui::TableNextColumn();
+
+	ImGui::PushItemWidth(-1);
+
+	constexpr auto text_buffer_size = 256;
+	char text_buffer[text_buffer_size];
+	snprintf(text_buffer, text_buffer_size, "%s",
+		 route.parameter_id.c_str());
+	if (ImGui::InputText(fmt::format("##route{}", key).c_str(), text_buffer,
+			     text_buffer_size)) {
+	  route.parameter_id = text_buffer;
+        }
+        if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
+          if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Right)) {
+	    route.parameter_id = ImGui::GetClipboardText();
+          }
+        }
+
+        ImGui::PopItemWidth();
+
+        ImGui::TableNextColumn();
+        ImGui::Text("%d", route.last_value);
+
+        ImGui::TableNextColumn();
+        if (ImGui::Button(("x##" + param_id).c_str())) {
+          marked_for_delete = key;
+        };
+      }
+      ImGui::EndTable();
+
+      if (_selected_input_route.has_value()) {
+
+	ImGui::PushID(gui::_parameter_index++);
+
+        auto &selected_route = (*_selected_input_route).get();
+
+        if (selected_route.input_mapping.has_value()) {
+
+          if (ImGui::BeginTable("##Selected input route", 1)) {
+
+	    ImGui::TableSetupColumn("##mapping");
+
+	    ImGui::TableNextRow();
+	    ImGui::TableNextColumn();
+
+	    static bool t = true;
+	    ImGui::Checkbox("Remap", &t);
+
+            auto &m = *selected_route.input_mapping;
+            int min_in = static_cast<int>(m.min_in);
+            int max_in = static_cast<int>(m.max_in);
+            ImGui::InputInt("Input min", &m.min_in);
+            ImGui::InputInt("Input max", &m.max_in);
+            m.min_in = std::clamp(min_in, 0, 127);
+            m.max_in = std::clamp(max_in, 0, 127);
+            ImGui::InputFloat("Output min", &m.min_out);
+            ImGui::InputFloat("Output max", &m.max_out);
+
+            ImGui::EndTable();
+          }
+
+        } else {
+          if (ImGui::Button("Remap selected route")) {
+            selected_route.input_mapping = MidiInputMapping{
+                .min_in = 0,
+                .max_in = 127,
+                .min_out = 0.0f,
+                .max_out = 1.0f,
+            };
+          }
+        }
+
+        ImGui::PopID();
+
+        if (marked_for_delete.has_value()) {
+          _config.input_routes.erase(marked_for_delete.value());
+        }
+      }
+    }
+  } else {
+    _config.show_input_routes = false;
+  }
+
+  ImGui::PopID();
 }
 
 } // namespace pc::midi

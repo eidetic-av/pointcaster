@@ -8,8 +8,6 @@
 #include "/opt/libRtpMidiSDK/C-Binding/os_posx.c"
 
 #include "../../thirdparty/mdns_cpp/include/mdns_cpp/logger.hpp"
-#include "../../thirdparty/mdns_cpp/include/mdns_cpp/mdns.hpp"
-#include "../../thirdparty/mdns_cpp/src/mdns.h"
 
 #include <array>
 #include <chrono>
@@ -54,6 +52,17 @@ RtpMidiDevice::udp_callback(RTP_MIDI_SESSION *session,
   }
 
   return RTP_MIDI_TRUE;
+}
+
+void RtpMidiDevice::midi_callback(RTP_MIDI_SESSION *session,
+				  uint32_t delta_time,
+				  const unsigned char *command, size_t length,
+				  RTP_MIDI_BOOL with_running_status,
+				  void *session_context) {
+  auto *device = reinterpret_cast<RtpMidiDevice *>(session_context);
+  std::vector<unsigned char> buffer(length);
+  std::memcpy(buffer.data(), command, length);
+  device->on_receive(buffer);
 }
 
 void RtpMidiDevice::peer_update_callback(RTP_MIDI_SESSION *session,
@@ -116,14 +125,41 @@ uint64_t RtpMidiDevice::get_current_time() {
   return elapsed.count() / 100;
 }
 
-volatile static std::atomic_bool mdns_request_stop = false;
+void RtpMidiDevice::mdns_reply_callback(const std::string &msg) {
 
-static bool mdns_stop_func(void *cookie) {
-  // auto *device = (RtpMidiDevice *)cookie;
-  bool stop = mdns_request_stop.load();
-  pc::logger->info("Stop requested: {}", stop ? "true" : "false");
-  return stop;
-};
+  if (msg.find("SRV") != std::string::npos) {
+
+    // extract the IP address
+    auto ip_end_pos = msg.find(':');
+    std::string ip_address = msg.substr(0, ip_end_pos);
+
+    // extract the application service name
+    auto end_pos = msg.find("._apple-midi");
+    auto temp_string = msg.substr(0, end_pos);
+    auto start_pos = temp_string.rfind(' ') + 1;
+    std::string name = msg.substr(start_pos, end_pos - start_pos);
+
+    // extract the port
+    start_pos = msg.rfind(' ') + 1;
+    uint16_t port = static_cast<uint16_t>(std::stoi(msg.substr(start_pos)));
+
+    pc::logger->debug("[mDNS] Found {} ({}:{})", name, ip_address, port);
+
+    // create an (unlinked) RtpPeer for this host
+    RtpPeer *rtp_peer = get_or_create_peer(name, ip_address, port);
+
+    RtpPeerKey peer_key{name, ip_address, port};
+
+    if (_config.enable && !rtp_peer->connected) {
+      // if we have a serialized config entry for this discovered peer, then
+      // automatically connect to it
+      auto it = std::find(_config.peers.begin(), _config.peers.end(), peer_key);
+      if (it != _config.peers.end()) {
+        rtp_peer->connect(_rtp_midi_session);
+      }
+    }
+  }
+}
 
 RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
     : _config(config) {
@@ -137,7 +173,7 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
       [](RTP_MIDI_SESSION *session, RTP_MIDI_PEER *peer, const char *message,
          uint32_t log_level, const unsigned char *data, size_t data_length,
          void *session_context, void *peer_session_context) {
-        pc::logger->debug("[rtp] {}", message);
+        // pc::logger->debug("[rtp] {}", message);
       };
 
   if (!rtpMidiInitialize(get_current_time, log, RTP_MIDI_LOGGING_LEVEL_INFO,
@@ -147,7 +183,7 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
   }
 
   _rtp_midi_session = rtpMidiSessionCreate(
-      "pointcaster", 0, udp_callback, nullptr, peer_update_callback,
+      "pointcaster", 0, udp_callback, midi_callback, peer_update_callback,
       new_peer_callback, RTP_MIDI_LOGGING_LEVEL_INFO, 0, this);
 
   _rtp_clock_thread = std::jthread([this](auto st) {
@@ -164,8 +200,8 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
     throw std::exception();
   }
   sockaddr_in ctrl_address = {.sin_family = AF_INET,
-                              .sin_port = htons(rtp_midi_ctrl_port)};
-  if (inet_pton(AF_INET, "192.168.1.220", &ctrl_address.sin_addr) <= 0) {
+			      .sin_port = htons(rtp_midi_ctrl_port)};
+  if (inet_pton(AF_INET, _config.ip.data(), &ctrl_address.sin_addr) <= 0) {
     pc::logger->error("Failed to convert network address to binary format");
     throw new std::exception();
   }
@@ -183,7 +219,7 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
   }
   sockaddr_in data_address = {.sin_family = AF_INET,
                               .sin_port = htons(rtp_midi_data_port)};
-  if (inet_pton(AF_INET, "192.168.1.220", &data_address.sin_addr) <= 0) {
+  if (inet_pton(AF_INET, config.ip.data(), &data_address.sin_addr) <= 0) {
     pc::logger->error("Failed to convert network address to binary format");
     throw new std::exception();
   }
@@ -220,17 +256,17 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
 
       source_address_size = sizeof(source_address);
 
-      ssize_t ctrl_bytes = recvfrom(
+      ssize_t recv_size = recvfrom(
           _ctrl_socket, (char *)recv_buffer, sizeof(recv_buffer), 0,
           reinterpret_cast<sockaddr *>(&source_address), &source_address_size);
 
-      if (ctrl_bytes > 0) {
+      if (recv_size > 0) {
 
-        rtpMidiSessionReceivedUdpPacket(
-            _rtp_midi_session, &source_address.sin_addr, sizeof(struct in_addr),
-            ntohs(source_address.sin_port),
-            RTP_MIDI_ADDRESS_FLAG_CTRL | RTP_MIDI_ADDRESS_FLAG_IPV4,
-            recv_buffer, ctrl_bytes);
+	rtpMidiSessionReceivedUdpPacket(
+	    _rtp_midi_session, &source_address.sin_addr, sizeof(struct in_addr),
+	    ntohs(source_address.sin_port),
+	    RTP_MIDI_ADDRESS_FLAG_CTRL | RTP_MIDI_ADDRESS_FLAG_IPV4,
+	    recv_buffer, recv_size);
 
       } else if (errno != EAGAIN && errno != EWOULDBLOCK) {
         pc::logger->warn("Unhandled UDP recv error");
@@ -248,17 +284,17 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
 
       source_address_size = sizeof(source_address);
 
-      ssize_t data_bytes = recvfrom(
+      ssize_t recv_size = recvfrom(
           _data_socket, (char *)recv_buffer, sizeof(recv_buffer), 0,
           reinterpret_cast<sockaddr *>(&source_address), &source_address_size);
 
-      if (data_bytes > 0) {
+      if (recv_size > 0) {
 
         rtpMidiSessionReceivedUdpPacket(
             _rtp_midi_session, &source_address.sin_addr, sizeof(struct in_addr),
             ntohs(source_address.sin_port),
             RTP_MIDI_ADDRESS_FLAG_DATA | RTP_MIDI_ADDRESS_FLAG_IPV4,
-            recv_buffer, data_bytes);
+            recv_buffer, recv_size);
 
       } else if (errno != EAGAIN && errno != EWOULDBLOCK) {
         pc::logger->warn("Unhandled UDP recv error");
@@ -270,60 +306,18 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
                    rtp_midi_ctrl_port, rtp_midi_data_port);
 
   // look for peers responding to mdns/avahi/bonjour
+  mdns_cpp::Logger::setLoggerSink(
+      [this](auto &msg) { mdns_reply_callback(msg); });
 
-  _mdns_thread = std::jthread([this](auto st) {
+  _mdns_query = std::async(std::launch::async, [this] {
     mdns_cpp::mDNS mdns;
-    const std::string service_query = "_apple-midi._udp.local";
-
-    mdns_cpp::Logger::setLoggerSink([this](const std::string &msg) {
-      if (msg.find("SRV") != std::string::npos) {
-
-        // extract the IP address
-        auto ip_end_pos = msg.find(':');
-        std::string ip_address = msg.substr(0, ip_end_pos);
-
-        // extract the application service name
-        auto end_pos = msg.find("._apple-midi");
-        auto temp_string = msg.substr(0, end_pos);
-        auto start_pos = temp_string.rfind(' ') + 1;
-        std::string name = msg.substr(start_pos, end_pos - start_pos);
-
-        // extract the port
-        start_pos = msg.rfind(' ') + 1;
-        uint16_t port = static_cast<uint16_t>(std::stoi(msg.substr(start_pos)));
-
-        pc::logger->debug("[mDNS] Found {} ({}:{})", name, ip_address, port);
-
-        // create an (unlinked) RtpPeer for this host
-	RtpPeer *rtp_peer = get_or_create_peer(name, ip_address, port);
-
-        RtpPeerKey peer_key{name, ip_address, port};
-
-	if (_config.enable && !rtp_peer->connected) {
-	  // if we have a serialized config entry for this discovered peer, then
-	  // automatically connect to it
-          auto it =
-	      std::find(_config.peers.begin(), _config.peers.end(), peer_key);
-	  if (it != _config.peers.end()) {
-	    rtp_peer->connect(_rtp_midi_session);
-	  }
-        }
-      }
-    });
-
-    mdns.executeQuery(service_query);
-
-    // TODO: a loop here that checks if we need to execute another query
-    // and probably also respond to newly announced clients
-
-    pc::logger->info("Stopped MDNS thread");
+    mdns.executeQuery("_apple-midi._udp.local");
   });
 
   parameters::declare_parameters("rtpmidi", _config);
 }
 
 RtpMidiDevice::~RtpMidiDevice() {
-  _mdns_thread.request_stop();
   for (auto &peer_entry : _peers) {
     auto &peer = peer_entry.second;
     peer->disconnect(_rtp_midi_session);
@@ -470,8 +464,9 @@ void RtpMidiDevice::draw_imgui() {
           PushStyleColor(ImGuiCol_Text, mocha_blue);
           Bullet();
           PopStyleColor();
-          NewLine();
+	  NewLine();
         }
+        NewLine();
       }
     }
     EndListBox();

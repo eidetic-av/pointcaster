@@ -187,11 +187,14 @@ bool DragScalarN(std::string_view parameter_id, ImGuiDataType data_type, void *p
     PopStyleVar();
   }
 
-  if (IsItemClicked() && IsMouseDoubleClicked(0)) {
-    auto& t = parameter_states[parameter_id];
-    t = ParameterState::Publish;
-    // parameter_states[parameter_id] = ParameterState::Publish;
-    // publish_parameter(parameter_id);
+  if (IsItemHovered()) {
+    if (IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+      auto &t = parameter_states[parameter_id];
+      t = ParameterState::Publish;
+    } else if (IsMouseClicked(ImGuiMouseButton_Right)) {
+      SetClipboardText(parameter_id.data());
+      pc::logger->info(parameter_id);
+    }
   }
 
   Dummy({text_width + g.Style.ItemInnerSpacing.x, 0});

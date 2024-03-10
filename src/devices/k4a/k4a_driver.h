@@ -12,7 +12,7 @@
 #include <thread>
 #include <atomic>
 
-#define EIGEN_DONT_VECTORIZE
+//#define EIGEN_DONT_VECTORIZE
 #include <Eigen/Geometry>
 
 namespace pc::devices {

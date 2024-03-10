@@ -78,8 +78,9 @@ struct MidiDeviceConfiguration {
   bool enable = true;
   float input_lerp = 0.65f;
   CCGuiBindings cc_gui_bindings; // @optional
-  bool show_output_routes = true;
+  bool show_output_routes = false;
   MidiOutputRouteMap output_routes; // @optional
+  bool show_input_routes = false;
   MidiInputRouteMap input_routes; // @optional
   std::optional<RtpMidiDeviceConfiguration> rtp;
 };

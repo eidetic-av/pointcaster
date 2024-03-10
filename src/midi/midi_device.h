@@ -72,9 +72,38 @@ public:
 
   void draw_imgui_window();
 
+  MidiOutputRoute &get_or_create_output_route(std::string_view topic) {
+    static MidiOutputRoute last_output_route{1, 1};
+
+    auto [route_itr, created_new_route] = _config.output_routes.try_emplace(
+        std::string{topic.data(), topic.size()});
+    auto &route = route_itr->second;
+
+    if (created_new_route) {
+      route = last_output_route;
+      if (last_output_route.cc == 129) {
+        last_output_route.cc = 1;
+        if (++last_output_route.channel == 17)
+          last_output_route.channel = 1;
+      } else {
+        last_output_route.cc++;
+      }
+    }
+    return route;
+  }
+
+  MidiInputRoute &get_or_create_input_route(std::string_view midi_id) {
+    auto [route_itr, created_new_route] = _config.input_routes.try_emplace(
+	std::string{midi_id.data(), midi_id.size()});
+    auto &route = route_itr->second;
+    return route;
+  }
+
 private:
   MidiDeviceConfiguration &_config;
+  
   std::optional<std::reference_wrapper<MidiOutputRoute>> _selected_output_route;
+  std::optional<std::reference_wrapper<MidiInputRoute>> _selected_input_route;
 
   std::unordered_map<std::string, libremidi::observer> _midi_observers;
   std::unordered_map<std::string, libremidi::midi_in> _midi_inputs;
@@ -96,26 +125,9 @@ private:
 
   void send_messages(std::stop_token st);
 
+  static void on_receive(MidiDevice &device,
+			 const std::vector<unsigned char> &buffer);
 
-  MidiOutputRoute &get_or_create_output_route(std::string_view topic) {
-    static MidiOutputRoute last_output_route{1, 1};
-
-    auto [route_itr, created_new_route] = _config.output_routes.try_emplace(
-        std::string{topic.data(), topic.size()});
-    auto &route = route_itr->second;
-
-    if (created_new_route) {
-      route = last_output_route;
-      if (last_output_route.cc == 129) {
-        last_output_route.cc = 1;
-        if (++last_output_route.channel == 17)
-          last_output_route.channel = 1;
-      } else {
-        last_output_route.cc++;
-      }
-    }
-    return route;
-  }
 
   void handle_input_added(const libremidi::input_port &port,
                           const libremidi::API &api);

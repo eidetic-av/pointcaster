@@ -9,6 +9,7 @@ using peer_set = std::vector<RtpPeerKey>;
 
 struct RtpMidiDeviceConfiguration {
   bool enable = true;
+  std::string ip = "0.0.0.0";
   peer_set peers; // @optional
 };
 

@@ -364,25 +364,60 @@ void set_parameter_value(std::string_view parameter_id, T new_value) {
   auto &parameter = parameter_bindings.at(parameter_id);
   auto old_binding = parameter;
 
-  // if (std::holds_alternative<FloatReference>(parameter.value)) {
-  //   float &value = std::get<FloatReference>(parameter.value).get();
-  //   value = static_cast<float>(new_value);
-  // } else if (std::holds_alternative<IntReference>(parameter.value)) {
-  //   int &value = std::get<IntReference>(parameter.value).get();
-  //   value = static_cast<int>(new_value);
-  // } else if (std::holds_alternative<IntReference>(parameter.value)) {
-  //   short &value = std::get<ShortReference>(parameter.value).get();
-  //   value = static_cast<short>(new_value);
-  // }
+  if (std::holds_alternative<FloatReference>(parameter.value)) {
 
-  if (std::holds_alternative<Float3Reference>(parameter.value)) {
-    Float3 &value = std::get<Float3Reference>(parameter.value).get();
-    value = new_value;
+    // TODO we should specialize the function itself to keep unwanted types out,
+    // i don't think any of these branches that error are ever hit, but they're
+    // necessary for compile without working on the function definition itself
+
+    if constexpr (pc::types::VectorType<T>) {
+      pc::logger->error("Setting float ref with vector type");
+    } else {
+      float &value = std::get<FloatReference>(parameter.value).get();
+      value = static_cast<float>(new_value);
+    }
+
+  } else if (std::holds_alternative<IntReference>(parameter.value)) {
+
+    if constexpr (pc::types::VectorType<T>) {
+      pc::logger->error("Setting int ref with vector type");
+    } else {
+      int &value = std::get<IntReference>(parameter.value).get();
+      value = static_cast<int>(new_value);
+    }
+
+  } else if (std::holds_alternative<IntReference>(parameter.value)) {
+
+    if constexpr (pc::types::VectorType<T>) {
+      pc::logger->error("Setting short ref with vector type");
+    } else {
+      short &value = std::get<ShortReference>(parameter.value).get();
+      value = static_cast<short>(new_value);
+    }
+
+  } else if (std::holds_alternative<Float3Reference>(parameter.value)) {
+
+    if constexpr (std::is_same_v<T, Float3>) {
+      Float3 &value = std::get<Float3Reference>(parameter.value).get();
+      value = new_value;
+    } else {
+      pc::logger->error("Setting float3 ref with non-float3 val");
+    }
   }
+
+  // else if (std::holds_alternative<Int2Reference>(parameter.value)) {
+  //    Int2 &value = std::get<Int2Reference>(parameter.value).get();
+  //    value = new_value;
+  //  } else if (std::holds_alternative<Int3Reference>(parameter.value)) {
+  //    Int3 &value = std::get<Int3Reference>(parameter.value).get();
+  //    value = new_value;
+  //  } else if (std::holds_alternative<Float2Reference>(parameter.value)) {
+  //    Float2 &value = std::get<Float2Reference>(parameter.value).get();
+  //    value = new_value;
+  //  }
 
   MainThreadDispatcher::enqueue([&] {
     for (const auto &cb : parameter.update_callbacks) {
-      pc::logger->info("Running cb from parameters:385");
       cb(old_binding, parameter);
     }
   });

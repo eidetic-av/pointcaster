@@ -81,6 +81,7 @@ if (GENERATE_REFLECTIONS)
     src/operators/rotate_operator.h
     src/operators/sample_filter_operator.h
     src/operators/range_filter_operator.h
+    src/operators/denoise/denoise_operator.h
   )
 
   foreach(HEADER IN LISTS REFLECTED_TYPES)
@@ -308,6 +309,7 @@ if (WITH_POINTCASTER)
     src/operators/rake_operator.cc
     src/operators/sample_filter_operator.cc
     src/operators/range_filter_operator.cc
+    src/operators/denoise/denoise_operator.cc
     ${POINTCASTER_SRC}
     ${OPTIONAL_SRC})
 

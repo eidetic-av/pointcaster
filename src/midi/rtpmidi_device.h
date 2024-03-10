@@ -1,16 +1,18 @@
 #pragma once
 
-#include "../serialization.h"
 #include "../logger.h"
+#include "../serialization.h"
 #include "rtp_peer.h"
+#include "rtpmidi_device_config.gen.h"
 #include <chrono>
+#include <future>
 #include <map>
 #include <netinet/in.h>
+#include <span>
 #include <thread>
-#include <netinet/in.h>
-#include "rtpmidi_device_config.gen.h"
 
 #include "/opt/libRtpMidiSDK/C-Binding/rtpMidi.h"
+#include "../../thirdparty/mdns_cpp/include/mdns_cpp/mdns.hpp"
 
 namespace pc::midi {
 class RtpMidiDevice {
@@ -20,6 +22,8 @@ public:
   static constexpr uint16_t rtp_midi_ctrl_port = 5004;
   static constexpr uint16_t rtp_midi_data_port = 5005;
   static constexpr auto rtp_tick_time_ms = 100;
+
+  std::function<void(std::vector<unsigned char>)> on_receive;
 
   RtpMidiDevice(RtpMidiDeviceConfiguration &config);
   ~RtpMidiDevice();
@@ -45,9 +49,9 @@ public:
   RtpPeer *get_or_create_peer(std::string_view name, std::string_view address,
 			      uint16_t port);
 
-  bool mdns_stop_requested() {
-    return _mdns_thread.get_stop_source().stop_requested();
-  }
+  void mdns_reply_callback(const std::string &msg);
+
+  static uint64_t get_current_time();
 
   static RTP_MIDI_BOOL
   udp_callback(RTP_MIDI_SESSION *session, const void *remote_address,
@@ -55,8 +59,13 @@ public:
 	       uint32_t address_flags, const unsigned char *packet,
                size_t packet_length, void *session_context);
 
+  static void midi_callback(RTP_MIDI_SESSION *session, uint32_t delta_time,
+			    const unsigned char *command, size_t length,
+			    RTP_MIDI_BOOL with_running_status,
+			    void *session_context);
+
   static void *new_peer_callback(RTP_MIDI_SESSION *session, RTP_MIDI_PEER *peer,
-				 void *session_context);
+                                 void *session_context);
 
   static void peer_update_callback(RTP_MIDI_SESSION *session,
 				   RTP_MIDI_PEER *peer, uint32_t update_type,
@@ -82,9 +91,8 @@ private:
   std::jthread _data_recv_thread;
 
   std::map<RtpPeerKey, std::unique_ptr<RtpPeer>> _peers;
-  std::jthread _mdns_thread;
-
-  static uint64_t get_current_time();
+  std::future<void> _mdns_query;
+  
 };
 
 } // namespace pc::midi
