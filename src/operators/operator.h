@@ -18,5 +18,12 @@ typedef thrust::zip_iterator<
     operator_in_out_t;
 
 using Operator = thrust::unary_function<indexed_point_t, indexed_point_t>;
-  
+
+struct get_position {
+  __host__ __device__ pc::types::position
+  operator()(indexed_point_t point) const {
+    return thrust::get<0>(point);
+  }
+};
+
 } // namespace pc::operators

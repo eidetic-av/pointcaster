@@ -309,6 +309,7 @@ if (WITH_POINTCASTER)
     src/operators/rake_operator.cc
     src/operators/sample_filter_operator.cc
     src/operators/range_filter_operator.cc
+    src/operators/denoise/kdtree.cu
     src/operators/denoise/denoise_operator.cc
     ${POINTCASTER_SRC}
     ${OPTIONAL_SRC})

@@ -1,5 +1,7 @@
 #include "../logger.h"
 #include "../math.h"
+#include "denoise/denoise_operator.cuh"
+#include "denoise/kdtree.h"
 #include "noise_operator.cuh"
 #include "rake_operator.cuh"
 #include "range_filter_operator.cuh"
@@ -52,7 +54,55 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
                                  T, SampleFilterOperatorConfiguration>) {
             end = thrust::copy_if(begin, end, begin,
                                   SampleFilterOperator(config));
-          } else if constexpr (std::is_same_v<
+          }
+
+	  //
+
+	  else if constexpr (std::is_same_v<T, DenoiseOperatorConfiguration>) {
+
+	    pc::logger->info("Building KDTree");
+
+	    // - copy the positions from the operator_in_out_t onto the CPU into a kdNode[]
+	    // -- first get the positions
+	    thrust::device_vector<pc::types::position> gpu_positions;
+	    gpu_positions.reserve(thrust::distance(begin, end));
+	    thrust::transform(begin, end, gpu_positions.begin(),
+			      get_position{});
+
+	    cudaDeviceSynchronize();
+
+            // -- copy them onto the CPU
+	    std::vector<pc::types::position> cpu_positions(
+		gpu_positions.begin(), gpu_positions.end());
+
+            // - create our kdNode vector
+            std::vector<DynaMap::kdNode> kd_nodes(cpu_positions.size());
+
+	    // does the copy need to be parallelized?
+	    for (int i = 0; i < cpu_positions.size(); i++) {
+	      kd_nodes[i] = {.id = i, .left = nullptr, .right = nullptr};
+	      kd_nodes[i].x[0] = cpu_positions[i].x / 1000.0f;
+	      kd_nodes[i].x[1] = cpu_positions[i].y / 1000.0f;
+	      kd_nodes[i].x[2] = cpu_positions[i].z / 1000.0f;
+	    }
+	    if (cpu_positions.size() > 1000) {
+              pc::logger->info("cpu[1000].x: {}", cpu_positions.at(1000).x);
+            }
+
+            // - create the kdtree
+	    DynaMap::kdTree tree;
+	    tree.kdRoot =
+		tree.buildTree(kd_nodes.data(), kd_nodes.size(), 0, MAX_DIM);
+
+            pc::logger->info("Successfully built KDTree: {}",
+                             tree.kdRoot == nullptr ? "false" : "true");
+
+            // DenoiseOperator kernel, passing in a reference or pointer to the tree
+	    
+	    // - kernel output still returns a filtered set into begin and end
+	  }
+	    //
+	  else if constexpr (std::is_same_v<
                                    T, RangeFilterOperatorConfiguration>) {
 
 	    // TODO: this is RangeFilter Operator behaviour,
@@ -86,27 +136,11 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
             }
 
             if (fill_count > config.fill.count_threshold) {
+
               config.fill.fill_value =
                   fill_count / static_cast<float>(config.fill.max_fill);
               config.fill.proportion =
                   fill_count / static_cast<float>(starting_point_count);
-	    } else {
-	      config.fill.fill_value = 0;
-	      config.fill.proportion = 0;
-            }
-
-            // if (config.fill.publish) {
-              // publisher::publish_all(
-              //     "fill_value", std::array<float, 1>{config.fill.fill_value},
-              //     {"operator", "range_filter", std::to_string(config.id),
-              //      "fill"});
-              // publisher::publish_all(
-              //     "proportion", std::array<float, 1>{config.fill.proportion},
-              //     {"operator", "range_filter", std::to_string(config.id),
-              //      "fill"});
-            // }
-
-            // TODO these three kernels could probably be fused into one
 
             auto minmax_x_points = thrust::minmax_element(
                 filtered_begin, filtered_end, MinMaxXComparator{});
@@ -160,6 +194,29 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
 	    config.minmax.max_z = pc::math::remap(box_min_z, box_max_z, 0.0f,
 						  1.0f, max_z, true);
 
+	    } else {
+	      config.fill.fill_value = 0;
+	      config.fill.proportion = 0;
+	      config.minmax.min_x = 0;
+	      config.minmax.max_x = 0;
+	      config.minmax.min_y = 0;
+	      config.minmax.max_y = 0;
+	      config.minmax.min_z = 0;
+	      config.minmax.max_z = 0;
+            }
+
+            // if (config.fill.publish) {
+              // publisher::publish_all(
+              //     "fill_value", std::array<float, 1>{config.fill.fill_value},
+              //     {"operator", "range_filter", std::to_string(config.id),
+              //      "fill"});
+              // publisher::publish_all(
+              //     "proportion", std::array<float, 1>{config.fill.proportion},
+              //     {"operator", "range_filter", std::to_string(config.id),
+              //      "fill"});
+            // }
+
+            // TODO these three kernels could probably be fused into one
 	    // if (config.minmax.publish) {
 	    //   auto &mm = config.minmax;
 	    //   auto id = std::to_string(config.id);

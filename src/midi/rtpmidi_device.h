@@ -41,6 +41,12 @@ public:
     rtpMidiSessionSendMidiData(_rtp_midi_session, 0, arr.data(), arr.size());
   }
 
+  // template <size_t msg_size>
+  // void send_message(std::array<uint8_t, msg_size> arr, uint32_t delta_ms) {
+  //   rtpMidiSessionSendMidiData(_rtp_midi_session, &delta_ms, arr.data(),
+  // 			       msg_size);
+  // }
+
   void draw_imgui();
 
   int ctrl_socket() { return _ctrl_socket; }

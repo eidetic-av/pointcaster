@@ -58,7 +58,8 @@ MidiDevice::MidiDevice(MidiDeviceConfiguration &config)
   pc::logger->info("MIDI: Listening for MIDI hotplug events");
 
   // Create a virtual MIDI port
-  _virtual_output.open_virtual_port("pointcaster 1");
+  // _virtual_output.open_virtual_port("pointcaster 1");
+
 
   // And an RTP Midi (Apple Network Midi) port
   if (!_config.rtp.has_value()) {
@@ -173,17 +174,17 @@ void MidiDevice::send_messages(std::stop_token st) {
 
   static constexpr auto thread_wait_time = 50ms;
 
-  while (!_virtual_output.is_port_open() && !st.stop_requested()) {
-    std::this_thread::sleep_for(thread_wait_time);
-  }
+  // while (!_virtual_output.is_port_open() && !st.stop_requested()) {
+  //   std::this_thread::sleep_for(thread_wait_time);
+  // }
 
   while (!st.stop_requested()) {
     MidiOutMessage message;
     while (_messages_to_publish.wait_dequeue_timed(message, thread_wait_time)) {
       auto status_byte =
 	  static_cast<uint8_t>(message.type) + (message.channel_num - 1);
-      _virtual_output.send_message(status_byte, message.cc_or_note_num,
-				   message.value);
+      // _virtual_output.send_message(status_byte, message.cc_or_note_num,
+      // 				   message.value);
       if (_config.rtp->enable) {
 	_rtp_midi->send_message(status_byte, message.cc_or_note_num,
 				message.value);
@@ -246,7 +247,10 @@ void MidiDevice::on_receive(MidiDevice &device,
     }
 
     if (!parameter_bindings.contains(std::string_view{topic})) {
-      pc::logger->debug("Parameter '{}' not found", topic);
+      pc::logger->debug(
+	  "Parameter not mapped: type: {:02x}, ch: {}, cc: {}, val: {}",
+	  message_type, static_cast<int>(channel + 1),
+	  static_cast<int>(cc_num + 1), static_cast<int>(buffer[2]));
       input_route.last_value = static_cast<int>(buffer[2]);
       return;
     }
