@@ -192,7 +192,7 @@ bool DragScalarN(std::string_view parameter_id, ImGuiDataType data_type, void *p
       auto &t = parameter_states[parameter_id];
       t = ParameterState::Publish;
     } else if (IsMouseClicked(ImGuiMouseButton_Right)) {
-      SetClipboardText(parameter_id.data());
+      ImGui::SetClipboardText(parameter_id.data());
       pc::logger->info(parameter_id);
     }
   }

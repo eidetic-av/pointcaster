@@ -37,6 +37,7 @@
 #include "session.gen.h"
 #include "structs.h"
 
+#include <SDL2/SDL.h>
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/GL/Context.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
@@ -353,6 +354,14 @@ PointCaster::PointCaster(const Arguments &args)
   _imgui_context = ImGuiIntegration::Context(
       *ImGui::GetCurrentContext(), Vector2(windowSize()) / dpiScaling(),
       windowSize(), framebufferSize());
+
+  // Set up the link from imgui to the system clipboard using SDL
+  ImGui::GetIO().SetClipboardTextFn = [](void *,const char * text) {
+    SDL_SetClipboardText(text);
+  };
+  ImGui::GetIO().GetClipboardTextFn = [](void *) -> const char * {
+    return SDL_GetClipboardText();
+  };
 
   // Set up blending to be used by imgui
   Magnum::GL::Renderer::setBlendEquation(
