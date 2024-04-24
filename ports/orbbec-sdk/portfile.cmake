@@ -7,17 +7,37 @@ vcpkg_from_github(
 )
 
 file(INSTALL
-  ${SOURCE_PATH}/lib/linux_x64/
-  DESTINATION ${CURRENT_PACKAGES_DIR}/lib
-  FILES_MATCHING PATTERN "*.so*")
-
-file(INSTALL
   ${SOURCE_PATH}/include/
   DESTINATION ${CURRENT_PACKAGES_DIR}/include)
 
 file(INSTALL
   ${SOURCE_PATH}/cmake/
   DESTINATION ${CURRENT_PACKAGES_DIR}/share/OrbbecSDK)
+
+# platform specific var setup
+
+if (VCPKG_TARGET_IS_LINUX)
+  set(LIB_EXT ".so")
+  set(LIB_DIR "linux_x64")
+elseif(VCPKG_TARGET_IS_WINDOWS)
+  set(LIB_EXT ".dll")
+  set(LIB_DIR "win_x64")
+else()
+  message(FATAL_ERROR "Platform not supported.")
+endif()
+
+# the depth engine library will come from the k4a repo instead,
+# which works with both k4a and orbbec devices. So skip it for this port
+
+file(GLOB_RECURSE LIB_FILES "${SOURCE_PATH}/lib/${LIB_DIR}/*${LIB_EXT}*")
+
+foreach(LIB_FILE ${LIB_FILES})
+  get_filename_component(FILE_NAME ${LIB_FILE} NAME)
+  if (NOT FILE_NAME MATCHES "depthengine")
+    file(INSTALL ${LIB_FILE}
+      DESTINATION ${CURRENT_PACKAGES_DIR}/lib)
+  endif()
+endforeach()
 
 configure_file(
     ${CURRENT_PACKAGES_DIR}/share/OrbbecSDK/OrbbecSDKConfig.cmake.in
