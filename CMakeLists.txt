@@ -174,9 +174,7 @@ if (WITH_POINTCASTER)
   endif()
 
   find_package(liblo CONFIG REQUIRED)
-  pkg_check_modules(LIBLO REQUIRED liblo)
-  list(APPEND INCLUDE_DIRS ${LIBLO_INCLUDE_DIRS})
-  list(APPEND LINK_LIBS ${LIBLO_LDFLAGS})
+  list(APPEND LINK_LIBS liblo::liblo_static)
   list(APPEND POINTCASTER_SRC 
     src/osc/osc_client.cc src/osc/osc_server.cc)
 
