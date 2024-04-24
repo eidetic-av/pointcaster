@@ -1,15 +1,15 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO mosra/magnum
-    REF multiwindow
-    SHA512 c269c96240e7da35059c3a682888b3f3cfe46fd552a8e517888a3b434a310c3fc11b38885a694a934d8497c7e082b2d16abfda980f485e1148de231becbf29fd
+    REF 8a92a64a4da612a963a70216c3576fac6886f6a7 
+    SHA512 451ea3f50b8bfb42c9a5de0115cb133be841264020ed91318015402877c424ded30b46150f059882af55203521e46e1cb89a3f6069459357c05c7811c8b2571e
     HEAD_REF multiwindow
     PATCHES
         002-sdl-includes.patch
         003-fix-FindGLFW.patch
         # 004-fix-FindOpenAL.patch
         005-fix-find-sdl2.patch
-        006-remove-nonportable-warnings.patch
+        # 006-remove-nonportable-warnings.patch
 )
 
 string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" BUILD_STATIC)
