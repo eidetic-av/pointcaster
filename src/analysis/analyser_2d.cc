@@ -519,6 +519,7 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
       // collect data as flattened layout as well
       // (easier to serialize for publishing)
       std::vector<std::array<float, 4>> flow_field_flattened;
+      float flow_energy = 0;
 
       for (size_t i = 0; i < feature_point_positions.size(); ++i) {
         if (feature_point_status[i] == false)
@@ -546,7 +547,8 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
             scaled_distance.y / analysis_frame_size.y};
 
         cv::Point2f absolute_distance{std::abs(normalised_distance.x),
-                                      std::abs(normalised_distance.y)};
+				      std::abs(normalised_distance.y)};
+	flow_energy += absolute_distance.x + absolute_distance.y;
 
         if (absolute_distance.x > optical_flow.minimum_distance &&
             absolute_distance.y > optical_flow.minimum_distance &&
@@ -583,6 +585,14 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
                      cv::LINE_AA);
           }
         }
+      }
+
+      // TODO total flow energy
+      if (feature_point_positions.size() > 0) {
+	flow_energy = flow_energy / feature_point_positions.size();
+	publisher::publish_all("flow_energy", flow_energy, address_nodes);
+      } else {
+	publisher::publish_all("flow_energy", 0.0f, address_nodes);
       }
 
       if (optical_flow.publish) {
