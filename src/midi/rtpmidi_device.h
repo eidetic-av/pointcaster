@@ -11,8 +11,8 @@
 #include <span>
 #include <thread>
 
-#include "/opt/libRtpMidiSDK/C-Binding/rtpMidi.h"
-#include "../../thirdparty/mdns_cpp/include/mdns_cpp/mdns.hpp"
+#include <C-Binding/rtpMidi.h>
+#include <mdns_cpp/mdns.hpp>
 
 namespace pc::midi {
 class RtpMidiDevice {

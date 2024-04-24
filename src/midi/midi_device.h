@@ -6,7 +6,9 @@
 #include "../string_utils.h"
 #include "../structs.h"
 #include "midi_device_config.gen.h"
+#ifdef WITH_RTP_MIDI
 #include "rtpmidi_device.h"
+#endif
 #include <array>
 #include <atomic>
 #include <concurrentqueue/blockingconcurrentqueue.h>
@@ -110,7 +112,9 @@ private:
 
   libremidi::midi_out _virtual_output;
 
+#ifdef WITH_RTP_MIDI
   std::unique_ptr<RtpMidiDevice> _rtp_midi;
+#endif
 
   std::jthread _sender_thread;
 
@@ -123,11 +127,12 @@ private:
   moodycamel::BlockingConcurrentQueue<MidiOutMessage>
       _messages_to_publish;
 
-  void send_messages(std::stop_token st);
+  void draw_network_options();
 
   static void on_receive(MidiDevice &device,
 			 const std::vector<unsigned char> &buffer);
 
+  void send_messages(std::stop_token st);
 
   void handle_input_added(const libremidi::input_port &port,
                           const libremidi::API &api);

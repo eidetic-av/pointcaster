@@ -143,32 +143,35 @@ if (WITH_POINTCASTER)
     add_compile_definitions(WITH_MQTT)
   endif()
 
+  find_package(mdns_cpp CONFIG REQUIRED)
+  list(APPEND LINK_LIBS mdns_cpp::mdns_cpp)
+
   # ----- Control -----
 
   find_package(libremidi CONFIG REQUIRED)
   list(APPEND LINK_LIBS libremidi)
   list(APPEND POINTCASTER_SRC src/midi/midi_device.cc)
 
-  # TODO find_package rtpmidid
-  # find_package(rtpmidid CONFIG REQUIRED)
-  # list(APPEND LINK_LIBS rtpmidid::rtpmidid-static)
-  list(APPEND POINTCASTER_SRC 
-    src/midi/rtpmidi_device.cc src/midi/rtp_peer.cc)
+  # look for installed Tobias Erichsen's libRtpMidiSDK
+  find_library(RTPMIDI_LIB
+    NAMES RtpMidi
+    PATHS "/usr/lib" "/opt/libRtpMidiSDK/targets/Linux/x64" 
+      "C:/Program Files (x86)/Tobias Erichsen/libRtpMidiSDK/targets/Microsoft/Windows/x64")
 
-  list(APPEND LINK_LIBS "/opt/libRtpMidiSDK/targets/Linux/x64/libRtpMidi.so")
+  if (RTPMIDI_LIB)
+    message(STATUS "Found libRtpMidiSDK: ${RTPMIDI_LIB}")
 
-  # find_path(MDNS_INCLUDE_DIRS "mdns.h")
-  # target_include_directories(main PRIVATE ${MDNS_INCLUDE_DIRS})
+    get_filename_component(RTPMIDI_LIB_DIR ${RTPMIDI_LIB} DIRECTORY)
+    set(RTPMIDI_INCLUDES "${RTPMIDI_LIB_DIR}/../../..")
 
-  # list(APPEND INCLUDE_DIRS "/opt/libRtpMidiSDK/C-Binding/")
-
-  add_subdirectory(thirdparty/mdns_cpp)
-  list(APPEND LINK_LIBS mdns_cpp::mdns_cpp)
-
-  # find_package(libmicrodns CONFIG REQUIRED)
-  pkg_check_modules(MICRODNS REQUIRED microdns)
-  list(APPEND INCLUDE_DIRS ${MICRODNS_INCLUDE_DIRS})
-  list(APPEND LINK_LIBS ${MICRODNS_LIBRARIES})
+    list(APPEND POINTCASTER_SRC 
+      src/midi/rtpmidi_device.cc src/midi/rtp_peer.cc)
+    list(APPEND LINK_LIBS ${RTPMIDI_LIB})
+    list(APPEND INCLUDE_DIRS ${RTPMIDI_INCLUDES})
+    add_compile_definitions(WITH_RTP_MIDI)
+  else()
+    message(STATUS "libRtpMidiSDK was not found. Network MIDI will be disabled.")
+  endif()
 
   find_package(liblo CONFIG REQUIRED)
   pkg_check_modules(LIBLO REQUIRED liblo)

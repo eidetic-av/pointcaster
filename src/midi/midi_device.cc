@@ -62,11 +62,13 @@ MidiDevice::MidiDevice(MidiDeviceConfiguration &config)
 
 
   // And an RTP Midi (Apple Network Midi) port
+#ifdef WITH_RTP_MIDI
   if (!_config.rtp.has_value()) {
     _config.rtp = RtpMidiDeviceConfiguration{};
   }
   _rtp_midi = std::make_unique<RtpMidiDevice>(*config.rtp);
   _rtp_midi->on_receive = [this](auto buffer) { on_receive(*this, buffer); };
+#endif
 
   // for any MIDI cc bindings to UI parameters saved in the config,
   // notify the parameter its been 'bound'
@@ -185,10 +187,12 @@ void MidiDevice::send_messages(std::stop_token st) {
 	  static_cast<uint8_t>(message.type) + (message.channel_num - 1);
       // _virtual_output.send_message(status_byte, message.cc_or_note_num,
       // 				   message.value);
+#ifdef WITH_RTP_MIDI
       if (_config.rtp->enable) {
 	_rtp_midi->send_message(status_byte, message.cc_or_note_num,
 				message.value);
       }
+#endif
     }
   }
 
@@ -516,10 +520,8 @@ void MidiDevice::handle_output_removed(const libremidi::output_port &port) {
   // 		   port.port_name);
 }
 
-void MidiDevice::draw_imgui_window() {
-
-  pc::gui::draw_parameters("midi", struct_parameters.at(std::string{"midi"}));
-
+void MidiDevice::draw_network_options() {
+#ifdef WITH_RTP_MIDI
   bool &rtp_unfolded = _config.rtp.value().unfolded;
   ImGui::SetNextItemOpen(rtp_unfolded);
   if (ImGui::CollapsingHeader("Network MIDI")) {
@@ -528,6 +530,14 @@ void MidiDevice::draw_imgui_window() {
   } else {
     rtp_unfolded = false;
   }
+#endif
+}
+
+void MidiDevice::draw_imgui_window() {
+
+  pc::gui::draw_parameters("midi", struct_parameters.at(std::string{"midi"}));
+
+  draw_network_options();
 
   ImGui::SetNextItemOpen(_config.show_output_routes);
 
