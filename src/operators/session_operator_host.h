@@ -16,7 +16,6 @@ using Object3D =
 
 class SessionOperatorHost {
 public:
-
   static operator_in_out_t run_operators(operator_in_out_t begin,
 					 operator_in_out_t end,
 					 OperatorHostConfiguration &host_config);
@@ -41,6 +40,9 @@ using OperatorList =
     std::vector<std::reference_wrapper<const SessionOperatorHost>>;
 
 extern operator_in_out_t apply(operator_in_out_t begin, operator_in_out_t end,
-			       const OperatorList& operator_list); 
+			       const OperatorList& operator_list);
+
+extern pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
+                                   const OperatorList &operator_list);
 
 } // namespace pc::operators

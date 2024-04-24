@@ -17,7 +17,7 @@ namespace pc::operators {
 using OperatorConfigurationVariant =
     std::variant<NoiseOperatorConfiguration, SampleFilterOperatorConfiguration,
 		 RangeFilterOperatorConfiguration, RotateOperatorConfiguration,
-		 RakeOperatorConfiguration, DenoiseOperatorConfiguration>;
+		 RakeOperatorConfiguration>;
 
 // Extract types from variant into a tuple
 template <typename Variant> struct VariantTypes;

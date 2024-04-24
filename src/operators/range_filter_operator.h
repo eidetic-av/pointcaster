@@ -41,6 +41,8 @@ struct RangeFilterOperatorMinMaxConfiguration {
   float max_y;
   float min_z;
   float max_z;
+  float volume_change;
+  float volume_change_timespan = 0.03f;
   bool publish = false;
 };
 
