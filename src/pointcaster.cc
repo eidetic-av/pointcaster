@@ -84,6 +84,7 @@
 
 // TODO these need to be removed when initialisation loop is made generic
 #include "devices/k4a/k4a_device.h"
+#include "devices/orbbec/orbbec_device.h"
 #include <k4a/k4a.h>
 
 #include "mqtt/mqtt_client.h"
@@ -116,6 +117,7 @@ using namespace Math::Literals;
 
 using pc::devices::Device;
 using pc::devices::K4ADevice;
+using pc::devices::OrbbecDevice;
 
 using uint = unsigned int;
 
@@ -188,6 +190,8 @@ protected:
   std::unique_ptr<OscServer> _osc_server;
   std::unique_ptr<SyncServer> _sync_server;
 
+  std::vector<std::unique_ptr<OrbbecDevice>> _orbbec_cameras;
+
 #ifndef WIN32
   std::unique_ptr<UsbMonitor> _usb_monitor;
   std::mutex _usb_config_mutex;
@@ -212,8 +216,9 @@ protected:
   void load_session(std::filesystem::path file_path);
 
   std::atomic_bool loading_device = false;
-  void load_device(const DeviceConfiguration& config, std::string_view target_id = "");
+  void load_k4a_device(const DeviceConfiguration& config, std::string_view target_id = "");
   void open_kinect_sensors();
+  void open_orbbec_sensor(std::string_view ip);
 
   void render_cameras();
   void publish_parameters();
@@ -591,8 +596,12 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   auto output_session = _session;
 
   output_session.devices.clear();
-  for (auto &device : Device::attached_devices) {
-    output_session.devices.emplace(device->id(), device->config());
+  for (auto &k4a_device : Device::attached_devices) {
+    output_session.devices.emplace(k4a_device->id(), k4a_device->config());
+  }
+  for (auto &ob_device_ref : OrbbecDevice::attached_devices) {
+    auto &ob_device = ob_device_ref.get();
+    output_session.devices.emplace(ob_device.id(), ob_device.config());
   }
 
   const auto uninitialized_or_default = [](auto &optional_obj) {
@@ -627,9 +636,11 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   if (uninitialized_or_default(output_session.mqtt)) {
     output_session.mqtt.reset();
   }
-  if (uninitialized_or_default(output_session.midi)) {
-    output_session.midi.reset();
-  }
+
+  // TODO: this is breaking Release builds
+  // if (uninitialized_or_default(output_session.midi)) {
+  //   output_session.midi.reset();
+  // }
 
   output_session.cameras.clear();
   for (auto &camera : _camera_controllers) {
@@ -708,8 +719,14 @@ void PointCaster::load_session(std::filesystem::path file_path) {
       run_async([this] {
 	for (auto &[device_id, device_config] : _session.devices) {
 	  pc::logger->info("Loading device '{}' from config file", device_id);
-	  load_device(device_config, device_id);
-	}
+          if (device_id.find("ob_") != std::string::npos) {
+	    auto ip = std::string(device_id.begin() + 3, device_id.end());
+	    std::replace(ip.begin(), ip.end(), '_', '.');
+	    open_orbbec_sensor(ip);
+          } else {
+            load_k4a_device(device_config, device_id);
+          }
+        }
       });
     }
   }
@@ -795,7 +812,7 @@ void PointCaster::render_cameras() {
   GL::defaultFramebuffer.bind();
 }
 
-void PointCaster::load_device(const DeviceConfiguration& config, std::string_view target_id) {
+void PointCaster::load_k4a_device(const DeviceConfiguration& config, std::string_view target_id) {
   loading_device = true;
   try {
     auto device = std::make_shared<K4ADevice>(config, target_id);
@@ -815,7 +832,26 @@ void PointCaster::open_kinect_sensors() {
     const auto attached_device_count = k4a::device::get_installed_count();
     pc::logger->info("Found {} attached k4a devices", (int)attached_device_count);
     for (std::size_t i = open_device_count; i < attached_device_count; i++) {
-      load_device({});
+      load_k4a_device({});
+    }
+    loading_device = false;
+  });
+}
+
+void PointCaster::open_orbbec_sensor(std::string_view ip) {
+  pc::logger->info("Opening Orbbec sensor at {}", ip);
+  std::string ip_str{ip.begin(), ip.end()};
+  run_async([this, ip = ip_str] {
+    loading_device = true;
+    try {
+      std::string id{fmt::format("ob_{}", ip)};
+      std::replace(id.begin(), id.end(), '.', '_');
+      _orbbec_cameras.push_back(
+	  std::make_unique<OrbbecDevice>(_session.devices[id], id));
+    } catch (ob::Error &e) {
+      pc::logger->error(e.getMessage());
+    } catch (...) {
+      pc::logger->error("Failed to open device. (Unknown exception)");
     }
     loading_device = false;
   });
@@ -1282,10 +1318,11 @@ void PointCaster::draw_devices_window() {
       pc::gui::draw_parameters("usb", struct_parameters.at("usb"));
     }
 #endif
+    ImGui::Text("Kinect");
     ImGui::Dummy({0, 4});
     ImGui::Dummy({10, 0});
     ImGui::SameLine();
-    if (ImGui::Button("Open")) {
+    if (ImGui::Button("Open##K4A")) {
       open_kinect_sensors();
     }
     ImGui::SameLine();
@@ -1295,21 +1332,55 @@ void PointCaster::draw_devices_window() {
       Device::attached_devices.clear();
     }
     ImGui::Dummy({0, 12});
+
+    ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
+
+    for (auto &device : Device::attached_devices) {
+      auto &config = device->config();
+      ImGui::SetNextItemOpen(config.unfolded);
+      if (ImGui::CollapsingHeader(device->name.c_str())) {
+        config.unfolded = true;
+        ImGui::Dummy({0, 8});
+        ImGui::Dummy({8, 0});
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", device->id().c_str());
+        ImGui::Dummy({0, 6});
+        device->draw_imgui_controls();
+      } else {
+        config.unfolded = false;
+      }
+    }
+    ImGui::PopItemWidth();
+
+    ImGui::Text("Orbbec");
+    ImGui::Dummy({0, 4});
+    ImGui::Dummy({10, 0});
+    ImGui::SameLine();
+    static std::array<char, 16> ip{};
+    ImGui::InputText("IP", ip.data(), ip.size());
+    ImGui::Dummy({0, 4});
+    ImGui::Dummy({10, 0});
+    ImGui::SameLine();
+    if (ImGui::Button("Open##Orbbec")) {
+      open_orbbec_sensor(ip.data());
+    }
   }
+  ImGui::Dummy({0, 12});
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
-  
-  for (auto &device : Device::attached_devices) {
-    auto& config = device->config();
+
+  for (auto &device_ref : OrbbecDevice::attached_devices) {
+    auto &device = device_ref.get();
+    auto &config = device.config();
     ImGui::SetNextItemOpen(config.unfolded);
-    if (ImGui::CollapsingHeader(device->name.c_str())) {
+    if (ImGui::CollapsingHeader(device.id().c_str())) {
       config.unfolded = true;
       ImGui::Dummy({0, 8});
       ImGui::Dummy({8, 0});
       ImGui::SameLine();
-      ImGui::TextDisabled("%s", device->id().c_str());
+      ImGui::TextDisabled("%s", device.id().c_str());
       ImGui::Dummy({0, 6});
-      device->draw_imgui_controls();
+      device.draw_imgui_controls();
     } else {
       config.unfolded = false;
     }
@@ -1405,7 +1476,6 @@ void PointCaster::drawEvent() {
 			       GL::FramebufferClear::Depth);
 
   render_cameras();
-
 
   _imgui_context.newFrame();
   pc::gui::begin_gui_helpers(_current_mode, _modeline_input);

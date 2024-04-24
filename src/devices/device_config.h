@@ -3,6 +3,7 @@
 #include "../serialization.h"
 #include "../structs.h"
 #include <k4a/k4atypes.h>
+#include <variant>
 
 namespace pc::devices {
 
@@ -30,7 +31,6 @@ struct K4AConfiguration {
   int contrast = 5;
   int saturation = 31;
   int gain = 128;
-  AutoTiltConfiguration auto_tilt; // @optional
 };
 
 struct DeviceConfiguration {
@@ -49,7 +49,7 @@ struct DeviceConfiguration {
   float scale = 1; // @minmax(0, 10)
   int sample = 1; 
   BodyTrackingConfiguration body; // @optional
-  K4AConfiguration k4a; // @optional
+  AutoTiltConfiguration auto_tilt; // @optional
 };
 
 } // namespace pc::devices

@@ -22,12 +22,13 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config, std::string_view target_
 
   _k4a_config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
   _k4a_config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
-  _k4a_config.color_resolution = K4A_COLOR_RESOLUTION_1080P;
+  _k4a_config.color_resolution = K4A_COLOR_RESOLUTION_720P;
   _k4a_config.synchronized_images_only = true;
 
-  _k4a_config.depth_mode = (k4a_depth_mode_t)config.k4a.depth_mode;
+  // _k4a_config.depth_mode = (k4a_depth_mode_t)config.k4a.depth_mode;
+  _k4a_config.depth_mode = K4A_DEPTH_MODE_NFOV_UNBINNED;
 
-  if (config.k4a.depth_mode == (int)K4A_DEPTH_MODE_WFOV_UNBINNED) {
+  if (_k4a_config.depth_mode == (int)K4A_DEPTH_MODE_WFOV_UNBINNED) {
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_15;
   } else {
     _k4a_config.camera_fps = K4A_FRAMES_PER_SECOND_30;
@@ -60,7 +61,7 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config, std::string_view target_
     int i = 0;
     for (; i < k4a::device::get_installed_count(); i++) {
       try {
-	pc::logger->debug("Attempting open at {}", i);
+	pc::logger->info("Opening device at index {}", i);
 
 	device = k4a::device::open(i);
 	auto this_serial_number = device.get_serialnum();
@@ -82,13 +83,13 @@ K4ADriver::K4ADriver(const DeviceConfiguration &config, std::string_view target_
 
 	// if we succesfully opened the device, but didn't match the serial
 	// number we were looking for, we need to close the device and try again
-        pc::logger->debug("Found k4a with wrong serial num... trying again...");
+        pc::logger->info("Found k4a with wrong serial num... trying again...");
         device.close();
 
       } catch (const k4a::error &e) {
 	// if the device failed to open, just continue on to try the next device
-	pc::logger->debug("Failed to open the k4a at {}", i);
-	pc::logger->debug(e.what());
+	pc::logger->error("Failed to open the k4a at {}", i);
+	pc::logger->error(e.what());
       }
     }
 
@@ -145,7 +146,7 @@ K4ADriver::~K4ADriver() {
 void K4ADriver::start_sensors() {
   if (_running) return;
 
-  pc::logger->debug("Starting sensors: {}", id());
+  pc::logger->info("Starting sensors for k4a: {}", id());
 
 
   // sometimes start_cameras fails but it works after a few seconds...
@@ -173,8 +174,10 @@ void K4ADriver::start_sensors() {
   _calibration = _device->get_calibration((k4a_depth_mode_t)_k4a_config.depth_mode,
                                           _k4a_config.color_resolution);
   _transformation = k4a::transformation(_calibration);
-  _tracker =
-      std::make_unique<k4abt::tracker>(k4abt::tracker::create(_calibration));
+
+  pc::logger->warn("Body tracking disabled");
+  // _tracker =
+  //     std::make_unique<k4abt::tracker>(k4abt::tracker::create(_calibration));
 
   _running = true;
 }
@@ -444,7 +447,7 @@ void K4ADriver::process_imu() {
 
   while (!_stop_requested) {
 
-    if (!_open || !_running || !_last_config.k4a.auto_tilt.enabled) {
+    if (!_open || !_running || !_last_config.auto_tilt.enabled) {
       std::this_thread::sleep_for(50ms);
       continue;
     }
@@ -485,11 +488,11 @@ void K4ADriver::process_imu() {
         (new_tilt * last_tilt.transpose()).eulerAngles(2, 1, 0).norm();
 
     float difference_threshold =
-	M_PI / 180.0f * _last_config.k4a.auto_tilt.threshold; // degrees
+	M_PI / 180.0f * _last_config.auto_tilt.threshold; // degrees
 
     if (tilt_difference > difference_threshold) {
       std::lock_guard lock(_auto_tilt_value_mutex);
-      auto lerp_factor = _last_config.k4a.auto_tilt.lerp_factor;
+      auto lerp_factor = _last_config.auto_tilt.lerp_factor;
       _auto_tilt_value = last_tilt * (1.0f - lerp_factor) + new_tilt * lerp_factor;
     }
 
