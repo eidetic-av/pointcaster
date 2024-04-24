@@ -154,8 +154,9 @@ if (WITH_POINTCASTER)
 
   # look for installed Tobias Erichsen's libRtpMidiSDK
   find_library(RTPMIDI_LIB
-    NAMES RtpMidi
-    PATHS "/usr/lib" "/opt/libRtpMidiSDK/targets/Linux/x64" 
+    NAMES RtpMidi libRtpMidi
+    HINTS 
+      "/opt/libRtpMidiSDK/targets/Linux/x64" 
       "C:/Program Files (x86)/Tobias Erichsen/libRtpMidiSDK/targets/Microsoft/Windows/x64")
 
   if (RTPMIDI_LIB)
