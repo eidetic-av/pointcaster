@@ -96,6 +96,7 @@ template <typename T> cache::lru_cache<std::string, T> &get_cache() {
 void publish() {
   for (const auto &kvp : parameter_states) {
     const auto &[parameter_id, state] = kvp;
+    if (!parameter_bindings.contains(parameter_id)) continue;
     if (state == ParameterState::Publish) {
       std::visit(
           [parameter_id](auto &&parameter_ref) {
