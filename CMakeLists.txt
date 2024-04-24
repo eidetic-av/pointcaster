@@ -213,7 +213,6 @@ if (WITH_POINTCASTER)
 
   # Azure Kinect
   if (WITH_K4A)
-
     find_package(k4a CONFIG REQUIRED)
     list(APPEND OPTIONAL_LIBS k4a::k4a)
 
@@ -232,6 +231,14 @@ if (WITH_POINTCASTER)
     endif()
 
   endif()
+
+  # ----- Orbbec -----
+  
+  find_package(OrbbecSDK REQUIRED CONFIG)
+  list(APPEND LINK_LIBS ${OrbbecSDK_LIBS})
+  list(APPEND OPTIONAL_SRC 
+    src/devices/orbbec/orbbec_device.cc
+    src/devices/orbbec/orbbec_device.cu)
 
   # ----- OpenCV -----
 

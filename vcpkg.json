@@ -10,6 +10,7 @@
     "toml11",
     "serdepp",
     "azure-kinect-sensor-sdk",
+    "orbbec-sdk",
     "cuda",
     "cuda-noise",
     "corrade",

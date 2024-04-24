@@ -1,0 +1,19 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9171b94..7e439cd 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -35,6 +35,7 @@ set_target_properties(OrbbecSDK::OrbbecSDK PROPERTIES
+ 
+ # check if the project is being used directly or via add_subdirectory
+ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})  # project is used directly
++  message(FATAL_ERROR "inside the branch")
+     # Set the C++ standard to C++ 11 and C standard to C11
+     set(CMAKE_CXX_STANDARD 11)
+     set(CMAKE_C_STANDARD 11)
+@@ -109,4 +110,6 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})  # project is used
+ 
+     # Uninstall target
+     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/UninstallTarget.cmake)
++else()
++  message(FATAL_ERROR "outside the branch")
+ endif()
