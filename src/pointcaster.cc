@@ -130,22 +130,22 @@ struct SphereInstanceData {
     Color3 color;
 };
 
-class CameraDisplayWindow : public Magnum::Platform::ApplicationWindow {
-public:
-  explicit CameraDisplayWindow(class PointCaster &application);
+// class CameraDisplayWindow : public Magnum::Platform::ApplicationWindow {
+// public:
+//   explicit CameraDisplayWindow(class PointCaster &application);
 
-  pc::shaders::TextureDisplayShader _shader;
-  GL::Mesh _mesh;
-private:
+//   pc::shaders::TextureDisplayShader _shader;
+//   GL::Mesh _mesh;
+// private:
   
-  void drawEvent() override;
-  void viewportEvent(ViewportEvent& event) override;
+//   void drawEvent() override;
+//   void viewportEvent(ViewportEvent& event) override;
 
-  PointCaster &application();
-};
+//   PointCaster &application();
+// };
 
 class PointCaster : public Platform::Application {
-  friend CameraDisplayWindow;
+  // friend CameraDisplayWindow;
 
 public:
   explicit PointCaster(const Arguments &args);
@@ -209,7 +209,7 @@ protected:
   Shaders::PhongGL _sphere_shader{NoCreate};
   Containers::Array<SphereInstanceData> _sphere_instance_data;
 
-  std::optional<CameraDisplayWindow> _secondary_window;
+  // std::optional<CameraDisplayWindow> _secondary_window;
 
   void save_session();
   void save_session(std::filesystem::path file_path);
@@ -533,36 +533,36 @@ PointCaster::PointCaster(const Arguments &args)
   // _secondary_window.emplace(*this);
 }
 
-CameraDisplayWindow::CameraDisplayWindow(PointCaster &application)
-  : Platform::ApplicationWindow{application, Configuration{}.setTitle("Hey").setSize({400, 400})} {
-  pc::logger->debug("Secondary window initialisation");
+// CameraDisplayWindow::CameraDisplayWindow(PointCaster &application)
+//   : Platform::ApplicationWindow{application, Configuration{}.setTitle("Hey").setSize({400, 400})} {
+//   pc::logger->debug("Secondary window initialisation");
 
-  struct Vertex {
-    Vector2 position;
-    Vector2 textureCoordinates;
-  };
-  const Vertex vertices[] = {{{-1.0f, -1.0f}, {0.0f, 0.0f}},
-                             {{1.0f, -1.0f}, {1.0f, 0.0f}},
-                             {{-1.0f, 1.0f}, {0.0f, 1.0f}},
-                             {{1.0f, 1.0f}, {1.0f, 1.0f}}};
+//   struct Vertex {
+//     Vector2 position;
+//     Vector2 textureCoordinates;
+//   };
+//   const Vertex vertices[] = {{{-1.0f, -1.0f}, {0.0f, 0.0f}},
+//                              {{1.0f, -1.0f}, {1.0f, 0.0f}},
+//                              {{-1.0f, 1.0f}, {0.0f, 1.0f}},
+//                              {{1.0f, 1.0f}, {1.0f, 1.0f}}};
 
-  GL::Buffer buffer;
-  buffer.setData(Containers::arrayView(vertices), GL::BufferUsage::StaticDraw);
+//   GL::Buffer buffer;
+//   buffer.setData(Containers::arrayView(vertices), GL::BufferUsage::StaticDraw);
 
-  _mesh.setPrimitive(MeshPrimitive::TriangleStrip)
-      .addVertexBuffer(std::move(buffer), 0,
-                       pc::shaders::TextureDisplayShader::Position{},
-                       pc::shaders::TextureDisplayShader::TextureCoordinates{})
-      .setCount(4);
+//   _mesh.setPrimitive(MeshPrimitive::TriangleStrip)
+//       .addVertexBuffer(std::move(buffer), 0,
+//                        pc::shaders::TextureDisplayShader::Position{},
+//                        pc::shaders::TextureDisplayShader::TextureCoordinates{})
+//       .setCount(4);
 
 
-  GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
-			       GL::FramebufferClear::Depth);
-}
+//   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
+// 			       GL::FramebufferClear::Depth);
+// }
 
-inline PointCaster &CameraDisplayWindow::application() {
-  return static_cast<PointCaster &>(Platform::ApplicationWindow::application());
-}
+// inline PointCaster &CameraDisplayWindow::application() {
+//   return static_cast<PointCaster &>(Platform::ApplicationWindow::application());
+// }
 
 void PointCaster::quit() {
   Device::attached_devices.clear();
@@ -1567,7 +1567,7 @@ void PointCaster::drawEvent() {
 
   // _secondary_window->_shader.bind_texture(frame).draw(_secondary_window->_mesh);
 
-  if (_secondary_window.has_value()) _secondary_window->redraw();
+ // if (_secondary_window.has_value()) _secondary_window->redraw();
 
   redraw();
 
@@ -1582,19 +1582,19 @@ void PointCaster::drawEvent() {
   FrameMark;
 }
 
-void CameraDisplayWindow::drawEvent() {
-  GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
-			       GL::FramebufferClear::Depth);
+// void CameraDisplayWindow::drawEvent() {
+//   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
+// 			       GL::FramebufferClear::Depth);
 
-  auto& pc = application();
+//   auto& pc = application();
 
-  auto& camera_controller = pc._camera_controllers.at(0);
-  GL::Texture2D& frame = camera_controller->color_frame();
+//   auto& camera_controller = pc._camera_controllers.at(0);
+//   GL::Texture2D& frame = camera_controller->color_frame();
 
-  _shader.bind_texture(frame).draw(_mesh);
+//   _shader.bind_texture(frame).draw(_mesh);
 
-  swapBuffers();
-}
+//   swapBuffers();
+// }
 
 void PointCaster::set_full_screen(bool full_screen) {
   if (full_screen && _display_resolution.has_value()) {
@@ -1627,9 +1627,9 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 }
 
 
-void CameraDisplayWindow::viewportEvent(ViewportEvent &event) {
-  GL::defaultFramebuffer.setViewport({{}, event.framebufferSize()});
-}
+// void CameraDisplayWindow::viewportEvent(ViewportEvent &event) {
+//   GL::defaultFramebuffer.setViewport({{}, event.framebufferSize()});
+// }
 
 void PointCaster::keyPressEvent(KeyEvent &event) {
 
