@@ -131,6 +131,8 @@ Radio::Radio(RadioConfiguration &config,
 }
 
 void Radio::draw_imgui_window() {
+  
+  ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
 
   ImGui::Begin("Radio", nullptr);
   pc::gui::draw_parameters("radio", struct_parameters.at("radio"));
