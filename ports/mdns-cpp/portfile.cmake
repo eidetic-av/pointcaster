@@ -16,9 +16,4 @@ vcpkg_cmake_config_fixup(
   CONFIG_PATH "share/mdns_cpp/cmake"
 )
 
-# file(REMOVE_RECURSE
-#     "${CURRENT_PACKAGES_DIR}/debug/cmake"
-#     "${CURRENT_PACKAGES_DIR}/debug/include"
-#     "${CURRENT_PACKAGES_DIR}/lib/cmake")
-
 file(INSTALL "${SOURCE_PATH}/LICENSE" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)
