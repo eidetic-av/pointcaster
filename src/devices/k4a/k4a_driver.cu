@@ -45,7 +45,13 @@ struct K4ADriverImplDeviceMemory {
 
 void K4ADriver::init_device_memory() {
   pc::logger->info("Initialising K4A GPU device memory ({})", id());
-  _device_memory = new K4ADriverImplDeviceMemory(incoming_point_count);
+  try {
+      _device_memory = new K4ADriverImplDeviceMemory(incoming_point_count);
+  }
+  catch (thrust::system::system_error e) {
+      pc::logger->error(e.what());
+      return;
+  }
   _device_memory_ready = true;
 }
 void K4ADriver::free_device_memory() {
