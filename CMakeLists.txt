@@ -4,7 +4,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 20)
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -diag-suppress 20012")
-# set(CMAKE_CUDA_HOST_COMPILER /usr/bin/g++-12)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX TRUE)
@@ -165,7 +164,7 @@ if (WITH_POINTCASTER)
     get_filename_component(RTPMIDI_LIB_DIR ${RTPMIDI_LIB} DIRECTORY)
 
     if (LINUX)
-    set(RTPMIDI_INCLUDES "${RTPMIDI_LIB_DIR}/../../..")
+        set(RTPMIDI_INCLUDES "${RTPMIDI_LIB_DIR}/../../..")
     elseif(WIN32)
         set(RTPMIDI_INCLUDES "${RTPMIDI_LIB_DIR}/../../../..")
     endif()
@@ -180,10 +179,10 @@ if (WITH_POINTCASTER)
   endif()
 
   if (WITH_OSC)
-  find_package(liblo CONFIG REQUIRED)
-  list(APPEND LINK_LIBS liblo::liblo_static)
-  list(APPEND POINTCASTER_SRC 
-    src/osc/osc_client.cc src/osc/osc_server.cc)
+    find_package(liblo CONFIG REQUIRED)
+    list(APPEND LINK_LIBS liblo::liblo_static)
+    list(APPEND POINTCASTER_SRC 
+      src/osc/osc_client.cc src/osc/osc_server.cc)
   endif()
 
   # ----- Dear ImGui lib -----
