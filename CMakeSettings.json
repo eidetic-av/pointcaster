@@ -36,7 +36,6 @@
       "inheritEnvironments": [ "msvc_x64_x64" ],
       "buildRoot": "${projectDir}\\build\\${name}",
       "installRoot": "${projectDir}\\out\\install\\${name}",
-      "cmakeCommandArgs": "-DVCPKG_TARGET_TRIPLET=x64-windows-static -DVCPKG_OVERLAY_PORTS=\"${projectDir}\\ports\"",
       "buildCommandArgs": "",
       "ctestCommandArgs": "",
       "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
@@ -52,14 +51,19 @@
           "type": "BOOL"
         },
         {
-          "name": "RECEIVER_LIB_SHARED",
+          "name": "WITH_POINTCASTER",
           "value": "True",
           "type": "BOOL"
         },
         {
-          "name": "WITH_POINTCASTER",
-          "value": "True",
-          "type": "BOOL"
+          "name": "VCPKG_TARGET_TRIPLET",
+          "value": "x64-windows-static",
+          "type": "STRING"
+        },
+        {
+          "name": "VCPKG_OVERLAY_PORTS",
+          "value": "\"${projectDir}\\ports\"",
+          "type": "STRING"
         }
       ]
     },
