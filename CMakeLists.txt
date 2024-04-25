@@ -163,7 +163,12 @@ if (WITH_POINTCASTER)
     message(STATUS "Found libRtpMidiSDK: ${RTPMIDI_LIB}")
 
     get_filename_component(RTPMIDI_LIB_DIR ${RTPMIDI_LIB} DIRECTORY)
+
+    if (LINUX)
     set(RTPMIDI_INCLUDES "${RTPMIDI_LIB_DIR}/../../..")
+    elseif(WIN32)
+        set(RTPMIDI_INCLUDES "${RTPMIDI_LIB_DIR}/../../../..")
+    endif()
 
     list(APPEND POINTCASTER_SRC 
       src/midi/rtpmidi_device.cc src/midi/rtp_peer.cc)
