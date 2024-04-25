@@ -1,0 +1,15 @@
+diff --git a/OrbbecSDKConfig.cmake b/OrbbecSDKConfig.cmake
+index 4931cc3..6602f73 100644
+--- a/OrbbecSDKConfig.cmake
++++ b/OrbbecSDKConfig.cmake
+@@ -16,8 +16,8 @@ elseif(UNIX)
+ endif()
+ 
+ # OrbbecSDK library
+-set(OrbbecSDK_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/include/)
+-set(OrbbecSDK_LIBS_DIR ${CMAKE_CURRENT_LIST_DIR}/lib/${HOST_PLATFORM})
++set(OrbbecSDK_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/../../include/)
++set(OrbbecSDK_LIBS_DIR ${CMAKE_CURRENT_LIST_DIR}/../../lib)
+ set(OrbbecSDK_LIBRARY  ${OrbbecSDK_LIBS_DIR}/${ORBBEC_LIB_PREFIX}OrbbecSDK${ORBBEC_LIB_SUFFIX})
+ set(OrbbecSDK_DLL ${OrbbecSDK_LIBS_DIR}/${ORBBEC_LIB_PREFIX}OrbbecSDK${ORBBEC_DLL_SUFFIX})
+ 
