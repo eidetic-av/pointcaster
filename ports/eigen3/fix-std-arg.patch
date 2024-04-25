@@ -1,0 +1,17 @@
+diff --git a/Eigen/src/Core/MathFunctions.h b/Eigen/src/Core/MathFunctions.h
+index 61b78f4f2..64ba81d4e 100644
+--- a/Eigen/src/Core/MathFunctions.h
++++ b/Eigen/src/Core/MathFunctions.h
+@@ -588,12 +588,7 @@ struct arg_default_impl<Scalar, true> {
+   EIGEN_DEVICE_FUNC
+   static inline RealScalar run(const Scalar& x)
+   {
+-    #if defined(EIGEN_HIP_DEVICE_COMPILE)
+-    // HIP does not seem to have a native device side implementation for the math routine "arg"
+     using std::arg;
+-    #else
+-    EIGEN_USING_STD(arg);
+-    #endif
+     return static_cast<RealScalar>(arg(x));
+   }
+ };
