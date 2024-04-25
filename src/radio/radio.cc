@@ -38,12 +38,7 @@ Radio::Radio(RadioConfiguration &config,
         // and don't keep excess frames in memory
         radio.set(zmq::sockopt::linger, 0);
 
-        // auto destination = fmt::format("tcp://:{}", _config.port);
-        // auto destination = "tcp://*:9999";
-        // radio.bind(destination);
-        // radio.bind("tcp://127.0.0.1:9992");
-        constexpr auto destination = "tcp://192.168.1.220:9992";
-        // constexpr auto destination = "tcp://127.0.0.1:9992";
+        auto destination = fmt::format("tcp://{}:{}", _config.address, _config.port);
         radio.bind(destination);
         pc::logger->info("Radio broadcasting on {}", destination);
 
