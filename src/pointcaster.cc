@@ -85,8 +85,10 @@
 
 #include "midi/midi_device.h"
 
+#ifdef WITH_OSC
 #include "osc/osc_client.h"
 #include "osc/osc_server.h"
+#endif
 
 #include <tracy/Tracy.hpp>
 
@@ -100,7 +102,9 @@ using namespace pc::radio;
 using namespace pc::client_sync;
 using namespace pc::snapshots;
 using namespace pc::midi;
+#ifdef WITH_OSC
 using namespace pc::osc;
+#endif
 using namespace pc::mqtt;
 using namespace pc::tween;
 using namespace pc::operators;
@@ -179,8 +183,10 @@ protected:
   std::unique_ptr<Radio> _radio;
   std::unique_ptr<MqttClient> _mqtt;
   std::unique_ptr<MidiDevice> _midi;
+#ifdef WITH_OSC
   std::unique_ptr<OscClient> _osc_client;
   std::unique_ptr<OscServer> _osc_server;
+#endif
   std::unique_ptr<SyncServer> _sync_server;
 
   std::vector<std::unique_ptr<OrbbecDevice>> _orbbec_cameras;
@@ -503,6 +509,7 @@ PointCaster::PointCaster(const Arguments &args)
   }
   _midi = std::make_unique<MidiDevice>(*_session.midi);
 
+#ifdef WITH_OSC
   if (!_session.osc_client.has_value()) {
     _session.osc_client = OscClientConfiguration{};
   }
@@ -512,6 +519,7 @@ PointCaster::PointCaster(const Arguments &args)
     _session.osc_server = OscServerConfiguration{};
   }
   _osc_server = std::make_unique<OscServer>(*_session.osc_server);
+#endif
 
   if (!_session.sync_server.has_value()) {
     _session.sync_server = SyncServerConfiguration{};
@@ -1477,11 +1485,13 @@ void PointCaster::drawEvent() {
       ImGui::End();
     }
 
+#ifdef WITH_OSC
     if (_session.osc_client.has_value() && (*_session.osc_client).show_window)
       _osc_client->draw_imgui_window();
 
     if (_session.osc_server.has_value() && (*_session.osc_server).show_window)
       _osc_server->draw_imgui_window();
+#endif
 
     draw_modeline();
   }
@@ -1625,6 +1635,7 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     }
     break;
   }
+#ifdef WITH_OSC
   case KeyEvent::Key::O: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
       if (_session.osc_client.has_value()) {
@@ -1639,6 +1650,7 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     }
     break;
   }
+#endif
   case KeyEvent::Key::Q: {
     quit();
     break;

@@ -174,10 +174,12 @@ if (WITH_POINTCASTER)
     message(STATUS "libRtpMidiSDK was not found. Network MIDI will be disabled.")
   endif()
 
+  if (WITH_OSC)
   find_package(liblo CONFIG REQUIRED)
   list(APPEND LINK_LIBS liblo::liblo_static)
   list(APPEND POINTCASTER_SRC 
     src/osc/osc_client.cc src/osc/osc_server.cc)
+  endif()
 
   # ----- Dear ImGui lib -----
 
