@@ -127,22 +127,7 @@ struct SphereInstanceData {
     Color3 color;
 };
 
-// class CameraDisplayWindow : public Magnum::Platform::ApplicationWindow {
-// public:
-//   explicit CameraDisplayWindow(class PointCaster &application);
-
-//   pc::shaders::TextureDisplayShader _shader;
-//   GL::Mesh _mesh;
-// private:
-  
-//   void drawEvent() override;
-//   void viewportEvent(ViewportEvent& event) override;
-
-//   PointCaster &application();
-// };
-
 class PointCaster : public Platform::Application {
-  // friend CameraDisplayWindow;
 
 public:
   explicit PointCaster(const Arguments &args);
@@ -207,8 +192,6 @@ protected:
   GL::Buffer _sphere_instance_buffer{NoCreate};
   Shaders::PhongGL _sphere_shader{NoCreate};
   Containers::Array<SphereInstanceData> _sphere_instance_data;
-
-  // std::optional<CameraDisplayWindow> _secondary_window;
 
   void save_session();
   void save_session(std::filesystem::path file_path);
