@@ -14,8 +14,7 @@ void declare_parameter(std::string_view parameter_id,
   parameter_bindings.emplace(parameter_id, parameter);
 
   // Ignored suffixes check
-  static constexpr std::array<std::string, 4> ignored_suffixes = {".x", ".y",
-                                                                  ".z", ".w"};
+  static const std::array<std::string, 4> ignored_suffixes = { ".x", ".y", ".z", ".w" };
   if (pc::strings::ends_with_any(parameter_id, ignored_suffixes.begin(),
                                  ignored_suffixes.end())) {
     return;

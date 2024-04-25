@@ -524,8 +524,7 @@ void tween_config(std::string_view group_id, std::string_view parameter_id,
 bool draw_parameter(std::string_view structure_name,
                     std::string_view parameter_id) {
 
-  static constexpr std::array<std::string, 2> ignored_suffixes = {
-      "unfolded", ".show_window"};
+  static const std::array<std::string, 2> ignored_suffixes = { "unfolded", ".show_window"};
   if (pc::strings::ends_with_any(parameter_id, ignored_suffixes.begin(),
                                  ignored_suffixes.end())) {
     return false;
