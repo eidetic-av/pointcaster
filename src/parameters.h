@@ -261,7 +261,7 @@ void declare_parameters(std::string_view parameter_id, T &complex_value,
                         T default_value = {},
                         std::optional<MinMax<float>> min_max = {},
                         std::string_view parent_struct_name = "") {
-  pc::logger->info("Declaring parameter: {}", parameter_id);
+  pc::logger->debug("Declaring parameter: {}", parameter_id);
 
   // retrieve type info at compile-time
   constexpr auto type_info = serde::type_info<T>;
