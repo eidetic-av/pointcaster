@@ -12,7 +12,7 @@ endif()
 
 ########################################################
 
-project(bob-pointcaster LANGUAGES CXX CUDA)
+project(pointcaster LANGUAGES CXX CUDA)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
