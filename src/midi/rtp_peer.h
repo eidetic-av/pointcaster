@@ -3,7 +3,7 @@
 #include "../serialization.h"
 #include <string>
 
-#include "/opt/libRtpMidiSDK/C-Binding/rtpMidi.h"
+#include <C-Binding/rtpMidi.h>
 
 namespace pc::midi {
 
