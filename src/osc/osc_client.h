@@ -9,7 +9,6 @@
 #include <array>
 #include <atomic>
 #include <concurrentqueue/blockingconcurrentqueue.h>
-#include <expected>
 #include <fmt/format.h>
 #include <future>
 #include <map>

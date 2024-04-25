@@ -5,7 +5,6 @@
 #include "mqtt_client_config.gen.h"
 #include <atomic>
 #include <concurrentqueue/blockingconcurrentqueue.h>
-#include <expected>
 #include <future>
 #include <memory>
 #include <mqtt/client.h>
