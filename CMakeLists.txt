@@ -19,6 +19,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_MQTT "Enable MQTT client support" ON)
+option(WITH_OSC "Enable OSC client/server support" $<OR:$<BOOL:${LINUX}>,0>)
 option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
 option(WITH_MARCH_NATIVE "Enable -march=native builds" ON)
@@ -179,6 +180,7 @@ if (WITH_POINTCASTER)
   endif()
 
   if (WITH_OSC)
+    message(STATUS "Configuring with OSC client/server support")
     find_package(liblo CONFIG REQUIRED)
     list(APPEND LINK_LIBS liblo::liblo_static)
     list(APPEND POINTCASTER_SRC 
