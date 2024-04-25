@@ -1,6 +1,5 @@
 #pragma once
 #include "../identifiable.h"
-#include "../serialization.h"
 #include "operator.h"
 
 namespace pc::operators {

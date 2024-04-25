@@ -10,13 +10,9 @@ namespace pc::operators {
 using pc::types::color;
 using pc::types::position;
 
-struct NoiseOperator : Operator {
+  NoiseOperator::NoiseOperator(const NoiseOperatorConfiguration &config) : _config(config){}
 
-  NoiseOperatorConfiguration _config;
-
-  NoiseOperator(const NoiseOperatorConfiguration &config) : _config(config){};
-
-  __device__ indexed_point_t operator()(indexed_point_t point) const {
+  __device__ indexed_point_t NoiseOperator::operator()(indexed_point_t point) const {
     position pos = thrust::get<0>(point);
     color col = thrust::get<1>(point);
     int index = thrust::get<2>(point);
@@ -43,6 +39,5 @@ struct NoiseOperator : Operator {
 
     return thrust::make_tuple(pos, col, index);
   }
-};
 
 } // namespace pc::operators
