@@ -523,39 +523,7 @@ PointCaster::PointCaster(const Arguments &args)
   TweenManager::create();
   _timeline.start();
 
-  // _secondary_window.emplace(*this);
 }
-
-// CameraDisplayWindow::CameraDisplayWindow(PointCaster &application)
-//   : Platform::ApplicationWindow{application, Configuration{}.setTitle("Hey").setSize({400, 400})} {
-//   pc::logger->debug("Secondary window initialisation");
-
-//   struct Vertex {
-//     Vector2 position;
-//     Vector2 textureCoordinates;
-//   };
-//   const Vertex vertices[] = {{{-1.0f, -1.0f}, {0.0f, 0.0f}},
-//                              {{1.0f, -1.0f}, {1.0f, 0.0f}},
-//                              {{-1.0f, 1.0f}, {0.0f, 1.0f}},
-//                              {{1.0f, 1.0f}, {1.0f, 1.0f}}};
-
-//   GL::Buffer buffer;
-//   buffer.setData(Containers::arrayView(vertices), GL::BufferUsage::StaticDraw);
-
-//   _mesh.setPrimitive(MeshPrimitive::TriangleStrip)
-//       .addVertexBuffer(std::move(buffer), 0,
-//                        pc::shaders::TextureDisplayShader::Position{},
-//                        pc::shaders::TextureDisplayShader::TextureCoordinates{})
-//       .setCount(4);
-
-
-//   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
-// 			       GL::FramebufferClear::Depth);
-// }
-
-// inline PointCaster &CameraDisplayWindow::application() {
-//   return static_cast<PointCaster &>(Platform::ApplicationWindow::application());
-// }
 
 void PointCaster::quit() {
   Device::attached_devices.clear();
@@ -1554,18 +1522,7 @@ void PointCaster::drawEvent() {
   if (error == GL::Renderer::Error::StackUnderflow)
     pc::logger->warn("StackUnderflow");
 
-
-  // auto& camera_controller = _camera_controllers.at(0);
-  // GL::Texture2D& frame = camera_controller->color_frame();
-
-  // _secondary_window->_shader.bind_texture(frame).draw(_secondary_window->_mesh);
-
- // if (_secondary_window.has_value()) _secondary_window->redraw();
-
   redraw();
-
-
-  // _secondary_window->redraw();
 
   swapBuffers();
 
@@ -1574,20 +1531,6 @@ void PointCaster::drawEvent() {
   _timeline.nextFrame();
   FrameMark;
 }
-
-// void CameraDisplayWindow::drawEvent() {
-//   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
-// 			       GL::FramebufferClear::Depth);
-
-//   auto& pc = application();
-
-//   auto& camera_controller = pc._camera_controllers.at(0);
-//   GL::Texture2D& frame = camera_controller->color_frame();
-
-//   _shader.bind_texture(frame).draw(_mesh);
-
-//   swapBuffers();
-// }
 
 void PointCaster::set_full_screen(bool full_screen) {
   if (full_screen && _display_resolution.has_value()) {
@@ -1618,11 +1561,6 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
   // recompute the camera's projection matrix
   // camera->setViewport(event.framebufferSize());
 }
-
-
-// void CameraDisplayWindow::viewportEvent(ViewportEvent &event) {
-//   GL::defaultFramebuffer.setViewport({{}, event.framebufferSize()});
-// }
 
 void PointCaster::keyPressEvent(KeyEvent &event) {
 
