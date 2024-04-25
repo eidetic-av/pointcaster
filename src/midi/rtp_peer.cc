@@ -1,7 +1,13 @@
 #include "rtp_peer.h"
 #include "../logger.h"
+
+#ifdef WIN32
+#include <Winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#endif
 
 namespace pc::midi {
 

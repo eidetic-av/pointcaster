@@ -5,17 +5,21 @@
 #include "../parameters.h"
 #include "../string_utils.h"
 
-#include "/opt/libRtpMidiSDK/C-Binding/os_posx.c"
-
-#include "../../thirdparty/mdns_cpp/include/mdns_cpp/logger.hpp"
-
+#ifdef WIN32
+#include <Winsock2.h>
+#include <ws2tcpip.h>
+typedef SSIZE_T ssize_t;
+#else
+#include <C-Binding/os_posx.c>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
+#include <mdns_cpp/logger.hpp>
 #include <array>
 #include <chrono>
 #include <imgui.h>
-#include <netinet/in.h>
 #include <string_view>
-#include <sys/socket.h>
-#include <unistd.h>
 
 namespace pc::midi {
 
@@ -35,13 +39,25 @@ RtpMidiDevice::udp_callback(RTP_MIDI_SESSION *session,
 
   if ((address_flags & RTP_MIDI_ADDRESS_MASK_PORT) ==
       RTP_MIDI_ADDRESS_FLAG_DATA) {
+#ifdef WIN32
+    sent_bytes =
+        sendto(device->data_socket(), reinterpret_cast<const char*>(packet), packet_length, 0,
+               reinterpret_cast<const sockaddr *>(&dest), sizeof(dest));
+#else
     sent_bytes =
         sendto(device->data_socket(), packet, packet_length, 0,
                reinterpret_cast<const sockaddr *>(&dest), sizeof(dest));
+#endif
   } else {
+#ifdef WIN32
+    sent_bytes =
+        sendto(device->ctrl_socket(), reinterpret_cast<const char*>(packet), packet_length, 0,
+               reinterpret_cast<const sockaddr *>(&dest), sizeof(dest));
+#else
     sent_bytes =
         sendto(device->ctrl_socket(), packet, packet_length, 0,
                reinterpret_cast<const sockaddr *>(&dest), sizeof(dest));
+#endif
   }
 
   if (sent_bytes != static_cast<ssize_t>(packet_length)) {

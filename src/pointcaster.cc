@@ -20,13 +20,6 @@
 
 #include <zpp_bits.h>
 
-#ifdef _WIN32
-#include <WinSock2.h>
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
-
 #include <zmq.hpp>
 
 #include "logger.h"
