@@ -30,7 +30,7 @@
 #include "session.gen.h"
 #include "structs.h"
 
-#include <SDL2/SDL.h>
+#include <SDL2/SDL_Clipboard.h>
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/GL/Context.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
