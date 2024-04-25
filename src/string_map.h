@@ -57,7 +57,9 @@ public:
     return _inner_map.contains(key);
   }
 
-  bool contains(std::string_view key) { return _inner_map.contains(key); }
+  bool contains(std::string_view key) const { 
+      return _inner_map.contains(key); 
+  }
 
   void erase(const std::string &key) { _inner_map.erase(key); }
   void erase(std::string_view key) { _inner_map.erase(std::string(key)); }
