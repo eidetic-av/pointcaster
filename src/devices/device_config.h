@@ -29,11 +29,11 @@ struct K4AConfiguration {
   int exposure = 10000;
   int brightness = 128;
   int contrast = 5;
-  int saturation = 31;
+  int saturation = 32;
   int gain = 128;
 };
 
-struct DeviceConfiguration {
+struct DeviceTransformConfiguration {
   bool flip_x = false; 
   bool flip_y = false;
   bool flip_z = false;
@@ -44,10 +44,16 @@ struct DeviceConfiguration {
   MinMaxShort bound_y{-10000, 10000}; // @minmax(-10000, 10000)
   MinMaxShort bound_z{-10000, 10000}; // @minmax(-10000, 10000)
   Float3 translate{0, 0, 0}; // @minmax(-10000, 10000)
-  Float3 offset{0, 0, 0};
+  Float3 offset{0, 0, 0}; // @minmax(-10000, 10000)
   Float3 rotation_deg{0, 0, 0}; // @minmax(-360, 360)
   float scale = 1; // @minmax(0, 10)
-  int sample = 1; 
+  int sample = 1;  // @minmax(1, 1000)
+};
+
+struct DeviceConfiguration {
+  std::string id;
+  int depth_mode = 0; // @minmax(0, 1)
+  DeviceTransformConfiguration transform; // @optional
   BodyTrackingConfiguration body; // @optional
   AutoTiltConfiguration auto_tilt; // @optional
 };

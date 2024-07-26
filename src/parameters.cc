@@ -11,6 +11,7 @@ namespace pc::parameters {
 
 void declare_parameter(std::string_view parameter_id,
                        const Parameter &parameter) {
+    pc::logger->debug(" -- param: {}", parameter_id.data());
   parameter_bindings.emplace(parameter_id, parameter);
 
   // Ignored suffixes check

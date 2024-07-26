@@ -110,6 +110,21 @@
           "name": "WITH_K4A",
           "value": "False",
           "type": "BOOL"
+        },
+        {
+          "name": "WITH_MQTT",
+          "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "WITH_MIDI",
+          "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "WITH_POINTCASTER",
+          "value": "False",
+          "type": "BOOL"
         }
       ]
     }

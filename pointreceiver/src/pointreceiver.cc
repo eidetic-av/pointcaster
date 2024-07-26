@@ -6,6 +6,7 @@
 #include <readerwriterqueue/readerwritercircularbuffer.h>
 #include <thread>
 #include <vector>
+#include <execution>
 #define ZMQ_BUILD_DRAFT_API
 #include <zmq.hpp>
 
@@ -25,8 +26,9 @@ static PointCloud synthesized_snapshot_frames;
 // Start a thread that handles networking
 int startNetworkThread(const char *point_caster_address, int timeout_ms) {
   request_thread_stop = false;
+  const std::string point_caster_address_str(point_caster_address);
   dish_thread =
-      std::make_unique<std::thread>([&, point_caster_address, timeout_ms]() {
+      std::make_unique<std::thread>([&, point_caster_address_str, timeout_ms]() {
         using namespace std::chrono;
         using namespace std::chrono_literals;
 
@@ -39,19 +41,17 @@ int startNetworkThread(const char *point_caster_address, int timeout_ms) {
 	// TODO something in the set calls here is crashing Unity
 
         // don't retain frames in memory
-        // dish.set(zmq::sockopt::linger, 0);
-        // dish.set(zmq::sockopt::rcvhwm, 10);
+        dish.set(zmq::sockopt::linger, 0);
+        // dish.set(zmq::sockopt::rcvhwm, 3);
 
         // connection attempt should time out if requested
-        // if (timeout_ms != 0) dish.set(zmq::sockopt::connect_timeout, timeout_ms);
+        if (timeout_ms != 0) dish.set(zmq::sockopt::connect_timeout, timeout_ms);
 
-	// constexpr auto recv_timeout_ms = 1000;
-	// dish.set(zmq::sockopt::rcvtimeo, recv_timeout_ms);
+	    constexpr auto recv_timeout_ms = 100;
+	    dish.set(zmq::sockopt::rcvtimeo, recv_timeout_ms);
 
-        //auto endpoint = fmt::format("tcp://{}", point_caster_address);
-	auto endpoint = "tcp://127.0.0.1:9992";
-	      // auto endpoint = "tcp://192.168.2.200:9999";
-        log(fmt::format("Attempting to connect to '{}'", endpoint));
+        auto endpoint = fmt::format("tcp://{}", point_caster_address_str);
+        fmt::print("Attempting to connect to '{}'", endpoint);
         dish.connect(endpoint);
 
         if (dish.handle() == nullptr) {
@@ -70,7 +70,7 @@ int startNetworkThread(const char *point_caster_address, int timeout_ms) {
 
           zmq::message_t incoming_msg;
           auto result = dish.recv(incoming_msg, zmq::recv_flags::none);
-	  if (!result) continue;
+	      if (!result) continue;
 
           std::string group = incoming_msg.group();
 
@@ -124,17 +124,50 @@ int stopNetworkThread() {
 
 static PointCloud point_cloud;
 
-bool dequeue() {
+bool dequeue(int timeout_ms) {
   point_cloud = PointCloud{};
-  const bool dequeue_success = cloud_queue.try_dequeue(point_cloud);
-  if (!dequeue_success) return false;
-  point_cloud += synthesized_snapshot_frames;
-  return true;
+  return cloud_queue.wait_dequeue_timed(point_cloud, std::chrono::milliseconds(timeout_ms));
 }
 
 int pointCount() { return point_cloud.size(); }
-bob::types::position *pointPositions() { return point_cloud.positions.data(); }
 bob::types::color *pointColors() { return point_cloud.colors.data(); }
+
+bob::types::position *pointPositions() { return point_cloud.positions.data(); }
+
+std::vector<std::array<float, 4>> shader_friendly_point_positions_data;
+
+float* shaderFriendlyPointPositions(bool parallel_transform, OrientationType orientation_type) {
+    std::size_t size = point_cloud.positions.size();
+    shader_friendly_point_positions_data.resize(size);
+
+    std::array<float, 3> orientation{ 1, 1, 1 };
+    if (orientation_type == OrientationType::flip_x) 
+    {
+        orientation[0] = -1;
+    }
+    else if (orientation_type == OrientationType::flip_x_z)
+    {
+        orientation[0] = -1;
+        orientation[2] = -1;
+    }
+
+	const auto transform_func = [&](const bob::types::position& pos)->std::array<float, 4> {
+		return { static_cast<float>(pos.x) * orientation[0] / 1000.0f,
+			     static_cast<float>(pos.y) * orientation[1] / 1000.0f,
+			     static_cast<float>(pos.z) * orientation[2] / 1000.0f, 0.0f };
+	};
+
+    if (parallel_transform) {
+        std::transform(std::execution::par, point_cloud.positions.begin(), point_cloud.positions.end(), 
+                       shader_friendly_point_positions_data.begin(), transform_func);
+    } else {
+        std::transform(point_cloud.positions.begin(), point_cloud.positions.end(), 
+                       shader_friendly_point_positions_data.begin(), transform_func);
+    }
+
+    return shader_friendly_point_positions_data.front().data();
+}
+
 }
 
 void testLoop() {

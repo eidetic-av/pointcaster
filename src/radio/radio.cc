@@ -39,8 +39,16 @@ Radio::Radio(RadioConfiguration &config,
         radio.set(zmq::sockopt::linger, 0);
 
         auto destination = fmt::format("tcp://{}:{}", _config.address, _config.port);
-        radio.bind(destination);
-        pc::logger->info("Radio broadcasting on {}", destination);
+        pc::logger->info("Starting radio on '{}'", destination);
+        try {
+			radio.bind(destination);
+		}
+		catch (const zmq::error_t& e)
+		{
+			pc::logger->error(e.what());
+			return;
+		}
+        pc::logger->info("Radio started", destination);
 
         using delta_time = duration<unsigned int, milliseconds>;
         milliseconds delta_ms;

@@ -234,8 +234,8 @@ bool bool_param(std::string_view group_id, std::string_view parameter_id,
   Dummy({text_width + g.Style.ItemInnerSpacing.x, 0});
   RenderFrame(frame_bb.Min, frame_bb.Max, GetColorU32(ImGuiCol_TableHeaderBg));
 
-  RenderTextClipped(text_bb.Min, text_bb.Max, &*formatted_label.begin(),
-                    &*formatted_label.end(), NULL, ImVec2(1.0f, 0.5f));
+  RenderTextClipped(text_bb.Min, text_bb.Max, formatted_label.data(),
+	  formatted_label.data() + formatted_label.size(), NULL, ImVec2(1.0f, 0.5f));
   SameLine();
   Dummy(g.Style.ItemSpacing);
   SameLine();
@@ -291,8 +291,8 @@ bool string_param(std::string_view group_id, std::string_view parameter_id,
   Dummy({text_width + g.Style.ItemInnerSpacing.x, 0});
   RenderFrame(frame_bb.Min, frame_bb.Max, GetColorU32(ImGuiCol_TableHeaderBg));
 
-  RenderTextClipped(text_bb.Min, text_bb.Max, &*formatted_label.begin(),
-                    &*formatted_label.end(), NULL, ImVec2(1.0f, 0.5f));
+  RenderTextClipped(text_bb.Min, text_bb.Max, formatted_label.data(),
+	  formatted_label.data() + formatted_label.size(), NULL, ImVec2(1.0f, 0.5f));
   SameLine();
   Dummy(g.Style.ItemSpacing);
   SameLine();

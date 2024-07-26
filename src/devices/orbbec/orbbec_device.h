@@ -3,6 +3,7 @@
 #include "../device.h"
 #include <libobsensor/ObSensor.hpp>
 #include <thread>
+#include <atomic>
 
 namespace pc::devices {
 
@@ -11,14 +12,25 @@ namespace pc::devices {
 // compiled with nvcc.
 struct OrbbecImplDeviceMemory;
 
+struct OrbbecDeviceInfo
+{
+    std::string ip;
+    std::string serial_num;
+};
+
 class OrbbecDevice {
 
 public:
   inline static std::vector<std::reference_wrapper<OrbbecDevice>>
       attached_devices;
   inline static std::mutex devices_access;
+  inline static std::vector<OrbbecDeviceInfo> discovered_devices;
+  inline static std::atomic_bool discovering_devices;
 
-  OrbbecDevice(DeviceConfiguration &config, std::string_view id);
+  static void init_context();
+  static void discover_devices();
+
+  OrbbecDevice(DeviceConfiguration &config);
   ~OrbbecDevice();
 
   OrbbecDevice(const OrbbecDevice &) = delete;
@@ -28,21 +40,26 @@ public:
 
   pc::types::PointCloud point_cloud(pc::operators::OperatorList operators = {});
 
+  void start_pipeline();
+  void stop_pipeline();
   void draw_imgui_controls();
 
-  // TODO this seems dumb
   DeviceConfiguration &config() { return _config; }
-  const std::string& id() { return _id; }
+  const std::string& ip() { return _ip; }
 
 private:
+  inline static std::unique_ptr<ob::Context> _ob_ctx;
+  inline static std::shared_ptr<ob::DeviceList> _ob_device_list;
+
   DeviceConfiguration &_config;
-  std::string _id;
   std::string _ip;
 
-  std::unique_ptr<ob::Context> _ob_ctx;
+  std::shared_ptr<ob::Config> _ob_config;
+  std::shared_ptr<ob::Device> _ob_device;
   std::shared_ptr<ob::Pipeline> _ob_pipeline;
-
   std::unique_ptr<ob::PointCloudFilter> _ob_point_cloud;
+
+  bool _running_pipeline = false;
   bool _initialised_point_cloud_scale = false;
 
   std::vector<OBColorPoint> _point_buffer;
@@ -53,6 +70,7 @@ private:
 
   OrbbecImplDeviceMemory *_device_memory;
   std::atomic_bool _device_memory_ready{false};
+
   void init_device_memory(std::size_t incoming_point_count);
   void free_device_memory();
 };

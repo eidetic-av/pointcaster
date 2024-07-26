@@ -40,7 +40,7 @@ __host__ __device__ static inline float as_rad(float deg) {
 };
 
 struct input_filter {
-  DeviceConfiguration config;
+  DeviceTransformConfiguration config;
 
   __device__ bool check_empty(OBColorPoint value) const {
     if (value.x == 0.0f && value.y == 0.0f && value.z == 0.0f)
@@ -76,16 +76,16 @@ struct input_filter {
 struct point_transformer
     : public thrust::unary_function<ob_point_in_t, indexed_point_t> {
 
-  DeviceConfiguration config;
+  DeviceTransformConfiguration config;
   Eigen::Vector3f alignment_center;
   Eigen::Vector3f aligned_position_offset;
   Eigen::Matrix3f auto_tilt_rotation;
 
-  point_transformer(const DeviceConfiguration &device_config,
+  point_transformer(const DeviceTransformConfiguration &transform_config,
                     const position &aligned_center,
                     const position &position_offset,
                     const Eigen::Matrix3f &auto_tilt)
-      : config(device_config), auto_tilt_rotation(auto_tilt) {
+      : config(transform_config), auto_tilt_rotation(auto_tilt) {
     alignment_center =
         Eigen::Vector3f(aligned_center.x, aligned_center.y, aligned_center.z);
     aligned_position_offset = Eigen::Vector3f(
@@ -158,7 +158,7 @@ struct point_transformer
 };
 
 struct output_filter {
-  DeviceConfiguration config;
+  DeviceTransformConfiguration config;
 
   __device__ bool check_bounds(position value) const {
 
@@ -204,6 +204,8 @@ OrbbecDevice::point_cloud(pc::operators::OperatorList operators) {
   auto &output_positions = _device_memory->output_positions;
   auto &output_colors = _device_memory->output_colors;
 
+  auto& transform_config = _config.transform;
+
   // copy data from other threads
   {
     std::lock_guard lock(_point_buffer_access);
@@ -224,10 +226,10 @@ OrbbecDevice::point_cloud(pc::operators::OperatorList operators) {
   // copy incoming_points into filtered_points if they pass they input_filter
   auto filtered_points_end =
       thrust::copy_if(incoming_points_begin, incoming_points_end,
-		      filtered_points_begin, input_filter{_config});
+		      filtered_points_begin, input_filter{transform_config});
 
   auto filtered_point_count =
-      std::distance(filtered_points_begin, filtered_points_end);
+      thrust::distance(filtered_points_begin, filtered_points_end);
 
 
   // transform the filtered points, placing them into transformed_points
@@ -244,7 +246,7 @@ OrbbecDevice::point_cloud(pc::operators::OperatorList operators) {
 
   thrust::transform(
       filtered_points_begin, filtered_points_end, transformed_points_begin,
-      point_transformer(_config, _alignment_center, _aligned_position_offset,
+      point_transformer(transform_config, _alignment_center, _aligned_position_offset,
 			auto_tilt_value));
 
   auto operator_output_begin = thrust::make_zip_iterator(thrust::make_tuple(
@@ -253,7 +255,7 @@ OrbbecDevice::point_cloud(pc::operators::OperatorList operators) {
   // copy transformed_points into operator_output if they pass the output_filter
   auto operator_output_end = thrust::copy_if(
       transformed_points_begin, transformed_points_begin + filtered_point_count,
-      operator_output_begin, output_filter{_config});
+      operator_output_begin, output_filter{transform_config});
 
   for (auto &operator_host_ref : operators) {
     auto &operator_host = operator_host_ref.get();

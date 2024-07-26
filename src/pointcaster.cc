@@ -14,27 +14,6 @@
 #include <thread>
 #include <vector>
 
-#include <serdepp/adaptor/toml11.hpp>
-#include <serdepp/serde.hpp>
-#include <toml.hpp>
-
-#include <zpp_bits.h>
-
-#include <zmq.hpp>
-
-#include "logger.h"
-#include "profiling.h"
-#include "main_thread_dispatcher.h"
-#include "path.h"
-#include "pointer.h"
-#include "session.gen.h"
-#include "structs.h"
-
-#ifdef WIN32
-#include <SDL2/SDL_Clipboard.h>
-#else
-#include <SDL2/SDL.h>
-#endif
 #include <Corrade/Utility/StlMath.h>
 #include <Magnum/GL/Context.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
@@ -43,6 +22,8 @@
 #include <Magnum/GL/Version.h>
 #include <Magnum/Image.h>
 #include <Magnum/ImageView.h>
+#include <Magnum/ImGuiIntegration/Context.hpp>
+#include <Magnum/ImGuiIntegration/Widgets.h>
 #include <Magnum/Magnum.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/Math/FunctionsBatch.h>
@@ -53,66 +34,81 @@
 #include <Magnum/SceneGraph/Drawable.h>
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
-
-#include "fonts/IconsFontAwesome6.h"
-#include <Magnum/ImGuiIntegration/Context.hpp>
-#include <Magnum/ImGuiIntegration/Widgets.h>
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <serdepp/adaptor/toml11.hpp>
+#include <serdepp/serde.hpp>
+#include <toml.hpp>
+#include <tracy/Tracy.hpp>
+#include <zpp_bits.h>
+#include <zmq.hpp>
 
-#include <pointclouds.h>
-
-#include "camera/camera_controller.h"
-#include "client_sync/sync_server.h"
-#include "devices/device.h"
-#include "devices/usb.h"
-#include "gui/widgets.h"
-#include "modes.h"
-#include "operators/session_operator_host.h"
-#include "point_cloud_renderer.h"
-#include "publisher/publisher.h"
-#include "radio/radio.h"
-#include "shaders/texture_display.h"
-#include "snapshots.h"
-#include "sphere_renderer.h"
-#include "tween/tween_manager.h"
-#include "uuid.h"
-#include "wireframe_objects.h"
-
-// TODO these need to be removed when initialisation loop is made generic
-#include "devices/k4a/k4a_device.h"
-#include "devices/orbbec/orbbec_device.h"
-#include <k4a/k4a.h>
-
-#include "mqtt/mqtt_client.h"
-#include "mqtt/mqtt_client_config.gen.h"
-
-#include "midi/midi_device.h"
+#ifdef WIN32
+#include <SDL2/SDL_Clipboard.h>
+#else
+#include <SDL2/SDL.h>
+#endif
 
 #ifdef WITH_OSC
 #include "osc/osc_client.h"
 #include "osc/osc_server.h"
 #endif
 
-#include <tracy/Tracy.hpp>
+#include "camera/camera_controller.h"
+#include "client_sync/sync_server.h"
+#include "devices/device.h"
+#include "devices/usb.h"
+#include "devices/k4a/k4a_device.h"
+#include "devices/orbbec/orbbec_device.h"
+#include "fonts/IconsFontAwesome6.h"
+#include "graph/operator_graph.h"
+#include "gui/widgets.h"
+#include "logger.h"
+#include "main_thread_dispatcher.h"
+#include "midi/midi_device.h"
+#include "modes.h"
+#include "mqtt/mqtt_client.h"
+#include "mqtt/mqtt_client_config.gen.h"
+#include "operators/session_operator_host.h"
+#include "path.h"
+#include "pointer.h"
+#include "point_cloud_renderer.h"
+#include "pointclouds.h"
+#include "profiling.h"
+#include "publisher/publisher.h"
+#include "radio/radio.h"
+#include "session.gen.h"
+#include "shaders/texture_display.h"
+#include "snapshots.h"
+#include "sphere_renderer.h"
+#include "structs.h"
+#include "tween/tween_manager.h"
+#include "uuid.h"
+#include "wireframe_objects.h"
+
+// Temporary headers to be removed
+#include <k4a/k4a.h>
 
 namespace pc {
 
 using namespace pc;
-using namespace pc::types;
-using namespace pc::devices;
 using namespace pc::camera;
-using namespace pc::radio;
 using namespace pc::client_sync;
-using namespace pc::snapshots;
+using namespace pc::devices;
+using namespace pc::graph;
 using namespace pc::midi;
+using namespace pc::mqtt;
+using namespace pc::operators;
+using namespace pc::parameters;
+using namespace pc::radio;
+using namespace pc::snapshots;
+using namespace pc::tween;
+using namespace pc::types;
+
 #ifdef WITH_OSC
 using namespace pc::osc;
 #endif
-using namespace pc::mqtt;
-using namespace pc::tween;
-using namespace pc::operators;
-using namespace pc::parameters;
+
 using namespace Magnum;
 using namespace Math::Literals;
 
@@ -121,7 +117,6 @@ using pc::devices::K4ADevice;
 using pc::devices::OrbbecDevice;
 
 using uint = unsigned int;
-
 using Object3D = Magnum::SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
 using Scene3D = Magnum::SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 
@@ -166,6 +161,7 @@ protected:
   std::unique_ptr<WireframeGrid> _ground_grid;
 
   std::unique_ptr<SessionOperatorHost> _session_operator_host;
+  std::unique_ptr<OperatorGraph> _session_operator_graph;
 
   std::unique_ptr<Snapshots> _snapshots_context;
 
@@ -205,6 +201,7 @@ protected:
   void load_k4a_device(const DeviceConfiguration& config, std::string_view target_id = "");
   void open_kinect_sensors();
   void open_orbbec_sensor(std::string_view ip);
+  void close_orbbec_sensor(OrbbecDevice& device);
 
   void render_cameras();
   void publish_parameters();
@@ -385,6 +382,9 @@ PointCaster::PointCaster(const Arguments &args)
   _usb_monitor = std::make_unique<UsbMonitor>(fetch_usb_config, fetch_session_devices);
 #endif
 
+  OrbbecDevice::init_context();
+  _session_operator_graph = std::make_unique<OperatorGraph>("Session");
+
   // load last session
   auto data_dir = path::get_or_create_data_directory();
   std::filesystem::path last_modified_session_file;
@@ -413,12 +413,14 @@ PointCaster::PointCaster(const Arguments &args)
 
   // If there are no cameras in the scene, initialise at least one
   if (_camera_controllers.empty()) {
-    auto _default_camera_controller =
+    auto default_camera_controller =
         std::make_unique<CameraController>(this, _scene.get());
     // TODO viewport size needs to be dynamic
-    _default_camera_controller->camera().setViewport(
+    default_camera_controller->camera().setViewport(
         GL::defaultFramebuffer.viewport().size());
-    _camera_controllers.push_back(std::move(_default_camera_controller));
+    auto& config = default_camera_controller->config();
+	_session_operator_graph->add_output_node(config);
+    _camera_controllers.push_back(std::move(default_camera_controller));
   }
 
   // if there is no usb configuration, initialise a default
@@ -557,7 +559,7 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   }
   for (auto &ob_device_ref : OrbbecDevice::attached_devices) {
     auto &ob_device = ob_device_ref.get();
-    output_session.devices.emplace(ob_device.id(), ob_device.config());
+    output_session.devices.emplace(ob_device.config().id, ob_device.config());
   }
 
   const auto uninitialized_or_default = [](auto &optional_obj) {
@@ -655,12 +657,13 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   }
 
   // get saved camera configurations and populate the cams list
-  for (auto &[_, saved_camera_config] : _session.cameras) {
+  for (auto &[camera_id, camera_config] : _session.cameras) {
     auto saved_camera =
-      std::make_unique<CameraController>(this, _scene.get(), saved_camera_config);
+      std::make_unique<CameraController>(this, _scene.get(), camera_config);
     saved_camera->camera().setViewport(
         GL::defaultFramebuffer.viewport().size());
-    _camera_controllers.push_back(std::move(saved_camera));
+	_session_operator_graph->add_output_node(camera_config);
+	_camera_controllers.push_back(std::move(saved_camera));
   }
 
   if (!_session.usb.has_value()) {
@@ -719,10 +722,14 @@ void PointCaster::render_cameras() {
     // - make sure to cache already synthesised configurations
     if (points.empty()) {
 
-      points = devices::synthesized_point_cloud({*_session_operator_host});
+      // points = devices::synthesized_point_cloud({*_session_operator_host});
+
+      // get the points from THIS camera
+      
 
       if (rendering_config.snapshots)
         points += snapshots::point_cloud();
+
       _point_cloud_renderer->points = points;
       _point_cloud_renderer->setDirty();
     }
@@ -796,21 +803,37 @@ void PointCaster::open_kinect_sensors() {
 
 void PointCaster::open_orbbec_sensor(std::string_view ip) {
   pc::logger->info("Opening Orbbec sensor at {}", ip);
-  std::string ip_str{ip.begin(), ip.end()};
+  std::string ip_str{ ip.begin(), ip.end() };
   run_async([this, ip = ip_str] {
-    loading_device = true;
-    try {
-      std::string id{fmt::format("ob_{}", ip)};
-      std::replace(id.begin(), id.end(), '.', '_');
-      _orbbec_cameras.push_back(
-	  std::make_unique<OrbbecDevice>(_session.devices[id], id));
-    } catch (ob::Error &e) {
-      pc::logger->error(e.getMessage());
-    } catch (...) {
-      pc::logger->error("Failed to open device. (Unknown exception)");
-    }
-    loading_device = false;
+	  loading_device = true;
+	  std::string id{ fmt::format("ob_{}", ip) };
+	  std::replace(id.begin(), id.end(), '.', '_');
+	  try {
+
+		  auto [config_it, _] = _session.devices.try_emplace(id, false, id);
+		  DeviceConfiguration& device_config = config_it->second;
+          device_config.id = id;
+		  _orbbec_cameras.push_back(std::make_unique<OrbbecDevice>(device_config));
+          _orbbec_cameras.back()->start_pipeline();
+		  _session_operator_graph->add_input_node(device_config);
+	  }
+	  catch (ob::Error& e) {
+		  pc::logger->error(e.getMessage());
+	  }
+	  catch (...) {
+		  pc::logger->error("Failed to create device. (Unknown exception)");
+	  }
+	  loading_device = false;
   });
+}
+
+void PointCaster::close_orbbec_sensor(OrbbecDevice& target_device) {
+	auto it = std::find_if(_orbbec_cameras.begin(), _orbbec_cameras.end(),
+		[&](const auto& cam) { return cam.get() == &target_device; });
+	if (it != _orbbec_cameras.end()) {
+		_orbbec_cameras.erase(it);
+		_session_operator_graph->remove_node(target_device.config().id);
+	}
 }
 
 void PointCaster::draw_menu_bar() {
@@ -1049,18 +1072,19 @@ void PointCaster::draw_main_viewport() {
       if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing)) {
         auto new_camera = std::make_unique<CameraController>(this, _scene.get());
         _camera_controllers.push_back(std::move(new_camera));
+        _session_operator_graph->add_output_node(_camera_controllers.back()->config());
         new_camera_index = _camera_controllers.size() - 1;
         pc::logger->info("new camera: {}", new_camera_index);
       }
 
       _interacting_camera_controller = std::nullopt;
 
-      for (int i = 0; i < _camera_controllers.size(); i++) {
-        auto &camera_controller = _camera_controllers.at(i);
-	const auto camera_config = camera_controller->config();
+	  for (int i = 0; i < _camera_controllers.size(); i++) {
+		  auto& camera_controller = _camera_controllers.at(i);
+		  const auto camera_config = camera_controller->config();
 
-        ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
-        if (new_camera_index == i)
+		  ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
+		  if (new_camera_index == i)
           tab_item_flags |= ImGuiTabItemFlags_SetSelected;
 
 	if (ImGui::BeginTabItem(camera_controller->name().data(), nullptr,
@@ -1306,46 +1330,104 @@ void PointCaster::draw_devices_window() {
         config.unfolded = false;
       }
     }
-    ImGui::PopItemWidth();
+	ImGui::PopItemWidth();
 
-    ImGui::Text("Orbbec");
-    ImGui::Dummy({0, 4});
-    ImGui::Dummy({10, 0});
-    ImGui::SameLine();
-    static std::array<char, 16> ip{};
-    ImGui::InputText("IP", ip.data(), ip.size());
-    ImGui::Dummy({0, 4});
-    ImGui::Dummy({10, 0});
-    ImGui::SameLine();
-    if (ImGui::Button("Open##Orbbec")) {
-      open_orbbec_sensor(ip.data());
-    }
+	ImGui::Text("Orbbec");
+
+	ImGui::Dummy({ 0, 4 });
+	ImGui::Dummy({ 10, 0 });
+	ImGui::SameLine();
+	if (ImGui::Button("Open network device")) {
+		ImGui::OpenPopup("Orbbec Discovered Devices");
+		run_async([]() { OrbbecDevice::discover_devices();  });
+	};
+	if (ImGui::BeginPopup("Orbbec Discovered Devices")) {
+		if (OrbbecDevice::discovering_devices) {
+			ImGui::BeginDisabled();
+			ImGui::Selectable("  Searching for devices...  ");
+			ImGui::EndDisabled();
+		}
+		else {
+			for (auto device : OrbbecDevice::discovered_devices) {
+				auto already_connected = false;
+				for (auto& connected_device : OrbbecDevice::attached_devices) {
+					if (connected_device.get().ip() == device.ip) {
+						already_connected = true;
+						break;
+					}
+				}
+				if (already_connected) continue;
+				auto option_string = fmt::format("  {} ({})  ", device.ip, device.serial_num);
+				if (ImGui::Selectable(option_string.c_str())) {
+					ImGui::CloseCurrentPopup();
+					open_orbbec_sensor(device.ip);
+				}
+			}
+			if (ImGui::Selectable("  Specify IP address...  ")) {
+				ImGui::CloseCurrentPopup();
+				ImGui::OpenPopup("OrbbecIPEntry");
+			};
+		}
+		ImGui::EndPopup();
+	}
+
+	if (ImGui::BeginPopup("OrbbecIPEntry")) {
+		ImGui::Text("Enter IP Address:");
+
+		static std::array<char, 16> ip{};
+		ImGui::InputText("IP", ip.data(), ip.size());
+		ImGui::Dummy({ 0, 4 });
+
+		if (ImGui::Button("Open##OrbbecIPEntry")) {
+			open_orbbec_sensor(ip.data());
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		ImGui::Dummy({ 10, 0 });
+		ImGui::SameLine();
+		if (ImGui::Button("Close##OrbbecIPEntry")) {
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
   }
   ImGui::Dummy({0, 12});
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
 
+  std::optional<std::reference_wrapper<OrbbecDevice>> device_to_disconnect;
+
   for (auto &device_ref : OrbbecDevice::attached_devices) {
     auto &device = device_ref.get();
     auto &config = device.config();
     ImGui::SetNextItemOpen(config.unfolded);
-    if (ImGui::CollapsingHeader(device.id().c_str())) {
+    if (ImGui::CollapsingHeader(config.id.c_str())) {
       config.unfolded = true;
       ImGui::Dummy({0, 8});
       ImGui::Dummy({8, 0});
       ImGui::SameLine();
-      ImGui::TextDisabled("%s", device.id().c_str());
+      ImGui::TextDisabled("%s", config.id.c_str());
       ImGui::Dummy({0, 6});
       device.draw_imgui_controls();
+      ImGui::Dummy({ 0, 8 });
+      ImGui::Dummy({ 10, 0 }); ImGui::SameLine();
+	  if (ImGui::Button("Disconnect")) {
+          device_to_disconnect = device_ref;
+	  };
     } else {
       config.unfolded = false;
     }
   }
   ImGui::PopItemWidth();
 
+  if (device_to_disconnect) {
+	  // Find the device to disconnect and erase it from the vector
+  }
+
   if (loading_device) {
-    ImGui::Dummy({8, 0});
-    ImGui::SameLine();
+	  ImGui::Dummy({ 8, 0 });
+	  ImGui::SameLine();
     ImGui::TextDisabled("Loading device...");
   }
 
@@ -1461,6 +1543,8 @@ void PointCaster::drawEvent() {
       _snapshots_context->draw_imgui_window();
     if (_session.layout.show_global_transform_window)
       _session_operator_host->draw_imgui_window();
+    if (_session.layout.show_session_operator_graph_window)
+        _session_operator_graph->draw();
 
     if (_session.mqtt.has_value() && (*_session.mqtt).show_window)
       _mqtt->draw_imgui_window();
@@ -1601,10 +1685,13 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   }
   case KeyEvent::Key::G: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
-      _session.layout.hide_ui = !_session.layout.hide_ui;
-    } else {
-      _session.layout.show_global_transform_window =
-          !_session.layout.show_global_transform_window;
+      //_session.layout.hide_ui = !_session.layout.hide_ui;
+		_session.layout.show_global_transform_window =
+		    !_session.layout.show_global_transform_window;
+	}
+	else {
+		_session.layout.show_session_operator_graph_window =
+			!_session.layout.show_session_operator_graph_window;
     }
     break;
   }

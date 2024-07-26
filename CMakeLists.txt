@@ -19,6 +19,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_MQTT "Enable MQTT client support" ON)
+option(WITH_MIDI "Enable MIDI support" ON)
 option(WITH_OSC "Enable OSC client/server support" $<OR:$<BOOL:${LINUX}>,0>)
 option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
@@ -51,6 +52,8 @@ endif()
 
 if(LINUX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive -Wfatal-errors")
+elseif(WIN32)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
 endif()
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION $<$<CONFIG:Release>:TRUE>)
@@ -143,14 +146,12 @@ if (WITH_POINTCASTER)
     add_compile_definitions(WITH_MQTT)
   endif()
 
-  find_package(mdns_cpp CONFIG REQUIRED)
-  list(APPEND LINK_LIBS mdns_cpp::mdns_cpp)
-
   # ----- Control -----
 
-  find_package(libremidi CONFIG REQUIRED)
-  list(APPEND LINK_LIBS libremidi)
-  list(APPEND POINTCASTER_SRC src/midi/midi_device.cc)
+  if (WITH_MIDI)
+    find_package(libremidi CONFIG REQUIRED)
+    list(APPEND LINK_LIBS libremidi)
+    list(APPEND POINTCASTER_SRC src/midi/midi_device.cc)
 
   # look for installed Tobias Erichsen's libRtpMidiSDK
   find_library(RTPMIDI_LIB
@@ -170,6 +171,9 @@ if (WITH_POINTCASTER)
         set(RTPMIDI_INCLUDES "${RTPMIDI_LIB_DIR}/../../../..")
     endif()
 
+    find_package(mdns_cpp CONFIG REQUIRED)
+    list(APPEND LINK_LIBS mdns_cpp::mdns_cpp)
+
     list(APPEND POINTCASTER_SRC 
       src/midi/rtpmidi_device.cc src/midi/rtp_peer.cc)
     list(APPEND LINK_LIBS ${RTPMIDI_LIB})
@@ -177,6 +181,8 @@ if (WITH_POINTCASTER)
     add_compile_definitions(WITH_RTP_MIDI)
   else()
     message(STATUS "libRtpMidiSDK was not found. Network MIDI will be disabled.")
+  endif()
+  
   endif()
 
   if (WITH_OSC)
@@ -193,6 +199,9 @@ if (WITH_POINTCASTER)
   add_library(ImGui::ImGui ALIAS imgui::imgui)
   list(APPEND LINK_LIBS imgui::imgui)
   add_definitions(-DIMGUI_DEFINE_MATH_OPERATORS)
+
+  list(APPEND THIRDPARTY_SRC thirdparty/imnodes/imnodes.cpp)
+  list(APPEND INCLUDE_DIRS thirdparty/imnodes)
 
   # ----- Magnum 3D engine -----
 
@@ -285,6 +294,9 @@ if (WITH_POINTCASTER)
   find_package(unofficial-concurrentqueue CONFIG REQUIRED)
   list(APPEND LINK_LIBS unofficial::concurrentqueue::concurrentqueue)
 
+  find_package(LEMON CONFIG REQUIRED)
+  list(APPEND LINK_LIBS unofficial::lemon::lemon)
+
   # ----- Profiling -----
 
   find_package(Tracy CONFIG REQUIRED)
@@ -319,6 +331,7 @@ if (WITH_POINTCASTER)
     src/tween/tween_manager.cc
     src/publisher/publisher.cc
     src/publisher/publisher_utils.cc
+    src/graph/operator_graph.cc
     src/operators/session_operator_host.cc
     src/operators/session_operator_host.cu
     src/operators/noise_operator.cc
@@ -328,6 +341,7 @@ if (WITH_POINTCASTER)
     src/operators/range_filter_operator.cc
     src/operators/denoise/kdtree.cu
     src/operators/denoise/denoise_operator.cc
+    ${THIRDPARTY_SRC}
     ${POINTCASTER_SRC}
     ${OPTIONAL_SRC})
 

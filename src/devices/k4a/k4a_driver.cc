@@ -378,10 +378,12 @@ void K4ADriver::track_bodies() {
           return deg * mult;
         };
 
+        auto& transform = config.transform;
+
         // create the rotation around our center
-        AngleAxisf rot_x(rad(config.rotation_deg.x), Vector3f::UnitX());
-        AngleAxisf rot_y(rad(config.rotation_deg.y), Vector3f::UnitY());
-        AngleAxisf rot_z(rad(config.rotation_deg.z), Vector3f::UnitZ());
+        AngleAxisf rot_x(rad(transform.rotation_deg.x), Vector3f::UnitX());
+        AngleAxisf rot_y(rad(transform.rotation_deg.y), Vector3f::UnitY());
+        AngleAxisf rot_z(rad(transform.rotation_deg.z), Vector3f::UnitZ());
         Quaternionf q = rot_z * rot_y * rot_x;
         Affine3f rot_transform = Translation3f(-alignment_center) * q *
                                  Translation3f(alignment_center);
@@ -394,24 +396,24 @@ void K4ADriver::track_bodies() {
         pos_f += alignment_center + aligned_position_offset;
 
         // perform our manual translation
-        pos_f += Vector3f(config.offset.x, config.offset.y, config.offset.z);
+        pos_f += Vector3f(transform.offset.x, transform.offset.y, transform.offset.z);
 
         // specified axis flips
-        if (config.flip_x) {
+        if (transform.flip_x) {
           pos_f.x() = -pos_f.x();
           ori_f *= Quaternionf(AngleAxisf(M_PI, Vector3f::UnitX()));
         }
-        if (config.flip_y) {
+        if (transform.flip_y) {
           pos_f.y() = -pos_f.y();
           ori_f *= Quaternionf(AngleAxisf(M_PI, Vector3f::UnitY()));
         }
-        if (config.flip_z) {
+        if (transform.flip_z) {
           pos_f.z() = -pos_f.z();
           ori_f *= Quaternionf(AngleAxisf(M_PI, Vector3f::UnitZ()));
         }
 
         // and scaling
-        pos_f *= config.scale;
+        pos_f *= transform.scale;
 
         position pos_out = {static_cast<short>(std::round(pos_f.x())),
                             static_cast<short>(std::round(pos_f.y())),

@@ -212,10 +212,10 @@ void declare_parameters(std::string_view parameter_id, T &basic_value,
   // bools and strings
   else if constexpr (std::is_same_v<T, bool> ||
                      std::is_same_v<T, std::string>) {
-    Parameter p(basic_value);
-    p.parent_struct_name = parent_struct_name;
-    p.default_value = default_value;
-    declare_parameter(parameter_id, std::move(p));
+    //Parameter p(basic_value);
+    //p.parent_struct_name = parent_struct_name;
+    //p.default_value = default_value;
+    //declare_parameter(parameter_id, std::move(p));
   }
   // ignore enums for now
   else if constexpr (std::is_enum_v<T>)
@@ -291,15 +291,14 @@ void declare_parameters(std::string_view parameter_id, T &complex_value,
     auto member_default = std::get<index>(member_defaults);
     auto member_min_max = member_min_max_values.at(index);
 
-    // recursively call declare_parameters for each member, delegating to the
-    // appropriate overload based on type
+    // recursively call declare_parameters for each member
     auto member_parameter_id = fmt::format("{}.{}", parameter_id, member_name);
     declare_parameters(member_parameter_id, member_ref, member_default,
                        member_min_max, struct_name);
   };
 
   // using an immediately invoked lambda to provide member names and
-  // the associated index as a compile-time constant to the handler function
+  // the associated index as a compile-time constant to the handler above
   [&handle_member,
    &member_names]<std::size_t... Is>(std::index_sequence<Is...>) {
     ((handle_member(member_names[Is],
@@ -345,7 +344,6 @@ void set_parameter_value(std::string_view parameter_id, T new_value,
 
   MainThreadDispatcher::enqueue([&] {
     for (const auto &cb : parameter.update_callbacks) {
-      pc::logger->info("Running cb from parameters:348");
       cb(old_binding, parameter);
     }
   });

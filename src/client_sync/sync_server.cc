@@ -58,7 +58,13 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
 					    zmq::socket_type::router);
 
   const auto socket_address = fmt::format("tcp://*:{}", _config.port);
-  _socket->bind(socket_address);
+  try {
+	  _socket->bind(socket_address);
+  }
+  catch (const zmq::error_t& e) {
+	  pc::logger->error(e.what());
+	  return;
+  }
 
   _publish_thread = std::make_unique<std::jthread>([socket_address,
 						    this](std::stop_token st) {

@@ -18,11 +18,6 @@
 #include <tracy/Tracy.hpp>
 #include <variant>
 
-// #include <pcl/filters/statistical_outlier_removal.h>
-// #include <pcl/gpu/octree/octree.hpp>
-// #include <pcl/memory.h>
-// #include <pcl/point_cloud.h>
-
 namespace pc::operators {
 
 operator_in_out_t
@@ -56,60 +51,13 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
             end = thrust::copy_if(begin, end, begin,
                                   SampleFilterOperator(config));
           }
-
-	  //
-
-	  // else if constexpr (std::is_same_v<T, DenoiseOperatorConfiguration>) {
-
-	  //   pc::logger->info("Building KDTree");
-
-	  //   // - copy the positions from the operator_in_out_t onto the CPU into a kdNode[]
-	  //   // -- first get the positions
-	  //   thrust::device_vector<pc::types::position> gpu_positions;
-	  //   gpu_positions.reserve(thrust::distance(begin, end));
-	  //   thrust::transform(begin, end, gpu_positions.begin(),
-	  // 		      get_position{});
-
-	  //   cudaDeviceSynchronize();
-
-          //   // -- copy them onto the CPU
-	  //   std::vector<pc::types::position> cpu_positions(
-	  // 	gpu_positions.begin(), gpu_positions.end());
-
-          //   // - create our kdNode vector
-          //   std::vector<DynaMap::kdNode> kd_nodes(cpu_positions.size());
-
-	  //   // does the copy need to be parallelized?
-	  //   for (int i = 0; i < cpu_positions.size(); i++) {
-	  //     kd_nodes[i] = {.id = i, .left = nullptr, .right = nullptr};
-	  //     kd_nodes[i].x[0] = cpu_positions[i].x / 1000.0f;
-	  //     kd_nodes[i].x[1] = cpu_positions[i].y / 1000.0f;
-	  //     kd_nodes[i].x[2] = cpu_positions[i].z / 1000.0f;
-	  //   }
-	  //   if (cpu_positions.size() > 1000) {
-          //     pc::logger->info("cpu[1000].x: {}", cpu_positions.at(1000).x);
-          //   }
-
-          //   // - create the kdtree
-	  //   DynaMap::kdTree tree;
-	  //   tree.kdRoot =
-	  // 	tree.buildTree(kd_nodes.data(), kd_nodes.size(), 0, MAX_DIM);
-
-          //   pc::logger->info("Successfully built KDTree: {}",
-          //                    tree.kdRoot == nullptr ? "false" : "true");
-
-          //   // DenoiseOperator kernel, passing in a reference or pointer to the tree
-	    
-	  //   // - kernel output still returns a filtered set into begin and end
-	  // }
-	    //
 	  else if constexpr (std::is_same_v<
                                    T, RangeFilterOperatorConfiguration>) {
 
-	    // TODO: this is RangeFilter Operator behaviour,
-	    // probs needs to be inside that class somehow
+			  // TODO: this is RangeFilter Operator behaviour,
+			  // probs needs to be inside that class somehow
 
-            // the operator host should really not contain logic relating to
+				  // the operator host should really not contain logic relating to
             // individual operators, it should simply call them
 
             // perhaps we completely replace the thrust::copy_if with an
@@ -290,47 +238,6 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
             // "minmax"});
             // }
           }
-          // else if constexpr (std::is_same_v<
-          //                        T, OutlierFilterOperatorConfiguration>) {
-          // if (config.enabled) {
-
-          // // Outlier filtering is PCL based
-          // auto point_count = thrust::distance(begin, end);
-          // thrust::device_vector<pcl::PointXYZ> gpu_points(point_count);
-          // thrust::transform(begin, end, gpu_points.begin(),
-          // 			PointTypesToPCLXYZ{});
-
-          // thrust::host_vector<pcl::PointXYZ> host_points(gpu_points.begin(),
-          // 						     gpu_points.end());
-
-          // // Copy points to GPU
-          // pcl::gpu::Octree::PointCloud point_cloud(
-          //     host_points.data(), host_points.size());
-
-          // pcl::gpu::Octree gpu_octree;
-          // gpu_octree.setCloud(point_cloud);
-
-          // gpu_octree.build();
-
-          // pcl::gpu::PointCloud<pcl::PointXYZRGB> cloud;
-
-          // thrust::host_vector<pcl::PointXYZRGB> pcl_points(
-          //     gpu_points.begin(), gpu_points.end());
-
-          // cloud.width = pcl_points.size();
-          // cloud.height = 1; // or appropriate height for your data structure
-          // cloud.is_dense = false; // or true, depending on your data
-          // cloud.points.assign(pcl_points.data(),
-          //                     pcl_points.data() + pcl_points.size());
-
-          // pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> filter;
-          // filter.setInputCloud(cloud.makeShared());
-          // filter.setMeanK(10);
-          // filter.setStddevMulThresh(1.0f);
-          // filter.filter(cloud);
-
-          // }
-          // }
         },
         operator_config);
   }

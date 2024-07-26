@@ -2,46 +2,9 @@
   "name": "pointcaster",
   "version-string": "0.0.1",
   "dependencies": [
-    "bob-pointclouds",
-    "zpp-bits",
-    "earcut-hpp",
-    "paho-mqttpp3",
-    "msgpack",
-    "toml11",
-    "serdepp",
-    "azure-kinect-sensor-sdk",
-    "orbbec-sdk",
-    "cuda",
-    "cuda-noise",
-    "corrade",
-    "eigen3",
-    "fmt",
-    "spdlog",
-    "cppzmq",
-    "libusb",
-    "libremidi",
-    "mdns-cpp",
-    "liblo",
-    "imgui",
-    {
-      "name": "opencv4",
-      "default-features": false,
-      "features": ["contrib", "cuda"]
-    },
     {
       "name": "imgui",
       "features": ["docking-experimental"]
-    },
-    {
-      "name": "sdl2",
-      "default-features": false,
-      "features": ["x11"],
-      "platform": "linux"
-    },
-    {
-      "name": "zeromq",
-      "default-features": false,
-      "features": ["draft"]
     },
     {
       "name": "magnum",
@@ -67,13 +30,51 @@
       "name": "magnum-integration",
       "features": ["imgui", "eigen"]
     },
-    "nanoflann",
-    "sdl2",
-    "nativefiledialog",
-    "tweeny",
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": ["contrib", "cuda"]
+    },
+    {
+      "name": "sdl2",
+      "default-features": false,
+      "features": ["x11"],
+      "platform": "linux"
+    },
+    {
+      "name": "zeromq",
+      "default-features": false,
+      "features": ["draft"]
+    },
+    "azure-kinect-sensor-sdk",
+    "bob-pointclouds",
     "concurrentqueue",
-    "readerwriterqueue",
+    "corrade",
+    "cppzmq",
+    "cuda",
+    "cuda-noise",
     "draco",
-    "tracy"
+    "earcut-hpp",
+    "eigen3",
+    "fmt",
+    "imgui",
+    "liblo",
+    "libremidi",
+    "liblemon",
+    "libusb",
+    "mdns-cpp",
+    "msgpack",
+    "nanoflann",
+    "nativefiledialog",
+    "orbbec-sdk",
+    "paho-mqttpp3",
+    "readerwriterqueue",
+    "serdepp",
+    "sdl2",
+    "spdlog",
+    "toml11",
+    "tracy",
+    "tweeny",
+    "zpp-bits"
   ]
 }

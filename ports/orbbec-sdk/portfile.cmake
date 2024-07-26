@@ -38,11 +38,12 @@ foreach(LIB_FILE ${LIB_FILES})
   get_filename_component(FILE_NAME ${LIB_FILE} NAME)
   if (NOT FILE_NAME MATCHES "depthengine")
     if(FILE_NAME MATCHES "dll")
-      file(INSTALL ${LIB_FILE}
-        DESTINATION ${CURRENT_PACKAGES_DIR}/bin)
+      file(INSTALL ${LIB_FILE} DESTINATION ${CURRENT_PACKAGES_DIR}/bin)
+      # orbbec sdk doesn't ship with debug bins, just release
+      file(INSTALL ${LIB_FILE} DESTINATION ${CURRENT_PACKAGES_DIR}/debug/bin)
     else()
-      file(INSTALL ${LIB_FILE}
-        DESTINATION ${CURRENT_PACKAGES_DIR}/lib)
+      file(INSTALL ${LIB_FILE} DESTINATION ${CURRENT_PACKAGES_DIR}/lib)
+      file(INSTALL ${LIB_FILE} DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib)
     endif()
   endif()
 endforeach()

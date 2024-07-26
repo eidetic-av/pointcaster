@@ -107,7 +107,7 @@ def process_cpp_header(input_text, file_path):
         # then the count of members
         generated_struct += f"\tstatic constexpr std::size_t MemberCount = {len(members)};\n"
 
-        # the type of each member
+        # the type of each membeOperatorConfiguratonVariantr
         generated_struct += "\tusing MemberTypes = pc::reflect::type_list<"
         all_types_string = ""
         for i, member in enumerate(members):

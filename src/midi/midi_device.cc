@@ -66,8 +66,13 @@ MidiDevice::MidiDevice(MidiDeviceConfiguration &config)
   if (!_config.rtp.has_value()) {
     _config.rtp = RtpMidiDeviceConfiguration{};
   }
-  _rtp_midi = std::make_unique<RtpMidiDevice>(*config.rtp);
-  _rtp_midi->on_receive = [this](auto buffer) { on_receive(*this, buffer); };
+  try {
+	  _rtp_midi = std::make_unique<RtpMidiDevice>(*config.rtp);
+	  _rtp_midi->on_receive = [this](auto buffer) { on_receive(*this, buffer); };
+  }
+  catch (const std::exception& e) {
+	  pc::logger->error(e.what());
+  }
 #endif
 
   // for any MIDI cc bindings to UI parameters saved in the config,

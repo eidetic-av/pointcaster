@@ -64,7 +64,7 @@ void K4ADriver::free_device_memory() {
 // used with any sensor type
 
 struct input_filter {
-  DeviceConfiguration config;
+  DeviceTransformConfiguration config;
 
   __device__ bool check_color(color value) const {
     // remove totally black values
@@ -98,12 +98,12 @@ struct input_filter {
 struct point_transformer
     : public thrust::unary_function<point_in_t, indexed_point_t> {
 
-  DeviceConfiguration config;
+  DeviceTransformConfiguration config;
   Eigen::Vector3f alignment_center;
   Eigen::Vector3f aligned_position_offset;
   Eigen::Matrix3f auto_tilt_rotation;
 
-  point_transformer(const DeviceConfiguration &device_config,
+  point_transformer(const DeviceTransformConfiguration &device_config,
                     const position &aligned_center,
                     const position &position_offset,
                     const Eigen::Matrix3f &auto_tilt)
@@ -180,7 +180,7 @@ struct point_transformer
 };
 
 struct output_filter {
-  DeviceConfiguration config;
+  DeviceTransformConfiguration config;
 
   __device__ bool check_bounds(position value) const {
 
@@ -250,9 +250,9 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   // copy incoming_points into filtered_points if they pass they input_filter
   auto filtered_points_end =
       thrust::copy_if(incoming_points_begin, incoming_points_end,
-                      filtered_points_begin, input_filter{config});
+                      filtered_points_begin, input_filter{config.transform});
 
-  auto filtered_point_count = std::distance(filtered_points_begin, filtered_points_end);
+  auto filtered_point_count = thrust::distance(filtered_points_begin, filtered_points_end);
 
   // transform the filtered points, placing them into transformed_points
   auto transformed_points_begin = thrust::make_zip_iterator(
@@ -261,7 +261,7 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
 
   thrust::transform(
       filtered_points_begin, filtered_points_end, transformed_points_begin,
-      point_transformer(config, _alignment_center, _aligned_position_offset,
+      point_transformer(config.transform, _alignment_center, _aligned_position_offset,
 			auto_tilt_value));
 
   auto operator_output_begin = thrust::make_zip_iterator(thrust::make_tuple(
@@ -270,7 +270,7 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   // copy transformed_points into operator_output if they pass the output_filter
   auto operator_output_end = thrust::copy_if(
       transformed_points_begin, transformed_points_begin + filtered_point_count,
-      operator_output_begin, output_filter{config});
+      operator_output_begin, output_filter{config.transform});
 
   // operator_output_end = pc::operators::apply(
   //     operator_output_begin, operator_output_end, operator_list);

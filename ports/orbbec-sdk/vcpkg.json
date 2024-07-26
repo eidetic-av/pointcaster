@@ -1,6 +1,7 @@
 {
     "name": "orbbec-sdk",
     "version": "1.9.5",
+    "port-version": 2,
     "description": "C/C++ base core lib for Orbbec 3D cameras",
     "homepage": "https://github.com/orbbec/OrbbecSDK",
     "license": "MIT",

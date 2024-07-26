@@ -10,7 +10,7 @@ struct SampleFilterOperatorConfiguration {
   uid id;
   bool unfolded = false;
   bool enabled = true;
-  int sample_count = 1;
+  int sample_count = 1; // @minmax(1, 1000)
 };
 
 struct SampleFilterOperator : public thrust::unary_function<indexed_point_t, indexed_point_t> {

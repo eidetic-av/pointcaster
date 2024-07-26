@@ -28,8 +28,16 @@ void log(std::string text) {
 extern "C" {
 	JNIEXPORT int startNetworkThread(const char* point_caster_address = "127.0.0.1:9999", int timeout_ms = 0);
 	JNIEXPORT int stopNetworkThread();
-	JNIEXPORT bool dequeue();
+	JNIEXPORT bool dequeue(int timeout_ms = 5);
 	JNIEXPORT int pointCount();
-	JNIEXPORT bob::types::position* pointPositions();
 	JNIEXPORT bob::types::color* pointColors();
+	JNIEXPORT bob::types::position* pointPositions();
+
+	enum class OrientationType {
+		unchanged = 0,
+		flip_x = 1,
+		flip_x_z = 2
+	};
+
+	JNIEXPORT float* shaderFriendlyPointPositions(bool parallel_transform = false, OrientationType orientation_type = OrientationType::unchanged);
 }

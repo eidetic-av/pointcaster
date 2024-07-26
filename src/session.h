@@ -27,8 +27,10 @@ struct PointCasterSessionLayout {
   bool show_snapshots_window = false; // @optional
   bool show_global_transform_window = false; // @optional
   bool show_stats = false; // @optional
+  bool show_session_operator_graph_window = false; // @optional
 };
 
+// these are necessary for the python pre-processor for now, doesn't handle nested types <<<>>> well
 using DeviceMap = std::map<std::string, devices::DeviceConfiguration>;
 using CameraMap = std::map<std::string, camera::CameraConfiguration>;
 using PublishedParameterList = std::vector<std::string>;
