@@ -5,18 +5,20 @@
 
 namespace pc::graph {
 
-	enum class LinkDirection { In, Out, InOut };
+    enum class LinkDirection { In, Out, InOut };
 
-	using NodeDataVariant = std::variant<
-		operators::OperatorConfigurationVariant,
-		 std::reference_wrapper<pc::devices::DeviceConfiguration>,
-		 std::reference_wrapper<pc::camera::CameraConfiguration>
-	>;
+    using NodeDataVariant = std::variant<
+        operators::OperatorConfigurationVariant,
+        std::reference_wrapper<pc::devices::DeviceConfiguration>,
+        std::reference_wrapper<pc::camera::CameraConfiguration>
+    >;
 
 	struct Node {
 		int id;
 		LinkDirection link_direction;
 		NodeDataVariant node_data;
+		int in_connection{ -1 }; // single input connection
+		std::vector<int> out_connections; // multiple output connections
 	};
 
 	struct Link {
@@ -25,10 +27,10 @@ namespace pc::graph {
 		int input_id;
 	};
 
-	template <typename T>
-	struct is_reference_wrapper : std::false_type {};
+    template <typename T>
+    struct is_reference_wrapper : std::false_type {};
 
-	template <typename U>
-	struct is_reference_wrapper<std::reference_wrapper<U>> : std::true_type {};
+    template <typename U>
+    struct is_reference_wrapper<std::reference_wrapper<U>> : std::true_type {};
 
 }

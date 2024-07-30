@@ -59,7 +59,8 @@ endif()
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION $<$<CONFIG:Release>:TRUE>)
 
 if (WIN32 AND WITH_POINTCASTER)
-  set(Boost_INCLUDE_DIR ${_VCPKG_INSTALLED_DIR}/x64-windows-static/include)
+  # set(Boost_INCLUDE_DIR ${_VCPKG_INSTALLED_DIR}/x64-windows-static/include)
+  set(Boost_INCLUDE_DIR ${_VCPKG_INSTALLED_DIR}/x64-windows-static-md/include)
 endif()
 
 if (GENERATE_REFLECTIONS)
@@ -264,6 +265,16 @@ if (WITH_POINTCASTER)
   find_package(OpenCV CONFIG REQUIRED)
   list(APPEND LINK_LIBS ${OpenCV_LIBS})
 
+  # ----- PCL -----
+
+  find_package(PCL CONFIG REQUIRED)
+  list(APPEND LINK_LIBS ${PCL_LIBRARIES})
+
+  # ----- TBB -----
+
+  find_package(TBB CONFIG REQUIRED)
+  list(APPEND LINK_LIBS TBB::tbb TBB::tbbmalloc)
+
   # ----- CUDA -----
 
   find_package(CUDAToolkit REQUIRED)
@@ -341,6 +352,7 @@ if (WITH_POINTCASTER)
     src/operators/range_filter_operator.cc
     src/operators/denoise/kdtree.cu
     src/operators/denoise/denoise_operator.cc
+    src/operators/pcl/test.cu
     ${THIRDPARTY_SRC}
     ${POINTCASTER_SRC}
     ${OPTIONAL_SRC})
@@ -354,9 +366,11 @@ if (WITH_POINTCASTER)
   add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
 
   set_target_properties(pointcaster PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+  set_target_properties(pointcaster PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
   set_property(TARGET pointcaster PROPERTY 
-    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+  set_property(TARGET pointcaster PROPERTY CUDA_RUNTIME_LIBRARY Shared)
 
   if (POINTCASTER_DEPENDENCIES)
     add_dependencies(pointcaster ${POINTCASTER_DEPENDENCIES})

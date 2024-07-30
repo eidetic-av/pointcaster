@@ -36,6 +36,11 @@
       "features": ["contrib", "cuda"]
     },
     {
+      "name": "pcl",
+      "default-features": false,
+      "features":  ["cuda"]
+    },
+    {
       "name": "sdl2",
       "default-features": false,
       "features": ["x11"],
@@ -58,6 +63,7 @@
     "eigen3",
     "fmt",
     "imgui",
+    "liblemon",
     "liblo",
     "libremidi",
     "liblemon",
@@ -72,6 +78,7 @@
     "serdepp",
     "sdl2",
     "spdlog",
+    "tbb",
     "toml11",
     "tracy",
     "tweeny",

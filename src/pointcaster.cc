@@ -70,6 +70,7 @@
 #include "mqtt/mqtt_client.h"
 #include "mqtt/mqtt_client_config.gen.h"
 #include "operators/session_operator_host.h"
+#include "operators/session_bounding_boxes.h"
 #include "path.h"
 #include "pointer.h"
 #include "point_cloud_renderer.h"
@@ -419,8 +420,8 @@ PointCaster::PointCaster(const Arguments &args)
     default_camera_controller->camera().setViewport(
         GL::defaultFramebuffer.viewport().size());
     auto& config = default_camera_controller->config();
-	_session_operator_graph->add_output_node(config);
     _camera_controllers.push_back(std::move(default_camera_controller));
+	_session_operator_graph->add_output_node(_camera_controllers.back()->config());
   }
 
   // if there is no usb configuration, initialise a default
@@ -662,8 +663,8 @@ void PointCaster::load_session(std::filesystem::path file_path) {
       std::make_unique<CameraController>(this, _scene.get(), camera_config);
     saved_camera->camera().setViewport(
         GL::defaultFramebuffer.viewport().size());
-	_session_operator_graph->add_output_node(camera_config);
 	_camera_controllers.push_back(std::move(saved_camera));
+	_session_operator_graph->add_output_node(_camera_controllers.back()->config());
   }
 
   if (!_session.usb.has_value()) {
@@ -703,6 +704,13 @@ void PointCaster::render_cameras() {
 
   PointCloud points;
 
+  // TODO
+  for (auto& [idx, box] : pc::operators::operator_bounding_boxes) {
+	  box->set_visible(false);
+  }
+  // pc::operators::operator_bounding_boxes.clear();
+  // draw bounding boxes here not inside cuda kernels
+
   auto skeletons = devices::scene_skeletons();
 
   for (auto &camera_controller : _camera_controllers) {
@@ -722,10 +730,14 @@ void PointCaster::render_cameras() {
     // - make sure to cache already synthesised configurations
     if (points.empty()) {
 
-      // points = devices::synthesized_point_cloud({*_session_operator_host});
+      points = devices::synthesized_point_cloud({*_session_operator_host});
 
+      // TODO
       // get the points from THIS camera
-      
+      // auto& config = camera_controller->config();
+      // int node_id = _session_operator_graph->node_id_from_reference(config);
+      // auto path = _session_operator_graph->path_to(node_id);
+      // if (path.size() > 1) pc::logger->info(path.size());
 
       if (rendering_config.snapshots)
         points += snapshots::point_cloud();
@@ -832,7 +844,7 @@ void PointCaster::close_orbbec_sensor(OrbbecDevice& target_device) {
 		[&](const auto& cam) { return cam.get() == &target_device; });
 	if (it != _orbbec_cameras.end()) {
 		_orbbec_cameras.erase(it);
-		_session_operator_graph->remove_node(target_device.config().id);
+		// _session_operator_graph->remove_node(target_device.config().id);
 	}
 }
 
@@ -980,10 +992,8 @@ void PointCaster::draw_onscreen_log() {
 }
 
 void PointCaster::draw_modeline() {
-  using namespace catpuccin::imgui;
-
   constexpr auto modeline_height = 20;
-  constexpr auto modeline_color = mocha_crust;
+  constexpr auto modeline_color = catpuccin::imgui::mocha_crust;
 
   ImGui::PushID("modeline");
 

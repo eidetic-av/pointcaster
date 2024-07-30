@@ -7,7 +7,6 @@
       "inheritEnvironments": [ "msvc_x64_x64" ],
       "buildRoot": "${projectDir}\\build\\${name}",
       "installRoot": "${projectDir}\\out\\install\\${name}",
-      "cmakeCommandArgs": "-DVCPKG_TARGET_TRIPLET=x64-windows-static -DVCPKG_OVERLAY_PORTS=\"${projectDir}\\ports\"",
       "buildCommandArgs": "",
       "ctestCommandArgs": "",
       "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
@@ -26,8 +25,14 @@
           "name": "TRACY_ENABLE",
           "value": "False",
           "type": "BOOL"
+        },
+        {
+          "name": "VCPKG_OVERLAY_PORTS",
+          "value": "${projectDir}\\ports",
+          "type": "STRING"
         }
-      ]
+      ],
+      "cmakeCommandArgs": "-DVCPKG_OVERLAY_PORTS=\"${projectDir}\\ports\" -DVCPKG_LIBRARY_LINKAGE=static -DVCPKG_CRT_LINKAGE=static -DVCPKG_TARGET_TRIPLET=x64-windows-static"
     },
     {
       "name": "x64-MSVC-Release",
@@ -125,6 +130,45 @@
           "name": "WITH_POINTCASTER",
           "value": "False",
           "type": "BOOL"
+        }
+      ]
+    },
+    {
+      "name": "x64-MSVC-Debug-Overlays",
+      "generator": "Ninja",
+      "configurationType": "Release",
+      "buildRoot": "${projectDir}\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "-DVCPKG_OVERLAY_PORTS=\"${projectDir}\\ports\" -DVCPKG_OVERLAY_TRIPLETS= -DVCPKG_TARGET_TRIPLET=x64-windows-static-md",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "cmakeToolchain": "C:/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "variables": [
+        {
+          "name": "WITH_ADDRESS_SANITIZER",
+          "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "WITH_POINTCASTER",
+          "value": "True",
+          "type": "BOOL"
+        },
+        {
+          "name": "TRACY_ENABLE",
+          "value": "False",
+          "type": "BOOL"
+        },
+        {
+          "name": "VCPKG_OVERLAY_PORTS",
+          "value": "${projectDir}\\ports",
+          "type": "STRING"
+        },
+        {
+          "name": "CMAKE_BUILD_TYPE",
+          "value": "Release",
+          "type": "STRING"
         }
       ]
     }

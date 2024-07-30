@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <random>
 
 namespace pc::operators {
 
@@ -52,6 +53,28 @@ set_or_create_bounding_box(const T &operator_config, Scene3D &scene,
   if constexpr (std::same_as<T, RangeFilterOperatorConfiguration>) {
     box->set_visible(operator_config.draw);
   }
+}
+
+static void
+set_or_create_bounding_box(uid id, pc::types::Float3 size, pc::types::Float3 position,
+	Scene3D& scene, SceneGraph::DrawableGroup3D& parent_group, std::optional<Color4> color = {}) {
+	// get or create the bounding box in the scene
+	auto [itr, _] = operator_bounding_boxes.emplace(
+		id, std::make_unique<WireframeBox>(&scene, &parent_group));
+	auto& box = itr->second;
+	// and set its updated position / scale
+	box->set_transformation(Matrix4::scaling({ size.x, size.y, size.z }) *
+		Matrix4::translation({ 0, 0, 0 }));
+
+	box->transform(Matrix4::translation({ position.x, position.y, position.z }));
+
+	if (color.has_value()) {
+		box->set_color(color.value().rgb());
+	}
+	else {
+		box->set_color(next_bounding_box_color());
+	}
+	box->set_visible(true);
 }
 
 } // namespace pc::operators
