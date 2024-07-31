@@ -352,7 +352,7 @@ if (WITH_POINTCASTER)
     src/operators/range_filter_operator.cc
     src/operators/denoise/kdtree.cu
     src/operators/denoise/denoise_operator.cc
-    src/operators/pcl/test.cu
+    src/operators/pcl/cluster_extraction_operator.cc
     ${THIRDPARTY_SRC}
     ${POINTCASTER_SRC}
     ${OPTIONAL_SRC})

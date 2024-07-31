@@ -9,7 +9,7 @@
 #include "sample_filter_operator.gen.h"
 #include "range_filter_operator.gen.h"
 #include "denoise/denoise_operator.gen.h"
-#include "pcl/test.gen.h"
+#include "pcl/operators.h"
 #include <functional>
 #include <variant>
 
@@ -18,7 +18,7 @@ namespace pc::operators {
 using OperatorConfigurationVariant =
     std::variant<NoiseOperatorConfiguration, SampleFilterOperatorConfiguration,
 		 RangeFilterOperatorConfiguration, RotateOperatorConfiguration,
-		 RakeOperatorConfiguration, PCLClusteringConfiguration>;
+		 RakeOperatorConfiguration, pcl_cpu::ClusterExtractionConfiguration>;
 
 // Extract types from variant into a tuple
 template <typename Variant> struct VariantTypes;

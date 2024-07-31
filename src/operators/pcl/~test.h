@@ -17,31 +17,6 @@ using uid = unsigned long int;
 //static inline std::atomic<std::shared_ptr<std::vector<EuclidianCluster>>>
 //	euclidian_clusters(std::make_shared<std::vector<EuclidianCluster>>());
 
-struct PCLClusteringConfiguration {
-  uid id;
-  bool enabled = true;
-  bool draw_voxels = true;
-  bool draw_clusters = true;
-};
-
-struct PositionToPointXYZ {
-	__host__ __device__
-		pcl::PointXYZ operator()(const pc::types::position& pos) const {
-		pcl::PointXYZ point;
-		point.x = static_cast<float>(pos.x);
-		point.y = static_cast<float>(pos.y);
-		point.z = static_cast<float>(pos.z);
-		return point;
-	}
-};
-
-struct PointXYZToPosition {
-	__host__ __device__
-	pc::types::position operator()(const pcl::PointXYZ& pos) const {
-		return pc::types::position{ static_cast<short>(pos.x), static_cast<short>(pos.y), static_cast<short>(pos.z) };
-	}
-};
-
 struct GenerateVoxelGrid : public thrust::unary_function<int, pcl::PointXYZ> {
 	__host__ __device__
 		pcl::PointXYZ operator()(int index) const {
@@ -70,17 +45,6 @@ struct VoxelToPointcloud : thrust::unary_function<indexed_voxel_t, indexed_point
 
 	__device__ indexed_point_t operator()(indexed_voxel_t voxel) const;
 };
-
-
-struct PCLClustering : public Operator {
-
-  PCLClusteringConfiguration _config;
-
-  PCLClustering(const PCLClusteringConfiguration &config);
-  
-  __device__ indexed_point_t operator()(indexed_point_t point) const;
-};
-
 
 
 } // namespace pc::operators

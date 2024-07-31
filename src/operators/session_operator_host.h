@@ -33,14 +33,6 @@ public:
 					 operator_in_out_t end,
 					 OperatorHostConfiguration &host_config);
 
-  struct pcl_input_frame {
-	  unsigned long timestamp;
-	  thrust::host_vector<pc::types::position> positions;
-  };
-  oneapi::tbb::concurrent_queue<pcl_input_frame> pcl_queue;
-  std::atomic<pcl::PointCloud<pcl::PointXYZ>::Ptr> latest_voxels;
-  std::atomic<std::shared_ptr<std::vector<pc::AABB>>> latest_clusters;
-
 
   SessionOperatorHost(OperatorHostConfiguration &config, Scene3D &scene,
 		      Magnum::SceneGraph::DrawableGroup3D &parent_group);
@@ -56,26 +48,11 @@ private:
   Scene3D &_scene;
   Magnum::SceneGraph::DrawableGroup3D &_parent_group;
 
-  std::jthread _pcl_thread;
-  bool _shutdown_pipeline = false;
-
   void add_operator(OperatorConfigurationVariant operator_config) {
     _config.operators.push_back(operator_config);
   }
 
   // std::atomic<std::shared_ptr<std::vector<pc::types::position>>> _pcl_data;
-
-  struct pcl_ingest {
-	  oneapi::tbb::concurrent_queue<pcl_input_frame>& queue;
-	  bool& shutdown_pipeline;
-	  pcl_input_frame* operator()(tbb::flow_control& fc) const;
-  };
-
-  struct pcl_process {
-	  std::atomic<pcl::PointCloud<pcl::PointXYZ>::Ptr>& latest_voxels;
-	  std::atomic<std::shared_ptr<std::vector<pc::AABB>>>& latest_clusters;
-	  void operator()(pcl_input_frame* frame) const;
-  };
 
 };
 

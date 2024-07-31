@@ -164,11 +164,6 @@
           "name": "VCPKG_OVERLAY_PORTS",
           "value": "${projectDir}\\ports",
           "type": "STRING"
-        },
-        {
-          "name": "CMAKE_BUILD_TYPE",
-          "value": "Release",
-          "type": "STRING"
         }
       ]
     }

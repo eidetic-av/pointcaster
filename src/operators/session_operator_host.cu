@@ -29,7 +29,7 @@
 #include <pcl/gpu/segmentation/gpu_extract_clusters.h>
 #include <pcl/gpu/segmentation/impl/gpu_extract_clusters.hpp>
 
-#include "pcl/test.gen.h"
+#include "pcl/operators.h"
 
 namespace pc::operators {
 
@@ -103,7 +103,7 @@ namespace pc::operators {
 					}
 
 					// PCL
-					else if constexpr (std::is_same_v<T, PCLClusteringConfiguration>) {
+					else if constexpr (std::is_same_v<T, pcl_cpu::ClusterExtractionConfiguration>) {
 
 						using namespace std::chrono;
 						using namespace std::chrono_literals;
@@ -112,220 +112,49 @@ namespace pc::operators {
 
 						//std::thread([positions = thrust::host_vector<pc::types::position>(
 
-						auto& host = *SessionOperatorHost::instance;
+						auto pipeline = pcl_cpu::ClusterExtractionPipeline::instance();
 
-						host.pcl_queue.emplace(pcl_input_frame{
+						pipeline->input_queue.emplace(pcl_cpu::ClusterExtractionPipeline::InputFrame{
 							.timestamp = 0,
+							.extraction_config = config,
 							.positions = thrust::host_vector<pc::types::position>(
 								thrust::get<0>(begin.get_iterator_tuple()),
 								thrust::get<0>(end.get_iterator_tuple()))
 						});
+						pc::logger->debug("input new frame");
 
 						// TODO move these to draw function in session_operator_host.cc
 
+						auto& host = SessionOperatorHost::instance;
+
 						if (config.draw_voxels) {
-							auto latest_voxels = SessionOperatorHost::instance->latest_voxels.load();
-							if (latest_voxels != nullptr) {
+							auto latest_voxels = pipeline->current_voxels.load();
+							if (latest_voxels.get() != nullptr) {
 								// TODO this is too slow
 								auto voxel_count = latest_voxels->size();
+								pc::logger->debug("voxel count: {}", voxel_count);
 								for (int i = 0; i < voxel_count; i++) {
 									pcl::PointXYZ p = latest_voxels->points[i];
 									// mm to metres
-									host.set_voxel(i, { p.x / 1000.0f, p.y / 1000.0f, p.z / 1000.0f });
+									host->set_voxel(i, { p.x / 1000.0f, p.y / 1000.0f, p.z / 1000.0f });
 								}
 							}
 						}
 
 						if (config.draw_clusters) {
-							auto latest_clusters_ptr = SessionOperatorHost::instance->latest_clusters.load();
-							if (latest_clusters_ptr != nullptr) {
+							auto latest_clusters_ptr = pipeline->current_clusters.load();
+							if (latest_clusters_ptr.get() != nullptr) {
 								auto& latest_clusters = *latest_clusters_ptr;
 								auto cluster_count = latest_clusters.size();
-								pc::logger->debug("Cluster count: {}", cluster_count);
+								pc::logger->debug("cluster count: {}", cluster_count);
 								for (int i = 0; i < cluster_count; i++) {
 									pc::AABB aabb = latest_clusters[i];
 									auto position = aabb.center() / 1000.0f; // mm to metres
 									auto size = aabb.extents() / 1000.0f;
-									host.set_cluster(i, position, size);
+									host->set_cluster(i, position, size);
 								}
 							}
 						}
-
-						//const auto id = config.id;
-
-						//static std::deque<std::future<void>> pcl_tasks;
-						//static constexpr size_t max_tasks = 5;
-
-						// static std::atomic<uid> box_id = 0;
-
-						// TODO this thread detach is really bad, need to manage ongoing tasks
-						//std::thread([id]() {
-
-						//	std::this_thread::sleep_for(120ms);
-						//	box_id.store(id);
-
-						//}).detach();
-
-						//pcl_tasks.push_back(std::async(std::launch::async, [id]() {
-						//}));
-
-						//while (pcl_tasks.size() > max_tasks) {
-						//	pcl_tasks.pop_front();
-						//}
-
-						//if (box_id != 0) {
-						//	pc::logger->info("setting box_id: {}", (int)box_id);
-						//	 SessionOperatorHost::instance->set_random_box(box_id.load());
-						//	box_id = 0;
-						//}
-
-						// copy positions from gpu into CPU thread
-
-						// TODO detaching these threads is possibly dangerous
-						// need to place them inside a collection of std::future or something but 
-						// it can't be blocking to remove the futures from that collection
-
-						//struct VoxelData {
-						//	pcl::PointXYZ position;
-						//	float size;
-						//};
-
-						//static std::mutex voxel_access;
-						//static std::optional<std::vector<VoxelData>> voxel_results;
-
-						//std::thread([positions = thrust::host_vector<pc::types::position>(
-						//	thrust::get<0>(begin.get_iterator_tuple()),
-						//	thrust::get<0>(end.get_iterator_tuple()))]() {
-
-						//	//  convert PointCloud.positions into PCL structures
-						//	auto pcl_positions = thrust::host_vector<pcl::PointXYZ>(positions.size());
-						//	thrust::transform(positions.begin(), positions.end(), pcl_positions.begin(),
-						//		PositionToPointXYZ());
-
-						//	// and copy the transformed result into a PCL PointCloud object
-						//	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-						//	cloud->points.resize(positions.size());
-						//	std::copy(pcl_positions.begin(), pcl_positions.end(), cloud->points.begin());
-
-						//	pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-
-						//	pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
-						//	voxel_grid.setInputCloud(cloud);
-						//	voxel_grid.setLeafSize(100.0f, 100.0f, 100.0f); // 100mm ??
-
-						//	voxel_grid.filter(*filtered_cloud);
-
-						//	//// dump into current_voxels
-						//	//std::vector<VoxelData> voxels;
-						//	//for (const auto& point : filtered_cloud->points) {
-						//	//	VoxelData voxel{
-						//	//		.position = point,
-						//	//		.size = 0.01f
-						//	//	};
-						//	//	voxels.push_back(voxel);
-						//	//}
-
-						//	//// Update the current_voxels
-						//	//// std::lock_guard lock(voxel_access);
-						//	//voxel_results = std::move(voxels);
-
-						//}).detach();
-
-						// if current voxels have a value, read them then set current_voxels to no value again
-						// {
-							// std::lock_guard lock(voxel_access);
-							//if (voxel_results.has_value()) {
-							//	pc::logger->debug(voxel_results->size());
-							//	voxel_results.reset();
-							//}
-						// }
-
-						//// convert result back to position
-						//auto result_count = filtered_cloud->width * filtered_cloud->height;
-						//std::transform(filtered_cloud->points.begin(), filtered_cloud->points.end(),
-						//	thrust::get<0>(begin.get_iterator_tuple()), PointXYZToPosition());
-
-						// -------------
-
-						// end = begin + result_count;
-
-						// now that the pcl position structures are in place in device memory, wrap them 
-						// in a PCL collection & point cloud type so they can be used in PCL algorithms
-						//auto pcl_positions_ptr = thrust::raw_pointer_cast(pcl_positions.data());
-						//auto gpu_cloud = pcl::gpu::Octree::PointCloud(pcl_positions_ptr, pcl_positions.size());
-
-						// build the octree
-						//pcl::gpu::Octree::Ptr octree(new pcl::gpu::Octree);
-						//octree->setCloud(gpu_cloud);
-						//octree->build();
-
-						//// Voxel grid dimensions
-						//int grid_size_x = 10, grid_size_y = 10, grid_size_z = 10;
-						//int total_voxels = grid_size_x * grid_size_y * grid_size_z;
-						//// Min and max values for x, y, and z axes
-						//float min_x = -1000.0f, max_x = 1000.0f;
-						//float min_y = -1000.0f, max_y = 1000.0f;
-						//float min_z = -1000.0f, max_z = 1000.0f;
-						//// voxel size diagonal is needed for octree radius-based search
-						//float voxel_size_x = (max_x - min_x) / grid_size_x;
-						//float voxel_size_y = (max_y - min_y) / grid_size_y;
-						//float voxel_size_z = (max_z - min_z) / grid_size_z;
-						//float voxel_diagonal = std::sqrt(voxel_size_x * voxel_size_x +
-						//	voxel_size_y * voxel_size_y + voxel_size_z * voxel_size_z);
-						//float search_radius = voxel_diagonal * 1.1f;
-
-						// thrust::device_vector<int> voxel_indices(total_voxels);
-						//thrust::host_vector<int> voxel_indices_host(total_voxels);
-						//thrust::sequence(voxel_indices_host.begin(), voxel_indices_host.end());
-						//for (int i = 0; i < voxel_indices_host.size(); i++) {
-						//	auto p = voxel_indices_host[i];
-						//	pc::logger->debug("{}: {}", i, p);
-						//}
-
-						// Create a device vector to hold the voxel grid points
-						// thrust::device_vector<pcl::PointXYZ> voxel_grid(total_voxels);
-						//thrust::host_vector<pcl::PointXYZ> host_grid(total_voxels);
-						// fill the voxel list with evenly distributed positions
-						//thrust::transform(voxel_indices_host.begin(), voxel_indices_host.end(),
-						//	host_grid.begin(), GenerateVoxelGrid());
-						// thrust::copy(voxel_grid.begin(), voxel_grid.end(), host_grid.begin());
-						//for (int i = 0; i < host_grid.size(); i++) {
-						//	auto p = host_grid[i];
-						//	pc::logger->debug("{}: ({}, {}, {})", i, p.x, p.y, p.z);
-						//}
-
-						//// wrap back into PCL type
-						//auto voxel_grid_ptr = thrust::raw_pointer_cast(voxel_grid.data());
-						//pcl::gpu::Octree::Queries voxel_grid_queries(voxel_grid_ptr, total_voxels);
-
-						//// For each point in the voxel grid, check for neighbors up to max
-						//constexpr int neighbor_threshold = 3;
-						//pcl::gpu::NeighborIndices search_results(total_voxels, neighbor_threshold);
-						//octree->radiusSearch(voxel_grid_queries, search_radius, neighbor_threshold, search_results);
-
-						//// and filter matching points with enough neighbors 
-						//thrust::device_vector<int> filtered_voxel_indices(total_voxels);
-
-						//auto end_it = thrust::copy_if(
-						//	thrust::make_counting_iterator(0),
-						//	thrust::make_counting_iterator(total_voxels),
-						//	filtered_voxel_indices.begin(),
-						//	NeighborThresholdFilter{neighbor_threshold, search_results.sizes.ptr()}
-						//);
-						//auto filtered_voxel_count = thrust::distance(filtered_voxel_indices.begin(), end_it);
-						//filtered_voxel_indices.resize(filtered_voxel_count);
-
-						//pc::logger->info("f: {}", filtered_voxel_count);
-
-						//auto indexed_voxels_begin = thrust::make_zip_iterator(
-						//	thrust::make_tuple(voxel_grid.begin(), thrust::make_counting_iterator(0)));
-						//auto indexed_voxels_end = thrust::make_zip_iterator(
-						//	thrust::make_tuple(voxel_grid.end(), thrust::make_counting_iterator(total_voxels)));
-
-						//thrust::transform(indexed_voxels_begin, indexed_voxels_end, begin,
-						//	VoxelToPointcloud(thrust::raw_pointer_cast(filtered_voxel_indices.data()), filtered_voxel_count));
-
-						//end = begin + filtered_voxel_count;
 
 						auto end_time = system_clock::now();
 						auto duration_us = duration_cast<microseconds>(end_time - start_time);
