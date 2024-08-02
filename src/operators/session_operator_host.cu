@@ -121,7 +121,7 @@ namespace pc::operators {
 								thrust::get<0>(begin.get_iterator_tuple()),
 								thrust::get<0>(end.get_iterator_tuple()))
 						});
-						pc::logger->debug("input new frame");
+						// pc::logger->debug("input new frame");
 
 						// TODO move these to draw function in session_operator_host.cc
 
@@ -132,7 +132,7 @@ namespace pc::operators {
 							if (latest_voxels.get() != nullptr) {
 								// TODO this is too slow
 								auto voxel_count = latest_voxels->size();
-								pc::logger->debug("voxel count: {}", voxel_count);
+								// pc::logger->debug("voxel count: {}", voxel_count);
 								for (int i = 0; i < voxel_count; i++) {
 									pcl::PointXYZ p = latest_voxels->points[i];
 									// mm to metres
@@ -146,7 +146,7 @@ namespace pc::operators {
 							if (latest_clusters_ptr.get() != nullptr) {
 								auto& latest_clusters = *latest_clusters_ptr;
 								auto cluster_count = latest_clusters.size();
-								pc::logger->debug("cluster count: {}", cluster_count);
+								// pc::logger->debug("cluster count: {}", cluster_count);
 								for (int i = 0; i < cluster_count; i++) {
 									pc::AABB aabb = latest_clusters[i];
 									auto position = aabb.center() / 1000.0f; // mm to metres
@@ -160,7 +160,7 @@ namespace pc::operators {
 						auto duration_us = duration_cast<microseconds>(end_time - start_time);
 						auto duration_ms = duration_us.count() / 1000.0f;
 
-						pc::logger->debug("pcl main took {:.2f}ms", duration_ms);
+						// pc::logger->debug("pcl main took {:.2f}ms", duration_ms);
 
 					}
 

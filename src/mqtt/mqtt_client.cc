@@ -192,7 +192,8 @@ void MqttClient::send_messages(std::stop_token st) {
 void MqttClient::draw_imgui_window() {
 
   ImGui::Begin("MQTT", nullptr);
-  pc::gui::draw_parameters("mqtt", struct_parameters.at("mqtt"));
+  pc::gui::draw_parameters("mqtt");
+  // pc::gui::draw_parameters("mqtt", struct_parameters.at("mqtt"));
   ImGui::End();
 
   return;

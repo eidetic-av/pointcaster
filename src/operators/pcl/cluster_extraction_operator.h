@@ -21,11 +21,13 @@ struct ClusterExtractionConfiguration {
 	bool draw_voxels = true;
 	bool draw_clusters = true;
 	int voxel_leaf_size = 200; // @minmax(100, 1000)
+	bool publish_voxels = false;
 	int cluster_tolerance = 270; // @minmax(120, 1200)
 	int cluster_voxel_count_min = 10; // @minmax(1, 300)
 	int cluster_voxel_count_max = 100; // @minmax(1, 300)
 	int cluster_size_min = 10; // @minmax(0, 5000)
 	int cluster_size_max = 1000; // @minmax(0, 5000)
+	bool publish_clusters = false;
 };
 
 	class ClusterExtractionPipeline {
@@ -39,7 +41,7 @@ struct ClusterExtractionConfiguration {
 
 		static std::shared_ptr<ClusterExtractionPipeline> instance();
 
-		oneapi::tbb::concurrent_queue<InputFrame> input_queue;
+		oneapi::tbb::concurrent_bounded_queue<InputFrame> input_queue;
 		std::atomic<pcl::PointCloud<pcl::PointXYZ>::Ptr> current_voxels;
 		std::atomic<std::shared_ptr<std::vector<pc::AABB>>> current_clusters;
 
@@ -47,7 +49,7 @@ struct ClusterExtractionConfiguration {
 
 	private:
 		struct IngestTask {
-			oneapi::tbb::concurrent_queue<InputFrame>& input_queue;
+			oneapi::tbb::concurrent_bounded_queue<InputFrame>& input_queue;
 			bool& host_shutdown;
 			InputFrame* operator()(tbb::flow_control& fc) const;
 		};

@@ -537,8 +537,10 @@ bool draw_parameter(std::string_view structure_name,
         using T = std::decay_t<decltype(ref.get())>;
         // bools are drawn as check boxes
         if constexpr (std::is_same_v<T, bool>) {
+
           return pc::gui::bool_param(structure_name, parameter_id, ref.get(),
                                      std::get<bool>(param.default_value));
+
         } else if constexpr (std::is_same_v<T, std::string>) {
           return pc::gui::string_param(
               structure_name, parameter_id, ref.get(),
@@ -626,7 +628,6 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
 
 bool draw_parameters(std::string_view structure_id) {
   // TODO std::string creation every frame
-
   auto id = std::string{structure_id};
   return draw_parameters(structure_id,
                          struct_parameters.at(std::string{structure_id}));

@@ -15,36 +15,28 @@ namespace pc::osc {
 
 OscClient::OscClient(OscClientConfiguration &config)
     : _config(config), _sender_thread([this](auto st) { send_messages(st); }) {
-  // publisher::add(this);
+  publisher::add(this);
   parameters::declare_parameters("oscclient", _config);
 }
 
 OscClient::~OscClient() {
   _sender_thread.request_stop();
   _sender_thread.join();
-  // publisher::remove(this);
+  publisher::remove(this);
 }
 
 void OscClient::send_messages(std::stop_token st) {
   using namespace std::chrono_literals;
 
   static constexpr auto thread_wait_time = 50ms;
+  lo::Address osc_client("localhost", "9000");
 
-  // while (!_virtual_output.is_port_open() && !st.stop_requested()) {
-  //   std::this_thread::sleep_for(thread_wait_time);
-  // }
-
-  // while (!st.stop_requested()) {
-    //   MidiOutMessage message;
-    //   while (_messages_to_publish.wait_dequeue_timed(message,
-    //   thread_wait_time)) {
-    //     auto status_byte =
-    //         static_cast<uint8_t>(libremidi::message_type::CONTROL_CHANGE) +
-    //         (message.channel_num - 1); // convert channel num to zero-indexed
-    //     _virtual_output.send_message(status_byte, message.cc_num,
-    //     message.value);
-    //   }
-    // }
+   while (!st.stop_requested()) {
+	   OscMessage msg;
+	   while (_messages_to_publish.wait_dequeue_timed(msg, thread_wait_time)) {
+		   osc_client.send(msg.address, msg.value);
+	   }
+     }
 }
 
 

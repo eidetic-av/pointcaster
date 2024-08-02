@@ -63,7 +63,6 @@
     "eigen3",
     "fmt",
     "imgui",
-    "liblemon",
     "liblo",
     "libremidi",
     "liblemon",

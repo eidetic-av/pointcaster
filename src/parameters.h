@@ -212,10 +212,10 @@ void declare_parameters(std::string_view parameter_id, T &basic_value,
   // bools and strings
   else if constexpr (std::is_same_v<T, bool> ||
                      std::is_same_v<T, std::string>) {
-    //Parameter p(basic_value);
-    //p.parent_struct_name = parent_struct_name;
-    //p.default_value = default_value;
-    //declare_parameter(parameter_id, std::move(p));
+    Parameter p(basic_value);
+    p.parent_struct_name = parent_struct_name;
+    p.default_value = default_value;
+    declare_parameter(parameter_id, std::move(p));
   }
   // ignore enums for now
   else if constexpr (std::is_enum_v<T>)

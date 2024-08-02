@@ -4,6 +4,10 @@
 #include "../midi/midi_device.h"
 #include "../mqtt/mqtt_client.h"
 
+#ifdef WITH_OSC
+#include "../osc/osc_client.h"
+#endif
+
 #include "publishable_traits.h"
 #include <initializer_list>
 #include <type_traits>
@@ -12,8 +16,18 @@
 namespace pc::publisher {
 
 // A variant that holds all of our publisher types
-using Publisher = std::variant<mqtt::MqttClient *, midi::MidiDevice *,
-			       client_sync::SyncServer *>;
+using Publisher = std::variant<
+		client_sync::SyncServer*
+#ifdef WITH_MQTT
+		, mqtt::MqttClient*
+#endif
+#ifdef WITH_MIDI
+		, midi::MidiDevice*
+#endif
+#ifdef WITH_OSC
+		, osc::OscClient*
+#endif
+>;
 
 // The list of all publishers in the application
 extern std::vector<Publisher> _instances;

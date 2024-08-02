@@ -1,6 +1,7 @@
 {
   "name": "mdns-cpp",
   "version": "0.0.1",
+  "port-version": 1,
   "description": "Simple mDNS service with C++ interface",
   "homepage": "https://github.com/gocarlos/mdns_cpp",
   "license": "MIT",

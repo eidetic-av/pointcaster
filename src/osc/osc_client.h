@@ -17,81 +17,80 @@
 #include <string_view>
 #include <thread>
 #include <type_traits>
-#include <lo/lo.h>
 #include <lo/lo_cpp.h>
 
 namespace pc::osc {
 
-class OscClient {
-public:
-  OscClient(OscClientConfiguration &config);
-  ~OscClient();
+	class OscClient {
+	public:
+		OscClient(OscClientConfiguration& config);
+		~OscClient();
 
-  OscClient(const OscClient &) = delete;
-  OscClient &operator=(const OscClient &) = delete;
-  OscClient(OscClient &&) = delete;
-  OscClient &operator=(OscClient &&) = delete;
+		OscClient(const OscClient&) = delete;
+		OscClient& operator=(const OscClient&) = delete;
+		OscClient(OscClient&&) = delete;
+		OscClient& operator=(OscClient&&) = delete;
 
-  template <typename T>
-  std::enable_if_t<is_publishable_container_v<T>, void>
-  publish(const std::string_view topic, const T &data,
-          std::initializer_list<std::string_view> topic_nodes = {}) {
+		template <typename T>
+		void publish(const std::string_view topic, const T& data,
+			std::initializer_list<std::string_view> topic_nodes = {}) {
 
-    std::size_t i = 0;
-    for (auto &element : data) {
-      auto element_topic = pc::strings::concat(topic, fmt::format("/{}", i++));
-      if constexpr (is_publishable_container<typename T::value_type>()) {
-	publish(element_topic, element, topic_nodes);
-      } else {
+			if (!_config.enable) return;
 
-	// TODO Taken from MIDI
+			// if we're trying to publish a container
+			if constexpr (is_publishable_container_v<T>) {
+				// if the container contains scalar types
+				if constexpr (pc::types::ScalarType<typename T::value_type>)
+				{
+					// add all elements to the message
+					lo::Message msg;
+					for (auto& element : data) {
+						msg.add(element);
+					}
+					_messages_to_publish.enqueue({
+						.address = publisher::construct_topic_string(topic, topic_nodes),
+						.value = msg
+					});
+				}
+				// if the container contains other containers, recurse into this function
+				else if constexpr (is_publishable_container<typename T::value_type>()) {
+					std::size_t i = 0;
+					for (auto& element : data) {
+						auto element_topic = pc::strings::concat(topic, fmt::format("/{}", i++));
+						publish(element_topic, element, topic_nodes);
+					}
+				}
+			}
+			// if we're trying to publish a simple scalar type
+			else if constexpr (pc::types::ScalarType<T>) {
+				lo::Message msg;
+				msg.add(data);
+				_messages_to_publish.enqueue({
+					.address = publisher::construct_topic_string(topic, topic_nodes),
+					.value = msg
+				});
+			}
+			else {
+				pc::logger->error(
+					"Attempting to publish an unimplemented type through OSC ({})", typeid(T).name());
+			}
+		}
 
-	// auto flattened_topic =
-	//     publisher::construct_topic_string(element_topic, topic_nodes);
+		void draw_imgui_window();
 
-	// auto [route_itr, created_new_route] =
-	//     _config.output_routes.try_emplace(flattened_topic);
+	private:
+		OscClientConfiguration& _config;
 
-        // auto &route = route_itr->second;
+		struct OscMessage {
+			std::string address;
+			lo::Message value;
+		};
 
-        // if (created_new_route) {
-        //   // New route created for this topic, set it to use last_output_route
-        //   // and increment that
-        //   route = last_output_route;
-        //   if (last_output_route.cc == 129) {
-        //     last_output_route.cc = 1;
-        //     if (++last_output_route.channel == 17)
-        //       last_output_route.channel = 1;
-        //   } else {
-        //     last_output_route.cc++;
-        //   }
-        // }
-	// route.last_value = element;
+		std::jthread _sender_thread;
+		moodycamel::BlockingConcurrentQueue<OscMessage> _messages_to_publish;
 
-	// publish(flattened_topic, route.channel, route.cc, route.last_value);
-      }
-    }
-  }
+		void send_messages(std::stop_token st);
 
-  void draw_imgui_window();
-
-private:
-  OscClientConfiguration &_config;
-
-
-  template <typename T>
-  struct OscMessage {
-    std::string address;
-    T value;
-  };
-
-  using OscOutMessage = std::variant<OscMessage<float>, OscMessage<int>>;
-
-  std::jthread _sender_thread;
-  moodycamel::BlockingConcurrentQueue<OscOutMessage> _messages_to_publish;
-
-  void send_messages(std::stop_token st);
-  
-};
+	};
 
 } // namespace pc::midi

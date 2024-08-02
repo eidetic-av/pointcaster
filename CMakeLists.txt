@@ -20,7 +20,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 option(WITH_K4A "Enable Azure Kinect support" ON)
 option(WITH_MQTT "Enable MQTT client support" ON)
 option(WITH_MIDI "Enable MIDI support" ON)
-option(WITH_OSC "Enable OSC client/server support" $<OR:$<BOOL:${LINUX}>,0>)
+option(WITH_OSC "Enable OSC client/server support" ON)
 option(WITH_THREAD_SANITIZER "Enable thread sanitizer on Debug configuration builds" OFF)
 option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration builds" OFF)
 option(WITH_MARCH_NATIVE "Enable -march=native builds" ON)
@@ -54,6 +54,11 @@ if(LINUX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive -Wfatal-errors")
 elseif(WIN32)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
+endif()
+
+if (WIN32)
+    # stop win socket conflicts with includes from networking libraries
+    add_compile_definitions(WIN32_LEAN_AND_MEAN)
 endif()
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION $<$<CONFIG:Release>:TRUE>)
@@ -153,6 +158,7 @@ if (WITH_POINTCASTER)
     find_package(libremidi CONFIG REQUIRED)
     list(APPEND LINK_LIBS libremidi)
     list(APPEND POINTCASTER_SRC src/midi/midi_device.cc)
+    add_compile_definitions(WITH_MIDI)
 
   # look for installed Tobias Erichsen's libRtpMidiSDK
   find_library(RTPMIDI_LIB
@@ -192,6 +198,7 @@ if (WITH_POINTCASTER)
     list(APPEND LINK_LIBS liblo::liblo_static)
     list(APPEND POINTCASTER_SRC 
       src/osc/osc_client.cc src/osc/osc_server.cc)
+    add_compile_definitions(WITH_OSC)
   endif()
 
   # ----- Dear ImGui lib -----
@@ -304,9 +311,6 @@ if (WITH_POINTCASTER)
 
   find_package(unofficial-concurrentqueue CONFIG REQUIRED)
   list(APPEND LINK_LIBS unofficial::concurrentqueue::concurrentqueue)
-
-  find_package(LEMON CONFIG REQUIRED)
-  list(APPEND LINK_LIBS unofficial::lemon::lemon)
 
   # ----- Profiling -----
 
