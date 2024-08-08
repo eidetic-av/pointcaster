@@ -378,13 +378,18 @@ RtpMidiDevice::~RtpMidiDevice() {
   _data_recv_thread.join();
 
 #ifdef WIN32
+  bool do_cleanup = false;
   if (_ctrl_socket != INVALID_SOCKET) {
 	  closesocket(_ctrl_socket);
+      do_cleanup = true;
   }
   if (_data_socket != INVALID_SOCKET) {
 	  closesocket(_data_socket);
+      do_cleanup = true;
   }
-  WSACleanup();
+  if (do_cleanup) {
+    WSACleanup();
+  }
 #else
   if (_ctrl_socket >= 0) {
 	  close(_ctrl_socket);
