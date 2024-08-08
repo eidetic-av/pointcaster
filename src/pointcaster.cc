@@ -36,9 +36,11 @@
 #include <Magnum/SceneGraph/Scene.h>
 #include <imgui.h>
 #include <imgui_internal.h>
+
 #include <serdepp/adaptor/toml11.hpp>
 #include <serdepp/serde.hpp>
 #include <toml.hpp>
+
 #include <tracy/Tracy.hpp>
 #include <zpp_bits.h>
 #include <zmq.hpp>
@@ -86,6 +88,7 @@
 #include "tween/tween_manager.h"
 #include "uuid.h"
 #include "wireframe_objects.h"
+#include "type_utils.h"
 
 // Temporary headers to be removed
 #include <k4a/k4a.h>
@@ -260,7 +263,6 @@ PointCaster::PointCaster(const Arguments &args)
   }
 
   // Set up the window
-
   Sdl2Application::Configuration conf;
   conf.setTitle("pointcaster");
 
@@ -552,8 +554,10 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   std::ofstream layout_file(layout_file_path, std::ios::binary);
   layout_file.write(layout_data.data(), layout_data.size());
 
+  // create output copy
   auto output_session = _session;
 
+  // parse devices
   output_session.devices.clear();
   for (auto &k4a_device : Device::attached_devices) {
     output_session.devices.emplace(k4a_device->id(), k4a_device->config());
@@ -563,44 +567,7 @@ void PointCaster::save_session(std::filesystem::path file_path) {
     output_session.devices.emplace(ob_device.config().id, ob_device.config());
   }
 
-  const auto uninitialized_or_default = [](auto &optional_obj) {
-    if (!optional_obj.has_value()) {
-      return true;
-    }
-    using T = typename std::decay<decltype(optional_obj.value())>::type;
-    const auto type_info = serde::type_info<T>;
-    const auto index_sequence = std::make_index_sequence<T::MemberCount>{};
-
-    const auto is_default_member = [&](auto index) {
-      auto &member_ref = type_info.template member<decltype(index)::value>(
-          optional_obj.value());
-      return member_ref == std::get<index>(T::Defaults);
-    };
-
-    return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-      return (... &&
-              is_default_member(std::integral_constant<std::size_t, Is>{}));
-    }(index_sequence);
-  };
-
-  // remove the value from any optional configuration structures that are
-  // uninitialised or default. to not store unneeded values in our save file
-
-  if (uninitialized_or_default(output_session.radio)) {
-    output_session.radio.reset();
-  }
-  if (uninitialized_or_default(output_session.usb)) {
-    output_session.usb.reset();
-  }
-  if (uninitialized_or_default(output_session.mqtt)) {
-    output_session.mqtt.reset();
-  }
-
-  // TODO: this is breaking Release builds
-  // if (uninitialized_or_default(output_session.midi)) {
-  //   output_session.midi.reset();
-  // }
-
+  // parse cameras
   output_session.cameras.clear();
   for (auto &camera : _camera_controllers) {
     auto config = camera->config();
@@ -612,9 +579,62 @@ void PointCaster::save_session(std::filesystem::path file_path) {
     }
   }
 
+  // parse optional config members
+
+  const auto session_type_info = serde::type_info<PointCasterSession>;
+  const auto session_member_sequence = std::make_index_sequence<PointCasterSession::MemberCount>{};
+
+  const auto process_optional_member = [&](auto index) {
+      auto session_member = session_type_info.member_info<index>(_session);
+      auto& session_member_ref = session_member.value();
+	  using SessionMemberT = std::decay_t<decltype(session_member_ref)>;
+	  if constexpr (pc::types::is_optional_v<SessionMemberT>) {
+          using MemberValueT = std::decay_t<decltype(session_member_ref.value())>;
+
+          // TODO
+
+          // if it does have a value, and its a custom serializable struct, don't save it if its empty / default
+
+     //     if constexpr (pc::reflect::IsSerializable<MemberValueT>) {
+			  //auto output_member = session_type_info.member_info<index>(output_session);
+			  //auto& output_member_ref = output_member.value();
+     //         if (session_member_ref == std::nullopt || session_member_ref->empty()) {
+     //             output_member_ref = std::nullopt;
+     //         }
+     //     }
+	  }
+  };
+
+  [&] <std::size_t... Is>(std::index_sequence<Is...>) {
+	  (..., process_optional_member(std::integral_constant<std::size_t, Is>{}));
+  }(session_member_sequence);
+
+  // parse parameter topic lists
+
   output_session.published_params = published_parameter_topics();
 
+  // remove session operators from the top-level serialization process
+  output_session.session_operator_host.operators.clear();
+
+  // top-level serialization
   auto session_toml = serde::serialize<serde::toml_v>(output_session);
+
+  // more manual serialization for storing session operator configuration variants
+  if (_session_operator_host != nullptr) {
+      toml::table operator_list;
+      int operator_index = 0;
+      for (auto& session_operator_variant : _session_operator_host->_config.operators) {
+		  std::visit([&](auto&& session_operator) {
+			  using T = std::decay_t<decltype(session_operator)>;
+			  operator_list[std::to_string(operator_index++)] = toml::table{
+					  { "variant", T::Name },
+					  { "config", serde::serialize<serde::toml_v>(session_operator) }
+			  };
+			  }, session_operator_variant);
+      }
+      session_toml["session_operators"] = operator_list;
+  }
+
   std::ofstream(file_path, std::ios::binary) << toml::format(session_toml);
 }
 
@@ -629,8 +649,34 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   }
 
   try {
-    toml::value file_toml = toml::parse(file);
+    auto file_toml = toml::parse(file);
+
+    // check for any session operators (they need to be deserialized more manually)
+    std::vector<OperatorConfigurationVariant> session_operators;
+
+    if (file_toml.contains("session_operators")) {
+        toml::table operator_list = file_toml.at("session_operators").as_table();
+        for (int i = 0; i < operator_list.size(); i++) {
+            auto operator_entry = operator_list.at(std::to_string(i));
+            auto operator_variant_name = operator_entry.at("variant").as_string().str;
+            OperatorConfigurationVariant operator_variant;
+            apply_to_all_operators([&](auto&& operator_type) {
+                using T = std::decay_t<decltype(operator_type)>;
+                if (operator_variant_name == T::Name) {
+                    operator_variant = T{ serde::deserialize<T>(operator_entry.at("config")) };
+                }
+            });
+            session_operators.push_back(std::move(operator_variant));
+        }
+        file_toml.at("session_operators") = toml::value({});
+    }
+
+    // handle automatic serialization
     _session = serde::deserialize<PointCasterSession>(file_toml);
+
+    // and add any session operators we found
+    _session.session_operator_host.operators = std::move(session_operators);
+
   } catch (const toml::syntax_error &e) {
     pc::logger->warn("Failed to parse config file toml");
     pc::logger->warn(e.what());
@@ -1398,13 +1444,18 @@ void PointCaster::draw_devices_window() {
 
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
 
-  std::optional<std::reference_wrapper<OrbbecDevice>> device_to_disconnect;
+  std::optional<std::reference_wrapper<OrbbecDevice>> device_to_detach;
+
+  // TODO 
+  // why are there two lists of these refs??
+  // the cameras should really only exist and be accessed in one place
 
   for (auto &device_ref : OrbbecDevice::attached_devices) {
     auto &device = device_ref.get();
+    const auto device_hash = std::hash<OrbbecDevice*>{}(&device);
     auto &config = device.config();
     ImGui::SetNextItemOpen(config.unfolded);
-    if (ImGui::CollapsingHeader(config.id.c_str())) {
+    if (ImGui::CollapsingHeader(fmt::format("{}##", config.id, device_hash).c_str())) {
       config.unfolded = true;
       ImGui::Dummy({0, 8});
       ImGui::Dummy({8, 0});
@@ -1547,8 +1598,10 @@ void PointCaster::drawEvent() {
       _radio->draw_imgui_window();
     if (_session.layout.show_snapshots_window)
       _snapshots_context->draw_imgui_window();
-    if (_session.layout.show_global_transform_window)
-      _session_operator_host->draw_imgui_window();
+    if (_session.layout.show_global_transform_window) {
+        _session_operator_host->draw_imgui_window();
+    }
+    _session_operator_host->draw_gizmos();
     if (_session.layout.show_session_operator_graph_window)
         _session_operator_graph->draw();
 
@@ -1692,12 +1745,12 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   case KeyEvent::Key::G: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
       //_session.layout.hide_ui = !_session.layout.hide_ui;
-		_session.layout.show_global_transform_window =
-		    !_session.layout.show_global_transform_window;
-	}
-	else {
 		_session.layout.show_session_operator_graph_window =
 			!_session.layout.show_session_operator_graph_window;
+	}
+	else {
+		_session.layout.show_global_transform_window =
+		    !_session.layout.show_global_transform_window;
     }
     break;
   }
@@ -1821,6 +1874,7 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
     return;
   }
 
+  if (!_interacting_camera_controller) return;
   auto& camera_controller = _interacting_camera_controller->get();
 
   const Magnum::Float delta = event.offset().y();
