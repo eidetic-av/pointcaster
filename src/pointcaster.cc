@@ -704,13 +704,6 @@ void PointCaster::render_cameras() {
 
   PointCloud points;
 
-  // TODO
-  for (auto& [idx, box] : pc::operators::operator_bounding_boxes) {
-	  box->set_visible(false);
-  }
-  // pc::operators::operator_bounding_boxes.clear();
-  // draw bounding boxes here not inside cuda kernels
-
   auto skeletons = devices::scene_skeletons();
 
   for (auto &camera_controller : _camera_controllers) {
