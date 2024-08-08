@@ -185,7 +185,7 @@ void OrbbecDevice::init_device_memory(std::size_t incoming_point_count) {
 }
 void OrbbecDevice::free_device_memory() {
   _device_memory_ready = false;
-  delete _device_memory;
+  if (_device_memory != nullptr) delete _device_memory;
   pc::logger->debug("OrbbecDevice GPU memory freed ({})", _ip);
 }
 

@@ -825,8 +825,7 @@ void PointCaster::open_orbbec_sensor(std::string_view ip) {
 		  auto [config_it, _] = _session.devices.try_emplace(id, false, id);
 		  DeviceConfiguration& device_config = config_it->second;
           device_config.id = id;
-		  _orbbec_cameras.push_back(std::make_unique<OrbbecDevice>(device_config));
-          _orbbec_cameras.back()->start_pipeline();
+		  _orbbec_cameras.emplace_back(std::make_unique<OrbbecDevice>(device_config));
 		  _session_operator_graph->add_input_node(device_config);
 	  }
 	  catch (ob::Error& e) {
@@ -1422,8 +1421,8 @@ void PointCaster::draw_devices_window() {
       device.draw_imgui_controls();
       ImGui::Dummy({ 0, 8 });
       ImGui::Dummy({ 10, 0 }); ImGui::SameLine();
-	  if (ImGui::Button("Disconnect")) {
-          device_to_disconnect = device_ref;
+	  if (ImGui::Button("Detach device")) {
+          device_to_detach = device_ref;
 	  };
     } else {
       config.unfolded = false;
@@ -1431,8 +1430,12 @@ void PointCaster::draw_devices_window() {
   }
   ImGui::PopItemWidth();
 
-  if (device_to_disconnect) {
-	  // Find the device to disconnect and erase it from the vector
+  if (device_to_detach.has_value()) {
+	  // Find the device to detach and erase it from the vector
+      auto* device_ptr = &(device_to_detach.value().get());
+      std::erase_if(_orbbec_cameras, [device_ptr](auto& device_instance) {
+          return device_instance.get() == device_ptr;
+      });
   }
 
   if (loading_device) {

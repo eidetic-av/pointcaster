@@ -40,8 +40,10 @@ public:
 
   pc::types::PointCloud point_cloud(pc::operators::OperatorList operators = {});
 
-  void start_pipeline();
-  void stop_pipeline();
+  void start();
+  void stop();
+  void restart();
+
   void draw_imgui_controls();
 
   DeviceConfiguration &config() { return _config; }
@@ -59,6 +61,8 @@ private:
   std::shared_ptr<ob::Pipeline> _ob_pipeline;
   std::unique_ptr<ob::PointCloudFilter> _ob_point_cloud;
 
+  std::jthread _initialisation_thread;
+
   bool _running_pipeline = false;
   bool _initialised_point_cloud_scale = false;
 
@@ -70,6 +74,9 @@ private:
 
   OrbbecImplDeviceMemory *_device_memory;
   std::atomic_bool _device_memory_ready{false};
+
+  void start_pipeline();
+  void stop_pipeline();
 
   void init_device_memory(std::size_t incoming_point_count);
   void free_device_memory();

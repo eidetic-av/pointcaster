@@ -2,6 +2,7 @@
 #include "../../logger.h"
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/hpp/Utils.hpp>
+#include <thread>
 
 namespace pc::devices {
 
@@ -38,17 +39,44 @@ OrbbecDevice::OrbbecDevice(DeviceConfiguration &config)
   std::replace(_ip.begin(), _ip.end(), '_', '.');
 
   OrbbecDevice::attached_devices.push_back(std::ref(*this));
+  start();
 }
 
 OrbbecDevice::~OrbbecDevice() {
 	stop_pipeline();
-	// remove from attached devices
-	auto it = std::remove_if(attached_devices.begin(), attached_devices.end(),
-		[this](std::reference_wrapper<OrbbecDevice> wrapper) { return &wrapper.get() == this; });
-	if (it != attached_devices.end()) {
-		attached_devices.erase(it, attached_devices.end());
-	}
+
+	parameters::unbind_parameters(_config.id);
+
+	// remove this instance from attached devices
+	std::erase_if(attached_devices, [this](auto& device) {
+		return &(device.get()) == this;
+	});
 	pc::logger->debug("Destroyed OrbbecDevice");
+}
+
+void OrbbecDevice::start() {
+	_initialisation_thread = std::jthread([this](std::stop_token stop_token) {
+		// TODO stop_token is currently unused,
+		// should pass it in and check at different initialisation thread steps
+		start_pipeline();
+	});
+}
+
+void OrbbecDevice::stop() {
+	_initialisation_thread = std::jthread([this](std::stop_token stop_token) {
+		// TODO stop_token is currently unused,
+		// should pass it in and check at different initialisation thread steps
+		stop_pipeline();
+	});
+}
+
+void OrbbecDevice::restart() {
+	_initialisation_thread = std::jthread([this](std::stop_token stop_token) {
+		// TODO stop_token is currently unused,
+		// should pass it in and check at different initialisation thread steps
+		stop_pipeline();
+		start_pipeline();
+	});
 }
 
 void OrbbecDevice::start_pipeline() {
@@ -152,15 +180,20 @@ void OrbbecDevice::draw_imgui_controls() {
 	auto running = _running_pipeline;
 	ImGui::Dummy({ 10, 0 }); ImGui::SameLine();
 	if (running) ImGui::BeginDisabled();
-	if (ImGui::Button("Start")) start_pipeline();
+	if (ImGui::Button("Start")) start();
 	if (running) ImGui::EndDisabled();
 	if (!running) ImGui::BeginDisabled();
 	ImGui::SameLine();
 	ImGui::Dummy({ 10, 10 });
 	ImGui::SameLine();
-	if (ImGui::Button("Stop")) stop_pipeline();
+	if (ImGui::Button("Stop")) stop();
 	if (!running) ImGui::EndDisabled();
-	pc::gui::draw_parameters(_config.id);
+	DeviceConfiguration last_config = _config;
+	if (pc::gui::draw_parameters(_config.id)) {
+		if (_config.depth_mode != last_config.depth_mode) {
+			restart();
+		}
+	};
 }
 
 } // namespace pc::devices
