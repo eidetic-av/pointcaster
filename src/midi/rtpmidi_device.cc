@@ -229,7 +229,7 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
   }
 
   try {
-  _data_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	  _data_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   }
   catch (std::exception& e){
 	  pc::logger->error("Failed to create RtpMidi control socket on port {}. Is another service running on this port?",
@@ -270,31 +270,41 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
   // Setup received UDP message handling
 
   _ctrl_recv_thread = std::jthread([this](auto st) {
-    constexpr auto udp_recv_buffer_size = 9000;
-    unsigned char recv_buffer[udp_recv_buffer_size + 1];
-    sockaddr_in source_address;
-    socklen_t source_address_size;
+	  constexpr auto udp_recv_buffer_size = 9000;
+	  unsigned char recv_buffer[udp_recv_buffer_size + 1];
+	  sockaddr_in source_address;
+	  socklen_t source_address_size;
 
-    while (!st.stop_requested()) {
+	  while (!st.stop_requested()) {
+		  // wait for data with a timeout
+		  fd_set read_fds;
+		  FD_ZERO(&read_fds);
+		  FD_SET(_ctrl_socket, &read_fds);
+		  const struct timeval timeout {
+			 .tv_sec = 0,
+			 .tv_usec = 50000 // 50ms
+          };
 
-      source_address_size = sizeof(source_address);
+          int result = select(0, &read_fds, nullptr, nullptr, &timeout);
+		  if (result > 0) {
+			  source_address_size = sizeof(source_address);
+			  ssize_t recv_size = recvfrom(
+				  _ctrl_socket, (char*)recv_buffer, sizeof(recv_buffer), 0,
+				  reinterpret_cast<sockaddr*>(&source_address), &source_address_size);
+			  if (recv_size > 0) {
 
-      ssize_t recv_size = recvfrom(
-          _ctrl_socket, (char *)recv_buffer, sizeof(recv_buffer), 0,
-          reinterpret_cast<sockaddr *>(&source_address), &source_address_size);
+				  rtpMidiSessionReceivedUdpPacket(
+					  _rtp_midi_session, &source_address.sin_addr, sizeof(struct in_addr),
+					  ntohs(source_address.sin_port),
+					  RTP_MIDI_ADDRESS_FLAG_CTRL | RTP_MIDI_ADDRESS_FLAG_IPV4,
+					  recv_buffer, recv_size);
 
-      if (recv_size > 0) {
-
-	rtpMidiSessionReceivedUdpPacket(
-	    _rtp_midi_session, &source_address.sin_addr, sizeof(struct in_addr),
-	    ntohs(source_address.sin_port),
-	    RTP_MIDI_ADDRESS_FLAG_CTRL | RTP_MIDI_ADDRESS_FLAG_IPV4,
-	    recv_buffer, recv_size);
-
-      } else if (errno != EAGAIN && errno != EWOULDBLOCK) {
-        pc::logger->warn("Unhandled UDP recv error");
-      }
-    }
+			  }
+			  else if (errno != EAGAIN && errno != EWOULDBLOCK) {
+				  pc::logger->warn("Unhandled UDP recv error");
+			  }
+		  }
+	  }
   });
 
   _data_recv_thread = std::jthread([this](auto st) {
@@ -305,23 +315,34 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
 
     while (!st.stop_requested()) {
 
-      source_address_size = sizeof(source_address);
+		// wait for data with a timeout
+		fd_set read_fds;
+		FD_ZERO(&read_fds);
+		FD_SET(_ctrl_socket, &read_fds);
+		const struct timeval timeout {
+			.tv_sec = 0,
+				.tv_usec = 50000 // 50ms
+		};
 
-      ssize_t recv_size = recvfrom(
-          _data_socket, (char *)recv_buffer, sizeof(recv_buffer), 0,
-          reinterpret_cast<sockaddr *>(&source_address), &source_address_size);
+		int result = select(0, &read_fds, nullptr, nullptr, &timeout);
+		if (result > 0) {
+			source_address_size = sizeof(source_address);
+			ssize_t recv_size = recvfrom(
+				_data_socket, (char*)recv_buffer, sizeof(recv_buffer), 0,
+				reinterpret_cast<sockaddr*>(&source_address), &source_address_size);
+			if (recv_size > 0) {
 
-      if (recv_size > 0) {
+				rtpMidiSessionReceivedUdpPacket(
+					_rtp_midi_session, &source_address.sin_addr, sizeof(struct in_addr),
+					ntohs(source_address.sin_port),
+					RTP_MIDI_ADDRESS_FLAG_DATA | RTP_MIDI_ADDRESS_FLAG_IPV4,
+					recv_buffer, recv_size);
 
-        rtpMidiSessionReceivedUdpPacket(
-            _rtp_midi_session, &source_address.sin_addr, sizeof(struct in_addr),
-            ntohs(source_address.sin_port),
-            RTP_MIDI_ADDRESS_FLAG_DATA | RTP_MIDI_ADDRESS_FLAG_IPV4,
-            recv_buffer, recv_size);
-
-      } else if (errno != EAGAIN && errno != EWOULDBLOCK) {
-        pc::logger->warn("Unhandled UDP recv error");
-      }
+			}
+			else if (errno != EAGAIN && errno != EWOULDBLOCK) {
+				pc::logger->warn("Unhandled UDP recv error");
+			}
+		}
     }
   });
 
@@ -347,18 +368,31 @@ RtpMidiDevice::~RtpMidiDevice() {
   }
   _rtp_clock_thread.request_stop();
   _rtp_clock_thread.join();
+
   rtpMidiSessionFree(_rtp_midi_session);
   rtpMidiFinalize();
+
   _ctrl_recv_thread.request_stop();
   _ctrl_recv_thread.join();
   _data_recv_thread.request_stop();
   _data_recv_thread.join();
+
+#ifdef WIN32
+  if (_ctrl_socket != INVALID_SOCKET) {
+	  closesocket(_ctrl_socket);
+  }
+  if (_data_socket != INVALID_SOCKET) {
+	  closesocket(_data_socket);
+  }
+  WSACleanup();
+#else
   if (_ctrl_socket >= 0) {
-    close(_ctrl_socket);
+	  close(_ctrl_socket);
   }
   if (_data_socket >= 0) {
-    close(_data_socket);
+	  close(_data_socket);
   }
+#endif
 };
 
 RtpPeer *RtpMidiDevice::get_or_create_peer(std::string_view name,
