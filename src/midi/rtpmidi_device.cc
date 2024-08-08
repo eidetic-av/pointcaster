@@ -194,7 +194,7 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
   if (!rtpMidiInitialize(get_current_time, log, RTP_MIDI_LOGGING_LEVEL_INFO,
                          0)) {
     pc::logger->error("Failed to initialise libRtpMidi");
-    throw std::exception();
+    return;
   }
 
   _rtp_midi_session = rtpMidiSessionCreate(
@@ -211,38 +211,46 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
   // UDP Socket setup and bind
   _ctrl_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (_ctrl_socket < 0) {
-    pc::logger->error("Failed to create RtpMidi control socket");
-    throw std::exception();
+	  pc::logger->error("Failed to create RtpMidi control socket on port {}. Is another service running on this port?",
+		  rtp_midi_ctrl_port);
+    return;
   }
   sockaddr_in ctrl_address = {.sin_family = AF_INET,
 			      .sin_port = htons(rtp_midi_ctrl_port)};
   if (inet_pton(AF_INET, _config.ip.data(), &ctrl_address.sin_addr) <= 0) {
     pc::logger->error("Failed to convert network address to binary format");
-    throw new std::exception();
+    return;
   }
   if (bind(_ctrl_socket, reinterpret_cast<sockaddr *>(&ctrl_address),
            sizeof(ctrl_address)) < 0) {
     pc::logger->error("Failed to bind RtpMidi control socket to port {}",
                       rtp_midi_ctrl_port);
-    throw std::exception();
+    return;
   }
 
+  try {
   _data_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  }
+  catch (std::exception& e){
+	  pc::logger->error("Failed to create RtpMidi control socket on port {}. Is another service running on this port?",
+		  rtp_midi_ctrl_port);
+  }
   if (_data_socket < 0) {
     pc::logger->error("Failed to create RtpMidi control socket");
-    throw std::exception();
+    return;
   }
+
   sockaddr_in data_address = {.sin_family = AF_INET,
                               .sin_port = htons(rtp_midi_data_port)};
   if (inet_pton(AF_INET, config.ip.data(), &data_address.sin_addr) <= 0) {
     pc::logger->error("Failed to convert network address to binary format");
-    throw new std::exception();
+    return;
   }
   if (bind(_data_socket, reinterpret_cast<sockaddr *>(&data_address),
            sizeof(data_address)) < 0) {
     pc::logger->error("Failed to bind RtpMidi data socket to port {}",
                       rtp_midi_data_port);
-    throw std::exception();
+    return;
   }
 
   constexpr timeval recv_timeout{.tv_sec = 0, .tv_usec = 200000};
