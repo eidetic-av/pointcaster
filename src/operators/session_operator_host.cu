@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <execution>
 #include <future>
 #include <thread>
 #include <variant>
@@ -112,9 +114,8 @@ namespace pc::operators {
 
 						//std::thread([positions = thrust::host_vector<pc::types::position>(
 
-						auto pipeline = pcl_cpu::ClusterExtractionPipeline::instance();
-
-						pipeline->input_queue.emplace(pcl_cpu::ClusterExtractionPipeline::InputFrame{
+						auto& pipeline = pcl_cpu::ClusterExtractionPipeline::instance();
+						pipeline.input_queue.emplace(pcl_cpu::ClusterExtractionPipeline::InputFrame{
 							.timestamp = 0,
 							.extraction_config = config,
 							.positions = thrust::host_vector<pc::types::position>(
@@ -124,37 +125,6 @@ namespace pc::operators {
 						// pc::logger->debug("input new frame");
 
 						// TODO move these to draw function in session_operator_host.cc
-
-						auto& host = SessionOperatorHost::instance;
-
-						if (config.draw_voxels) {
-							auto latest_voxels = pipeline->current_voxels.load();
-							if (latest_voxels.get() != nullptr) {
-								// TODO this is too slow
-								auto voxel_count = latest_voxels->size();
-								// pc::logger->debug("voxel count: {}", voxel_count);
-								for (int i = 0; i < voxel_count; i++) {
-									pcl::PointXYZ p = latest_voxels->points[i];
-									// mm to metres
-									host->set_voxel(i, { p.x / 1000.0f, p.y / 1000.0f, p.z / 1000.0f });
-								}
-							}
-						}
-
-						if (config.draw_clusters) {
-							auto latest_clusters_ptr = pipeline->current_clusters.load();
-							if (latest_clusters_ptr.get() != nullptr) {
-								auto& latest_clusters = *latest_clusters_ptr;
-								auto cluster_count = latest_clusters.size();
-								// pc::logger->debug("cluster count: {}", cluster_count);
-								for (int i = 0; i < cluster_count; i++) {
-									pc::AABB aabb = latest_clusters[i];
-									auto position = aabb.center() / 1000.0f; // mm to metres
-									auto size = aabb.extents() / 1000.0f;
-									host->set_cluster(i, position, size);
-								}
-							}
-						}
 
 						auto end_time = system_clock::now();
 						auto duration_us = duration_cast<microseconds>(end_time - start_time);

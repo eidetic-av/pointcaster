@@ -38,10 +38,12 @@ public:
 		      Magnum::SceneGraph::DrawableGroup3D &parent_group);
 
   void draw_imgui_window();
+  void draw_gizmos();
 
   OperatorHostConfiguration &_config;
 
-  void set_voxel(uid id, pc::types::Float3 position, pc::types::Float3 size = { 0.05f, 0.05f, 0.05f });
+  void set_voxel(pc::types::Float3 position, pc::types::Float3 size = { 0.05f, 0.05f, 0.05f });
+  void set_voxel(pc::types::uid id, pc::types::Float3 position, pc::types::Float3 size = { 0.05f, 0.05f, 0.05f });
   void set_cluster(uid id, pc::types::Float3 position, pc::types::Float3 size = { 0.05f, 0.05f, 0.05f });
 
 private:
