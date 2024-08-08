@@ -11,11 +11,8 @@
 
 namespace pc::operators::pcl_cpu {
 
-	std::shared_ptr<ClusterExtractionPipeline> ClusterExtractionPipeline::instance() {
-		static std::shared_ptr<ClusterExtractionPipeline> instance;
-		if (!instance) {
-			instance = std::make_shared<ClusterExtractionPipeline>();
-		}
+	ClusterExtractionPipeline& ClusterExtractionPipeline::instance() {
+		static ClusterExtractionPipeline instance;
 		return instance;
 	}
 
@@ -70,6 +67,7 @@ namespace pc::operators::pcl_cpu {
 
 			auto& positions = frame->positions;
 			auto count = positions.size();
+			if (count == 0) return;
 
 			//  convert position type into PCL structures
 			auto pcl_positions = thrust::host_vector<pcl::PointXYZ>(count);

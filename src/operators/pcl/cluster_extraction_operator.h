@@ -18,7 +18,7 @@ using uid = unsigned long;
 struct ClusterExtractionConfiguration {
 	uid id;
 	bool enabled = true;
-	bool draw_voxels = true;
+	bool draw_voxels = false;
 	bool draw_clusters = true;
 	int voxel_leaf_size = 200; // @minmax(100, 1000)
 	bool publish_voxels = false;
@@ -39,13 +39,18 @@ struct ClusterExtractionConfiguration {
 			thrust::host_vector<pc::types::position> positions;
 		};
 
-		static std::shared_ptr<ClusterExtractionPipeline> instance();
+		static ClusterExtractionPipeline& instance();
 
 		oneapi::tbb::concurrent_bounded_queue<InputFrame> input_queue;
 		std::atomic<pcl::PointCloud<pcl::PointXYZ>::Ptr> current_voxels;
 		std::atomic<std::shared_ptr<std::vector<pc::AABB>>> current_clusters;
 
 		ClusterExtractionPipeline();
+
+		ClusterExtractionPipeline(const ClusterExtractionPipeline&) = delete;
+		ClusterExtractionPipeline& operator=(const ClusterExtractionPipeline&) = delete;
+		ClusterExtractionPipeline(ClusterExtractionPipeline&&) = delete;
+		ClusterExtractionPipeline& operator=(ClusterExtractionPipeline&&) = delete;
 
 	private:
 		struct IngestTask {
