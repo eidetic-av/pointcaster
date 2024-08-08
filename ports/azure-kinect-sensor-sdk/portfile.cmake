@@ -40,8 +40,15 @@ vcpkg_cmake_configure(
 
 vcpkg_cmake_install()
 
+# only do debug post-build stuff when we actually build a debug configuration
+if (EXISTS "${CURRENT_PACKAGES_DIR}/debug")
+    set(DEBUG_BUILD TRUE)
+endif()
+
 # Avoid deleting debug/lib/cmake when fixing the first cmake
-file(RENAME "${CURRENT_PACKAGES_DIR}/debug/lib/cmake" "${CURRENT_PACKAGES_DIR}/debug/share")
+if (DEBUG_BUILD)
+    file(RENAME "${CURRENT_PACKAGES_DIR}/debug/lib/cmake" "${CURRENT_PACKAGES_DIR}/debug/share")
+endif()
 file(RENAME "${CURRENT_PACKAGES_DIR}/lib/cmake" "${CURRENT_PACKAGES_DIR}/share")
 
 vcpkg_cmake_config_fixup(PACKAGE_NAME k4a CONFIG_PATH share/k4a)
@@ -49,7 +56,9 @@ vcpkg_cmake_config_fixup(PACKAGE_NAME k4arecord CONFIG_PATH share/k4arecord)
 
 vcpkg_copy_pdbs()
 
-file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+if (DEBUG_BUILD)
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+endif()
 
 if ("tool" IN_LIST FEATURES)
     vcpkg_copy_tools(TOOL_NAMES k4arecorder k4aviewer AzureKinectFirmwareTool AUTO_CLEAN)
@@ -86,9 +95,13 @@ if (VCPKG_TARGET_IS_LINUX)
     file(COPY "${PACKAGE_PATH}/linux/lib/native/${VCPKG_TARGET_ARCHITECTURE}/release/libdepthengine.so.2.0" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/lib")
 else()
     file(COPY "${PACKAGE_PATH}/lib/native/${ARCHITECTURE}/release/depthengine_2_0.dll" DESTINATION "${CURRENT_PACKAGES_DIR}/tools/azure-kinect-sensor-sdk")
-    file(COPY "${PACKAGE_PATH}/lib/native/${ARCHITECTURE}/release/depthengine_2_0.dll" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/tools/azure-kinect-sensor-sdk")
+    if (DEBUG_BUILD)
+        file(COPY "${PACKAGE_PATH}/lib/native/${ARCHITECTURE}/release/depthengine_2_0.dll" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/tools/azure-kinect-sensor-sdk")
+    endif()
     file(COPY "${CMAKE_CURRENT_LIST_DIR}/k4adeploy.ps1" DESTINATION "${CURRENT_PACKAGES_DIR}/tools/azure-kinect-sensor-sdk")
-    file(COPY "${CMAKE_CURRENT_LIST_DIR}/k4adeploy.ps1" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/tools/azure-kinect-sensor-sdk")
+    if (DEBUG_BUILD)
+        file(COPY "${CMAKE_CURRENT_LIST_DIR}/k4adeploy.ps1" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/tools/azure-kinect-sensor-sdk")
+    endif()
 endif()
 
 # Handle copyright
