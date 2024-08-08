@@ -311,6 +311,8 @@ void bind_parameter(std::string_view parameter_id, const Parameter &parameter);
 
 void unbind_parameter(std::string_view parameter_id);
 
+void unbind_parameters(std::string_view parameter_id);
+
 void publish_parameter(std::string_view parameter_id);
 
 void publish();

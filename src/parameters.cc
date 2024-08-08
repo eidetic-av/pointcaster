@@ -3,6 +3,7 @@
 #include "string_utils.h"
 #include "utils/lru_cache.h"
 #include <algorithm>
+#include <functional>
 #include <stack>
 #include <type_traits>
 #include <unordered_map>
@@ -81,6 +82,18 @@ void unbind_parameter(std::string_view parameter_id) {
     }
   }
   parameter_states[parameter_id] = ParameterState::Unbound;
+}
+
+void unbind_parameters(std::string_view parameter_id) {
+    std::erase_if(parameter_bindings.inner_map(), [parameter_id](auto& kvp) {
+        return pc::strings::starts_with(std::get<0>(kvp), parameter_id);
+    });
+    std::erase_if(parameter_states.inner_map(), [parameter_id](auto& kvp) {
+        return pc::strings::starts_with(std::get<0>(kvp), parameter_id);
+    });
+    std::erase_if(struct_parameters, [parameter_id](auto& kvp) {
+        return pc::strings::starts_with(std::get<0>(kvp), parameter_id);
+    });
 }
 
 void publish_parameter(std::string_view parameter_id) {
