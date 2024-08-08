@@ -65,7 +65,6 @@
     "imgui",
     "liblo",
     "libremidi",
-    "liblemon",
     "libusb",
     "mdns-cpp",
     "msgpack",
