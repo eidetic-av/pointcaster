@@ -537,6 +537,8 @@ using PointCloud = bob::types::PointCloud;
 using position = bob::types::position;
 using color = bob::types::color;
 
+using uid = unsigned long;
+
 // struct color {
 //   using vector_type = unsigned char;
 //   vector_type r, g, b, a = 0;

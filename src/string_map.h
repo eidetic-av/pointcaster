@@ -64,6 +64,11 @@ public:
   void erase(const std::string &key) { _inner_map.erase(key); }
   void erase(std::string_view key) { _inner_map.erase(std::string(key)); }
 
+  template<typename... Args>
+  auto erase_if(Args&&... args) {
+	  return std::erase_if(_inner_map, std::forward<Args>(args)...);
+  }
+
   auto find(const std::string &key) { return _inner_map.find(key); };
   auto find(std::string_view key) { return _inner_map.find(std::string(key)); };
 
@@ -131,13 +136,7 @@ public:
     }
   }
 
-  MapType inner_map() {
-    std::unordered_map<std::string, ValueType> result;
-    for (auto &entry : _inner_map) {
-      result.emplace(entry);
-    }
-    return result;
-  }
+  MapType& inner_map() { return _inner_map; }
 };
 
 } // namespace pc

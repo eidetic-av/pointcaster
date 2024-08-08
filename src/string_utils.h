@@ -120,4 +120,9 @@ inline constexpr bool ends_with_any(const std::string_view str, Iter begin,
   return false;
 }
 
+inline constexpr bool starts_with(const std::string_view str, const std::string_view prefix) {
+	return str.size() >= prefix.size() &&
+		str.substr(0, prefix.size()) == prefix;
+}
+
 } // namespace pc::strings
