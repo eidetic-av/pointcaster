@@ -69,7 +69,6 @@
     "mdns-cpp",
     "msgpack",
     "nanoflann",
-    "nativefiledialog",
     "orbbec-sdk",
     "paho-mqttpp3",
     "readerwriterqueue",
