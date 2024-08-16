@@ -1,0 +1,13 @@
+diff --git a/include/serdepp/adaptor/toml11.hpp b/include/serdepp/adaptor/toml11.hpp
+index ace5e19..850694b 100644
+--- a/include/serdepp/adaptor/toml11.hpp
++++ b/include/serdepp/adaptor/toml11.hpp
+@@ -18,7 +18,7 @@ namespace serde {
+         static bool is_float(Format& format) { return format.is_floating(); }
+         static bool is_string(Format& format) { return format.is_string(); }
+         static bool is_bool(Format& format) { return format.is_boolean(); }
+-        static bool is_null(Format& format) { return format.is_uninitialized(); }
++        static bool is_null(Format& format) { return format.is_empty(); }
+         static bool is_struct(Format& format) { return format.is_table(); }
+     };
+ 
