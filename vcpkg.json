@@ -4,7 +4,7 @@
   "dependencies": [
     {
       "name": "imgui",
-      "features": ["docking-experimental"]
+      "features": [ "docking-experimental" ]
     },
     {
       "name": "magnum",
@@ -28,28 +28,28 @@
     },
     {
       "name": "magnum-integration",
-      "features": ["imgui", "eigen"]
+      "features": [ "imgui", "eigen" ]
     },
     {
       "name": "opencv4",
       "default-features": false,
-      "features": ["contrib", "cuda"]
+      "features": [ "contrib", "cuda" ]
     },
     {
       "name": "pcl",
       "default-features": false,
-      "features":  ["cuda"]
+      "features": [ "cuda" ]
     },
     {
       "name": "sdl2",
       "default-features": false,
-      "features": ["x11"],
+      "features": [ "x11" ],
       "platform": "linux"
     },
     {
       "name": "zeromq",
       "default-features": false,
-      "features": ["draft"]
+      "features": [ "draft" ]
     },
     "azure-kinect-sensor-sdk",
     "bob-pointclouds",
