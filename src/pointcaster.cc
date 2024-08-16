@@ -658,7 +658,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
         toml::table operator_list = file_toml.at("session_operators").as_table();
         for (int i = 0; i < operator_list.size(); i++) {
             auto operator_entry = operator_list.at(std::to_string(i));
-            auto operator_variant_name = operator_entry.at("variant").as_string().str;
+            auto operator_variant_name = operator_entry.at("variant").as_string();
             OperatorConfigurationVariant operator_variant;
             apply_to_all_operators([&](auto&& operator_type) {
                 using T = std::decay_t<decltype(operator_type)>;
@@ -668,7 +668,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
             });
             session_operators.push_back(std::move(operator_variant));
         }
-        file_toml.at("session_operators") = toml::value({});
+        file_toml.at("session_operators") = toml::value();
     }
 
     // handle automatic serialization
@@ -1094,10 +1094,10 @@ void PointCaster::draw_main_viewport() {
   ImGuiWindowClass docking_viewport_class = {};
 
   ImGuiID id =
-      ImGui::DockSpaceOverViewport(nullptr,
-                                   ImGuiDockNodeFlags_NoDockingInCentralNode |
-                                       ImGuiDockNodeFlags_PassthruCentralNode,
-                                   nullptr);
+	  ImGui::DockSpaceOverViewport(0, nullptr,
+		  ImGuiDockNodeFlags_NoDockingInCentralNode |
+		  ImGuiDockNodeFlags_PassthruCentralNode,
+		  nullptr);
   ImGuiDockNode *node = ImGui::DockBuilderGetCentralNode(id);
 
   ImGuiWindowClass central_always = {};
