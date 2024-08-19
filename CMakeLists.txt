@@ -373,12 +373,12 @@ if (WITH_POINTCASTER)
     UNITY_BUILD OFF
     UNITY_BUILD_MODE BATCH
     CUDA_SEPARABLE_COMPILATION ON
-    CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    CUDA_RESOLVE_DEVICE_SYMBOLS ON)
     CUDA_RUNTIME_LIBRARY Shared)
 
  if (WIN32)
- set_target_properties(pointcaster PROPERTIES
-    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+	 set_target_properties(pointcaster PROPERTIES
+	 	MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
  endif()
 
   if (POINTCASTER_DEPENDENCIES)

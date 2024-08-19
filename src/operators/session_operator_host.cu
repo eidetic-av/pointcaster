@@ -11,7 +11,6 @@
 #include <thrust/host_vector.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
-#include <tracy/Tracy.hpp>
 #include "../logger.h"
 #include "../math.h"
 #include "denoise/denoise_operator.cuh"
@@ -30,6 +29,10 @@
 #include <pcl/gpu/containers/device_array.hpp>
 #include <pcl/gpu/segmentation/gpu_extract_clusters.h>
 #include <pcl/gpu/segmentation/impl/gpu_extract_clusters.hpp>
+
+#ifdef WITH_TRACY
+#include <tracy/Tracy.hpp>
+#endif
 
 #include "pcl/operators.h"
 
@@ -91,7 +94,9 @@ namespace pc::operators {
 
 					using T = std::decay_t<decltype(config)>;
 
+#ifdef WITH_TRACY
 					ZoneScopedN(T::Name);
+#endif
 
 					// Transform operators
 					if constexpr (std::is_same_v<T, NoiseOperatorConfiguration>) {
