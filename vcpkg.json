@@ -2,55 +2,6 @@
   "name": "pointcaster",
   "version-string": "0.0.1",
   "dependencies": [
-    {
-      "name": "imgui",
-      "features": [ "docking-experimental" ]
-    },
-    {
-      "name": "magnum",
-      "features": [
-        "debugtools",
-        "gl",
-        "sdl2application",
-        "glxcontext",
-        "magnumfont",
-        "meshtools",
-        "objimporter",
-        "primitives",
-        "scenegraph",
-        "shaders",
-        "text",
-        "texturetools",
-        "trade",
-        "tgaimporter",
-        "windowlessglxapplication"
-      ]
-    },
-    {
-      "name": "magnum-integration",
-      "features": [ "imgui", "eigen" ]
-    },
-    {
-      "name": "opencv4",
-      "default-features": false,
-      "features": [ "contrib", "cuda" ]
-    },
-    {
-      "name": "pcl",
-      "default-features": false,
-      "features": [ "cuda" ]
-    },
-    {
-      "name": "sdl2",
-      "default-features": false,
-      "features": [ "x11" ],
-      "platform": "linux"
-    },
-    {
-      "name": "zeromq",
-      "default-features": false,
-      "features": [ "draft" ]
-    },
     "azure-kinect-sensor-sdk",
     "bob-pointclouds",
     "concurrentqueue",
@@ -63,22 +14,77 @@
     "eigen3",
     "fmt",
     "imgui",
+    {
+      "name": "imgui",
+      "features": [
+        "docking-experimental"
+      ]
+    },
     "liblo",
     "libremidi",
     "libusb",
+    {
+      "name": "magnum",
+      "features": [
+        "debugtools",
+        "gl",
+        "glxcontext",
+        "magnumfont",
+        "meshtools",
+        "objimporter",
+        "primitives",
+        "scenegraph",
+        "sdl2application",
+        "shaders",
+        "text",
+        "texturetools",
+        "tgaimporter",
+        "trade",
+        "windowlessglxapplication"
+      ]
+    },
+    {
+      "name": "magnum-integration",
+      "features": [
+        "eigen",
+        "imgui"
+      ]
+    },
     "mdns-cpp",
     "msgpack",
     "nanoflann",
     "orbbec-sdk",
     "paho-mqttpp3",
+    {
+      "name": "pcl",
+      "default-features": false,
+      "features": [
+        "cuda"
+      ]
+    },
     "readerwriterqueue",
-    "serdepp",
     "sdl2",
+    {
+      "name": "sdl2",
+      "default-features": false,
+      "features": [
+        "x11"
+      ],
+      "platform": "linux"
+    },
+    "serdepp",
     "spdlog",
     "tbb",
     "toml11",
     "tracy",
     "tweeny",
+    {
+      "name": "zeromq",
+      "default-features": false,
+      "features": [
+        "draft"
+      ]
+    },
     "zpp-bits"
   ]
 }
