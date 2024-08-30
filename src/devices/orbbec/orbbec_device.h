@@ -78,7 +78,7 @@ private:
   void start_pipeline();
   void stop_pipeline();
 
-  void init_device_memory(std::size_t incoming_point_count);
+  bool init_device_memory(std::size_t incoming_point_count);
   void free_device_memory();
 };
 

@@ -177,11 +177,16 @@ struct output_filter {
   }
 };
 
-void OrbbecDevice::init_device_memory(std::size_t incoming_point_count) {
-  pc::logger->debug("Initialising OrbbecDevice GPU memory ({})", _ip);
-  _device_memory = new OrbbecImplDeviceMemory(incoming_point_count);
-  _device_memory_ready = true;
-  pc::logger->debug("Success");
+bool OrbbecDevice::init_device_memory(std::size_t incoming_point_count) {
+  _device_memory_ready = false;
+  try {
+    _device_memory = new OrbbecImplDeviceMemory(incoming_point_count);
+    _device_memory_ready = true;
+  } catch (std::exception e) {
+    pc::logger->error("Failed to initialise GPU memory");
+    pc::logger->error("Exception: {}", e.what());
+  }
+  return _device_memory_ready;
 }
 void OrbbecDevice::free_device_memory() {
   _device_memory_ready = false;

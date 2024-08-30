@@ -2,6 +2,7 @@
 #include "../../logger.h"
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/hpp/Utils.hpp>
+#include <exception>
 #include <thread>
 
 namespace pc::devices {
@@ -108,6 +109,9 @@ void OrbbecDevice::start_pipeline() {
 				net_device_port);
 			return;
 		}
+		catch (...) {
+			pc::logger->error("Unknown error creating Orrbec NetDevice");
+		}
 	}
 
 	// pass in device to create pipeline
@@ -147,7 +151,10 @@ void OrbbecDevice::start_pipeline() {
 
 	_ob_config->enableStream(depth_profile);
 
-	init_device_memory(color_profile->width() * color_profile->height());
+	if (!init_device_memory(color_profile->width() * color_profile->height())) {
+    pc::logger->error("Failed to start orbbec pipeline");
+    return;
+  };
 
 	_ob_pipeline->start(_ob_config, [&](std::shared_ptr<ob::FrameSet> frame_set) {
 		auto color_frame = frame_set->colorFrame();
