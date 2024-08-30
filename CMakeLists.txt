@@ -369,17 +369,16 @@ if (WITH_POINTCASTER)
 
   add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
 
+# ----- Pointcaster build properties
+
   set_target_properties(pointcaster PROPERTIES 
     UNITY_BUILD OFF
     UNITY_BUILD_MODE BATCH
     CUDA_SEPARABLE_COMPILATION ON
-    CUDA_RESOLVE_DEVICE_SYMBOLS ON)
-    CUDA_RUNTIME_LIBRARY Shared)
-
- if (WIN32)
-	 set_target_properties(pointcaster PROPERTIES
-	 	MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
- endif()
+    CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    CUDA_PROPAGATE_HOST_FLAGS OFF
+    CUDA_ARCHITECTURES "75;86;89"
+  )
 
   if (POINTCASTER_DEPENDENCIES)
     add_dependencies(pointcaster ${POINTCASTER_DEPENDENCIES})
