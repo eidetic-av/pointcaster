@@ -35,8 +35,9 @@ extern "C" {
 
 	enum class OrientationType {
 		unchanged = 0,
-		flip_x = 1,
-		flip_x_z = 2
+		flip_x,
+		flip_x_z,
+		flip_z
 	};
 
 	JNIEXPORT float* shaderFriendlyPointPositions(bool parallel_transform = false, OrientationType orientation_type = OrientationType::unchanged);

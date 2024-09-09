@@ -145,6 +145,10 @@ float* shaderFriendlyPointPositions(bool parallel_transform, OrientationType ori
     {
         orientation[0] = -1;
     }
+    else if (orientation_type == OrientationType::flip_z)
+    {
+        orientation[2] = -1;
+    }
     else if (orientation_type == OrientationType::flip_x_z)
     {
         orientation[0] = -1;
