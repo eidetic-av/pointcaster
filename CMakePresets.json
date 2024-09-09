@@ -24,6 +24,26 @@
           "hostOS": [ "Windows" ]
         }
       }
+    },
+    {
+	"name": "windows-debug",
+	"inherits": "windows-release",
+	"displayName": "Windows x64 Debug",
+	"description": "Build with debug info",
+	"cacheVariables": {
+		"CMAKE_BUILD_TYPE": "Debug"
+	}
+    },
+    {
+	"name": "pointreceiver-windows-release",
+	"inherits": "windows-release",
+	"displayName": "PointReceiver Lib Windows x64 Release",
+	"description": "Build pointreceiver dll",
+	"cacheVariables": {
+        	"VCPKG_TARGET_TRIPLET": "x64-windows",
+		"WITH_POINTCASTER": false,
+		"WITH_RECEIVER_LIB": true
+	}
     }
   ]
 }
