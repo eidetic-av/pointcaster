@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22.0)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 20)
 
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -diag-suppress 20012")
+set(CMAKE_BUILD_TYPE Release)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX TRUE)
@@ -52,8 +52,6 @@ endif()
 
 if(LINUX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive -Wfatal-errors")
-elseif(WIN32)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
 endif()
 
 if (WIN32)
@@ -64,8 +62,8 @@ endif()
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION $<$<CONFIG:Release>:TRUE>)
 
 if (WIN32 AND WITH_POINTCASTER)
-  # set(Boost_INCLUDE_DIR ${_VCPKG_INSTALLED_DIR}/x64-windows-static/include)
-  set(Boost_INCLUDE_DIR ${_VCPKG_INSTALLED_DIR}/x64-windows-static-md/include)
+  # set(Boost_INCLUDE_DIR ${_VCPKG_INSTALLED_DIR}/x64-windows-static-md/include)
+  set(Boost_INCLUDE_DIR ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include)
 endif()
 
 if (GENERATE_REFLECTIONS)
@@ -113,6 +111,14 @@ if (GENERATE_REFLECTIONS)
   
 endif()
 
+find_package(ZeroMQ CONFIG REQUIRED)
+list(APPEND LINK_LIBS libzmq libzmq-static)
+if (WIN32)
+  # zmq windows dependency:
+  list(APPEND PLATFORM_LIBS bcrypt)
+endif()
+
+
 if (WITH_POINTCASTER)
 
   # ----- Geometry -----
@@ -135,13 +141,6 @@ if (WITH_POINTCASTER)
   list(APPEND LINK_LIBS draco::draco)
 
   # ----- Networking -----
-
-  find_package(ZeroMQ CONFIG REQUIRED)
-  list(APPEND LINK_LIBS libzmq-static)
-  if (WIN32)
-    # zmq windows dependency:
-    list(APPEND PLATFORM_LIBS bcrypt)
-  endif()
 
   if (WITH_MQTT)
     find_package(PahoMqttCpp CONFIG REQUIRED)
@@ -269,8 +268,13 @@ if (WITH_POINTCASTER)
 
   # ----- OpenCV -----
 
-  find_package(OpenCV CONFIG REQUIRED)
+  if (WIN32)
+    find_package(OpenCV REQUIRED HINTS "/Users/matth/Downloads/opencv/build")
+  else()
+    find_package(OpenCV CONFIG REQUIRED)
+  endif()
   list(APPEND LINK_LIBS ${OpenCV_LIBS})
+  list(APPEND INCLUDE_DIRS ${OpenCV_INCLUDE_DIRS})
 
   # ----- PCL -----
 
@@ -361,6 +365,8 @@ if (WITH_POINTCASTER)
     ${POINTCASTER_SRC}
     ${OPTIONAL_SRC})
 
+# ----- Resources -----
+
   corrade_add_resource(RESOURCES resources.conf)
 
   if (WIN32)
@@ -378,6 +384,7 @@ if (WITH_POINTCASTER)
     CUDA_RESOLVE_DEVICE_SYMBOLS ON
     CUDA_PROPAGATE_HOST_FLAGS OFF
     CUDA_ARCHITECTURES "75;86;89"
+    # CUDA_ARCHITECTURES "86"
   )
 
   if (POINTCASTER_DEPENDENCIES)
@@ -405,7 +412,15 @@ if (WITH_POINTCASTER)
 
   endif()
 
-  
+  # platform specific
+
+  if (WIN32)
+    target_compile_options(pointcaster PRIVATE /bigobj /utf-8)
+    target_compile_options(pointcaster PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+	    -forward-slash-prefix-opts >)
+  endif()
+
+  # debugging related options
 
   if (WITH_THREAD_SANITIZER)
     target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
