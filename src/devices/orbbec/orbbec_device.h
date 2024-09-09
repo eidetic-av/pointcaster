@@ -4,6 +4,7 @@
 #include <libobsensor/ObSensor.hpp>
 #include <thread>
 #include <atomic>
+#include <optional>
 
 namespace pc::devices {
 
@@ -60,6 +61,11 @@ private:
   std::shared_ptr<ob::Device> _ob_device;
   std::shared_ptr<ob::Pipeline> _ob_pipeline;
   std::unique_ptr<ob::PointCloudFilter> _ob_point_cloud;
+
+  std::optional<OBXYTables> _ob_xy_tables;
+  std::optional<std::vector<float>> _xy_table_data;
+  std::optional<std::vector<OBPoint3f>> _depth_positions_buffer;
+  std::optional<std::vector<OBColorPoint>> _depth_frame_buffer;
 
   std::jthread _initialisation_thread;
 

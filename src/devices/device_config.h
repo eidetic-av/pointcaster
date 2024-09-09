@@ -53,6 +53,7 @@ struct DeviceTransformConfiguration {
 struct DeviceConfiguration {
   std::string id;
   int depth_mode = 0; // @minmax(0, 1)
+  int acquisition_mode = 0; // @minmax(0, 1)
   DeviceTransformConfiguration transform; // @optional
   BodyTrackingConfiguration body; // @optional
   AutoTiltConfiguration auto_tilt; // @optional

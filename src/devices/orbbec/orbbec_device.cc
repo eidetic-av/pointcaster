@@ -1,9 +1,11 @@
 #include "orbbec_device.h"
 #include "../../logger.h"
+#include <fmt/format.h>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/hpp/Utils.hpp>
-#include <exception>
-#include <thread>
+#include <oneapi/tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
 
 namespace pc::devices {
 
@@ -114,66 +116,143 @@ void OrbbecDevice::start_pipeline() {
 		}
 	}
 
-	// pass in device to create pipeline
 	_ob_pipeline = std::make_shared<ob::Pipeline>(_ob_device);
-
-	// Create Config for configuring Pipeline work
 	_ob_config = std::make_shared<ob::Config>();
+  _ob_point_cloud = std::make_unique<ob::PointCloudFilter>();
 
-	_ob_config->setAlignMode(ALIGN_D2C_HW_MODE);
-	_ob_config->setFrameAggregateOutputMode(
-		OB_FRAME_AGGREGATE_OUTPUT_FULL_FRAME_REQUIRE);
+  _ob_xy_tables.reset();
+  _xy_table_data.reset();
+  _depth_positions_buffer.reset();
+  _depth_frame_buffer.reset();
 
-	constexpr auto fps = 30;
-	constexpr auto color_width = 1280;
-	constexpr auto color_height = 720;
+  constexpr auto fps = 30;
+  constexpr auto color_width = 1280;
+  constexpr auto color_height = 720;
 
-	auto color_profiles = _ob_pipeline->getStreamProfileList(OB_SENSOR_COLOR);
-	auto color_profile = color_profiles->getVideoStreamProfile(
-		color_width, color_height, OB_FORMAT_ANY, fps);
+  // Default to using Narrow FOV
+  auto depth_width = 640;
+  auto depth_height = 576;
+  // Wide FOV depth mode
+  if (_config.depth_mode == 1)
+  {
+    depth_width = 512;
+    depth_height = 512;
+  }
 
-	_ob_config->enableStream(color_profile);
 
-	// DEPTH_MODE_NFOV_UNBINNED
-	auto depth_width = 640;
-	auto depth_height = 576;
-	if (_config.depth_mode == 1)
-	{
-		// DEPTH_MODE_WFOV_2X2BINNED
-		depth_width = 512;
-		depth_height = 512;
-	}
+  // default acquisition mode is RGBD
+  if (_config.acquisition_mode == 0) {
 
-	auto depth_profiles =
-		_ob_pipeline->getD2CDepthProfileList(color_profile, ALIGN_D2C_HW_MODE);
-	auto depth_profile = depth_profiles->getVideoStreamProfile(
-		depth_width, depth_height, OB_FORMAT_ANY, fps);
+    _ob_config->setAlignMode(ALIGN_D2C_HW_MODE);
+    _ob_config->setFrameAggregateOutputMode(
+      OB_FRAME_AGGREGATE_OUTPUT_FULL_FRAME_REQUIRE);
 
-	_ob_config->enableStream(depth_profile);
+    auto color_profiles = _ob_pipeline->getStreamProfileList(OB_SENSOR_COLOR);
+    auto color_profile = color_profiles->getVideoStreamProfile(
+      color_width, color_height, OB_FORMAT_ANY, fps);
 
-	if (!init_device_memory(color_profile->width() * color_profile->height())) {
-    pc::logger->error("Failed to start orbbec pipeline");
-    return;
-  };
+    _ob_config->enableStream(color_profile);
 
-	_ob_pipeline->start(_ob_config, [&](std::shared_ptr<ob::FrameSet> frame_set) {
-		auto color_frame = frame_set->colorFrame();
-		auto point_count = color_frame->width() * color_frame->height();
-		auto point_cloud = _ob_point_cloud->process(frame_set);
-		if (point_cloud && point_cloud->data()) {
-			std::lock_guard lock(_point_buffer_access);
-			_point_buffer.resize(point_count);
-			std::memcpy(_point_buffer.data(), point_cloud->data(),
-				point_count * sizeof(OBColorPoint));
-		}
-		_buffer_updated = true;
-	});
+    auto depth_profiles =
+      _ob_pipeline->getD2CDepthProfileList(color_profile, ALIGN_D2C_HW_MODE);
+    auto depth_profile = depth_profiles->getVideoStreamProfile(
+      depth_width, depth_height, OB_FORMAT_ANY, fps);
 
-	_ob_point_cloud = std::make_unique<ob::PointCloudFilter>();
-	_ob_point_cloud->setCameraParam(_ob_pipeline->getCameraParam());
-	_ob_point_cloud->setCreatePointFormat(OB_FORMAT_RGB_POINT);
+    _ob_config->enableStream(depth_profile);
 
-	_running_pipeline = true;
+    if (!init_device_memory(color_profile->width() * color_profile->height())) {
+      pc::logger->error("Failed to initialise GPU memory for Orbbec pipeline");
+      return;
+    };
+
+    _ob_pipeline->start(_ob_config, [&](std::shared_ptr<ob::FrameSet> frame_set) {
+      auto color_frame = frame_set->colorFrame();
+      auto point_count = color_frame->width() * color_frame->height();
+      auto point_cloud = _ob_point_cloud->process(frame_set);
+      if (point_cloud && point_cloud->data()) {
+        std::lock_guard lock(_point_buffer_access);
+        _point_buffer.resize(point_count);
+        std::memcpy(_point_buffer.data(), point_cloud->data(),
+                    point_count * sizeof(OBColorPoint));
+      }
+      _buffer_updated = true;
+    });
+
+    _ob_point_cloud->setCameraParam(_ob_pipeline->getCameraParam());
+    _ob_point_cloud->setCreatePointFormat(OB_FORMAT_RGB_POINT);
+
+    _running_pipeline = true;
+  }
+
+  // depth_only acquisition_mode
+  else if (_config.acquisition_mode == 1) {
+
+    auto depth_profiles = _ob_pipeline->getStreamProfileList(OB_SENSOR_DEPTH);
+    auto depth_profile = depth_profiles->getVideoStreamProfile(depth_width, depth_height, OB_FORMAT_Y16, fps);
+
+    _ob_config->enableStream(depth_profile);
+    _ob_config->setAlignMode(ALIGN_DISABLE);
+
+    if (!init_device_memory(depth_width * depth_height)) {
+      pc::logger->error("Failed to initialise GPU memory for Orbbec pipeline");
+      return;
+    }
+
+    _point_buffer.resize(depth_width * depth_height);
+
+    auto camera_param = _ob_pipeline->getCameraParam();
+    _ob_point_cloud->setCameraParam(camera_param);
+
+    auto calibration_param = _ob_pipeline->getCalibrationParam(_ob_config);
+    auto stream_profile = depth_profile->as<ob::VideoStreamProfile>();
+
+    uint32_t xy_table_size = depth_width * depth_height * 2;
+    _xy_table_data = std::vector<float>(xy_table_size);
+    _ob_xy_tables = OBXYTables{};
+    bool table_init = ob::CoordinateTransformHelper::transformationInitXYTables(
+      calibration_param, OB_SENSOR_DEPTH, 
+      (*_xy_table_data).data(), &xy_table_size, &(*_ob_xy_tables));
+
+    if (!table_init) {
+      pc::logger->error("Failed to initialise orbbec transformation tables");
+      return;
+    }
+
+    const auto frame_size = depth_height * depth_width;
+    _depth_positions_buffer = std::vector<OBPoint3f>(frame_size);
+    _depth_frame_buffer = std::vector<OBColorPoint>(frame_size);
+
+    _ob_pipeline->start(_ob_config, [this, frame_size]
+                        (std::shared_ptr<ob::FrameSet> frame_set) {
+      if (frame_set == nullptr || frame_set->depthFrame() == nullptr) return;
+
+      auto depth_frame = frame_set->depthFrame();
+      auto* depth_data = static_cast<uint16_t*>(depth_frame->data());
+
+      auto& depth_positions_buffer = (*_depth_positions_buffer);
+      auto& depth_frame_buffer = (*_depth_frame_buffer);
+
+      ob::CoordinateTransformHelper::transformationDepthToPointCloud(&(*_ob_xy_tables), depth_data, depth_positions_buffer.data());
+      
+      tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, frame_size),
+        [&](auto& r) {
+          for (size_t i = r.begin(); i < r.end(); ++i) {
+            auto pos = depth_positions_buffer[i];
+            depth_frame_buffer[i] = OBColorPoint { pos.x, pos.y, pos.z, 255, 255, 255 };
+        }
+      });
+
+      {
+        std::lock_guard lock(_point_buffer_access);
+        std::swap(_point_buffer, depth_frame_buffer);
+        _buffer_updated = true;
+      }
+
+    });
+
+    _running_pipeline = true;
+  }
 }
 
 void OrbbecDevice::stop_pipeline() {
@@ -197,8 +276,9 @@ void OrbbecDevice::draw_imgui_controls() {
 	if (!running) ImGui::EndDisabled();
 	DeviceConfiguration last_config = _config;
 	if (pc::gui::draw_parameters(_config.id)) {
-		if (_config.depth_mode != last_config.depth_mode) {
-			restart();
+    if (_config.depth_mode != last_config.depth_mode
+      || _config.acquisition_mode != last_config.acquisition_mode) {
+      restart();
 		}
 	};
 }
