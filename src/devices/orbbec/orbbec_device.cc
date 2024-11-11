@@ -15,6 +15,12 @@ void OrbbecDevice::init_context()
 	_ob_ctx->enableNetDeviceEnumeration(true);
 }
 
+void OrbbecDevice::destroy_context()
+{
+	_ob_ctx->enableNetDeviceEnumeration(false);
+  _ob_ctx.reset();
+}
+
 void OrbbecDevice::discover_devices()
 {
 	discovering_devices = true;

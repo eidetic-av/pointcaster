@@ -29,6 +29,8 @@ public:
   inline static std::atomic_bool discovering_devices;
 
   static void init_context();
+  static void destroy_context();
+
   static void discover_devices();
 
   OrbbecDevice(DeviceConfiguration &config);

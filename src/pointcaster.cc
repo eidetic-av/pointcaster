@@ -527,6 +527,7 @@ PointCaster::PointCaster(const Arguments &args)
 
 void PointCaster::quit() {
   Device::attached_devices.clear();
+  OrbbecDevice::destroy_context();
   exit(0);
 }
 
