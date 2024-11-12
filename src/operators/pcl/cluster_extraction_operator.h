@@ -46,6 +46,7 @@ struct ClusterExtractionConfiguration {
 		std::atomic<std::shared_ptr<std::vector<pc::AABB>>> current_clusters;
 
 		ClusterExtractionPipeline();
+~ClusterExtractionPipeline();
 
 		ClusterExtractionPipeline(const ClusterExtractionPipeline&) = delete;
 		ClusterExtractionPipeline& operator=(const ClusterExtractionPipeline&) = delete;
@@ -55,7 +56,7 @@ struct ClusterExtractionConfiguration {
 	private:
 		struct IngestTask {
 			oneapi::tbb::concurrent_bounded_queue<InputFrame>& input_queue;
-			bool& host_shutdown;
+			std::stop_token st;
 			InputFrame* operator()(tbb::flow_control& fc) const;
 		};
 
@@ -65,7 +66,6 @@ struct ClusterExtractionConfiguration {
 			void operator()(InputFrame* frame) const;
 		};
 		std::jthread _host_thread;
-		bool _host_shutdown = false;
 	};
 
 	// Util for converting to pcl types

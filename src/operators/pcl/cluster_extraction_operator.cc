@@ -24,15 +24,21 @@ namespace pc::operators::pcl_cpu {
 		pc::logger->info("Starting Cluster Extraction TBB Pipeline (max_concurrency = {})",
 			max_concurrency);
 
-		_host_thread = std::jthread([this, max_concurrency]() {
+		_host_thread = std::jthread([this, max_concurrency](std::stop_token st) {
+if (st.stop_requested()) return;
 			tbb::parallel_pipeline(
 				max_concurrency,
 				tbb::make_filter<void, InputFrame*>(
-					tbb::filter_mode::serial_in_order, IngestTask{ input_queue, _host_shutdown }) &
+					tbb::filter_mode::serial_in_order, IngestTask{ input_queue, st }) &
 				tbb::make_filter<InputFrame*, void>(
 					tbb::filter_mode::parallel, ExtractTask{ current_voxels, current_clusters })
 			);
 		});
+	}
+
+	ClusterExtractionPipeline::~ClusterExtractionPipeline()
+	{
+		_host_thread.request_stop();
 	}
 
 	// TODO swap raw ptrs for shared pointers in pipeline stages
@@ -41,7 +47,7 @@ namespace pc::operators::pcl_cpu {
 		using namespace std::chrono_literals;
 		auto* new_frame = new InputFrame;
 		while (!input_queue.try_pop(*new_frame)) {
-			if (host_shutdown) {
+			if (st.stop_requested()) {
 				delete new_frame;
 				fc.stop();
 				return nullptr;
