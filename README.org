@@ -1,4 +1,4 @@
-#+title: PointCaster
+#+title: Pointcaster
 #+author: Matt Hughes
 * Developing
 + ~pointcaster~ requires [[https://cmake.org/][CMake]] and [[https://vcpkg.io][vcpkg]] to build and manage dependencies. A working CUDA toolkit installation and ~nvcc~ on the path is also required.
