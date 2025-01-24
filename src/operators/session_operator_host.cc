@@ -132,7 +132,7 @@ namespace pc::operators {
 							auto cluster_count = latest_clusters.size();
 							// pc::logger->debug("cluster count: {}", cluster_count);
 							for (int i = 0; i < cluster_count; i++) {
-								pc::AABB aabb = latest_clusters[i];
+								pc::AABB aabb = latest_clusters[i].bounding_box;
 								auto position = aabb.center() / 1000.0f; // mm to metres
 								auto size = aabb.extents() / 1000.0f;
 								set_cluster(i, position, size);
