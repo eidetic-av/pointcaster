@@ -269,7 +269,9 @@ if (WITH_POINTCASTER)
   # ----- OpenCV -----
 
   if (WIN32)
-    find_package(OpenCV REQUIRED HINTS "/Users/matth/Downloads/opencv/build")
+    find_package(OpenCV REQUIRED HINTS "/opt/opencv/build")
+    get_target_property(OpenCV_DLL opencv_world IMPORTED_LOCATION_RELEASE)
+    list(APPEND INSTALL_DLLS ${OpenCV_DLL})
   else()
     find_package(OpenCV CONFIG REQUIRED)
   endif()
@@ -448,6 +450,18 @@ if (WIN32 AND WITH_K4A)
     add_custom_command(TARGET pointcaster POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
       ${K4ABT_BIN} $<TARGET_FILE_DIR:pointcaster>)
+  endforeach()
+endif()
+
+if (WIN32)
+  # if we have any DLLS in our list that need to be copied into the
+  # output directory
+  foreach(dll ${INSTALL_DLLS})
+    if (NOT "${dll}" STREQUAL "")
+      add_custom_command(TARGET pointcaster POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${dll} $<TARGET_FILE_DIR:pointcaster>)
+    endif()
   endforeach()
 endif()
 
