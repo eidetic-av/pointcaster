@@ -9,12 +9,13 @@
 #include <mapbox/earcut.hpp>
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/core/mat.hpp>
-#include <opencv2/cudaarithm.hpp>
-#include <opencv2/cudafilters.hpp>
-#include <opencv2/cudaimgproc.hpp>
-#include <opencv2/cudaoptflow.hpp>
-#include <opencv2/cudawarping.hpp>
 #include <opencv2/imgproc.hpp>
+
+/*#include <opencv2/cudaarithm.hpp>*/
+/*#include <opencv2/cudafilters.hpp>*/
+/*#include <opencv2/cudaimgproc.hpp>*/
+/*#include <opencv2/cudaoptflow.hpp>*/
+/*#include <opencv2/cudawarping.hpp>*/
 
 namespace pc::analysis {
 		
@@ -51,58 +52,61 @@ cv::Mat Analyser2D::setup_input_frame(Magnum::Image2D &input,
   cv::Mat return_mat;
 
   if (config.use_cuda) {
-    cv::cuda::GpuMat gpu_input_mat(input_mat);
-    cv::cuda::GpuMat gpu_return_mat;
 
-    // scale to analysis size if different
-    if (input_frame_size.x() != config.resolution[0] ||
-        input_frame_size.y() != config.resolution[1]) {
-      auto &resolution = config.resolution;
-      if (resolution[0] != 0 && resolution[1] != 0) {
-        cv::cuda::resize(gpu_input_mat, gpu_return_mat,
-                         {resolution[0], resolution[1]}, 0, 0,
-                         cv::INTER_LINEAR);
-      } else {
-        gpu_return_mat = gpu_input_mat;
-      }
-    } else {
-      gpu_return_mat = gpu_input_mat;
-    }
+    pc::logger->warn("Not compiled with OpenCV-CUDA!");
 
-    // convert the image to grayscale
-    cv::cuda::cvtColor(gpu_return_mat, gpu_return_mat, cv::COLOR_RGBA2GRAY);
+    /*cv::cuda::GpuMat gpu_input_mat(input_mat);*/
+    /*cv::cuda::GpuMat gpu_return_mat;*/
+    /**/
+    /*// scale to analysis size if different*/
+    /*if (input_frame_size.x() != config.resolution[0] ||*/
+    /*    input_frame_size.y() != config.resolution[1]) {*/
+    /*  auto &resolution = config.resolution;*/
+    /*  if (resolution[0] != 0 && resolution[1] != 0) {*/
+    /*    cv::cuda::resize(gpu_input_mat, gpu_return_mat,*/
+    /*                     {resolution[0], resolution[1]}, 0, 0,*/
+    /*                     cv::INTER_LINEAR);*/
+    /*  } else {*/
+    /*    gpu_return_mat = gpu_input_mat;*/
+    /*  }*/
+    /*} else {*/
+    /*  gpu_return_mat = gpu_input_mat;*/
+    /*}*/
+    /**/
+    /*// convert the image to grayscale*/
+    /*cv::cuda::cvtColor(gpu_return_mat, gpu_return_mat, cv::COLOR_RGBA2GRAY);*/
+    /**/
+    /*// binary colour thresholding*/
+    /*cv::cuda::threshold(gpu_return_mat, gpu_return_mat,*/
+    /*                    config.binary_threshold[0], config.binary_threshold[1],*/
+    /*                    cv::THRESH_BINARY);*/
+    /**/
+    /*// blur the image*/
+    /*if (config.blur_size > 0) {*/
+    /**/
+    /*  // for cuda's guassian blurring, blur_size must be an odd number*/
+    /*  auto blur_size = config.blur_size;*/
+    /*  if (blur_size % 2 == 0)*/
+    /*    blur_size += 1;*/
+    /*  // and a maximum of 31*/
+    /*  if (blur_size > 31)*/
+    /*    blur_size = 31;*/
+    /**/
+    /*  auto filter = cv::cuda::createGaussianFilter(*/
+    /*      gpu_return_mat.type(), gpu_return_mat.type(),*/
+    /*      cv::Size(blur_size, blur_size), 0);*/
+    /*  filter->apply(gpu_return_mat, gpu_return_mat);*/
+    /*}*/
+    /**/
+    /*// perform canny edge detection*/
+    /*if (config.canny.enabled) {*/
+    /*  auto canny_detector = cv::cuda::createCannyEdgeDetector(*/
+    /*      config.canny.min_threshold, config.canny.max_threshold,*/
+    /*      config.canny.aperture_size);*/
+    /*  canny_detector->detect(gpu_return_mat, gpu_return_mat);*/
+    /*}*/
 
-    // binary colour thresholding
-    cv::cuda::threshold(gpu_return_mat, gpu_return_mat,
-                        config.binary_threshold[0], config.binary_threshold[1],
-                        cv::THRESH_BINARY);
-
-    // blur the image
-    if (config.blur_size > 0) {
-
-      // for cuda's guassian blurring, blur_size must be an odd number
-      auto blur_size = config.blur_size;
-      if (blur_size % 2 == 0)
-        blur_size += 1;
-      // and a maximum of 31
-      if (blur_size > 31)
-        blur_size = 31;
-
-      auto filter = cv::cuda::createGaussianFilter(
-          gpu_return_mat.type(), gpu_return_mat.type(),
-          cv::Size(blur_size, blur_size), 0);
-      filter->apply(gpu_return_mat, gpu_return_mat);
-    }
-
-    // perform canny edge detection
-    if (config.canny.enabled) {
-      auto canny_detector = cv::cuda::createCannyEdgeDetector(
-          config.canny.min_threshold, config.canny.max_threshold,
-          config.canny.aperture_size);
-      canny_detector->detect(gpu_return_mat, gpu_return_mat);
-    }
-
-    gpu_return_mat.download(return_mat);
+    /*gpu_return_mat.download(return_mat);*/
 
   } else {
 
@@ -153,32 +157,32 @@ Analyser2D::calculate_optical_flow(
   std::vector<uchar> status;
 
   if (use_cuda) {
-    cv::cuda::GpuMat gpu_input_frame_1(input_frame_1);
-    cv::cuda::GpuMat gpu_input_frame_2(input_frame_2);
-    cv::cuda::GpuMat gpu_feature_point_positions,
-        gpu_new_feature_point_positions, gpu_feature_point_status;
-
-    // find acceptable feature points to track accross
-    // the previous frame
-    auto feature_point_detector = cv::cuda::createGoodFeaturesToTrackDetector(
-        gpu_input_frame_2.type(), config.feature_point_count,
-        config.cuda_feature_detector_quality_cutoff,
-        config.feature_point_distance);
-    feature_point_detector->detect(gpu_input_frame_2,
-                                   gpu_feature_point_positions);
-
-    if (!gpu_feature_point_positions.empty()) {
-
-      // track the feature points' motion into the new frame
-      auto optical_flow_filter = cv::cuda::SparsePyrLKOpticalFlow::create();
-      optical_flow_filter->calc(
-          gpu_input_frame_2, gpu_input_frame_1, gpu_feature_point_positions,
-          gpu_new_feature_point_positions, gpu_feature_point_status);
-
-      gpu_feature_point_positions.download(feature_point_positions);
-      gpu_new_feature_point_positions.download(new_feature_point_positions);
-      gpu_feature_point_status.download(status);
-    }
+    /*cv::cuda::GpuMat gpu_input_frame_1(input_frame_1);*/
+    /*cv::cuda::GpuMat gpu_input_frame_2(input_frame_2);*/
+    /*cv::cuda::GpuMat gpu_feature_point_positions,*/
+    /*    gpu_new_feature_point_positions, gpu_feature_point_status;*/
+    /**/
+    /*// find acceptable feature points to track accross*/
+    /*// the previous frame*/
+    /*auto feature_point_detector = cv::cuda::createGoodFeaturesToTrackDetector(*/
+    /*    gpu_input_frame_2.type(), config.feature_point_count,*/
+    /*    config.cuda_feature_detector_quality_cutoff,*/
+    /*    config.feature_point_distance);*/
+    /*feature_point_detector->detect(gpu_input_frame_2,*/
+    /*                               gpu_feature_point_positions);*/
+    /**/
+    /*if (!gpu_feature_point_positions.empty()) {*/
+    /**/
+    /*  // track the feature points' motion into the new frame*/
+    /*  auto optical_flow_filter = cv::cuda::SparsePyrLKOpticalFlow::create();*/
+    /*  optical_flow_filter->calc(*/
+    /*      gpu_input_frame_2, gpu_input_frame_1, gpu_feature_point_positions,*/
+    /*      gpu_new_feature_point_positions, gpu_feature_point_status);*/
+    /**/
+    /*  gpu_feature_point_positions.download(feature_point_positions);*/
+    /*  gpu_new_feature_point_positions.download(new_feature_point_positions);*/
+    /*  gpu_feature_point_status.download(status);*/
+    /*}*/
 
   } else {
     // find acceptable feature points to track accross
