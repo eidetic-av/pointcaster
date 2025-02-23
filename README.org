@@ -1,5 +1,12 @@
 #+title: Pointcaster
 #+author: Matt Hughes
+Pointcaster is an engine for capturing, transforming, analysing and broadcasting 3D scenes captured using depth sensors. 
+It enables room-scale mixed reality installations, performances and applications.
+Currently it supports Orbbec Femto Mega and Azure Kinect sensors.
+
+Depth data captured by multiple sensors can be synthesized into a single point-cloud in real-time, and streamed into client applications through the Pointreceiver library over local networks or the internet.
+Scene analysis such as clustering and presence detection can be configured and streamed over multiple protocols including MIDI, RTP-MIDI, OSC and MQTT to enable integration into game engines, digital audio workstations and any other application you can think of.
+
 * Developing
 + ~pointcaster~ requires [[https://cmake.org/][CMake]] and [[https://vcpkg.io][vcpkg]] to build and manage dependencies. A working CUDA toolkit installation and ~nvcc~ on the path is also required.
 + Linux builds are using GCC 12.3.0
