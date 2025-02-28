@@ -12,11 +12,12 @@ namespace pc::parameters {
 
 void declare_parameter(std::string_view parameter_id,
                        const Parameter &parameter) {
-    pc::logger->debug(" -- param: {}", parameter_id.data());
+  pc::logger->debug(" -- param: {}", parameter_id.data());
   parameter_bindings.emplace(parameter_id, parameter);
 
   // Ignored suffixes check
-  static const std::array<std::string, 4> ignored_suffixes = { ".x", ".y", ".z", ".w" };
+  static const std::array<std::string, 4> ignored_suffixes = {".x", ".y", ".z",
+                                                              ".w"};
   if (pc::strings::ends_with_any(parameter_id, ignored_suffixes.begin(),
                                  ignored_suffixes.end())) {
     return;
@@ -67,8 +68,7 @@ void declare_parameter(std::string_view parameter_id,
   deepest_map.emplace_back(std::string(parameter_id));
 }
 
-void bind_parameter(std::string_view parameter_id,
-                    const Parameter &parameter) {
+void bind_parameter(std::string_view parameter_id, const Parameter &parameter) {
   declare_parameter(parameter_id, parameter);
   parameter_states.emplace(parameter_id, ParameterState::Bound);
 }
@@ -85,15 +85,15 @@ void unbind_parameter(std::string_view parameter_id) {
 }
 
 void unbind_parameters(std::string_view parameter_id) {
-    std::erase_if(parameter_bindings.inner_map(), [parameter_id](auto& kvp) {
-        return pc::strings::starts_with(std::get<0>(kvp), parameter_id);
-    });
-    std::erase_if(parameter_states.inner_map(), [parameter_id](auto& kvp) {
-        return pc::strings::starts_with(std::get<0>(kvp), parameter_id);
-    });
-    std::erase_if(struct_parameters, [parameter_id](auto& kvp) {
-        return pc::strings::starts_with(std::get<0>(kvp), parameter_id);
-    });
+  std::erase_if(parameter_bindings.inner_map(), [parameter_id](auto &kvp) {
+    return pc::strings::starts_with(std::get<0>(kvp), parameter_id);
+  });
+  std::erase_if(parameter_states.inner_map(), [parameter_id](auto &kvp) {
+    return pc::strings::starts_with(std::get<0>(kvp), parameter_id);
+  });
+  std::erase_if(struct_parameters, [parameter_id](auto &kvp) {
+    return pc::strings::starts_with(std::get<0>(kvp), parameter_id);
+  });
 }
 
 void publish_parameter(std::string_view parameter_id) {
@@ -109,35 +109,34 @@ template <typename T> cache::lru_cache<std::string, T> &get_cache() {
 void publish() {
   for (const auto &kvp : parameter_states) {
     const auto &[parameter_id, state] = kvp;
-    if (!parameter_bindings.contains(parameter_id)) continue;
+    if (!parameter_bindings.contains(parameter_id))
+      continue;
     if (state == ParameterState::Publish) {
       std::visit(
           [parameter_id](auto &&parameter_ref) {
-
-	    const auto &p = parameter_ref.get();
+            const auto &p = parameter_ref.get();
             using T = std::decay_t<decltype(p)>;
 
-	    auto& param_cache = get_cache<T>();
+            auto &param_cache = get_cache<T>();
 
-	    bool value_updated = true;
-	    if (param_cache.exists(parameter_id)) {
-	      const auto &cached_value = param_cache.get(parameter_id);
-	      value_updated = p != cached_value;
-	    }
+            bool value_updated = true;
+            if (param_cache.exists(parameter_id)) {
+              const auto &cached_value = param_cache.get(parameter_id);
+              value_updated = p != cached_value;
+            }
 
-	    if (value_updated) {
-
-	      if constexpr (is_publishable_container_v<T>) {
-		publisher::publish_all(parameter_id, p);
-	      } else if constexpr (pc::types::VectorType<T>) {
-		constexpr auto vector_size = types::VectorSize<T>::value;
-		std::array<typename T::vector_type, vector_size> array;
-		std::copy_n(p.data(), vector_size, array.begin());
-		publisher::publish_all(parameter_id, array);
-	      } else if constexpr (pc::types::ScalarType<T>) {
-		publisher::publish_all(parameter_id, p);
-	      }
-	      param_cache.put(parameter_id, p);
+            if (value_updated) {
+              if constexpr (is_publishable_container_v<T>) {
+                publisher::publish_all(parameter_id, p);
+              } else if constexpr (pc::types::VectorType<T>) {
+                constexpr auto vector_size = types::VectorSize<T>::value;
+                std::array<typename T::vector_type, vector_size> array;
+                std::copy_n(p.data(), vector_size, array.begin());
+                publisher::publish_all(parameter_id, array);
+              } else if constexpr (pc::types::ScalarType<T>) {
+                publisher::publish_all(parameter_id, p);
+              }
+              param_cache.put(parameter_id, p);
             }
           },
           parameter_bindings.at(parameter_id).value);
