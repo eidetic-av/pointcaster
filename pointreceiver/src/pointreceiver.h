@@ -25,9 +25,9 @@ void log(std::string text) { spdlog::info("{}", text); }
 
 extern "C" {
 JNIEXPORT int
-startNetworkThread(const char *point_caster_address = "127.0.0.1:9992",
-                   int timeout_ms = 0);
-JNIEXPORT int stopNetworkThread();
+startPointcloudReceiver(const char *point_caster_address = "127.0.0.1:9992",
+                        int timeout_ms = 0);
+JNIEXPORT int stopPointcloudReceiver();
 JNIEXPORT bool dequeue(int timeout_ms = 5);
 JNIEXPORT int pointCount();
 JNIEXPORT bob::types::color *pointColors();

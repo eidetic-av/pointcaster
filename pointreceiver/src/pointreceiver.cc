@@ -12,23 +12,18 @@
 
 extern "C" {
 
-std::atomic<bool> request_thread_stop = false;
-std::unique_ptr<std::thread> dish_thread;
-
-std::mutex buffer_access;
-
 using bob::types::PointCloud;
 static moodycamel::BlockingReaderWriterCircularBuffer<PointCloud>
     cloud_queue(1);
-static std::vector<PointCloud> snapshot_frames;
-static PointCloud synthesized_snapshot_frames;
+
+std::unique_ptr<std::jthread> pointcloud_thread;
 
 // Start a thread that handles networking
-int startNetworkThread(const char *point_caster_address, int timeout_ms) {
-  request_thread_stop = false;
+int startPointcloudReceiver(const char *point_caster_address, int timeout_ms) {
   const std::string point_caster_address_str(point_caster_address);
-  dish_thread = std::make_unique<std::thread>(
-      [&, point_caster_address_str, timeout_ms]() {
+
+  pointcloud_thread = std::make_unique<std::jthread>(
+      [&, point_caster_address_str, timeout_ms](std::stop_token stop_token) {
         using namespace std::chrono;
         using namespace std::chrono_literals;
 
@@ -42,7 +37,7 @@ int startNetworkThread(const char *point_caster_address, int timeout_ms) {
 
         // don't retain frames in memory
         dish.set(zmq::sockopt::linger, 0);
-        // dish.set(zmq::sockopt::rcvhwm, 3);
+        dish.set(zmq::sockopt::rcvhwm, 3);
 
         // connection attempt should time out if requested
         if (timeout_ms != 0)
@@ -60,56 +55,25 @@ int startNetworkThread(const char *point_caster_address, int timeout_ms) {
           return;
         }
 
-        log("Connected");
         dish.join("live");
-        dish.join("snapshots");
-        log("Joined live and snapshots groups");
+        log("Connected");
 
-        time_point<system_clock> last_snapshot_time = system_clock::now();
-
-        while (!request_thread_stop) {
+        while (!stop_token.stop_requested()) {
 
           zmq::message_t incoming_msg;
           auto result = dish.recv(incoming_msg, zmq::recv_flags::none);
           if (!result) continue;
-
-          std::string group = incoming_msg.group();
 
           // deserialize the incoming message
           auto msg_size = incoming_msg.size();
           bob::types::bytes buffer(msg_size);
           auto bytes_ptr = static_cast<std::byte *>(incoming_msg.data());
           buffer.assign(bytes_ptr, bytes_ptr + msg_size);
-          // log(fmt::format("bytes size: {}", buffer.size()));
-          // log(fmt::format("pc.size: {}", point_cloud.size()));
-          if (group == "live") {
-            cloud_queue.try_enqueue(PointCloud::deserialize(buffer));
-          } else if (group == "snapshots") {
-            auto msg_begin = static_cast<const char *>(incoming_msg.data());
-            std::string header_msg(msg_begin, msg_begin + 5);
-            if (header_msg == "clear") {
-              snapshot_frames.clear();
-              synthesized_snapshot_frames = PointCloud{};
-            } else {
-              auto frame_time = system_clock::now();
-              if (frame_time - last_snapshot_time > 1000ms) {
-                // snapshot_frames.push_back(PointCloud::deserialize(buffer));
-                // synthesized_snapshot_frames =
-                // std::reduce(snapshot_frames.begin(), snapshot_frames.end(),
-                // PointCloud{}, [](auto a, auto b) -> PointCloud { return a +
-                // b; });
-                last_snapshot_time = frame_time;
-                synthesized_snapshot_frames = PointCloud::deserialize(buffer);
-              }
-            }
-          }
+          // and place it in our queue
+          cloud_queue.try_enqueue(PointCloud::deserialize(buffer));
         }
 
         dish.disconnect(endpoint);
-
-        // cleanup any snapshots
-        snapshot_frames.clear();
-        synthesized_snapshot_frames = PointCloud{};
 
         log("Disconnected");
       });
@@ -117,9 +81,11 @@ int startNetworkThread(const char *point_caster_address, int timeout_ms) {
   return 0;
 }
 
-int stopNetworkThread() {
-  request_thread_stop = true;
-  dish_thread->join();
+int stopPointcloudReceiver() {
+  if (pointcloud_thread) {
+    pointcloud_thread->request_stop();
+    pointcloud_thread.reset();
+  }
   return 0;
 }
 
@@ -175,7 +141,7 @@ float *shaderFriendlyPointPositions(bool parallel_transform,
 }
 }
 
-void testLoop() {
+void testPointcloudLoop() {
   int i = 0;
   while (i++ < 6000) {
     using namespace std::chrono_literals;
@@ -183,19 +149,16 @@ void testLoop() {
     if (!dequeue()) continue;
     auto count = pointCount();
     // auto buffer = pointPositions();
-    log(fmt::format("--{}", i));
-    for (auto frame : snapshot_frames) {
-      log("f: " + std::to_string(frame.positions[0].x));
-    }
+    log(fmt::format("--{} points recieved", count));
     // auto o = buffer[200];
     // log(fmt::format("x {}, y {}, z {}, p {}", o.x, o.y, o.z, o.__pad));
   }
 }
 
 int main(int argc, char *argv[]) {
-  if (argc < 2) startNetworkThread();
-  else startNetworkThread(argv[1]);
-  for (int i = 0; i < 3; i++) { testLoop(); }
-  stopNetworkThread();
+  if (argc < 2) startPointcloudReceiver();
+  else startPointcloudReceiver(argv[1]);
+  for (int i = 0; i < 3; i++) { testPointcloudLoop(); }
+  stopPointcloudReceiver();
   return 0;
 }
