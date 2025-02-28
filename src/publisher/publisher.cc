@@ -13,5 +13,4 @@ void remove(Publisher publisher) {
   }
 }
 
-
 } // namespace pc::publisher

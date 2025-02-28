@@ -16,18 +16,20 @@
 namespace pc::publisher {
 
 // A variant that holds all of our publisher types
-using Publisher = std::variant<
-		client_sync::SyncServer*
+using Publisher = std::variant<client_sync::SyncServer *
 #ifdef WITH_MQTT
-		, mqtt::MqttClient*
+                               ,
+                               mqtt::MqttClient *
 #endif
 #ifdef WITH_MIDI
-		, midi::MidiDevice*
+                               ,
+                               midi::MidiDevice *
 #endif
 #ifdef WITH_OSC
-		, osc::OscClient*
+                               ,
+                               osc::OscClient *
 #endif
->;
+                               >;
 
 // The list of all publishers in the application
 extern std::vector<Publisher> _instances;
@@ -37,11 +39,11 @@ void remove(Publisher publisher);
 // Publish a single value on a specific topic through all publishers
 template <typename T>
 void publish_all(const std::string_view topic, const T &data,
-		 std::initializer_list<std::string_view> topic_nodes = {}) {
+                 std::initializer_list<std::string_view> topic_nodes = {}) {
   for (auto &publisher : _instances) {
     std::visit(
         [&topic, &data, &topic_nodes](auto &publisher) {
-	  publisher->publish(topic, data, topic_nodes);
+          publisher->publish(topic, data, topic_nodes);
         },
         publisher);
   }

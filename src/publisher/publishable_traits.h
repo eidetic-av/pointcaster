@@ -18,4 +18,3 @@ struct is_publishable_container<std::array<T, N>> : std::true_type {};
 template <typename T>
 inline constexpr bool is_publishable_container_v =
     is_publishable_container<T>::value;
-
