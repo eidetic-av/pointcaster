@@ -80,13 +80,7 @@ public:
 
 private:
   SyncServerConfiguration &_config;
-
-  std::unique_ptr<zmq::context_t> _socket_context;
-  std::unique_ptr<zmq::socket_t> _socket;
-
-  std::unique_ptr<std::jthread> _publish_thread;
-  std::unique_ptr<std::jthread> _listener_thread;
-
+  std::unique_ptr<std::jthread> _sync_thread;
   std::unordered_set<std::string> _connected_client_ids;
 
 #ifndef __CUDACC__
