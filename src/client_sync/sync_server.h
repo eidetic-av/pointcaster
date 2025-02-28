@@ -67,10 +67,10 @@ public:
 
   template <typename T>
   void publish(const std::string_view topic, const T &data,
-	       std::initializer_list<std::string_view> topic_nodes = {}) {
+               std::initializer_list<std::string_view> topic_nodes = {}) {
     if constexpr (std::disjunction_v<std::is_same<T, float>,
-				     std::is_same<T, Float3>,
-				     std::is_same<T, array3f>>) {
+                                     std::is_same<T, Float3>,
+                                     std::is_same<T, array3f>>) {
       const auto id = publisher::construct_topic_string(topic, topic_nodes);
       enqueue_parameter_update(ParameterUpdate{id, {data}});
     }
@@ -90,8 +90,7 @@ private:
   std::unordered_set<std::string> _connected_client_ids;
 
 #ifndef __CUDACC__
-  moodycamel::BlockingConcurrentQueue<ServerToClientMessage>
-      _messages_to_send;
+  moodycamel::BlockingConcurrentQueue<ServerToClientMessage> _messages_to_send;
 #endif
 
   void enqueue_parameter_update(ParameterUpdate update);

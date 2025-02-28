@@ -19,23 +19,23 @@ msgpack::sbuffer serialize_parameter_update(const ParameterUpdate &update) {
       [&buffer, &update](const auto &val) {
         using T = std::decay_t<decltype(val)>;
 
-	if constexpr (types::ScalarType<T>) {
+        if constexpr (types::ScalarType<T>) {
           std::tuple<uint8_t, std::string_view, T> update_value{
-	      param_update_msgtype, update.id, val};
-	  msgpack::pack(buffer, update_value);
-	} else if constexpr (types::VectorType<T>) {
-	  std::array<typename T::vector_type, types::VectorSize<T>::value>
-	      array;
-	  for (std::size_t el = 0; el < types::VectorSize<T>::value; el++) {
-	    array[el] = val[el];
-	  }
-	  std::tuple<uint8_t, std::string_view, decltype(array)> update_value{
-	      param_update_msgtype, update.id, array};
-	  msgpack::pack(buffer, update_value);
+              param_update_msgtype, update.id, val};
+          msgpack::pack(buffer, update_value);
+        } else if constexpr (types::VectorType<T>) {
+          std::array<typename T::vector_type, types::VectorSize<T>::value>
+              array;
+          for (std::size_t el = 0; el < types::VectorSize<T>::value; el++) {
+            array[el] = val[el];
+          }
+          std::tuple<uint8_t, std::string_view, decltype(array)> update_value{
+              param_update_msgtype, update.id, array};
+          msgpack::pack(buffer, update_value);
         } else if constexpr (std::is_same_v<T, std::array<float, 3>>) {
-	  std::tuple<uint8_t, std::string_view, std::array<float, 3>>
-	      update_value{param_update_msgtype, update.id, val};
-	  msgpack::pack(buffer, update_value);
+          std::tuple<uint8_t, std::string_view, std::array<float, 3>>
+              update_value{param_update_msgtype, update.id, val};
+          msgpack::pack(buffer, update_value);
         } else {
           pc::logger->debug("{}", typeid(T).name());
         }
@@ -55,22 +55,20 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
 
   _socket_context = std::make_unique<zmq::context_t>();
   _socket = std::make_unique<zmq::socket_t>(*_socket_context,
-					    zmq::socket_type::router);
+                                            zmq::socket_type::router);
 
   const auto socket_address = fmt::format("tcp://*:{}", _config.port);
   try {
-	  _socket->bind(socket_address);
-  }
-  catch (const zmq::error_t& e) {
-	  pc::logger->error(e.what());
-	  return;
+    _socket->bind(socket_address);
+  } catch (const zmq::error_t &e) {
+    pc::logger->error(e.what());
+    return;
   }
 
   _publish_thread = std::make_unique<std::jthread>([socket_address,
-						    this](std::stop_token st) {
-
+                                                    this](std::stop_token st) {
     pc::logger->info("Starting sync server publish thread for {}",
-		     socket_address);
+                     socket_address);
 
     using namespace std::chrono_literals;
     static constexpr auto thread_wait_time = 50ms;
@@ -79,28 +77,27 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
 
       ServerToClientMessage message;
 
-      while (
-	  _messages_to_send.wait_dequeue_timed(message, thread_wait_time)) {
+      while (_messages_to_send.wait_dequeue_timed(message, thread_wait_time)) {
 
         if (_connected_client_ids.empty()) {
-	  continue;
-	}
+          continue;
+        }
 
-	msgpack::sbuffer buffer;
+        msgpack::sbuffer buffer;
 
-	if (std::holds_alternative<ParameterUpdate>(message)) {
-	  buffer =
-	      serialize_parameter_update(std::get<ParameterUpdate>(message));
-	} else if (std::holds_alternative<MessageType>(message)) {
-	  const auto signal_message =
-	      static_cast<uint8_t>(std::get<MessageType>(message));
-	  msgpack::pack(buffer, std::array<uint8_t, 1>{signal_message});
+        if (std::holds_alternative<ParameterUpdate>(message)) {
+          buffer =
+              serialize_parameter_update(std::get<ParameterUpdate>(message));
+        } else if (std::holds_alternative<MessageType>(message)) {
+          const auto signal_message =
+              static_cast<uint8_t>(std::get<MessageType>(message));
+          msgpack::pack(buffer, std::array<uint8_t, 1>{signal_message});
         }
 
         for (const auto &client_id : _connected_client_ids) {
-	  _socket->send(zmq::message_t{client_id}, zmq::send_flags::sndmore);
-	  _socket->send(zmq::message_t{buffer.data(), buffer.size()},
-			zmq::send_flags::none);
+          _socket->send(zmq::message_t{client_id}, zmq::send_flags::sndmore);
+          _socket->send(zmq::message_t{buffer.data(), buffer.size()},
+                        zmq::send_flags::none);
         }
       }
     }
@@ -109,9 +106,9 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
   });
 
   _listener_thread = std::make_unique<std::jthread>([socket_address,
-						     this](std::stop_token st) {
+                                                     this](std::stop_token st) {
     pc::logger->info("Starting sync server listener thread for {}",
-		     socket_address);
+                     socket_address);
 
     static constexpr auto recv_wait_ms = 50;
     _socket->set(zmq::sockopt::rcvtimeo, recv_wait_ms);
@@ -121,59 +118,61 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
       if (_socket->recv(msg)) {
 
         bool more = _socket->get(zmq::sockopt::rcvmore);
-	if (more) {
-	  // if it's a multipart message, the first part is the sender's id
-	  auto msg_buf = static_cast<const char *>(msg.data());
+        if (more) {
+          // if it's a multipart message, the first part is the sender's id
+          auto msg_buf = static_cast<const char *>(msg.data());
           std::string client_id(msg_buf, msg_buf + msg.size());
 
           if (_socket->recv(msg)) {
-	    auto unpacked = msgpack::unpack(
-		static_cast<const char *>(msg.data()), msg.size());
-	    const auto& obj = unpacked.get();
+            auto unpacked = msgpack::unpack(
+                static_cast<const char *>(msg.data()), msg.size());
+            const auto &obj = unpacked.get();
 
-	    MessageType message_type;
-	    if (obj.type == msgpack::type::BIN) {
-	      std::array<uint8_t, 1> message_type_buffer;
-	      obj.convert(message_type_buffer);
-	      message_type = static_cast<MessageType>(message_type_buffer[0]);
+            MessageType message_type;
+            if (obj.type == msgpack::type::BIN) {
+              std::array<uint8_t, 1> message_type_buffer;
+              obj.convert(message_type_buffer);
+              message_type = static_cast<MessageType>(message_type_buffer[0]);
             } else if (obj.type == msgpack::type::ARRAY) {
-	      message_type = static_cast<MessageType>(obj.via.array.ptr[0].as<uint8_t>());
+              message_type =
+                  static_cast<MessageType>(obj.via.array.ptr[0].as<uint8_t>());
             }
-	    pc::logger->debug("message_type_byte: {}",
-			      fmt::format("{:02x}", (char)message_type));
-	    
+            pc::logger->debug("message_type_byte: {}",
+                              fmt::format("{:02x}", (char)message_type));
+
             if (message_type == MessageType::Connected) {
-	      _connected_client_ids.insert(client_id);
-	      pc::logger->info("Sync client '{}' connected", client_id);
-	      continue;
-	    } else if (message_type == MessageType::ClientHeartbeat) {
+              _connected_client_ids.insert(client_id);
+              pc::logger->info("Sync client '{}' connected", client_id);
+              continue;
+            } else if (message_type == MessageType::ClientHeartbeat) {
               pc::logger->debug("Heartbeat from: {}", client_id);
               _connected_client_ids.insert(client_id);
-	      enqueue_signal(MessageType::ClientHeartbeatResponse);
-	      continue;
+              enqueue_signal(MessageType::ClientHeartbeatResponse);
+              continue;
             }
             //
             else if (message_type == MessageType::ParameterRequest) {
               auto parameter_id =
-		  unpacked.get().via.array.ptr[1].as<std::string_view>();
-              pc::logger->debug("'{}' requesting: '{}'", client_id, parameter_id);
+                  unpacked.get().via.array.ptr[1].as<std::string_view>();
+              pc::logger->debug("'{}' requesting: '{}'", client_id,
+                                parameter_id);
 
               if (parameter_bindings.contains(parameter_id)) {
-		auto value = parameter_bindings.at(parameter_id).value;
+                auto value = parameter_bindings.at(parameter_id).value;
 
-		if (std::holds_alternative<FloatReference>(value)) {
-		  enqueue_parameter_update(
-		      ParameterUpdate{std::string{parameter_id},
-				      std::get<FloatReference>(value).get()});
+                if (std::holds_alternative<FloatReference>(value)) {
+                  enqueue_parameter_update(
+                      ParameterUpdate{std::string{parameter_id},
+                                      std::get<FloatReference>(value).get()});
                 } else if (std::holds_alternative<IntReference>(value)) {
-                  enqueue_parameter_update(ParameterUpdate{std::string{parameter_id},
-					  std::get<IntReference>(value).get()});
+                  enqueue_parameter_update(
+                      ParameterUpdate{std::string{parameter_id},
+                                      std::get<IntReference>(value).get()});
                 } else if (std::holds_alternative<Float3Reference>(value)) {
-		  enqueue_parameter_update(
-		      ParameterUpdate{std::string{parameter_id},
-				      std::get<Float3Reference>(value).get()});
+                  enqueue_parameter_update(
+                      ParameterUpdate{std::string{parameter_id},
+                                      std::get<Float3Reference>(value).get()});
                 }
-
               }
             }
           };
