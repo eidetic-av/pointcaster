@@ -13,13 +13,23 @@
 extern "C" {
 
 using bob::types::PointCloud;
+
+static std::unique_ptr<zmq::context_t> zmq_ctx;
+static std::once_flag zmq_ctx_once;
+
 static moodycamel::BlockingReaderWriterCircularBuffer<PointCloud>
     cloud_queue(1);
 
 std::unique_ptr<std::jthread> pointcloud_thread;
+std::unique_ptr<std::jthread> parameter_thread;
 
-// Start a thread that handles networking
+// Start a thread that handles networking for the point cloud
 int startPointcloudReceiver(const char *point_caster_address, int timeout_ms) {
+
+  // initialise the zmq context if it hasn't already been initialised
+  std::call_once(zmq_ctx_once,
+                 [] { zmq_ctx = std::make_unique<zmq::context_t>(); });
+
   const std::string point_caster_address_str(point_caster_address);
 
   pointcloud_thread = std::make_unique<std::jthread>(
@@ -30,8 +40,7 @@ int startPointcloudReceiver(const char *point_caster_address, int timeout_ms) {
         log("Beginning networking thread");
 
         // create the dish that receives point clouds
-        zmq::context_t ctx;
-        zmq::socket_t dish(ctx, zmq::socket_type::dish);
+        zmq::socket_t dish(*zmq_ctx, zmq::socket_type::dish);
 
         // TODO something in the set calls here is crashing Unity
 

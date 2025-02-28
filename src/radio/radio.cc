@@ -1,13 +1,14 @@
 #include "radio.h"
 #include "../devices/device.h"
 #include "../logger.h"
+#include "../network_globals.h"
 #include "../snapshots.h"
-#include <tracy/Tracy.hpp>
 #include <chrono>
 #include <fmt/format.h>
 #include <imgui.h>
 #include <map>
 #include <numeric>
+#include <tracy/Tracy.hpp>
 #include <zmq.hpp>
 
 namespace pc::radio {
@@ -31,8 +32,8 @@ Radio::Radio(RadioConfiguration &config,
         using namespace std::chrono;
         using namespace std::chrono_literals;
 
-        zmq::context_t zmq_context;
-        zmq::socket_t radio(zmq_context, zmq::socket_type::radio);
+        zmq::socket_t radio(network_globals::get_zmq_context(),
+                            zmq::socket_type::radio);
         // prioritise the latest frame
         radio.set(zmq::sockopt::sndhwm, 1);
         // and don't keep excess frames in memory
