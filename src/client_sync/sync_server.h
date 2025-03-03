@@ -6,6 +6,7 @@
 #include "../string_utils.h"
 #include "../structs.h"
 #include "sync_server_config.gen.h"
+#include "updates.h"
 #include <thread>
 #include <type_traits>
 #include <variant>
@@ -35,24 +36,6 @@ constexpr bool is_in_tuple<T, std::tuple<Head, Tail...>> =
 /////////////////
 
 namespace pc::client_sync {
-
-using array3f = std::array<float, 3>;
-using pc::types::Float3;
-
-struct ParameterUpdate {
-  std::string id;
-  std::variant<float, int, Float3, array3f> value;
-};
-
-enum class MessageType : uint8_t {
-  Connected = 0x00,
-  ClientHeartbeat = 0x01,
-  ClientHeartbeatResponse = 0x02,
-  ParameterUpdate = 0x10,
-  ParameterRequest = 0x11
-};
-
-using ServerToClientMessage = std::variant<MessageType, ParameterUpdate>;
 
 class SyncServer {
 public:
@@ -84,7 +67,7 @@ private:
   std::unordered_set<std::string> _connected_client_ids;
 
 #ifndef __CUDACC__
-  moodycamel::BlockingConcurrentQueue<ServerToClientMessage> _messages_to_send;
+  moodycamel::BlockingConcurrentQueue<SyncMessage> _messages_to_send;
 #endif
 
   void enqueue_parameter_update(ParameterUpdate update);

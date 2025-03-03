@@ -5,46 +5,12 @@
 #include "../parameters.h"
 #include "../publisher/publisher.h"
 #include "../string_utils.h"
-#include <msgpack.hpp>
+#include <system_error>
+#include <zpp_bits.h>
 
 namespace pc::client_sync {
 
 using namespace pc::parameters;
-
-msgpack::sbuffer serialize_parameter_update(const ParameterUpdate &update) {
-  static const auto param_update_msgtype =
-      static_cast<uint8_t>(MessageType::ParameterUpdate);
-  msgpack::sbuffer buffer;
-
-  std::visit(
-      [&buffer, &update](const auto &val) {
-        using T = std::decay_t<decltype(val)>;
-
-        if constexpr (types::ScalarType<T>) {
-          std::tuple<uint8_t, std::string_view, T> update_value{
-              param_update_msgtype, update.id, val};
-          msgpack::pack(buffer, update_value);
-        } else if constexpr (types::VectorType<T>) {
-          std::array<typename T::vector_type, types::VectorSize<T>::value>
-              array;
-          for (std::size_t el = 0; el < types::VectorSize<T>::value; el++) {
-            array[el] = val[el];
-          }
-          std::tuple<uint8_t, std::string_view, decltype(array)> update_value{
-              param_update_msgtype, update.id, array};
-          msgpack::pack(buffer, update_value);
-        } else if constexpr (std::is_same_v<T, std::array<float, 3>>) {
-          std::tuple<uint8_t, std::string_view, std::array<float, 3>>
-              update_value{param_update_msgtype, update.id, val};
-          msgpack::pack(buffer, update_value);
-        } else {
-          pc::logger->debug("{}", typeid(T).name());
-        }
-      },
-      update.value);
-
-  return buffer;
-}
 
 SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
   _config.port = std::clamp(_config.port, 1024, 49151);
@@ -139,22 +105,15 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
           }
 
           // send any outgoing messages
-          ServerToClientMessage message;
+          SyncMessage message;
           while (_messages_to_send.wait_dequeue_timed(message,
                                                       send_queue_wait_time)) {
 
             if (_connected_client_ids.empty()) { continue; }
 
-            // serialize the outgoing message using messagepack
-            msgpack::sbuffer buffer;
-            if (std::holds_alternative<ParameterUpdate>(message)) {
-              buffer = serialize_parameter_update(
-                  std::get<ParameterUpdate>(message));
-            } else if (std::holds_alternative<MessageType>(message)) {
-              const auto signal_message =
-                  static_cast<uint8_t>(std::get<MessageType>(message));
-              msgpack::pack(buffer, std::array<uint8_t, 1>{signal_message});
-            }
+            // serialize the outgoing message
+            auto [buffer, out] = zpp::bits::data_out();
+            out(message);
 
             for (const auto &client_id : _connected_client_ids) {
               socket.send(zmq::message_t{client_id}, zmq::send_flags::sndmore);

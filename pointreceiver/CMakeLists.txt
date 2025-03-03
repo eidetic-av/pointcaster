@@ -18,6 +18,10 @@ list(APPEND RECEIVER_LINK_LIBS bob::pointclouds)
 find_path(READERWRITERQUEUE_INCLUDE_DIRS "readerwriterqueue/atomicops.h")
 list(APPEND RECEIVER_INCLUDE_DIRS ${READERWRITERQUEUE_INCLUDE_DIRS})
 
+find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
+list(APPEND RECEIVER_INCLUDE_DIRS ${ZPP_BITS_INCLUDE_DIRS})
+
+
 # ----- Pointreceiver library -----
 
 set(RECEIVER_SOURCE_FILES src/pointreceiver.cc)
