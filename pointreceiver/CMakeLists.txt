@@ -64,3 +64,17 @@ if (WITH_TESTS)
     $<$<BOOL:${RECEIVER_LIB_SHARED}>:${RECEIVER_SHARED_LIBS}>
     $<$<NOT:$<BOOL:${RECEIVER_LIB_SHARED}>>:${RECEIVER_STATIC_LIBS}>)
 endif()
+
+# ----- Upload/deploy build artefacts -----
+
+list(APPEND RECEIVER_DEPLOY_EXCLUDES
+    "*cmake*" "*CMake*" "*vcpkg*"
+    "*ninja*" "*.exp" "pointreceiver-test.*"
+    "compile_commands.json")
+
+add_custom_target(deploy DEPENDS pointreceiver
+  COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/deploy.py
+        --name ${ARCHIVE_NAME}
+        --directory ${CMAKE_CURRENT_BINARY_DIR}
+        --exclude ${RECEIVER_DEPLOY_EXCLUDES}
+        --bucket pointcaster-builds)

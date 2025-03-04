@@ -9,6 +9,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX TRUE)
 endif()
 
+get_filename_component(CMAKE_PRESET_NAME ${CMAKE_BINARY_DIR} NAME)
+
 ########################################################
 
 project(pointcaster LANGUAGES CXX CUDA)
@@ -49,6 +51,8 @@ if (LINUX AND MOLD_LINKER_FOUND)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fuse-ld=mold")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fuse-ld=mold")
 endif()
+  
+find_package(Python REQUIRED COMPONENTS Interpreter)
 
 if(LINUX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive -Wfatal-errors")
@@ -99,7 +103,7 @@ if (GENERATE_REFLECTIONS)
 
   add_custom_command(
     OUTPUT ${GENERATED_HEADERS}
-    COMMAND python ${CMAKE_SOURCE_DIR}/scripts/generate_reflections.py ${REFLECTED_TYPES}
+    COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/generate_reflections.py ${REFLECTED_TYPES}
     DEPENDS ${REFLECTED_TYPES}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Generating reflection information"
@@ -475,23 +479,19 @@ endif()
 
 # ----- Upload/deploy build artefacts -----
 
-# TODO this is only working with pointcaster builds,
-# need to make it work for pointreceiver library builds too
+if (WITH_POINTCASTER)
 
-list(APPEND DEPLOY_EXCLUDES
-    "*cmake*" "*CMake*" "*vcpkg*"
-    "*ninja*" "*.lib" "*.exp"
-    "resource*.cpp" "Log/*"
-    "data/*" "compile_commands.json"
-)
-get_filename_component(BUILD_PRESET_NAME ${CMAKE_BINARY_DIR} NAME)
+  list(APPEND DEPLOY_EXCLUDES
+      "*cmake*" "*CMake*" "*vcpkg*"
+      "*ninja*" "*.lib" "*.exp"
+      "resource*.cpp" "Log/*"
+      "data/*" "compile_commands.json")
 
-# Add the deploy custom target. Replace <your_build_target> with the target that must be built.
-add_custom_target(deploy
-  COMMAND python ${CMAKE_SOURCE_DIR}/scripts/deploy.py
-          --name "pointcaster_${BUILD_PRESET_NAME}"
+  add_custom_target(deploy DEPENDS pointcaster
+    COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/deploy.py
+          --name ${ARCHIVE_NAME}
           --directory ${CMAKE_BINARY_DIR}
           --exclude ${DEPLOY_EXCLUDES}
-          --bucket pointcaster-builds
-  DEPENDS pointcaster
-)
+          --bucket pointcaster-builds)
+
+endif()

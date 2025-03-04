@@ -12,6 +12,7 @@
         "strategy": "external"
       },
       "cacheVariables": {
+        "ARCHIVE_NAME": "pointcaster_windows-release",
         "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
         "CMAKE_TOOLCHAIN_FILE": "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
@@ -33,6 +34,7 @@
       "displayName": "Windows x64 Debug",
       "description": "Build with debug info",
       "cacheVariables": {
+        "ARCHIVE_NAME": "pointcaster_windows-debug",
         "CMAKE_BUILD_TYPE": "Debug"
       }
     },
@@ -42,6 +44,7 @@
       "displayName": "PointReceiver Lib Windows x64 Release",
       "description": "Build pointreceiver dll",
       "cacheVariables": {
+        "ARCHIVE_NAME": "pointreceiver_windows-release",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
         "WITH_POINTCASTER": false,
         "WITH_RECEIVER_LIB": true,
@@ -54,6 +57,7 @@
       "displayName": "PointReceiver Lib Windows x64 Debug",
       "description": "Build pointreceiver dll with debug info and tests",
       "cacheVariables": {
+        "ARCHIVE_NAME": "pointreceiver_windows-debug",
         "CMAKE_BUILD_TYPE": "Debug"
       }
     }
