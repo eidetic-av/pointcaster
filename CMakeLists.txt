@@ -472,3 +472,26 @@ if (LINUX)
     ${CMAKE_BINARY_DIR}/compile_commands.json
     ${CMAKE_CURRENT_LIST_DIR})
 endif()
+
+# ----- Upload/deploy build artefacts -----
+
+# TODO this is only working with pointcaster builds,
+# need to make it work for pointreceiver library builds too
+
+list(APPEND DEPLOY_EXCLUDES
+    "*cmake*" "*CMake*" "*vcpkg*"
+    "*ninja*" "*.lib" "*.exp"
+    "resource*.cpp" "Log/*"
+    "data/*" "compile_commands.json"
+)
+get_filename_component(BUILD_PRESET_NAME ${CMAKE_BINARY_DIR} NAME)
+
+# Add the deploy custom target. Replace <your_build_target> with the target that must be built.
+add_custom_target(deploy
+  COMMAND python ${CMAKE_SOURCE_DIR}/scripts/deploy.py
+          --name "pointcaster_${BUILD_PRESET_NAME}"
+          --directory ${CMAKE_BINARY_DIR}
+          --exclude ${DEPLOY_EXCLUDES}
+          --bucket pointcaster-builds
+  DEPENDS pointcaster
+)
