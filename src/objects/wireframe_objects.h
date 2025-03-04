@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../gui/catpuccin.h"
+#include "flat_shade_object.h"
 #include <Corrade/Containers/Pointer.h>
 #include <Magnum/GL/Mesh.h>
 #include <Magnum/MeshTools/Compile.h>
@@ -9,8 +11,6 @@
 #include <Magnum/SceneGraph/Scene.h>
 #include <Magnum/Shaders/Flat.h>
 #include <Magnum/Trade/MeshData.h>
-#include "flat_shade_object.h"
-#include "gui/catpuccin.h"
 
 namespace pc {
 

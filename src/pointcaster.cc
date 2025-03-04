@@ -1631,22 +1631,19 @@ void PointCaster::drawEvent() {
 
   // Render ImGui window
   GL::Renderer::enable(GL::Renderer::Feature::Blending);
+  GL::Renderer::enable(GL::Renderer::Feature::ScissorTest);
   GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
   GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
-  GL::Renderer::enable(GL::Renderer::Feature::ScissorTest);
 
   _imgui_context.drawFrame();
-
 
   if (ImGuiConfigFlags_ViewportsEnable) {
     ImGui::UpdatePlatformWindows();
     ImGui::RenderPlatformWindowsDefault();
   }
-
-  GL::Renderer::disable(GL::Renderer::Feature::ScissorTest);
-  GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+  
   GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
-  GL::Renderer::disable(GL::Renderer::Feature::Blending);
+  GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
 
   // TODO this can be removed and if we want GL errors we can set
   // MAGNUM_GPU_VALIDATION=ON instead or run the application with

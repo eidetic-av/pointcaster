@@ -1,8 +1,10 @@
 #pragma once
 
+#include "../objects/wireframe_objects.h"
+#include "../objects/solid_objects.h"
+
 #include "../gui/catpuccin.h"
 #include "../uuid.h"
-#include "../wireframe_objects.h"
 #include "range_filter_operator.gen.h"
 #include <Magnum/Magnum.h>
 #include <map>
@@ -18,7 +20,7 @@ using Vector4 = Magnum::Math::Vector4<float>;
 
 using uid = unsigned long int;
 
-inline static std::map<uid, std::unique_ptr<WireframeBox>>
+inline static std::map<uid, std::unique_ptr<SolidBox>>
     operator_bounding_boxes;
 
 inline static constexpr std::array<Vector4, 6> bounding_box_colors{
@@ -38,18 +40,26 @@ set_or_create_bounding_box(const T &operator_config, Scene3D &scene,
                            std::optional<Color4> color = {}) {
   // get or create the bounding box in the scene
   auto [itr, _] = operator_bounding_boxes.emplace(
-      operator_config.id,
-      std::make_unique<WireframeBox>(&scene, &parent_group));
+      operator_config.id, std::make_unique<SolidBox>(&scene, &parent_group));
+
   auto &box = itr->second;
   // and set its updated position / scale
   const auto &size = operator_config.size;
   const auto &position = operator_config.position;
-  box->set_transformation(Matrix4::scaling({size.x, size.y, size.z}) *
-                          Matrix4::translation({0, 0, 0}));
+  box->setTransformation(Matrix4::scaling({size.x, size.y, size.z}) *
+                         Matrix4::translation({0, 0, 0}));
   box->transform(Matrix4::translation({position.x, position.y, position.z}));
-  if (color.has_value()) { box->set_color(color.value().rgb()); }
+
+  if (color.has_value()) {
+    auto rgb = color.value().rgb();
+    box->setColor({rgb, 0.3f});
+  } else {
+    auto rgb = next_bounding_box_color();
+    box->setColor({rgb, 0.3f});
+  }
+
   if constexpr (std::same_as<T, RangeFilterOperatorConfiguration>) {
-    box->set_visible(operator_config.draw);
+    // box->set_visible(operator_config.draw);
   }
 }
 
@@ -60,20 +70,20 @@ set_or_create_bounding_box(uid id, pc::types::Float3 size,
                            std::optional<Color4> color = {}) {
   // get or create the bounding box in the scene
   auto [itr, _] = operator_bounding_boxes.emplace(
-      id, std::make_unique<WireframeBox>(&scene, &parent_group));
+      id, std::make_unique<SolidBox>(&scene, &parent_group));
   auto &box = itr->second;
   // and set its updated position / scale
-  box->set_transformation(Matrix4::scaling({size.x, size.y, size.z}) *
-                          Matrix4::translation({0, 0, 0}));
-
+  box->setTransformation(Matrix4::scaling({size.x, size.y, size.z}) *
+                         Matrix4::translation({0, 0, 0}));
   box->transform(Matrix4::translation({position.x, position.y, position.z}));
 
   if (color.has_value()) {
-    box->set_color(color.value().rgb());
+    auto rgb = color.value().rgb();
+    box->setColor({rgb, 0.3f});
   } else {
-    box->set_color(next_bounding_box_color());
+    auto rgb = next_bounding_box_color();
+    box->setColor({rgb, 0.3f});
   }
-  box->set_visible(true);
 }
 
 } // namespace pc::operators
