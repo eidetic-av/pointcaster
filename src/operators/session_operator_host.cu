@@ -22,13 +22,13 @@
 #include <thrust/transform.h>
 #include <variant>
 
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/gpu/containers/device_array.hpp>
-#include <pcl/gpu/octree/octree.hpp>
-#include <pcl/gpu/segmentation/gpu_extract_clusters.h>
-#include <pcl/gpu/segmentation/impl/gpu_extract_clusters.hpp>
-#include <pcl/octree/octree_search.h>
-#include <pcl/point_cloud.h>
+// #include <pcl/filters/voxel_grid.h>
+// #include <pcl/gpu/containers/device_array.hpp>
+// #include <pcl/gpu/octree/octree.hpp>
+// #include <pcl/gpu/segmentation/gpu_extract_clusters.h>
+// #include <pcl/gpu/segmentation/impl/gpu_extract_clusters.hpp>
+// #include <pcl/octree/octree_search.h>
+// #include <pcl/point_cloud.h>
 
 #ifdef WITH_TRACY
 #include <tracy/Tracy.hpp>

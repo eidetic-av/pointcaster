@@ -7,6 +7,7 @@
 #include "../string_utils.h"
 #include "../uuid.h"
 #include "noise_operator.gen.h"
+#include "operator_friendly_names.h"
 #include "rake_operator.gen.h"
 #include "range_filter_operator.gen.h"
 #include "rotate_operator.gen.h"
@@ -163,6 +164,7 @@ void SessionOperatorHost::draw_imgui_window() {
     // populate menu with all Operator types
 
     apply_to_all_operators([this](auto &&operator_type) {
+      // creating a new operator
       using T = std::remove_reference_t<decltype(operator_type)>;
       if (ImGui::Selectable(T::Name)) {
 
@@ -171,6 +173,16 @@ void SessionOperatorHost::draw_imgui_window() {
         // create a new instance of our operator configuration and add it to our
         // session operator list
         auto &variant_ref = _config.operators.emplace_back(operator_config);
+
+        // ensure an initial friendly name for this operator is added to our map
+        size_t num = 0;
+        std::string friendly_name =
+            fmt::format("{}_{}", pc::strings::snake_case(T::Name), num);
+        while (operator_friendly_name_exists(friendly_name)) {
+          friendly_name =
+              fmt::format("{}_{}", pc::strings::snake_case(T::Name), ++num);
+        }
+        set_operator_friendly_name(operator_config.id, friendly_name);
 
         // declare the instance as parameters to bind to this new operator's id
         auto &config_instance = std::get<T>(variant_ref);
@@ -201,7 +213,7 @@ void SessionOperatorHost::draw_imgui_window() {
           ImGui::PushID(gui::_parameter_index++);
           ImGui::BeginGroup();
           if (operator_collapsing_header(
-                  pc::strings::concat(T::Name, "##" + id).c_str(),
+                  get_operator_friendly_name_cstr(config.id),
                   [&] { marked_for_delete = config.id; })) {
             config.unfolded = true;
 
