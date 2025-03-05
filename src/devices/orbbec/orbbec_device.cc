@@ -52,7 +52,7 @@ OrbbecDevice::OrbbecDevice(DeviceConfiguration &config)
 }
 
 OrbbecDevice::~OrbbecDevice() {
-	stop_pipeline();
+	stop_sync();
 
 	parameters::unbind_parameters(_config.id);
 
@@ -67,7 +67,7 @@ void OrbbecDevice::start() {
 	_initialisation_thread = std::jthread([this](std::stop_token stop_token) {
 		// TODO stop_token is currently unused,
 		// should pass it in and check at different initialisation thread steps
-		start_pipeline();
+		start_sync();
 	});
 }
 
@@ -75,7 +75,7 @@ void OrbbecDevice::stop() {
 	_initialisation_thread = std::jthread([this](std::stop_token stop_token) {
 		// TODO stop_token is currently unused,
 		// should pass it in and check at different initialisation thread steps
-		stop_pipeline();
+		stop_sync();
 	});
 }
 
@@ -83,12 +83,12 @@ void OrbbecDevice::restart() {
 	_initialisation_thread = std::jthread([this](std::stop_token stop_token) {
 		// TODO stop_token is currently unused,
 		// should pass it in and check at different initialisation thread steps
-		stop_pipeline();
-		start_pipeline();
+		stop_sync();
+		start_sync();
 	});
 }
 
-void OrbbecDevice::start_pipeline() {
+void OrbbecDevice::start_sync() {
 	pc::logger->info("Initialising OrbbecDevice at {}", _ip);
 
 	constexpr uint16_t net_device_port = 8090; // femto mega default
@@ -261,32 +261,43 @@ void OrbbecDevice::start_pipeline() {
   }
 }
 
-void OrbbecDevice::stop_pipeline() {
+void OrbbecDevice::stop_sync() {
 	pc::logger->info("Closing OrbbecDevice {}", _ip);
 	_running_pipeline = false;
 	_ob_pipeline->stop();
 	free_device_memory();
 }
 
-void OrbbecDevice::draw_imgui_controls() {
-	auto running = _running_pipeline;
-	ImGui::Dummy({ 10, 0 }); ImGui::SameLine();
-	if (running) ImGui::BeginDisabled();
-	if (ImGui::Button("Start")) start();
-	if (running) ImGui::EndDisabled();
-	if (!running) ImGui::BeginDisabled();
-	ImGui::SameLine();
-	ImGui::Dummy({ 10, 10 });
-	ImGui::SameLine();
-	if (ImGui::Button("Stop")) stop();
-	if (!running) ImGui::EndDisabled();
-	DeviceConfiguration last_config = _config;
-	if (pc::gui::draw_parameters(_config.id)) {
+bool OrbbecDevice::draw_imgui_controls() {
+  auto running = _running_pipeline;
+
+  ImGui::Dummy({10, 0});
+  ImGui::SameLine();
+  if (running) ImGui::BeginDisabled();
+  if (ImGui::Button("Start")) start();
+  if (running) ImGui::EndDisabled();
+  if (!running) ImGui::BeginDisabled();
+  ImGui::SameLine();
+  ImGui::Dummy({10, 10});
+  ImGui::SameLine();
+  if (ImGui::Button("Stop")) stop();
+  if (!running) ImGui::EndDisabled();
+
+  ImGui::SameLine();
+  ImGui::Dummy({10, 10});
+  ImGui::SameLine();
+  bool signal_detach = ImGui::Button("Detach");
+  ImGui::Dummy({10, 10});
+
+  DeviceConfiguration last_config = _config;
+  if (pc::gui::draw_parameters(_config.id)) {
     if (_config.depth_mode != last_config.depth_mode
       || _config.acquisition_mode != last_config.acquisition_mode) {
       restart();
 		}
 	};
+
+  return signal_detach;
 }
 
 } // namespace pc::devices

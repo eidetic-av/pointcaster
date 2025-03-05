@@ -1456,19 +1456,19 @@ void PointCaster::draw_devices_window() {
     const auto device_hash = std::hash<OrbbecDevice*>{}(&device);
     auto &config = device.config();
     ImGui::SetNextItemOpen(config.unfolded);
-    if (ImGui::CollapsingHeader(fmt::format("{}##", config.id, device_hash).c_str())) {
+    if (ImGui::CollapsingHeader(
+            fmt::format("{}##", config.id, device_hash).c_str())) {
       config.unfolded = true;
       ImGui::Dummy({0, 8});
       ImGui::Dummy({8, 0});
       ImGui::SameLine();
       ImGui::TextDisabled("%s", config.id.c_str());
       ImGui::Dummy({0, 6});
-      device.draw_imgui_controls();
-      ImGui::Dummy({ 0, 8 });
-      ImGui::Dummy({ 10, 0 }); ImGui::SameLine();
-	  if (ImGui::Button("Detach device")) {
-          device_to_detach = device_ref;
-	  };
+      bool signal_detach = device.draw_imgui_controls();
+      if (signal_detach) device_to_detach = device_ref;
+      ImGui::Dummy({0, 8});
+      ImGui::Dummy({10, 0});
+      ImGui::SameLine();
     } else {
       config.unfolded = false;
     }
@@ -1476,11 +1476,15 @@ void PointCaster::draw_devices_window() {
   ImGui::PopItemWidth();
 
   if (device_to_detach.has_value()) {
-	  // Find the device to detach and erase it from the vector
-      auto* device_ptr = &(device_to_detach.value().get());
-      std::erase_if(_orbbec_cameras, [device_ptr](auto& device_instance) {
-          return device_instance.get() == device_ptr;
-      });
+    auto &device = device_to_detach.value().get();
+    // TODO at the moment sensor must be running before detaching
+    // but we run the start&detach as async to not block the main thread
+    // ... though that probably ends in a data race
+    // because maybe theres a chance the 'device' ref is not valid?
+    run_async([&device, this]() {
+      device.start_sync();
+      close_orbbec_sensor(device);
+    });
   }
 
   if (loading_device) {

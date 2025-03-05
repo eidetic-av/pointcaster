@@ -47,7 +47,11 @@ public:
   void stop();
   void restart();
 
-  void draw_imgui_controls();
+  void start_sync();
+  void stop_sync();
+
+  /// returns signal_detach bool, a request for if the device should be detached
+  bool draw_imgui_controls();
 
   DeviceConfiguration &config() { return _config; }
   const std::string& ip() { return _ip; }
@@ -82,9 +86,6 @@ private:
 
   OrbbecImplDeviceMemory *_device_memory;
   std::atomic_bool _device_memory_ready{false};
-
-  void start_pipeline();
-  void stop_pipeline();
 
   bool init_device_memory(std::size_t incoming_point_count);
   void free_device_memory();
