@@ -56,30 +56,75 @@ SessionOperatorHost::SessionOperatorHost(
 };
 
 bool operator_collapsing_header(
-    const char *label,
-    std::optional<std::function<void()>> delete_callback = {}) {
+    uid operator_id, std::optional<std::function<void()>> delete_callback = {},
+    std::optional<std::function<void(std::string)>> title_edit_callback = {}) {
+  const char *label = get_operator_friendly_name_cstr(operator_id);
   using namespace ImGui;
   PushID(gui::_parameter_index++);
   PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
   bool *p_open = GetStateStorage()->GetBoolRef(GetID(label), false);
-  ImGuiStyle &style = ImGui::GetStyle();
-  if (ArrowButton(fmt::format("{}##arrow", label).c_str(),
-                  *p_open ? ImGuiDir_Down : ImGuiDir_Right)) {
-    *p_open ^= 1;
-  }
-  ImGui::SameLine();
+
+  // Render arrow button
+  bool arrow_clicked =
+      ArrowButton(fmt::format("{}##arrow_{}", label, operator_id).c_str(),
+                  *p_open ? ImGuiDir_Down : ImGuiDir_Right);
+  if (arrow_clicked) { *p_open = !(*p_open); }
+  SameLine();
+
+  bool label_clicked = false;
+  bool label_right_clicked = false;
+  auto button_label = fmt::format("{}##button_{}", label, operator_id);
   if (delete_callback.has_value()) {
-    const auto close_button_width = ImGui::CalcTextSize(" X ").x * 1.5;
-    if (Button(label, ImVec2(-FLT_MIN - close_button_width, 0.0f))) {
-      *p_open ^= 1;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(" X ")) { delete_callback.value()(); };
+    const auto close_button_width = CalcTextSize(" X ").x * 1.5f;
+    label_clicked = Button(button_label.c_str(),
+                           ImVec2(-FLT_MIN - close_button_width, 0.0f));
+    label_right_clicked = IsItemClicked(ImGuiMouseButton_Right);
+    SameLine();
+    if (Button(" X ")) { delete_callback.value()(); }
   } else {
-    if (Button(label, ImVec2(-FLT_MIN, 0.0f))) { *p_open ^= 1; }
+    label_clicked = Button(button_label.c_str(), ImVec2(-FLT_MIN, 0.0f));
+    label_right_clicked = IsItemClicked(ImGuiMouseButton_Right);
   }
+
+  static std::string original_title;
+  static bool edit_popup_opened = false;
+  auto popup_label = fmt::format("{}##editpopup_{}", label, operator_id);
+
+  if (label_clicked) *p_open = !(*p_open);
+  else if (label_right_clicked) {
+    original_title = label;
+    OpenPopup(popup_label.c_str());
+  }
+
+  // Popup: Editable text field for title editing.
+  static char edit_buf[256] = "";
+  if (BeginPopup(popup_label.c_str())) {
+    // Initialize edit_buf with the current label if just opened.
+    if (!edit_popup_opened) {
+      strncpy(edit_buf, label, sizeof(edit_buf) - 1);
+      edit_buf[sizeof(edit_buf) - 1] = '\0';
+      edit_popup_opened = true;
+    }
+    // Render InputText; use flags to auto-select and commit on Enter.
+    if (InputText(fmt::format("##rename_{}", popup_label).c_str(), edit_buf,
+                  IM_ARRAYSIZE(edit_buf),
+                  ImGuiInputTextFlags_AutoSelectAll |
+                      ImGuiInputTextFlags_EnterReturnsTrue)) {
+      std::string new_title(edit_buf);
+      if (new_title.empty()) new_title = original_title;
+      if (title_edit_callback.has_value()) {
+        title_edit_callback.value()(new_title);
+      }
+      CloseCurrentPopup();
+      edit_popup_opened = false;
+    }
+    EndPopup();
+  } else {
+    edit_popup_opened = false;
+  }
+
   PopStyleVar();
-  ImGui::PopID();
+  PopID();
   return *p_open;
 }
 
@@ -155,12 +200,13 @@ void SessionOperatorHost::draw_imgui_window() {
 
   static bool select_node = false;
 
-  if (ImGui::Button("Add session operator")) {
-    ImGui::OpenPopup("Add session operator");
-  }
+  ImGui::Dummy({10, 0});
+  ImGui::SameLine();
+  if (ImGui::Button("Add operator")) { ImGui::OpenPopup("Add operator"); }
   ImGui::Spacing();
+  ImGui::Dummy({0, 10});
 
-  if (ImGui::BeginPopup("Add session operator")) {
+  if (ImGui::BeginPopup("Add operator")) {
     // populate menu with all Operator types
 
     apply_to_all_operators([this](auto &&operator_type) {
@@ -213,9 +259,23 @@ void SessionOperatorHost::draw_imgui_window() {
           ImGui::PushID(gui::_parameter_index++);
           ImGui::BeginGroup();
           if (operator_collapsing_header(
-                  get_operator_friendly_name_cstr(config.id),
-                  [&] { marked_for_delete = config.id; })) {
+                  config.id, [&] { marked_for_delete = config.id; },
+                  [operator_id = config.id](std::string new_title) {
+                    if (!operator_friendly_name_exists(new_title)) {
+                      set_operator_friendly_name(operator_id, new_title);
+                    } else {
+                      pc::logger->error("'{}' already exists", new_title);
+                    }
+                  })) {
             config.unfolded = true;
+
+            ImGui::Dummy({0, 6});
+            ImGui::Dummy({10, 0});
+            ImGui::SameLine();
+            ImGui::BeginDisabled(true);
+            ImGui::Text(T::Name);
+            ImGui::EndDisabled();
+            ImGui::Dummy({0, 3});
 
             if (pc::gui::draw_parameters(config.id)) {
               if constexpr (std::is_same_v<T,
