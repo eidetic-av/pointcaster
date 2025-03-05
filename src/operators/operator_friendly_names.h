@@ -20,8 +20,15 @@ inline void set_operator_friendly_name(uid id, T&& name) {
 }
 
 inline std::string get_operator_friendly_name(uid id) {
-    auto it = operator_friendly_names.find(id);
-    return (it != operator_friendly_names.end()) ? it->second : "";
+  auto it = operator_friendly_names.find(id);
+  return (it != operator_friendly_names.end()) ? it->second : "";
+}
+
+inline std::string get_operator_friendly_name(uid id,
+                                              std::string_view fallback) {
+  auto it = operator_friendly_names.find(id);
+  return (it != operator_friendly_names.end()) ? it->second
+                                               : std::string(fallback);
 }
 
 inline std::string get_operator_friendly_name(std::string_view id_str) {
