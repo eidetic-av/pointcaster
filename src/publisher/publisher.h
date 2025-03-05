@@ -56,6 +56,15 @@ void publish_all(const std::string_view topic, const T &data,
     publish_label = topic;
   }
 
+#ifndef NDEBUG
+  pc::logger->debug("Publishing with label: {}", publish_label);
+  if (topic_nodes.size() > 0) {
+    pc::logger->debug("- Topic nodes: ", publish_label);
+    std::for_each(topic_nodes.begin(), topic_nodes.end(),
+                  [](const auto &node) { pc::logger->debug("  - {}", node); });
+  }
+#endif
+
   for (auto &publisher : _instances) {
     std::visit(
         [&publish_label, &data, &topic_nodes](auto &publisher) {
