@@ -19,14 +19,14 @@ void RangeFilterOperator::init(const RangeFilterOperatorConfiguration &config,
 
   parameters::add_parameter_update_callback(
       position_parameter, [&](const auto &, auto &) {
-	set_or_create_bounding_box(config, scene, parent_group,
-				   next_bounding_box_color());
+        set_or_create_bounding_box(config, scene, parent_group,
+                                   next_bounding_box_color());
       });
 
   parameters::add_parameter_update_callback(
       size_parameter, [&](const auto &, auto &) {
-	set_or_create_bounding_box(config, scene, parent_group,
-				   next_bounding_box_color());
+        set_or_create_bounding_box(config, scene, parent_group,
+                                   next_bounding_box_color());
       });
 }
 } // namespace pc::operators

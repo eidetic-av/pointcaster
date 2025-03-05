@@ -20,7 +20,7 @@ using Magnum::SceneGraph::DrawableGroup3D;
 struct AABB {
   bool unfolded = true;
   Float3 min{-10000, -10000, -10000}; // @minmax(-10000, 10000)
-  Float3 max{10000, 10000, 10000}; // @minmax(-10000, 10000)
+  Float3 max{10000, 10000, 10000};    // @minmax(-10000, 10000)
 };
 
 using uid = unsigned long int;
@@ -51,8 +51,8 @@ struct RangeFilterOperatorConfiguration {
   bool enabled = true;
   bool bypass = false;
   bool draw = true;
-  Float3 position {0, 0, 0}; // @minmax(-10, 10)
-  Float3 size {1, 1, 1}; // @minmax(0.01f, 10)
+  Float3 position{0, 0, 0}; // @minmax(-10, 10)
+  Float3 size{1, 1, 1};     // @minmax(0.01f, 10)
   RangeFilterOperatorFillConfiguration fill;
   RangeFilterOperatorMinMaxConfiguration minmax;
 };
@@ -62,7 +62,7 @@ struct RangeFilterOperator : Operator {
   RangeFilterOperatorConfiguration _config;
 
   RangeFilterOperator(const RangeFilterOperatorConfiguration &config)
-      : _config(config){};
+      : _config(config) {};
 
   __device__ bool operator()(indexed_point_t point) const;
 
