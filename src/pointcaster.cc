@@ -20,10 +20,10 @@
 #include <Magnum/GL/PixelFormat.h>
 #include <Magnum/GL/Renderer.h>
 #include <Magnum/GL/Version.h>
-#include <Magnum/Image.h>
-#include <Magnum/ImageView.h>
 #include <Magnum/ImGuiIntegration/Context.hpp>
 #include <Magnum/ImGuiIntegration/Widgets.h>
+#include <Magnum/Image.h>
+#include <Magnum/ImageView.h>
 #include <Magnum/Magnum.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/Math/FunctionsBatch.h>
@@ -34,6 +34,7 @@
 #include <Magnum/SceneGraph/Drawable.h>
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
+
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -42,8 +43,8 @@
 #include <toml.hpp>
 
 #include <tracy/Tracy.hpp>
-#include <zpp_bits.h>
 #include <zmq.hpp>
+#include <zpp_bits.h>
 
 #ifdef WIN32
 #include <SDL2/SDL_Clipboard.h>
@@ -125,9 +126,9 @@ using Object3D = Magnum::SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
 using Scene3D = Magnum::SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 
 struct SphereInstanceData {
-    Matrix4 transformationMatrix;
-    Matrix3x3 normalMatrix;
-    Color3 color;
+  Matrix4 transformationMatrix;
+  Matrix3x3 normalMatrix;
+  Color3 color;
 };
 
 class PointCaster : public Platform::Application {
@@ -148,8 +149,7 @@ protected:
   std::array<char, modeline_buffer_size> _modeline_input =
       std::array<char, modeline_buffer_size>({});
 
-  std::vector<std::jthread>
-      _async_tasks;
+  std::vector<std::jthread> _async_tasks;
 
   std::unique_ptr<Scene3D> _scene;
   std::unique_ptr<SceneGraph::DrawableGroup3D> _scene_root;
@@ -157,7 +157,8 @@ protected:
   std::optional<Vector2i> _display_resolution;
 
   std::vector<std::unique_ptr<CameraController>> _camera_controllers;
-  std::optional<std::reference_wrapper<CameraController>> _interacting_camera_controller;
+  std::optional<std::reference_wrapper<CameraController>>
+      _interacting_camera_controller;
 
   std::unique_ptr<PointCloudRenderer> _point_cloud_renderer;
   std::unique_ptr<SphereRenderer> _sphere_renderer;
@@ -202,10 +203,11 @@ protected:
   void load_session(std::filesystem::path file_path);
 
   std::atomic_bool loading_device = false;
-  void load_k4a_device(const DeviceConfiguration& config, std::string_view target_id = "");
+  void load_k4a_device(const DeviceConfiguration &config,
+                       std::string_view target_id = "");
   void open_kinect_sensors();
   void open_orbbec_sensor(std::string_view ip);
-  void close_orbbec_sensor(OrbbecDevice& device);
+  void close_orbbec_sensor(OrbbecDevice &device);
 
   void render_cameras();
   void publish_parameters();
@@ -213,7 +215,7 @@ protected:
   void draw_menu_bar();
   void draw_control_bar();
   void draw_main_viewport();
-  void draw_viewport_controls(CameraController& selected_camera);
+  void draw_viewport_controls(CameraController &selected_camera);
   void draw_camera_control_windows();
   void draw_devices_window();
   void draw_onscreen_log();
@@ -256,7 +258,8 @@ PointCaster::PointCaster(const Arguments &args)
   // Get OS resolution
   SDL_DisplayMode dm;
   if (SDL_GetDesktopDisplayMode(0, &dm) != 0)
-    pc::logger->warn("Failed to get display resolution using SDL: {}", SDL_GetError());
+    pc::logger->warn("Failed to get display resolution using SDL: {}",
+                     SDL_GetError());
   else {
     _display_resolution = {dm.w, dm.h};
     pc::logger->info("SDL2 returned display resolution: {}x{}", dm.w, dm.h);
@@ -268,7 +271,7 @@ PointCaster::PointCaster(const Arguments &args)
 
   // TODO figure out how to persist window size accross launches
   if (_display_resolution.has_value()) {
-    auto& resolution = _display_resolution.value();
+    auto &resolution = _display_resolution.value();
     constexpr auto start_res_scale = 2.0f / 3.0f;
     constexpr auto start_ratio = 2.0f / 3.0f;
     auto start_width = int(resolution.x() / 1.5f * start_res_scale);
@@ -282,8 +285,7 @@ PointCaster::PointCaster(const Arguments &args)
   // Enable only 2x MSAA if we have enough DPI.
   GLConfiguration gl_conf;
   gl_conf.setSampleCount(8);
-  if (!tryCreate(conf, gl_conf))
-    create(conf, gl_conf.setSampleCount(0));
+  if (!tryCreate(conf, gl_conf)) create(conf, gl_conf.setSampleCount(0));
 
   // Set up ImGui
   ImGui::CreateContext();
@@ -347,7 +349,7 @@ PointCaster::PointCaster(const Arguments &args)
       windowSize(), framebufferSize());
 
   // Set up the link from imgui to the system clipboard using SDL
-  ImGui::GetIO().SetClipboardTextFn = [](void *,const char * text) {
+  ImGui::GetIO().SetClipboardTextFn = [](void *, const char *text) {
     SDL_SetClipboardText(text);
   };
   ImGui::GetIO().GetClipboardTextFn = [](void *) -> const char * {
@@ -382,7 +384,8 @@ PointCaster::PointCaster(const Arguments &args)
     std::lock_guard lock(this->_usb_config_mutex);
     return this->_session.usb.value();
   };
-  _usb_monitor = std::make_unique<UsbMonitor>(fetch_usb_config, fetch_session_devices);
+  _usb_monitor =
+      std::make_unique<UsbMonitor>(fetch_usb_config, fetch_session_devices);
 #endif
 
   OrbbecDevice::init_context();
@@ -421,9 +424,10 @@ PointCaster::PointCaster(const Arguments &args)
     // TODO viewport size needs to be dynamic
     default_camera_controller->camera().setViewport(
         GL::defaultFramebuffer.viewport().size());
-    auto& config = default_camera_controller->config();
+    auto &config = default_camera_controller->config();
     _camera_controllers.push_back(std::move(default_camera_controller));
-	_session_operator_graph->add_output_node(_camera_controllers.back()->config());
+    _session_operator_graph->add_output_node(
+        _camera_controllers.back()->config());
   }
 
   // if there is no usb configuration, initialise a default
@@ -452,7 +456,7 @@ PointCaster::PointCaster(const Arguments &args)
     const Vector3 joint_size{0.015};
 
     _sphere_instance_data =
-	Containers::Array<SphereInstanceData>{NoInit, total_joint_count};
+        Containers::Array<SphereInstanceData>{NoInit, total_joint_count};
 
     for (std::size_t i = 0; i < total_joint_count; i++) {
       /* Fill in the instance data. Most of this stays the same, except
@@ -462,8 +466,8 @@ PointCaster::PointCaster(const Arguments &args)
       _sphere_instance_data[i].normalMatrix =
           _sphere_instance_data[i].transformationMatrix.normalMatrix();
       _sphere_instance_data[i].color =
-	  Color3{Vector3(std::rand(), std::rand(), std::rand()) /
-		 Magnum::Float(RAND_MAX)};
+          Color3{Vector3(std::rand(), std::rand(), std::rand()) /
+                 Magnum::Float(RAND_MAX)};
     }
 
     _sphere_shader =
@@ -486,19 +490,13 @@ PointCaster::PointCaster(const Arguments &args)
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  if (!_session.radio.has_value()) {
-    _session.radio = RadioConfiguration {};
-  }
+  if (!_session.radio.has_value()) { _session.radio = RadioConfiguration{}; }
   _radio = std::make_unique<Radio>(*_session.radio, *_session_operator_host);
 
-  if (!_session.mqtt.has_value()) {
-    _session.mqtt = MqttClientConfiguration{};
-  }
+  if (!_session.mqtt.has_value()) { _session.mqtt = MqttClientConfiguration{}; }
   _mqtt = std::make_unique<MqttClient>(*_session.mqtt);
 
-  if (!_session.midi.has_value()) {
-    _session.midi = MidiDeviceConfiguration{};
-  }
+  if (!_session.midi.has_value()) { _session.midi = MidiDeviceConfiguration{}; }
   _midi = std::make_unique<MidiDevice>(*_session.midi);
 
 #ifdef WITH_OSC
@@ -522,7 +520,6 @@ PointCaster::PointCaster(const Arguments &args)
 
   TweenManager::create();
   _timeline.start();
-
 }
 
 void PointCaster::quit() {
@@ -549,7 +546,7 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   std::size_t imgui_layout_size;
   auto imgui_layout_data = ImGui::SaveIniSettingsToMemory(&imgui_layout_size);
   std::vector<char> layout_data(imgui_layout_data,
-				imgui_layout_data + imgui_layout_size);
+                                imgui_layout_data + imgui_layout_size);
   std::filesystem::path layout_file_path = file_path;
   layout_file_path.replace_extension(".layout");
   std::ofstream layout_file(layout_file_path, std::ios::binary);
@@ -583,31 +580,35 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   // parse optional config members
 
   const auto session_type_info = serde::type_info<PointCasterSession>;
-  const auto session_member_sequence = std::make_index_sequence<PointCasterSession::MemberCount>{};
+  const auto session_member_sequence =
+      std::make_index_sequence<PointCasterSession::MemberCount>{};
 
   const auto process_optional_member = [&](auto index) {
-      auto session_member = session_type_info.member_info<index>(_session);
-      auto& session_member_ref = session_member.value();
-	  using SessionMemberT = std::decay_t<decltype(session_member_ref)>;
-	  if constexpr (pc::types::is_optional_v<SessionMemberT>) {
-          using MemberValueT = std::decay_t<decltype(session_member_ref.value())>;
+    auto session_member = session_type_info.member_info<index>(_session);
+    auto &session_member_ref = session_member.value();
+    using SessionMemberT = std::decay_t<decltype(session_member_ref)>;
+    if constexpr (pc::types::is_optional_v<SessionMemberT>) {
+      using MemberValueT = std::decay_t<decltype(session_member_ref.value())>;
 
-          // TODO
+      // TODO
 
-          // if it does have a value, and its a custom serializable struct, don't save it if its empty / default
+      // if it does have a value, and its a custom serializable struct, don't
+      // save it if its empty / default
 
-     //     if constexpr (pc::reflect::IsSerializable<MemberValueT>) {
-			  //auto output_member = session_type_info.member_info<index>(output_session);
-			  //auto& output_member_ref = output_member.value();
-     //         if (session_member_ref == std::nullopt || session_member_ref->empty()) {
-     //             output_member_ref = std::nullopt;
-     //         }
-     //     }
-	  }
+      //     if constexpr (pc::reflect::IsSerializable<MemberValueT>) {
+      // auto output_member =
+      // session_type_info.member_info<index>(output_session); auto&
+      // output_member_ref = output_member.value();
+      //         if (session_member_ref == std::nullopt ||
+      //         session_member_ref->empty()) {
+      //             output_member_ref = std::nullopt;
+      //         }
+      //     }
+    }
   };
 
-  [&] <std::size_t... Is>(std::index_sequence<Is...>) {
-	  (..., process_optional_member(std::integral_constant<std::size_t, Is>{}));
+  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    (..., process_optional_member(std::integral_constant<std::size_t, Is>{}));
   }(session_member_sequence);
 
   // parse parameter topic lists
@@ -620,20 +621,23 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   // top-level serialization
   auto session_toml = serde::serialize<serde::toml_v>(output_session);
 
-  // more manual serialization for storing session operator configuration variants
+  // more manual serialization for storing session operator configuration
+  // variants
   if (_session_operator_host != nullptr) {
-      toml::table operator_list;
-      int operator_index = 0;
-      for (auto& session_operator_variant : _session_operator_host->_config.operators) {
-		  std::visit([&](auto&& session_operator) {
-			  using T = std::decay_t<decltype(session_operator)>;
-			  operator_list[std::to_string(operator_index++)] = toml::table{
-					  { "variant", T::Name },
-					  { "config", serde::serialize<serde::toml_v>(session_operator) }
-			  };
-			  }, session_operator_variant);
-      }
-      session_toml["session_operators"] = operator_list;
+    toml::table operator_list;
+    int operator_index = 0;
+    for (auto &session_operator_variant :
+         _session_operator_host->_config.operators) {
+      std::visit(
+          [&](auto &&session_operator) {
+            using T = std::decay_t<decltype(session_operator)>;
+            operator_list[std::to_string(operator_index++)] = toml::table{
+                {"variant", T::Name},
+                {"config", serde::serialize<serde::toml_v>(session_operator)}};
+          },
+          session_operator_variant);
+    }
+    session_toml["session_operators"] = operator_list;
   }
 
   std::ofstream(file_path, std::ios::binary) << toml::format(session_toml);
@@ -652,24 +656,26 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   try {
     auto file_toml = toml::parse(file);
 
-    // check for any session operators (they need to be deserialized more manually)
+    // check for any session operators (they need to be deserialized more
+    // manually)
     std::vector<OperatorConfigurationVariant> session_operators;
 
     if (file_toml.contains("session_operators")) {
-        toml::table operator_list = file_toml.at("session_operators").as_table();
-        for (int i = 0; i < operator_list.size(); i++) {
-            auto operator_entry = operator_list.at(std::to_string(i));
-            auto operator_variant_name = operator_entry.at("variant").as_string();
-            OperatorConfigurationVariant operator_variant;
-            apply_to_all_operators([&](auto&& operator_type) {
-                using T = std::decay_t<decltype(operator_type)>;
-                if (operator_variant_name == T::Name) {
-                    operator_variant = T{ serde::deserialize<T>(operator_entry.at("config")) };
-                }
-            });
-            session_operators.push_back(std::move(operator_variant));
-        }
-        file_toml.at("session_operators") = toml::value();
+      toml::table operator_list = file_toml.at("session_operators").as_table();
+      for (int i = 0; i < operator_list.size(); i++) {
+        auto operator_entry = operator_list.at(std::to_string(i));
+        auto operator_variant_name = operator_entry.at("variant").as_string();
+        OperatorConfigurationVariant operator_variant;
+        apply_to_all_operators([&](auto &&operator_type) {
+          using T = std::decay_t<decltype(operator_type)>;
+          if (operator_variant_name == T::Name) {
+            operator_variant =
+                T{serde::deserialize<T>(operator_entry.at("config"))};
+          }
+        });
+        session_operators.push_back(std::move(operator_variant));
+      }
+      file_toml.at("session_operators") = toml::value();
     }
 
     // handle automatic serialization
@@ -707,16 +713,15 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   // get saved camera configurations and populate the cams list
   for (auto &[camera_id, camera_config] : _session.cameras) {
     auto saved_camera =
-      std::make_unique<CameraController>(this, _scene.get(), camera_config);
+        std::make_unique<CameraController>(this, _scene.get(), camera_config);
     saved_camera->camera().setViewport(
         GL::defaultFramebuffer.viewport().size());
-	_camera_controllers.push_back(std::move(saved_camera));
-	_session_operator_graph->add_output_node(_camera_controllers.back()->config());
+    _camera_controllers.push_back(std::move(saved_camera));
+    _session_operator_graph->add_output_node(
+        _camera_controllers.back()->config());
   }
 
-  if (!_session.usb.has_value()) {
-    _session.usb = UsbConfiguration {};
-  }
+  if (!_session.usb.has_value()) { _session.usb = UsbConfiguration{}; }
 
   if ((*_session.usb).open_on_launch) {
     if (_session.devices.empty()) {
@@ -724,12 +729,12 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     } else {
       // get saved device configurations and populate the device list
       run_async([this] {
-	for (auto &[device_id, device_config] : _session.devices) {
-	  pc::logger->info("Loading device '{}' from config file", device_id);
+        for (auto &[device_id, device_config] : _session.devices) {
+          pc::logger->info("Loading device '{}' from config file", device_id);
           if (device_id.find("ob_") != std::string::npos) {
-	    auto ip = std::string(device_id.begin() + 3, device_id.end());
-	    std::replace(ip.begin(), ip.end(), '_', '.');
-	    open_orbbec_sensor(ip);
+            auto ip = std::string(device_id.begin() + 3, device_id.end());
+            std::replace(ip.begin(), ip.end(), '_', '.');
+            open_orbbec_sensor(ip);
           } else {
             load_k4a_device(device_config, device_id);
           }
@@ -755,18 +760,18 @@ void PointCaster::render_cameras() {
 
   for (auto &camera_controller : _camera_controllers) {
 
-    auto& rendering_config = camera_controller->config().rendering;
+    auto &rendering_config = camera_controller->config().rendering;
 
     const auto frame_size =
-      Vector2i{int(rendering_config.resolution[0] / dpiScaling().x()),
-	       int(rendering_config.resolution[1] / dpiScaling().y())};
+        Vector2i{int(rendering_config.resolution[0] / dpiScaling().x()),
+                 int(rendering_config.resolution[1] / dpiScaling().y())};
 
     if (frame_size.x() < 1 || frame_size.y() < 1) continue;
 
     camera_controller->setup_frame(frame_size);
 
     // TODO: pass selected physical cameras into the
-    // synthesise_point_cloud function 
+    // synthesise_point_cloud function
     // - make sure to cache already synthesised configurations
     if (points.empty()) {
 
@@ -779,8 +784,7 @@ void PointCaster::render_cameras() {
       // auto path = _session_operator_graph->path_to(node_id);
       // if (path.size() > 1) pc::logger->info(path.size());
 
-      if (rendering_config.snapshots)
-        points += snapshots::point_cloud();
+      if (rendering_config.snapshots) points += snapshots::point_cloud();
 
       _point_cloud_renderer->points = points;
       _point_cloud_renderer->setDirty();
@@ -791,30 +795,29 @@ void PointCaster::render_cameras() {
 
     // draw shaders
 
-    _point_cloud_renderer->draw(camera_controller->camera(),
-				rendering_config);
+    _point_cloud_renderer->draw(camera_controller->camera(), rendering_config);
 
     if (rendering_config.skeletons) {
       if (!skeletons.empty()) {
-	int i = 0;
-	for (auto &skeleton : skeletons) {
-	  for (auto &joint : skeleton) {
-	    auto pos = joint.first;
-	    _sphere_instance_data[i].transformationMatrix.translation() = {
-		pos.x / 1000.0f, pos.y / 1000.0f, pos.z / 1000.0f};
-	    i++;
+        int i = 0;
+        for (auto &skeleton : skeletons) {
+          for (auto &joint : skeleton) {
+            auto pos = joint.first;
+            _sphere_instance_data[i].transformationMatrix.translation() = {
+                pos.x / 1000.0f, pos.y / 1000.0f, pos.z / 1000.0f};
+            i++;
           }
         }
-	_sphere_instance_buffer.setData(_sphere_instance_data,
-					GL::BufferUsage::DynamicDraw);
-	GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
-	_sphere_shader
-	    .setProjectionMatrix(camera_controller->camera().projectionMatrix())
-	    .setTransformationMatrix(camera_controller->camera().cameraMatrix())
-	    .setNormalMatrix(
-		camera_controller->camera().cameraMatrix().normalMatrix())
-	    .draw(_sphere_mesh);
-	GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+        _sphere_instance_buffer.setData(_sphere_instance_data,
+                                        GL::BufferUsage::DynamicDraw);
+        GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
+        _sphere_shader
+            .setProjectionMatrix(camera_controller->camera().projectionMatrix())
+            .setTransformationMatrix(camera_controller->camera().cameraMatrix())
+            .setNormalMatrix(
+                camera_controller->camera().cameraMatrix().normalMatrix())
+            .draw(_sphere_mesh);
+        GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
       }
     }
 
@@ -827,14 +830,13 @@ void PointCaster::render_cameras() {
   GL::defaultFramebuffer.bind();
 }
 
-void PointCaster::load_k4a_device(const DeviceConfiguration& config, std::string_view target_id) {
+void PointCaster::load_k4a_device(const DeviceConfiguration &config,
+                                  std::string_view target_id) {
   loading_device = true;
   try {
     auto device = std::make_shared<K4ADevice>(config, target_id);
     Device::attached_devices.push_back(device);
-  } catch (k4a::error e) {
-    pc::logger->error(e.what());
-  } catch (...) {
+  } catch (k4a::error e) { pc::logger->error(e.what()); } catch (...) {
     pc::logger->error("Failed to open device. (Unknown exception)");
   }
   loading_device = false;
@@ -845,7 +847,8 @@ void PointCaster::open_kinect_sensors() {
     loading_device = true;
     const auto open_device_count = Device::attached_devices.size();
     const auto attached_device_count = k4a::device::get_installed_count();
-    pc::logger->info("Found {} attached k4a devices", (int)attached_device_count);
+    pc::logger->info("Found {} attached k4a devices",
+                     (int)attached_device_count);
     for (std::size_t i = open_device_count; i < attached_device_count; i++) {
       load_k4a_device({});
     }
@@ -855,43 +858,40 @@ void PointCaster::open_kinect_sensors() {
 
 void PointCaster::open_orbbec_sensor(std::string_view ip) {
   pc::logger->info("Opening Orbbec sensor at {}", ip);
-  std::string ip_str{ ip.begin(), ip.end() };
+  std::string ip_str{ip.begin(), ip.end()};
   run_async([this, ip = ip_str] {
-	  loading_device = true;
-	  std::string id{ fmt::format("ob_{}", ip) };
-	  std::replace(id.begin(), id.end(), '.', '_');
-	  try {
+    loading_device = true;
+    std::string id{fmt::format("ob_{}", ip)};
+    std::replace(id.begin(), id.end(), '.', '_');
+    try {
 
-		  auto [config_it, _] = _session.devices.try_emplace(id, false, id);
-		  DeviceConfiguration& device_config = config_it->second;
-          device_config.id = id;
-		  _orbbec_cameras.emplace_back(std::make_unique<OrbbecDevice>(device_config));
-		  _session_operator_graph->add_input_node(device_config);
-	  }
-	  catch (ob::Error& e) {
-		  pc::logger->error(e.getMessage());
-	  }
-	  catch (...) {
-		  pc::logger->error("Failed to create device. (Unknown exception)");
-	  }
-	  loading_device = false;
+      auto [config_it, _] = _session.devices.try_emplace(id, false, id);
+      DeviceConfiguration &device_config = config_it->second;
+      device_config.id = id;
+      _orbbec_cameras.emplace_back(
+          std::make_unique<OrbbecDevice>(device_config));
+      _session_operator_graph->add_input_node(device_config);
+    } catch (ob::Error &e) { pc::logger->error(e.getMessage()); } catch (...) {
+      pc::logger->error("Failed to create device. (Unknown exception)");
+    }
+    loading_device = false;
   });
 }
 
-void PointCaster::close_orbbec_sensor(OrbbecDevice& target_device) {
-	auto it = std::find_if(_orbbec_cameras.begin(), _orbbec_cameras.end(),
-		[&](const auto& cam) { return cam.get() == &target_device; });
-	if (it != _orbbec_cameras.end()) {
-		_orbbec_cameras.erase(it);
-		// _session_operator_graph->remove_node(target_device.config().id);
-	}
+void PointCaster::close_orbbec_sensor(OrbbecDevice &target_device) {
+  auto it = std::find_if(
+      _orbbec_cameras.begin(), _orbbec_cameras.end(),
+      [&](const auto &cam) { return cam.get() == &target_device; });
+  if (it != _orbbec_cameras.end()) {
+    _orbbec_cameras.erase(it);
+    // _session_operator_graph->remove_node(target_device.config().id);
+  }
 }
 
 void PointCaster::draw_menu_bar() {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
-      if (ImGui::MenuItem("Quit", "q"))
-        save_and_quit();
+      if (ImGui::MenuItem("Quit", "q")) save_and_quit();
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Window")) {
@@ -908,7 +908,8 @@ void PointCaster::draw_menu_bar() {
           window_toggle = !window_toggle;
       };
 
-      window_item("Global Transform", "g", _session.layout.show_global_transform_window);
+      window_item("Global Transform", "g",
+                  _session.layout.show_global_transform_window);
       window_item("Devices", "d", _session.layout.show_devices_window);
       window_item("RenderStats", "f", _session.layout.show_stats);
       // if (_session.mqtt.has_value()) {
@@ -931,12 +932,9 @@ void PointCaster::draw_control_bar() {
                                   ImGuiDir_Up, ImGui::GetFrameHeight(),
                                   control_bar_flags)) {
     if (ImGui::BeginMenuBar()) {
-      if (ImGui::Button(ICON_FA_FLOPPY_DISK)) {
-        save_session();
-      }
+      if (ImGui::Button(ICON_FA_FLOPPY_DISK)) { save_session(); }
 
-      if (ImGui::Button(ICON_FA_FOLDER_OPEN)) {
-      }
+      if (ImGui::Button(ICON_FA_FOLDER_OPEN)) {}
       ImGui::EndMenuBar();
     }
 
@@ -973,14 +971,14 @@ void PointCaster::draw_onscreen_log() {
 
   if (latest_messages.size() > 0) {
     ImGui::SetNextWindowPos({viewport_size.x - log_window_size.x,
-			     viewport_size.y - log_window_size.y});
+                             viewport_size.y - log_window_size.y});
     ImGui::SetNextWindowSize({log_window_size.x, log_window_size.y});
     ImGui::SetNextWindowBgAlpha(0.5f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::PushFont(_mono_font);
     constexpr auto log_window_flags =
-	ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoFocusOnAppearing |
-	ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking;
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking;
     ImGui::Begin("log", nullptr, log_window_flags);
     ImGui::PushTextWrapPos(log_window_size.x);
     for (auto log_entry : latest_messages) {
@@ -990,35 +988,35 @@ void PointCaster::draw_onscreen_log() {
 
       switch (log_level) {
       case spdlog::level::info:
-	ImGui::PushStyleColor(ImGuiCol_Text,
-			      ImVec4(1.0f, 1.0f, 1.0f, 1.0f)); // Green
-	ImGui::Text(" [info]");
-	ImGui::SameLine();
-	break;
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImVec4(1.0f, 1.0f, 1.0f, 1.0f)); // Green
+        ImGui::Text(" [info]");
+        ImGui::SameLine();
+        break;
       case spdlog::level::warn:
-	ImGui::PushStyleColor(ImGuiCol_Text,
-			      ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow
-	ImGui::Text(" [warn]");
-	ImGui::SameLine();
-	break;
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow
+        ImGui::Text(" [warn]");
+        ImGui::SameLine();
+        break;
       case spdlog::level::err:
-	ImGui::PushStyleColor(ImGuiCol_Text,
-			      ImVec4(1.0f, 0.0f, 0.0f, 1.0f)); // Red
-	ImGui::Text("[error]");
-	ImGui::SameLine();
-	break;
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImVec4(1.0f, 0.0f, 0.0f, 1.0f)); // Red
+        ImGui::Text("[error]");
+        ImGui::SameLine();
+        break;
       case spdlog::level::debug:
-	ImGui::PushStyleColor(ImGuiCol_Text,
-			      ImVec4(0.0f, 1.0f, 0.0f, 1.0f)); // Red
-	ImGui::Text("[debug]");
-	ImGui::SameLine();
-	break;
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImVec4(0.0f, 1.0f, 0.0f, 1.0f)); // Red
+        ImGui::Text("[debug]");
+        ImGui::SameLine();
+        break;
       case spdlog::level::critical:
-	ImGui::PushStyleColor(ImGuiCol_Text,
-			      ImVec4(1.0f, 0.0f, 1.0f, 1.0f)); // Red
-	ImGui::Text(" [crit]");
-	ImGui::SameLine();
-	break;
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImVec4(1.0f, 0.0f, 1.0f, 1.0f)); // Red
+        ImGui::Text(" [crit]");
+        ImGui::SameLine();
+        break;
       }
       ImGui::TextUnformatted(message.c_str());
       ImGui::PopStyleColor();
@@ -1044,8 +1042,8 @@ void PointCaster::draw_modeline() {
 
   const auto viewport_size = ImGui::GetMainViewport()->Size;
   const ImVec2 modeline_size{viewport_size.x, modeline_height};
-  const ImVec2 modeline_min {0, viewport_size.y - modeline_size.y};
-  const ImVec2 modeline_max {viewport_size.x, viewport_size.y};
+  const ImVec2 modeline_min{0, viewport_size.y - modeline_size.y};
+  const ImVec2 modeline_max{viewport_size.x, viewport_size.y};
 
   ImGui::SetNextWindowPos(modeline_min);
   ImGui::SetNextWindowSize(modeline_size);
@@ -1062,8 +1060,7 @@ void PointCaster::draw_modeline() {
     ImGui::SetKeyboardFocusHere();
 
     if (ImGui::InputText("##modeline.find", _modeline_input.data(),
-			 modeline_buffer_size)) {
-    };
+                         modeline_buffer_size)) {};
   }
 
   ImGui::End();
@@ -1074,7 +1071,8 @@ void PointCaster::draw_modeline() {
   ImGui::PopStyleColor();
   ImGui::PopStyleColor();
 
-  ImGui::PopID();;
+  ImGui::PopID();
+  ;
 }
 
 void PointCaster::find_mode_keypress(KeyEvent &event) {
@@ -1095,10 +1093,10 @@ void PointCaster::draw_main_viewport() {
   ImGuiWindowClass docking_viewport_class = {};
 
   ImGuiID id =
-	  ImGui::DockSpaceOverViewport(0, nullptr,
-		  ImGuiDockNodeFlags_NoDockingInCentralNode |
-		  ImGuiDockNodeFlags_PassthruCentralNode,
-		  nullptr);
+      ImGui::DockSpaceOverViewport(0, nullptr,
+                                   ImGuiDockNodeFlags_NoDockingInCentralNode |
+                                       ImGuiDockNodeFlags_PassthruCentralNode,
+                                   nullptr);
   ImGuiDockNode *node = ImGui::DockBuilderGetCentralNode(id);
 
   ImGuiWindowClass central_always = {};
@@ -1119,56 +1117,58 @@ void PointCaster::draw_main_viewport() {
       // button for creating a new camera
       auto new_camera_index = -1;
       if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing)) {
-        auto new_camera = std::make_unique<CameraController>(this, _scene.get());
+        auto new_camera =
+            std::make_unique<CameraController>(this, _scene.get());
         _camera_controllers.push_back(std::move(new_camera));
-        _session_operator_graph->add_output_node(_camera_controllers.back()->config());
+        _session_operator_graph->add_output_node(
+            _camera_controllers.back()->config());
         new_camera_index = _camera_controllers.size() - 1;
         pc::logger->info("new camera: {}", new_camera_index);
       }
 
       _interacting_camera_controller = std::nullopt;
 
-	  for (int i = 0; i < _camera_controllers.size(); i++) {
-		  auto& camera_controller = _camera_controllers.at(i);
-		  const auto camera_config = camera_controller->config();
+      for (int i = 0; i < _camera_controllers.size(); i++) {
+        auto &camera_controller = _camera_controllers.at(i);
+        const auto camera_config = camera_controller->config();
 
-		  ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
-		  if (new_camera_index == i)
+        ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
+        if (new_camera_index == i)
           tab_item_flags |= ImGuiTabItemFlags_SetSelected;
 
-	if (ImGui::BeginTabItem(camera_controller->name().data(), nullptr,
-				tab_item_flags)) {
+        if (ImGui::BeginTabItem(camera_controller->name().data(), nullptr,
+                                tab_item_flags)) {
 
           const auto window_size = ImGui::GetWindowSize();
 
-	  auto *tab_bar = ImGui::GetCurrentTabBar();
-	  float tab_bar_height =
-	      (tab_bar->BarRect.Max.y - tab_bar->BarRect.Min.y) + 5;
-	  // TODO 5 pixels above? where's it come from
+          auto *tab_bar = ImGui::GetCurrentTabBar();
+          float tab_bar_height =
+              (tab_bar->BarRect.Max.y - tab_bar->BarRect.Min.y) + 5;
+          // TODO 5 pixels above? where's it come from
 
           if (_session.layout.hide_ui) {
-	    tab_bar_height = 0;
+            tab_bar_height = 0;
             ImGui::SetCursorPosY(0);
           }
 
-	  const auto draw_frame_labels =
-	      [&camera_controller](ImVec2 viewport_offset) {
-		ImGui::PushStyleColor(ImGuiCol_Text, {1.0f, 1.0f, 0.0f, 1.0f});
-		for (auto label : camera_controller->labels()) {
-		  auto &pos = label.position;
-		  auto x = static_cast<float>(viewport_offset.x + pos.x);
-		  auto y = static_cast<float>(viewport_offset.y + pos.y);
-		  ImGui::SetCursorPos({x, y});
-		  ImGui::Text("%s", label.text.data());
-		}
-		ImGui::PopStyleColor();
-	      };
+          const auto draw_frame_labels =
+              [&camera_controller](ImVec2 viewport_offset) {
+                ImGui::PushStyleColor(ImGuiCol_Text, {1.0f, 1.0f, 0.0f, 1.0f});
+                for (auto label : camera_controller->labels()) {
+                  auto &pos = label.position;
+                  auto x = static_cast<float>(viewport_offset.x + pos.x);
+                  auto y = static_cast<float>(viewport_offset.y + pos.y);
+                  ImGui::SetCursorPos({x, y});
+                  ImGui::Text("%s", label.text.data());
+                }
+                ImGui::PopStyleColor();
+              };
 
           auto rendering = camera_config.rendering;
           auto scale_mode = rendering.scale_mode;
-	  const Vector2 frame_space{window_size.x,
-				    window_size.y - tab_bar_height};
-	  camera_controller->viewport_size = frame_space;
+          const Vector2 frame_space{window_size.x,
+                                    window_size.y - tab_bar_height};
+          camera_controller->viewport_size = frame_space;
 
           if (scale_mode == (int)ScaleMode::Span) {
 
@@ -1182,41 +1182,42 @@ void PointCaster::draw_main_viewport() {
               ImGui::SetCursorPos(image_pos);
               ImGuiIntegration::image(camera_controller->analysis_frame(),
                                       {frame_space.x(), frame_space.y()});
-	      draw_frame_labels(image_pos);
+              draw_frame_labels(image_pos);
             }
-	  } else if (scale_mode == (int)ScaleMode::Letterbox) {
+          } else if (scale_mode == (int)ScaleMode::Letterbox) {
 
             float width, height, horizontal_offset, vertical_offset;
 
-            auto frame_aspect_ratio = rendering.resolution[0] /
-                                static_cast<float>(rendering.resolution[1]);
-	    auto space_aspect_ratio = frame_space.x() / frame_space.y();
+            auto frame_aspect_ratio =
+                rendering.resolution[0] /
+                static_cast<float>(rendering.resolution[1]);
+            auto space_aspect_ratio = frame_space.x() / frame_space.y();
 
-	    constexpr auto frame_spacing = 5.0f;
+            constexpr auto frame_spacing = 5.0f;
 
-	    if (frame_aspect_ratio > space_aspect_ratio) {
-	      width = frame_space.x();
-	      height = std::round(width / frame_aspect_ratio);
-	      horizontal_offset = 0.0f;
-	      vertical_offset =
-		  std::max(0.0f, (frame_space.y() - height) / 2.0f - frame_spacing);
-	    } else {
-	      height = frame_space.y() - 2 * frame_spacing;
-	      width = std::round(height * frame_aspect_ratio);
-	      vertical_offset = 0.0f;
-	      horizontal_offset =
-		  std::max(0.0f, (frame_space.x() - width) / 2.0f);
-	    }
+            if (frame_aspect_ratio > space_aspect_ratio) {
+              width = frame_space.x();
+              height = std::round(width / frame_aspect_ratio);
+              horizontal_offset = 0.0f;
+              vertical_offset = std::max(
+                  0.0f, (frame_space.y() - height) / 2.0f - frame_spacing);
+            } else {
+              height = frame_space.y() - 2 * frame_spacing;
+              width = std::round(height * frame_aspect_ratio);
+              vertical_offset = 0.0f;
+              horizontal_offset =
+                  std::max(0.0f, (frame_space.x() - width) / 2.0f);
+            }
 
             ImGui::Dummy({horizontal_offset, vertical_offset});
-	    if (horizontal_offset != 0.0f) ImGui::SameLine();
+            if (horizontal_offset != 0.0f) ImGui::SameLine();
 
             constexpr auto border_size = 1.0f;
             ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, border_size);
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0, 0});
 
-	    ImGui::BeginChildFrame(ImGui::GetID("letterboxed"),
-				   {width, height});
+            ImGui::BeginChildFrame(ImGui::GetID("letterboxed"),
+                                   {width, height});
 
             auto image_pos = ImGui::GetCursorPos();
             ImGuiIntegration::image(camera_controller->color_frame(),
@@ -1228,27 +1229,25 @@ void PointCaster::draw_main_viewport() {
               ImGui::SetCursorPos(image_pos);
               ImGuiIntegration::image(camera_controller->analysis_frame(),
                                       {width, height});
-	      draw_frame_labels(image_pos);
+              draw_frame_labels(image_pos);
             }
 
             ImGui::EndChildFrame();
 
-	    ImGui::PopStyleVar();
+            ImGui::PopStyleVar();
             ImGui::PopStyleVar();
 
-	    if (horizontal_offset != 0.0f) ImGui::SameLine();
+            if (horizontal_offset != 0.0f) ImGui::SameLine();
             ImGui::Dummy({horizontal_offset, vertical_offset});
-	  }
+          }
 
           if (!_session.layout.hide_ui) {
             // draw_viewport_controls(*camera_controller);
-	    if (_session.layout.show_log) {
-	      draw_onscreen_log();
-	    }
+            if (_session.layout.show_log) { draw_onscreen_log(); }
           }
 
           if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows)) {
-	    _interacting_camera_controller = *camera_controller;
+            _interacting_camera_controller = *camera_controller;
           }
 
           ImGui::EndTabItem();
@@ -1262,7 +1261,7 @@ void PointCaster::draw_main_viewport() {
 }
 
 void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
-  auto& camera_config = selected_camera.config();
+  auto &camera_config = selected_camera.config();
   const auto viewport_window_size = ImGui::GetWindowSize();
   const auto viewport_window_pos = ImGui::GetWindowPos();
 
@@ -1279,45 +1278,47 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
   ImGui::Begin("ViewportControls", nullptr, viewport_controls_flags);
 
   constexpr auto draw_button = [button_size](auto content,
-					     std::function<void()> action,
-					     bool toggled = false) {
+                                             std::function<void()> action,
+                                             bool toggled = false) {
     ImGui::Spacing();
     ImGui::SameLine();
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0, 9});
 
     if (toggled) {
       const auto toggled_color =
-	  ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
+          ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
       ImGui::PushStyleColor(ImGuiCol_Button, toggled_color);
     }
 
-    if (ImGui::Button(content, button_size))
-      action();
+    if (ImGui::Button(content, button_size)) action();
 
-    if (toggled)
-      ImGui::PopStyleColor();
+    if (toggled) ImGui::PopStyleColor();
 
     ImGui::PopStyleVar();
   };
 
   ImGui::PushFont(_icon_font);
 
-  draw_button(ICON_FA_SLIDERS, [&] {
-    camera_config.show_window = !camera_config.show_window;
-   }, camera_config.show_window);
+  draw_button(
+      ICON_FA_SLIDERS,
+      [&] { camera_config.show_window = !camera_config.show_window; },
+      camera_config.show_window);
 
   ImGui::Dummy({0, 7});
 
-  draw_button(ICON_FA_ENVELOPE, [&] {
-    if (camera_config.rendering.scale_mode == (int)ScaleMode::Span)
-      camera_config.rendering.scale_mode = (int)ScaleMode::Letterbox;
-    else camera_config.rendering.scale_mode = (int)ScaleMode::Span;
-  }, camera_config.rendering.scale_mode == (int)ScaleMode::Letterbox);
+  draw_button(
+      ICON_FA_ENVELOPE,
+      [&] {
+        if (camera_config.rendering.scale_mode == (int)ScaleMode::Span)
+          camera_config.rendering.scale_mode = (int)ScaleMode::Letterbox;
+        else camera_config.rendering.scale_mode = (int)ScaleMode::Span;
+      },
+      camera_config.rendering.scale_mode == (int)ScaleMode::Letterbox);
 
   ImGui::PopFont();
 
   ImGui::SetWindowPos({viewport_window_pos.x + control_inset.x,
-		       viewport_window_pos.y + control_inset.y});
+                       viewport_window_pos.y + control_inset.y});
 
   ImGui::End();
   ImGui::PopStyleVar();
@@ -1351,15 +1352,11 @@ void PointCaster::draw_devices_window() {
     ImGui::Dummy({0, 4});
     ImGui::Dummy({10, 0});
     ImGui::SameLine();
-    if (ImGui::Button("Open##K4A")) {
-      open_kinect_sensors();
-    }
+    if (ImGui::Button("Open##K4A")) { open_kinect_sensors(); }
     ImGui::SameLine();
     ImGui::Dummy({4, 0});
     ImGui::SameLine();
-    if (ImGui::Button("Close")) {
-      Device::attached_devices.clear();
-    }
+    if (ImGui::Button("Close")) { Device::attached_devices.clear(); }
     ImGui::Dummy({0, 12});
 
     ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
@@ -1379,67 +1376,65 @@ void PointCaster::draw_devices_window() {
         config.unfolded = false;
       }
     }
-	ImGui::PopItemWidth();
+    ImGui::PopItemWidth();
 
-	ImGui::Text("Orbbec");
+    ImGui::Text("Orbbec");
 
-	ImGui::Dummy({ 0, 4 });
-	ImGui::Dummy({ 10, 0 });
-	ImGui::SameLine();
-	if (ImGui::Button("Open network device")) {
-		ImGui::OpenPopup("Orbbec Discovered Devices");
-		run_async([]() { OrbbecDevice::discover_devices();  });
-	};
-	if (ImGui::BeginPopup("Orbbec Discovered Devices")) {
-		if (OrbbecDevice::discovering_devices) {
-			ImGui::BeginDisabled();
-			ImGui::Selectable("  Searching for devices...  ");
-			ImGui::EndDisabled();
-		}
-		else {
-			for (auto device : OrbbecDevice::discovered_devices) {
-				auto already_connected = false;
-				for (auto& connected_device : OrbbecDevice::attached_devices) {
-					if (connected_device.get().ip() == device.ip) {
-						already_connected = true;
-						break;
-					}
-				}
-				if (already_connected) continue;
-				auto option_string = fmt::format("  {} ({})  ", device.ip, device.serial_num);
-				if (ImGui::Selectable(option_string.c_str())) {
-					ImGui::CloseCurrentPopup();
-					open_orbbec_sensor(device.ip);
-				}
-			}
-			if (ImGui::Selectable("  Specify IP address...  ")) {
-				ImGui::CloseCurrentPopup();
-				ImGui::OpenPopup("OrbbecIPEntry");
-			};
-		}
-		ImGui::EndPopup();
-	}
+    ImGui::Dummy({0, 4});
+    ImGui::Dummy({10, 0});
+    ImGui::SameLine();
+    if (ImGui::Button("Open network device")) {
+      ImGui::OpenPopup("Orbbec Discovered Devices");
+      run_async([]() { OrbbecDevice::discover_devices(); });
+    };
+    if (ImGui::BeginPopup("Orbbec Discovered Devices")) {
+      if (OrbbecDevice::discovering_devices) {
+        ImGui::BeginDisabled();
+        ImGui::Selectable("  Searching for devices...  ");
+        ImGui::EndDisabled();
+      } else {
+        for (auto device : OrbbecDevice::discovered_devices) {
+          auto already_connected = false;
+          for (auto &connected_device : OrbbecDevice::attached_devices) {
+            if (connected_device.get().ip() == device.ip) {
+              already_connected = true;
+              break;
+            }
+          }
+          if (already_connected) continue;
+          auto option_string =
+              fmt::format("  {} ({})  ", device.ip, device.serial_num);
+          if (ImGui::Selectable(option_string.c_str())) {
+            ImGui::CloseCurrentPopup();
+            open_orbbec_sensor(device.ip);
+          }
+        }
+        if (ImGui::Selectable("  Specify IP address...  ")) {
+          ImGui::CloseCurrentPopup();
+          ImGui::OpenPopup("OrbbecIPEntry");
+        };
+      }
+      ImGui::EndPopup();
+    }
 
-	if (ImGui::BeginPopup("OrbbecIPEntry")) {
-		ImGui::Text("Enter IP Address:");
+    if (ImGui::BeginPopup("OrbbecIPEntry")) {
+      ImGui::Text("Enter IP Address:");
 
-		static std::array<char, 16> ip{};
-		ImGui::InputText("IP", ip.data(), ip.size());
-		ImGui::Dummy({ 0, 4 });
+      static std::array<char, 16> ip{};
+      ImGui::InputText("IP", ip.data(), ip.size());
+      ImGui::Dummy({0, 4});
 
-		if (ImGui::Button("Open##OrbbecIPEntry")) {
-			open_orbbec_sensor(ip.data());
-			ImGui::CloseCurrentPopup();
-		}
-		ImGui::SameLine();
-		ImGui::Dummy({ 10, 0 });
-		ImGui::SameLine();
-		if (ImGui::Button("Close##OrbbecIPEntry")) {
-			ImGui::CloseCurrentPopup();
-		}
+      if (ImGui::Button("Open##OrbbecIPEntry")) {
+        open_orbbec_sensor(ip.data());
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::SameLine();
+      ImGui::Dummy({10, 0});
+      ImGui::SameLine();
+      if (ImGui::Button("Close##OrbbecIPEntry")) { ImGui::CloseCurrentPopup(); }
 
-		ImGui::EndPopup();
-	}
+      ImGui::EndPopup();
+    }
   }
   ImGui::Dummy({0, 12});
 
@@ -1447,13 +1442,13 @@ void PointCaster::draw_devices_window() {
 
   std::optional<std::reference_wrapper<OrbbecDevice>> device_to_detach;
 
-  // TODO 
+  // TODO
   // why are there two lists of these refs??
   // the cameras should really only exist and be accessed in one place
 
   for (auto &device_ref : OrbbecDevice::attached_devices) {
     auto &device = device_ref.get();
-    const auto device_hash = std::hash<OrbbecDevice*>{}(&device);
+    const auto device_hash = std::hash<OrbbecDevice *>{}(&device);
     auto &config = device.config();
     ImGui::SetNextItemOpen(config.unfolded);
     if (ImGui::CollapsingHeader(
@@ -1488,8 +1483,8 @@ void PointCaster::draw_devices_window() {
   }
 
   if (loading_device) {
-	  ImGui::Dummy({ 8, 0 });
-	  ImGui::SameLine();
+    ImGui::Dummy({8, 0});
+    ImGui::SameLine();
     ImGui::TextDisabled("Loading device...");
   }
 
@@ -1539,17 +1534,17 @@ void PointCaster::draw_stats(const float delta_time) {
 
     for (auto &camera_controller : _camera_controllers) {
       if (ImGui::CollapsingHeader(camera_controller->name().data())) {
-	if (camera_controller->config().analysis.enabled) {
-	  ImGui::Text("Analysis Duration");
-	  ImGui::BeginTable("analysis_duration", 2);
-	  ImGui::TableNextColumn();
-	  ImGui::Text("Current");
-	  ImGui::TableNextColumn();
-	  auto duration = camera_controller->analysis_time();
-	  ImGui::Text("%ims", duration);
+        if (camera_controller->config().analysis.enabled) {
+          ImGui::Text("Analysis Duration");
+          ImGui::BeginTable("analysis_duration", 2);
+          ImGui::TableNextColumn();
+          ImGui::Text("Current");
+          ImGui::TableNextColumn();
+          auto duration = camera_controller->analysis_time();
+          ImGui::Text("%ims", duration);
           ImGui::EndTable();
-	  ImGui::Text("%.0f FPS", 1000.0f / duration);
-	}
+          ImGui::Text("%.0f FPS", 1000.0f / duration);
+        }
       }
     }
   }
@@ -1573,7 +1568,7 @@ void PointCaster::drawEvent() {
   }
 
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
-			       GL::FramebufferClear::Depth);
+                               GL::FramebufferClear::Depth);
 
   render_cameras();
 
@@ -1581,8 +1576,7 @@ void PointCaster::drawEvent() {
   pc::gui::begin_gui_helpers(_current_mode, _modeline_input);
 
   // Enable text input, if needed/
-  if (ImGui::GetIO().WantTextInput && !isTextInputActive())
-    startTextInput();
+  if (ImGui::GetIO().WantTextInput && !isTextInputActive()) startTextInput();
   else if (!ImGui::GetIO().WantTextInput && isTextInputActive())
     stopTextInput();
 
@@ -1595,20 +1589,17 @@ void PointCaster::drawEvent() {
 
   if (!_session.layout.hide_ui) {
     draw_camera_control_windows();
-    if (_session.layout.show_devices_window)
-      draw_devices_window();
-    if (_session.layout.show_stats)
-      draw_stats(delta_time);
-    if (_session.layout.show_radio_window)
-      _radio->draw_imgui_window();
+    if (_session.layout.show_devices_window) draw_devices_window();
+    if (_session.layout.show_stats) draw_stats(delta_time);
+    if (_session.layout.show_radio_window) _radio->draw_imgui_window();
     if (_session.layout.show_snapshots_window)
       _snapshots_context->draw_imgui_window();
     if (_session.layout.show_global_transform_window) {
-        _session_operator_host->draw_imgui_window();
+      _session_operator_host->draw_imgui_window();
     }
     _session_operator_host->draw_gizmos();
     if (_session.layout.show_session_operator_graph_window)
-        _session_operator_graph->draw();
+      _session_operator_graph->draw();
 
     if (_session.mqtt.has_value() && (*_session.mqtt).show_window)
       _mqtt->draw_imgui_window();
@@ -1645,7 +1636,7 @@ void PointCaster::drawEvent() {
     ImGui::UpdatePlatformWindows();
     ImGui::RenderPlatformWindowsDefault();
   }
-  
+
   GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
   GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
 
@@ -1679,7 +1670,8 @@ void PointCaster::set_full_screen(bool full_screen) {
     pc::logger->info("going full screen");
     if (!_full_screen) {
       _restore_window_size = windowSize() / dpiScaling();
-      SDL_GetWindowPosition(window(), &_restore_window_position.x(), &_restore_window_position.y());
+      SDL_GetWindowPosition(window(), &_restore_window_position.x(),
+                            &_restore_window_position.y());
     }
     setWindowSize(_display_resolution.value() / dpiScaling());
     SDL_SetWindowPosition(window(), 0, 0);
@@ -1687,7 +1679,8 @@ void PointCaster::set_full_screen(bool full_screen) {
   } else if (!full_screen) {
     pc::logger->info("restoring out");
     setWindowSize(_restore_window_size);
-    SDL_SetWindowPosition(window(), _restore_window_position.x(), _restore_window_position.y());
+    SDL_SetWindowPosition(window(), _restore_window_position.x(),
+                          _restore_window_position.y());
     _full_screen = false;
   }
 }
@@ -1707,22 +1700,20 @@ void PointCaster::viewportEvent(ViewportEvent &event) {
 void PointCaster::keyPressEvent(KeyEvent &event) {
 
   if (ImGui::GetIO().WantTextInput) {
-    if (_imgui_context.handleKeyPressEvent(event))
-      event.setAccepted(true);
+    if (_imgui_context.handleKeyPressEvent(event)) event.setAccepted(true);
     return;
   }
 
   if (_current_mode == Mode::Find) {
     find_mode_keypress(event);
-    if (_imgui_context.handleKeyPressEvent(event))
-      event.setAccepted(true);
+    if (_imgui_context.handleKeyPressEvent(event)) event.setAccepted(true);
     return;
   }
   if (_current_mode != Mode::Normal && event.key() == KeyEvent::Key::Esc) {
     _current_mode = Mode::Normal;
     return;
   } else if (_current_mode == Mode::Normal &&
-	     event.key() == KeyEvent::Key::Slash) {
+             event.key() == KeyEvent::Key::Slash) {
     _current_mode = Mode::Find;
     return;
   }
@@ -1730,8 +1721,8 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   switch (event.key()) {
   case KeyEvent::Key::C: {
     CameraController &active_camera_controller =
-	_interacting_camera_controller ? _interacting_camera_controller->get()
-				       : *_camera_controllers[0];
+        _interacting_camera_controller ? _interacting_camera_controller->get()
+                                       : *_camera_controllers[0];
     bool showing_window = active_camera_controller.config().show_window;
     active_camera_controller.config().show_window = !showing_window;
     break;
@@ -1747,24 +1738,23 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   case KeyEvent::Key::G: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
       //_session.layout.hide_ui = !_session.layout.hide_ui;
-		_session.layout.show_session_operator_graph_window =
-			!_session.layout.show_session_operator_graph_window;
-	}
-	else {
-		_session.layout.show_global_transform_window =
-		    !_session.layout.show_global_transform_window;
+      _session.layout.show_session_operator_graph_window =
+          !_session.layout.show_session_operator_graph_window;
+    } else {
+      _session.layout.show_global_transform_window =
+          !_session.layout.show_global_transform_window;
     }
     break;
   }
   case KeyEvent::Key::M: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
       if (_session.mqtt.has_value()) {
-	auto& mqtt_conf = _session.mqtt.value();
+        auto &mqtt_conf = _session.mqtt.value();
         mqtt_conf.show_window = !mqtt_conf.show_window;
       }
     } else {
       if (_session.midi.has_value()) {
-	auto& midi_conf = _session.midi.value();
+        auto &midi_conf = _session.midi.value();
         midi_conf.show_window = !midi_conf.show_window;
       }
     }
@@ -1797,7 +1787,7 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   case KeyEvent::Key::S: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
       _session.layout.show_snapshots_window =
-	  !_session.layout.show_snapshots_window;
+          !_session.layout.show_snapshots_window;
     } else {
       save_session();
     }
@@ -1808,20 +1798,17 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     break;
   }
   default: {
-    if (_imgui_context.handleKeyPressEvent(event))
-      event.setAccepted(true);
+    if (_imgui_context.handleKeyPressEvent(event)) event.setAccepted(true);
   }
   }
 }
 
 void PointCaster::keyReleaseEvent(KeyEvent &event) {
-  if (_imgui_context.handleKeyReleaseEvent(event))
-    event.setAccepted(true);
+  if (_imgui_context.handleKeyReleaseEvent(event)) event.setAccepted(true);
 }
 
 void PointCaster::textInputEvent(TextInputEvent &event) {
-  if (_imgui_context.handleTextInputEvent(event))
-    event.setAccepted(true);
+  if (_imgui_context.handleTextInputEvent(event)) event.setAccepted(true);
 }
 
 void PointCaster::mousePressEvent(MouseEvent &event) {
@@ -1849,11 +1836,11 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
   }
 
   if (!_interacting_camera_controller) {
-	  event.setAccepted(true);
-	  return;
+    event.setAccepted(true);
+    return;
   }
 
-  auto& camera_controller = _interacting_camera_controller->get();
+  auto &camera_controller = _interacting_camera_controller->get();
 
   // rotate / orbit
   if (event.buttons() == MouseMoveEvent::Button::Left) {
@@ -1877,7 +1864,7 @@ void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
   }
 
   if (!_interacting_camera_controller) return;
-  auto& camera_controller = _interacting_camera_controller->get();
+  auto &camera_controller = _interacting_camera_controller->get();
 
   const Magnum::Float delta = event.offset().y();
   if (Math::abs(delta) < 1.0e-2f) return;
