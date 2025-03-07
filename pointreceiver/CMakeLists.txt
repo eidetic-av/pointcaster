@@ -72,9 +72,19 @@ list(APPEND RECEIVER_DEPLOY_EXCLUDES
     "*ninja*" "*.exp" "pointreceiver-test.*"
     "compile_commands.json")
 
-add_custom_target(deploy DEPENDS pointreceiver
-  COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/deploy.py
-        --name ${ARCHIVE_NAME}
-        --directory ${CMAKE_CURRENT_BINARY_DIR}
-        --exclude ${RECEIVER_DEPLOY_EXCLUDES}
-        --bucket pointcaster-builds)
+  if(DEFINED ENV{POINTRECEIVER_DEPLOY_LOCATIONS})
+    set(RECEIVER_DEPLOY_LOCATIONS $ENV{POINTRECEIVER_DEPLOY_LOCATIONS})
+  endif()
+
+  add_custom_target(deploy DEPENDS pointreceiver
+    COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/deploy.py
+          --exclude ${RECEIVER_DEPLOY_EXCLUDES}
+          --directory ${CMAKE_CURRENT_BINARY_DIR}
+          -- ${RECEIVER_DEPLOY_LOCATIONS})
+
+  add_custom_target(deploy-archive DEPENDS pointreceiver
+    COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/deploy.py
+          --exclude ${RECEIVER_DEPLOY_EXCLUDES}
+          --directory ${CMAKE_CURRENT_BINARY_DIR}
+          --archive --sha256 
+          -- "b2://pointcaster-builds")

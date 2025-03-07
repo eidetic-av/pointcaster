@@ -487,11 +487,20 @@ if (WITH_POINTCASTER)
       "resource*.cpp" "Log/*"
       "data/*" "compile_commands.json")
 
+  if(DEFINED ENV{POINTCASTER_DEPLOY_LOCATIONS})
+    set(DEPLOY_LOCATIONS $ENV{POINTCASTER_DEPLOY_LOCATIONS})
+  endif()
+
   add_custom_target(deploy DEPENDS pointcaster
     COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/deploy.py
-          --name ${ARCHIVE_NAME}
-          --directory ${CMAKE_BINARY_DIR}
           --exclude ${DEPLOY_EXCLUDES}
-          --bucket pointcaster-builds)
+          --directory ${CMAKE_BINARY_DIR}
+          -- ${DEPLOY_LOCATIONS})
 
+  add_custom_target(deploy-archive DEPENDS pointcaster
+    COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/deploy.py
+          --exclude ${DEPLOY_EXCLUDES}
+          --directory ${CMAKE_BINARY_DIR}
+          --archive --sha256 
+          -- "b2://pointcaster-builds")
 endif()
