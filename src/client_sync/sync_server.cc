@@ -43,67 +43,64 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
           // receive any incoming message requests
           zmq::message_t msg;
           if (socket.recv(msg)) {
+            // it should be a multipart message, because the first part is the
+            // sender's id
+            auto id_ptr = static_cast<const char *>(msg.data());
+            std::string client_id(id_ptr, id_ptr + msg.size());
+            // now get the actual msg
             bool more = socket.get(zmq::sockopt::rcvmore);
-            if (more) {
-              // if it's a multipart message, the first part is the sender's id
-              auto msg_buf = static_cast<const char *>(msg.data());
-              std::string client_id(msg_buf, msg_buf + msg.size());
-
-              if (socket.recv(msg)) {
-                auto unpacked = msgpack::unpack(
-                    static_cast<const char *>(msg.data()), msg.size());
-                const auto &obj = unpacked.get();
-
-                MessageType message_type;
-                if (obj.type == msgpack::type::BIN) {
-                  std::array<uint8_t, 1> message_type_buffer;
-                  obj.convert(message_type_buffer);
-                  message_type =
-                      static_cast<MessageType>(message_type_buffer[0]);
-                } else if (obj.type == msgpack::type::ARRAY) {
-                  message_type = static_cast<MessageType>(
-                      obj.via.array.ptr[0].as<uint8_t>());
-                }
+            if (!more || !socket.recv(msg)) {
+              pc::logger->error("Client '{}' sent malformed message", client_id);
+            } else {
+              // unpack the sync message variant
+              std::vector<std::byte> buffer(msg.size());
+              std::memcpy(buffer.data(), msg.data(), msg.size());
+              zpp::bits::in in(buffer);
+              SyncMessage message;
+              if (failure(in(message))) {
+                pc::logger->error("Failed to deserialize client sync message");
+              } else {
+                // in a server receiving a SyncMessage, it has to be a
+                // MessageType not a ParameterUpdate, so if std::get throws here
+                // that's fine, its a serious problem
+                auto message_type = std::get<MessageType>(message);
                 pc::logger->debug("message_type_byte: {}",
                                   fmt::format("{:02x}", (char)message_type));
-
                 if (message_type == MessageType::Connected) {
                   _connected_client_ids.insert(client_id);
                   pc::logger->info("Sync client '{}' connected", client_id);
-                  continue;
                 } else if (message_type == MessageType::ClientHeartbeat) {
                   pc::logger->debug("Heartbeat from: {}", client_id);
                   _connected_client_ids.insert(client_id);
                   enqueue_signal(MessageType::ClientHeartbeatResponse);
-                  continue;
                 } else if (message_type == MessageType::ParameterRequest) {
-                  auto parameter_id =
-                      unpacked.get().via.array.ptr[1].as<std::string_view>();
-                  pc::logger->debug("'{}' requesting: '{}'", client_id,
-                                    parameter_id);
+                  pc::logger->debug("Got parameter request");
+                  // auto parameter_id =
+                  //     unpacked.get().via.array.ptr[1].as<std::string_view>();
+                  // pc::logger->debug("'{}' requesting: '{}'", client_id,
+                  //                   parameter_id);
 
-                  if (parameter_bindings.contains(parameter_id)) {
-                    auto value = parameter_bindings.at(parameter_id).value;
+                  // if (parameter_bindings.contains(parameter_id)) {
+                  //   auto value = parameter_bindings.at(parameter_id).value;
 
-                    if (std::holds_alternative<FloatReference>(value)) {
-                      enqueue_parameter_update(ParameterUpdate{
-                          std::string{parameter_id},
-                          std::get<FloatReference>(value).get()});
-                    } else if (std::holds_alternative<IntReference>(value)) {
-                      enqueue_parameter_update(
-                          ParameterUpdate{std::string{parameter_id},
-                                          std::get<IntReference>(value).get()});
-                    } else if (std::holds_alternative<Float3Reference>(value)) {
-                      enqueue_parameter_update(ParameterUpdate{
-                          std::string{parameter_id},
-                          std::get<Float3Reference>(value).get()});
-                    }
-                  }
+                  //   if (std::holds_alternative<FloatReference>(value)) {
+                  //     enqueue_parameter_update(ParameterUpdate{
+                  //         std::string{parameter_id},
+                  //         std::get<FloatReference>(value).get()});
+                  //   } else if (std::holds_alternative<IntReference>(value)) {
+                  //     enqueue_parameter_update(
+                  //         ParameterUpdate{std::string{parameter_id},
+                  //                         std::get<IntReference>(value).get()});
+                  //   } else if (std::holds_alternative<Float3Reference>(value)) {
+                  //     enqueue_parameter_update(ParameterUpdate{
+                  //         std::string{parameter_id},
+                  //         std::get<Float3Reference>(value).get()});
+                  //   }
+                  // }
                 }
-              };
+              }
             }
           }
-
           // send any outgoing messages
           SyncMessage message;
           while (_messages_to_send.wait_dequeue_timed(message,
@@ -114,7 +111,7 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
             // serialize the outgoing message
             auto [buffer, out] = zpp::bits::data_out();
             out(message);
-
+            // and send
             for (const auto &client_id : _connected_client_ids) {
               socket.send(zmq::message_t{client_id}, zmq::send_flags::sndmore);
               socket.send(zmq::message_t{buffer.data(), buffer.size()},
