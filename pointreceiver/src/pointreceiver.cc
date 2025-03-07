@@ -77,6 +77,9 @@ void log(fmt::format_string<Args...> fmt, Args &&...args) {
 extern "C" {
 
 pointreceiver_context *pointreceiver_create_context() {
+  // initialise the zmq context if it hasn't already been initialised
+  std::call_once(zmq_ctx_once,
+                 [] { zmq_ctx = std::make_unique<zmq::context_t>(); });
   return new pointreceiver_context();
 }
 
@@ -94,10 +97,6 @@ void pointreceiver_set_client_name(pointreceiver_context *ctx,
 
 int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
                                          const char *pointcaster_address) {
-  // initialise the zmq context if it hasn't already been initialised
-  std::call_once(zmq_ctx_once,
-                 [] { zmq_ctx = std::make_unique<zmq::context_t>(); });
-
   const std::string pointcaster_address_str(pointcaster_address);
 
   ctx->message_thread = std::make_unique<
@@ -115,6 +114,8 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
     socket.set(zmq::sockopt::rcvtimeo, recv_timeout_ms);
     if (ctx->client_name.has_value()) {
       socket.set(zmq::sockopt::routing_id, ctx->client_name.value());
+    } else {
+      socket.set(zmq::sockopt::routing_id, "pointreceiver");
     }
 
     auto endpoint = fmt::format("tcp://{}:{}", pointcaster_address_str,
