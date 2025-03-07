@@ -2,6 +2,7 @@
 #include "../../src/client_sync/updates.h"
 
 #include <chrono>
+#include <concepts>
 #include <cstring>
 #include <execution>
 #include <iostream>
@@ -22,11 +23,11 @@
 #include <spdlog/spdlog.h>
 #endif
 
-
 static constexpr int pointcloud_stream_port = 9992;
 static constexpr int message_stream_port = 9002;
 
 using bob::types::PointCloud;
+using pc::client_sync::MessageType;
 using pc::client_sync::SyncMessage;
 
 static std::unique_ptr<zmq::context_t> zmq_ctx;
@@ -38,23 +39,23 @@ static moodycamel::BlockingReaderWriterCircularBuffer<PointCloud>
 std::unique_ptr<std::jthread> pointcloud_thread;
 
 struct pointreceiver_context {
+  std::optional<std::string> client_name;
   moodycamel::BlockingReaderWriterQueue<SyncMessage> message_queue;
   std::unique_ptr<std::jthread> message_thread;
 
   pointreceiver_context() : message_queue() {}
 };
 
-static pointreceiver_message_type
-convertMessageType(pc::client_sync::MessageType message_type) {
+static pointreceiver_message_type convertMessageType(MessageType message_type) {
   switch (message_type) {
-  case pc::client_sync::MessageType::Connected: return POINTRECEIVER_MSG_TYPE_CONNECTED;
-  case pc::client_sync::MessageType::ClientHeartbeat:
+  case MessageType::Connected: return POINTRECEIVER_MSG_TYPE_CONNECTED;
+  case MessageType::ClientHeartbeat:
     return POINTRECEIVER_MSG_TYPE_CLIENT_HEARTBEAT;
-  case pc::client_sync::MessageType::ClientHeartbeatResponse:
+  case MessageType::ClientHeartbeatResponse:
     return POINTRECEIVER_MSG_TYPE_CLIENT_HEARTBEAT_RESPONSE;
-  case pc::client_sync::MessageType::ParameterUpdate:
+  case MessageType::ParameterUpdate:
     return POINTRECEIVER_MSG_TYPE_PARAMETER_UPDATE;
-  case pc::client_sync::MessageType::ParameterRequest:
+  case MessageType::ParameterRequest:
     return POINTRECEIVER_MSG_TYPE_PARAMETER_REQUEST;
   default: return POINTRECEIVER_MSG_TYPE_UNKNOWN;
   }
@@ -86,6 +87,11 @@ void pointreceiver_destroy_context(pointreceiver_context *ctx) {
   delete ctx;
 }
 
+void pointreceiver_set_client_name(pointreceiver_context *ctx,
+                                   const char *client_name) {
+  if (ctx) ctx->client_name = std::string(client_name);
+}
+
 int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
                                          const char *pointcaster_address) {
   // initialise the zmq context if it hasn't already been initialised
@@ -94,63 +100,121 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
 
   const std::string pointcaster_address_str(pointcaster_address);
 
-  ctx->message_thread = std::make_unique<std::jthread>(
-      [ctx, pointcaster_address_str](std::stop_token stop_token) {
-        log("Beginning message receive thread");
+  ctx->message_thread = std::make_unique<
+      std::jthread>([ctx, pointcaster_address_str](std::stop_token stop_token) {
+    log("Beginning message receive thread");
 
-        zmq::socket_t socket(*zmq_ctx, zmq::socket_type::dealer);
-        socket.set(zmq::sockopt::linger, 0);
+    zmq::socket_t socket(*zmq_ctx, zmq::socket_type::dealer);
+    socket.set(zmq::sockopt::linger, 0);
 
-        // TODO connection attempt should time out if requested
-        // if (timeout_ms != 0)
-        //   socket.set(zmq::sockopt::connect_timeout, timeout_ms);
+    // TODO connection attempt should time out if requested
+    // if (timeout_ms != 0)
+    //   socket.set(zmq::sockopt::connect_timeout, timeout_ms);
 
-        constexpr auto recv_timeout_ms = 100;
-        socket.set(zmq::sockopt::rcvtimeo, recv_timeout_ms);
-        // TODO what should the id be??
-        // socket.set(zmq::sockopt::routing_id, "dealer_socket");
+    constexpr auto recv_timeout_ms = 100;
+    socket.set(zmq::sockopt::rcvtimeo, recv_timeout_ms);
+    if (ctx->client_name.has_value()) {
+      socket.set(zmq::sockopt::routing_id, ctx->client_name.value());
+    }
 
-        auto endpoint = fmt::format("tcp://{}:{}", pointcaster_address_str,
-                                    message_stream_port);
-        socket.connect(endpoint);
+    auto endpoint = fmt::format("tcp://{}:{}", pointcaster_address_str,
+                                message_stream_port);
+    socket.connect(endpoint);
 
-        if (socket.handle() == nullptr) {
-          log("Failed to connect");
-          return;
-        }
+    if (socket.handle() == nullptr) {
+      log("Failed to connect");
+      return;
+    }
 
-        // Send our server a connected message
-        constexpr auto connected_signal = pc::client_sync::MessageType::Connected;
-        zmq::message_t msg(&connected_signal, sizeof(connected_signal));
-        socket.send(msg, zmq::send_flags::none);
+    // convenience map contains our message type signals pre-populated as
+    // serialized buffers
+    static const std::unordered_map<MessageType, std::vector<std::byte>>
+        msg_type_buffers = []() {
+          std::unordered_map<MessageType, std::vector<std::byte>> map;
+          const auto add = [&map](MessageType type) {
+            auto [buffer, out] = zpp::bits::data_out();
+            out(SyncMessage{type});
+            map.emplace(type, std::move(buffer));
+          };
+          add(MessageType::Connected);
+          add(MessageType::ClientHeartbeat);
+          add(MessageType::ParameterRequest);
+          // Add additional cases as needed.
+          return map;
+        }();
+    // along with the following convenience func we can easily get our
+    // MessageType as a zmq::message_t ready to send
+    static auto make_msg = [](MessageType type) -> zmq::message_t {
+      const auto &buffer = msg_type_buffers.at(type);
+      return zmq::message_t(buffer.data(), buffer.size());
+    };
 
-        log("Listening for messages at '{}'", endpoint);
+    // Send our server a connected message
+    socket.send(make_msg(MessageType::Connected), zmq::send_flags::none);
 
-        while (!stop_token.stop_requested()) {
-          zmq::message_t incoming_msg;
-          auto recv_result = socket.recv(incoming_msg, zmq::recv_flags::none);
-          if (!recv_result) continue;
+    log("Listening for messages at '{}'", endpoint);
 
-          // deserialize the incoming message
-          auto msg_size = incoming_msg.size();
-          std::vector<std::byte> buffer(msg_size);
-          auto bytes_ptr = static_cast<std::byte *>(incoming_msg.data());
-          buffer.assign(bytes_ptr, bytes_ptr + msg_size);
+    using namespace std::chrono;
+    using namespace std::chrono_literals;
+    auto time_since_heartbeat = 0ms;
 
-          zpp::bits::in in(buffer);
-          SyncMessage message;
-          if (failure(in(message))) {
-            log("Failed to deserialise incoming message from Pointcaster");
-            continue;
-          }
-          if (!ctx->message_queue.try_enqueue(message)) {
+    while (!stop_token.stop_requested()) {
+      zmq::message_t incoming_msg;
+      auto recv_start_time = steady_clock::now();
+      // try check for incoming msg (this times out)
+      auto recv_result = socket.recv(incoming_msg, zmq::recv_flags::none);
+      if (recv_result) {
+        // deserialize the incoming message
+        auto msg_size = incoming_msg.size();
+        std::vector<std::byte> buffer(msg_size);
+        auto bytes_ptr = static_cast<std::byte *>(incoming_msg.data());
+        buffer.assign(bytes_ptr, bytes_ptr + msg_size);
+
+        zpp::bits::in in(buffer);
+        SyncMessage message;
+        if (success(in(message))) {
+          log("Got a message");
+          bool msg_enqueue_result;
+          std::visit(
+              [&](auto &&sync_message) {
+                using T = std::decay_t<decltype(sync_message)>;
+                if constexpr (std::same_as<T, MessageType>) {
+                  if (sync_message == MessageType::ClientHeartbeatResponse) {
+                    // stop our heartbeat response timer as successful?
+                    msg_enqueue_result = true;
+                  } else {
+                    msg_enqueue_result = ctx->message_queue.try_enqueue(message);
+                  }
+                  // check for heartbeat type
+                  // pass other message types to our queue
+                } else if constexpr (std::same_as<
+                                         T, pc::client_sync::ParameterUpdate>) {
+                  // pass all parameter updates to our queue
+                  msg_enqueue_result = ctx->message_queue.try_enqueue(message);
+                }
+              },
+              message);
+          if (!msg_enqueue_result) {
             log("Failed to enqueue incoming message from Pointcaster");
           }
+        } else {
+          log("Failed to deserialise incoming message from Pointcaster");
         }
+      }
 
-        socket.disconnect(endpoint);
-        log("Disconnected");
-      });
+      time_since_heartbeat +=
+          duration_cast<milliseconds>(steady_clock::now() - recv_start_time);
+
+      if (time_since_heartbeat >= 5s) {
+        socket.send(make_msg(MessageType::ClientHeartbeat),
+                    zmq::send_flags::none);
+        time_since_heartbeat = 0s;
+      }
+    }
+
+    socket.disconnect(endpoint);
+    log("Disconnected");
+  });
 
   return 0;
 }
@@ -177,8 +241,8 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
       ctx->message_queue.wait_dequeue_timed(message, milliseconds(timeout_ms));
   if (!result) return false;
 
-  if (std::holds_alternative<pc::client_sync::MessageType>(message)) {
-    auto message_type = std::get<pc::client_sync::MessageType>(message);
+  if (std::holds_alternative<MessageType>(message)) {
+    auto message_type = std::get<MessageType>(message);
     out_message->message_type = convertMessageType(message_type);
     out_message->id[0] = '\0';
     out_message->value_type = POINTRECEIVER_PARAM_VALUE_UNKNOWN;
@@ -364,8 +428,12 @@ void testMessageLoop(pointreceiver_context *ctx) {
         log("Parameter Update received: id = {}, value_type = {}", msg.id,
             (int)msg.value_type);
         switch (msg.value_type) {
-        case POINTRECEIVER_PARAM_VALUE_FLOAT: log("Value: {}", msg.value.float_val); break;
-        case POINTRECEIVER_PARAM_VALUE_INT: log("Value: {}", msg.value.int_val); break;
+        case POINTRECEIVER_PARAM_VALUE_FLOAT:
+          log("Value: {}", msg.value.float_val);
+          break;
+        case POINTRECEIVER_PARAM_VALUE_INT:
+          log("Value: {}", msg.value.int_val);
+          break;
         case POINTRECEIVER_PARAM_VALUE_FLOAT3:
           log("Value: ({}, {}, {})", msg.value.float3_val.x,
               msg.value.float3_val.y, msg.value.float3_val.z);
@@ -396,6 +464,7 @@ void testMessageLoop(pointreceiver_context *ctx) {
 
 int main(int argc, char *argv[]) {
   auto *ctx = pointreceiver_create_context();
+  pointreceiver_set_client_name(ctx, "test_application");
   if (argc < 2) {
     // pointreceiver_start_point_receiver("127.0.0.1", 5);
     pointreceiver_start_message_receiver(ctx, "127.0.0.1");

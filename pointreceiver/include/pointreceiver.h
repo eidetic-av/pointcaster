@@ -94,6 +94,15 @@ PR_EXPORT pointreceiver_context *pointreceiver_create_context(void);
 PR_EXPORT void pointreceiver_destroy_context(pointreceiver_context *ctx);
 
 /**
+ * @brief Sets the context's client name
+ *
+ * @param ctx Pointer to the context to target
+ * @param client_name Name for this client to send to server on connected
+ */
+PR_EXPORT void pointreceiver_set_client_name(pointreceiver_context *ctx,
+                                             const char *client_name);
+
+/**
  * @brief Starts the message receiver thread.
  *
  * This function initialises the message receiving mechanism and begins
