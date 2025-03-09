@@ -87,4 +87,5 @@ list(APPEND RECEIVER_DEPLOY_EXCLUDES
           --exclude ${RECEIVER_DEPLOY_EXCLUDES}
           --directory ${CMAKE_CURRENT_BINARY_DIR}
           --archive --sha256 
+          --name ${ARCHIVE_NAME}
           -- "b2://pointcaster-builds")

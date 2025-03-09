@@ -60,6 +60,8 @@ def main():
                         help='List of glob patterns to exclude from processing')
     parser.add_argument('--archive', action='store_true',
                         help='If set, zip the directory contents and transfer the archive')
+    parser.add_argument('--name',
+                        help='If set (and with --archive), set the archive output name')
     parser.add_argument('--sha256', action='store_true',
                         help='If set (and with --archive), compute and upload a SHA256 checksum file')
     parser.add_argument('destinations', nargs='+',
