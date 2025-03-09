@@ -215,12 +215,18 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
                                       .z /
                                   1000.0f;
 
-              const float box_min_x = config.position.x - config.size.x;
-              const float box_max_x = config.position.x + config.size.x;
-              const float box_min_y = config.position.y - config.size.y;
-              const float box_max_y = config.position.y + config.size.y;
-              const float box_min_z = config.position.z - config.size.z;
-              const float box_max_z = config.position.z + config.size.z;
+              const float box_min_x =
+                  config.transform.position.x - config.transform.size.x;
+              const float box_max_x =
+                  config.transform.position.x + config.transform.size.x;
+              const float box_min_y =
+                  config.transform.position.y - config.transform.size.y;
+              const float box_max_y =
+                  config.transform.position.y + config.transform.size.y;
+              const float box_min_z =
+                  config.transform.position.z - config.transform.size.z;
+              const float box_max_z =
+                  config.transform.position.z + config.transform.size.z;
 
               const float min_x_value = pc::math::remap(
                   box_min_x, box_max_x, 0.0f, 1.0f, min_x, true);

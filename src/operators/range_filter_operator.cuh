@@ -7,8 +7,8 @@ namespace pc::operators {
 __device__ bool RangeFilterOperator::operator()(indexed_point_t point) const {
   auto &pos = thrust::get<0>(point);
 
-  const auto &center = _config.position;
-  const auto &size = _config.size;
+  const auto &center = _config.transform.position;
+  const auto &size = _config.transform.size;
 
   // config is in metres, point cloud is in mm
   const Float3 min{(center.x - size.x) * 1000, (center.y - size.y) * 1000,

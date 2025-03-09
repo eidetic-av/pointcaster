@@ -44,8 +44,8 @@ set_or_create_bounding_box(const T &operator_config, Scene3D &scene,
 
   auto &box = itr->second;
   // and set its updated position / scale
-  const auto &size = operator_config.size;
-  const auto &position = operator_config.position;
+  const auto &size = operator_config.transform.size;
+  const auto &position = operator_config.transform.position;
   box->setTransformation(Matrix4::scaling({size.x, size.y, size.z}) *
                          Matrix4::translation({0, 0, 0}));
   box->transform(Matrix4::translation({position.x, position.y, position.z}));

@@ -23,7 +23,10 @@ struct AABB {
   Float3 max{10000, 10000, 10000}; // @minmax(-10000, 10000)
 };
 
-using uid = unsigned long int;
+struct RangeFilterOperatorTransformConfiguration {
+  Float3 position{0, 0, 0}; // @minmax(-10, 10)
+  Float3 size{1, 1, 1};     // @minmax(0.01f, 10)
+};
 
 struct RangeFilterOperatorFillConfiguration {
   int fill_count;
@@ -46,13 +49,14 @@ struct RangeFilterOperatorMinMaxConfiguration {
   bool publish = false;
 };
 
+using uid = unsigned long int;
+
 struct RangeFilterOperatorConfiguration {
   uid id;
   bool enabled = true;
   bool bypass = false;
   bool draw = true;
-  Float3 position {0, 0, 0}; // @minmax(-10, 10)
-  Float3 size {1, 1, 1}; // @minmax(0.01f, 10)
+  RangeFilterOperatorTransformConfiguration transform;
   RangeFilterOperatorFillConfiguration fill;
   RangeFilterOperatorMinMaxConfiguration minmax;
 };
