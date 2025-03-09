@@ -1,15 +1,16 @@
 #pragma once
 
 #include "camera/camera_config.gen.h"
+#include "client_sync/sync_server_config.gen.h"
 #include "devices/device_config.gen.h"
 #include "devices/usb_config.gen.h"
 #include "midi/midi_device_config.gen.h"
+#include "mqtt/mqtt_client_config.gen.h"
+#include "operators/operator_friendly_names.h"
+#include "operators/operator_host_config.gen.h"
 #include "osc/osc_client_config.gen.h"
 #include "osc/osc_server_config.gen.h"
-#include "mqtt/mqtt_client_config.gen.h"
-#include "operators/operator_host_config.gen.h"
 #include "radio/radio_config.gen.h"
-#include "client_sync/sync_server_config.gen.h"
 #include "serialization.h"
 #include <atomic>
 #include <map>
@@ -33,6 +34,7 @@ struct PointCasterSessionLayout {
 // these are necessary for the python pre-processor for now, doesn't handle nested types <<<>>> well
 using DeviceMap = std::map<std::string, devices::DeviceConfiguration>;
 using CameraMap = std::map<std::string, camera::CameraConfiguration>;
+using OperatorNameMap = std::map<std::string, operators::uid>;
 using PublishedParameterList = std::vector<std::string>;
 
 struct PointCasterSession {
@@ -48,7 +50,9 @@ struct PointCasterSession {
   std::optional<osc::OscClientConfiguration> osc_client;
   std::optional<osc::OscServerConfiguration> osc_server;
   std::optional<client_sync::SyncServerConfiguration> sync_server;
+
   std::optional<PublishedParameterList> published_params;
+  OperatorNameMap operator_names; // @optional
 
   PointCasterSessionLayout layout; // @optional
 

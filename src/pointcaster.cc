@@ -613,40 +613,17 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   }(session_member_sequence);
 
   // parse parameter topic lists
-
   output_session.published_params = published_parameter_topics();
 
-  // remove session operators from the top-level serialization process.
-  // session operators are manually serialized later on
-  output_session.session_operator_host.operators.clear();
+  // save any friendly names assigned to operators
+  const auto& op_names = pc::operators::operator_friendly_names;
+  std::for_each(op_names.begin(), op_names.end(), [&](auto &&kvp) {
+    const auto &[id, name] = kvp;
+    output_session.operator_names[name] = id;
+  });
 
-  // top-level serialization
+  // output_session.operator_names = pc::operators::operator_friendly_names;
   auto session_toml = serde::serialize<serde::toml_v>(output_session);
-
-  // manual serialization 
-
-  if (_session_operator_host != nullptr) {
-    toml::table operator_list;
-    int operator_index = 0;
-    for (auto &session_operator_variant :
-         _session_operator_host->_config.operators) {
-      std::visit(
-          [&](auto &&session_operator) {
-            using T = std::decay_t<decltype(session_operator)>;
-            auto operator_config = serde::serialize<serde::toml_v>(session_operator);
-            operator_config["variant"] = T::Name;
-            operator_config["index"] = operator_index++;
-            // serialize under the friendly name if it exists, otherwise use
-            // index as the key to serialize the operator under
-            std::string operator_key =
-                pc::operators::get_operator_friendly_name(
-                    session_operator.id, std::to_string(operator_index));
-            operator_list[operator_key] = std::move(operator_config);
-          },
-          session_operator_variant);
-    }
-    session_toml["session_operators"] = operator_list;
-  }
 
   std::ofstream(file_path, std::ios::binary) << toml::format(session_toml);
 }
@@ -663,79 +640,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
 
   try {
     auto file_toml = toml::parse(file);
-
-    // check for any session operators.
-    // (they need to be deserialized manually)
-    std::vector<OperatorConfigurationVariant> session_operators;
-
-    if (file_toml.contains("session_operators")) {
-      toml::table operator_list = file_toml.at("session_operators").as_table();
-
-      // this holds our map and the index of each entry so we can reconstruct the 
-      // right order for our session operators container
-      std::unordered_map<int, OperatorConfigurationVariant> deserialized_operators;
-
-      std::for_each(
-          operator_list.begin(), operator_list.end(),
-          [&](const auto &operator_toml_kvp) {
-            const auto [operator_key, operator_entry] = operator_toml_kvp;
-            pc::logger->debug("Deserializing session operator '{}'",
-                              operator_key);
-
-            // retrieve our manually serialized entries
-            const auto operator_variant_name =
-                operator_entry.at("variant").as_string();
-            const auto operator_index =
-                static_cast<size_t>(operator_entry.at("index").as_integer());
-            const auto operator_id =
-                static_cast<uid>(operator_entry.at("id").as_integer());
-
-            OperatorConfigurationVariant operator_variant;
-            // run through all possible operators with compile-time
-            // check and deserialize into the correct type
-            apply_to_all_operators([&](auto &&operator_type) {
-              using T = std::decay_t<decltype(operator_type)>;
-              if (operator_variant_name == T::Name) {
-                // create a copy of this toml to deserialize
-                auto operator_toml = toml::table{operator_entry.as_table()};
-                // remove properties that were manually serialized
-                operator_toml.erase("variant");
-                operator_toml.erase("index");
-                operator_toml.erase("id");
-                // now auto deserialization for the rest of the properties
-                auto operator_config = T{serde::deserialize<T>(operator_toml)};
-                // set the id and the entry in our friendly name map
-                operator_config.id = operator_id;
-                pc::operators::set_operator_friendly_name(operator_id, operator_key);
-                operator_variant = operator_config;
-              }
-            });
-            deserialized_operators[operator_index] = std::move(operator_variant);
-          });
-
-      // sort our deserialized operators into order by their index
-      auto sorted_operators =
-          std::vector<std::pair<int, OperatorConfigurationVariant>>{
-              deserialized_operators.begin(), deserialized_operators.end()};
-      std::ranges::sort(sorted_operators, [](auto const &a, auto const &b) {
-        return a.first < b.first;
-      });
-
-      // build our session_operators collection moving our sorted values
-      session_operators.reserve(sorted_operators.size());
-      std::ranges::transform(sorted_operators, std::back_inserter(session_operators),
-                             [](auto &kvp) { return std::move(kvp.second); });
-
-      // zero out the session operators in the toml now they're deserialized
-      file_toml.at("session_operators") = toml::value();
-    }
-
-    // the rest should be Configs that are automatically deserializable
     _session = serde::deserialize<PointCasterSession>(file_toml);
-
-    // and add any session operators we found
-    _session.session_operator_host.operators = std::move(session_operators);
-
   } catch (const toml::syntax_error &e) {
     pc::logger->warn("Failed to parse config file toml");
     pc::logger->warn(e.what());
@@ -795,10 +700,16 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     }
   }
 
+  // unpack published parameters, initialising parameter state
   if (_session.published_params.has_value()) {
     for (auto &parameter_id : *_session.published_params) {
       parameter_states.emplace(parameter_id, ParameterState::Publish);
     }
+  }
+
+  // unpack any saved friendly names
+  for (auto &[friendly_name, id] : _session.operator_names) {
+    set_operator_friendly_name(id, friendly_name);
   }
 
   pc::logger->info("Loaded session '{}'", file_path.filename().string());
