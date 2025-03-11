@@ -35,6 +35,8 @@ struct PointCasterSessionLayout {
 using DeviceMap = std::map<std::string, devices::DeviceConfiguration>;
 using CameraMap = std::map<std::string, camera::CameraConfiguration>;
 using OperatorNameMap = std::map<std::string, operators::uid>;
+using SerializedColor = std::vector<float>;
+using OperatorColorMap = std::map<std::string, SerializedColor>;
 using PublishedParameterList = std::vector<std::string>;
 
 struct PointCasterSession {
@@ -52,7 +54,9 @@ struct PointCasterSession {
   std::optional<client_sync::SyncServerConfiguration> sync_server;
 
   std::optional<PublishedParameterList> published_params;
+
   OperatorNameMap operator_names; // @optional
+  OperatorColorMap operator_colors; // @optional
 
   PointCasterSessionLayout layout; // @optional
 

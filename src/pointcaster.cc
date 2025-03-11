@@ -616,10 +616,22 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   output_session.published_params = published_parameter_topics();
 
   // save any friendly names assigned to operators
+  output_session.operator_names.clear();
   const auto& op_names = pc::operators::operator_friendly_names;
   std::for_each(op_names.begin(), op_names.end(), [&](auto &&kvp) {
     const auto &[id, name] = kvp;
     output_session.operator_names[name] = id;
+  });
+
+  // similarly save any colors assigned to operators' bounding boxes
+  output_session.operator_colors.clear();
+  const auto &op_colors = pc::operators::operator_bounding_boxes;
+  std::for_each(op_colors.begin(), op_colors.end(), [&](auto &&kvp) {
+    const auto &[id, box] = kvp;
+    const auto &name = pc::operators::operator_friendly_names[id];
+    auto color = box->getColor();
+    output_session.operator_colors[name] = {color.r(), color.g(), color.b(),
+                                            color.a()};
   });
 
   // output_session.operator_names = pc::operators::operator_friendly_names;
@@ -708,8 +720,30 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   }
 
   // unpack any saved friendly names
-  for (auto &[friendly_name, id] : _session.operator_names) {
-    set_operator_friendly_name(id, friendly_name);
+  auto &loaded_operators = _session.session_operator_host.operators;
+  std::ranges::for_each(loaded_operators, [&](auto &op_variant) {
+    std::visit(
+        [&](auto &&op) {
+          if (auto it = std::ranges::find_if(
+                  _session.operator_names,
+                  [&](const auto &kvp) { return kvp.second == op.id; });
+              it != _session.operator_names.end()) {
+            // found a friendly name entry with an id equal to one of our
+            // loaded operators - so load it in
+            set_operator_friendly_name(op.id, it->first);
+          }
+        },
+        op_variant);
+  });
+
+  // unpack any operator bounding boxes
+  for (auto &[friendly_name, color] : _session.operator_colors) {
+    const auto operator_id = _session.operator_names[friendly_name];
+    // start position & size is just default initialised, they'll get set when
+    // the main loop starts
+    set_or_create_bounding_box(
+        operator_id, Float3{}, Float3{}, *_scene.get(), *_scene_root.get(),
+        Magnum::Color4{color[0], color[1], color[2], color[3]});
   }
 
   pc::logger->info("Loaded session '{}'", file_path.filename().string());
