@@ -2,7 +2,10 @@
 
 #include <memory>
 #include <mutex>
+
+#ifndef ZMQ_BUILD_DRAFT_API
 #define ZMQ_BUILD_DRAFT_API
+#endif
 #include <zmq.hpp>
 
 namespace network_globals {
