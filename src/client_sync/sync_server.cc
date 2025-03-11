@@ -74,7 +74,37 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
                   _connected_client_ids.insert(client_id);
                   enqueue_signal(MessageType::ClientHeartbeatResponse);
                 } else if (message_type == MessageType::ParameterRequest) {
+
+                  // TODO
                   pc::logger->debug("Got parameter request");
+
+                  // when we get a parameter request, publish everything that is
+                  // set to be published!
+
+                  // std::for_each(parameter_states.begin(),
+                  //               parameter_states.end(), [&](auto &&kvp) {
+                  //                 const auto &[id, state] = kvp;
+                  //                 if (state == ParameterState::Publish) {
+                  //                   auto it = parameter_bindings.find(id);
+                  //                   if (it != parameter_bindings.end()) {
+                  //                     std::visit(
+                  //                         [&](auto &&value) {
+                  //                           using P = std::decay_t<
+                  //                               decltype(value.get())>;
+                  //                           if constexpr (
+                  //                               is_publishable_container_v<P> ||
+                  //                               pc::types::ScalarType<P> ||
+                  //                               pc::types::VectorType<P>) {
+                  //                             publisher::publish_all(
+                  //                                 id, value.get());
+                  //                             pc::logger->debug("Sent: ", id);
+                  //                           }
+                  //                         },
+                  //                         it->second.value);
+                  //                   }
+                  //                 }
+                  //               });
+
                   // auto parameter_id =
                   //     unpacked.get().via.array.ptr[1].as<std::string_view>();
                   // pc::logger->debug("'{}' requesting: '{}'", client_id,
@@ -110,12 +140,16 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
 
             // serialize the outgoing message
             auto [buffer, out] = zpp::bits::data_out();
-            out(message);
-            // and send
-            for (const auto &client_id : _connected_client_ids) {
-              socket.send(zmq::message_t{client_id}, zmq::send_flags::sndmore);
-              socket.send(zmq::message_t{buffer.data(), buffer.size()},
-                           zmq::send_flags::none);
+            const auto serialize_result = out(message);
+            if (failure(serialize_result)) {
+              pc::logger->error("Failed to serialize sync message.");
+            } else {
+              // and send
+              for (const auto &client_id : _connected_client_ids) {
+                using namespace zmq;
+                socket.send(message_t{client_id}, send_flags::sndmore);
+                socket.send(message_t{buffer}, send_flags::none);
+              }
             }
           }
         }
