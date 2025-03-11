@@ -6,7 +6,7 @@
 #include <Magnum/Primitives/Cube.h>
 #include <Magnum/SceneGraph/Drawable.h>
 #include <Magnum/SceneGraph/SceneGraph.h>
-#include <Magnum/Shaders/Phong.h>
+#include <Magnum/Shaders/PhongGL.h>
 
 using Object3D =
     Magnum::SceneGraph::Object<Magnum::SceneGraph::MatrixTransformation3D>;
@@ -18,50 +18,45 @@ public:
   explicit SolidBox(Object3D *parent, DrawableGroup3D *group,
                     const Magnum::Color4 &color = {1.0f, 1.0f, 1.0f, 0.3f})
       : Object3D{parent}, Drawable3D{*this, group}, _color(color) {
-    // static for sharing resources across SolidBox instances
-    static Magnum::GL::Mesh mesh;
-    static Magnum::Shaders::Phong shader;
-    static bool initialized = false;
-    if (!initialized) {
-      mesh = Magnum::MeshTools::compile(Magnum::Primitives::cubeSolid());
 
-      shader = Magnum::Shaders::Phong{};
-      shader.setAmbientColor(Magnum::Color4(0.2f * _color.rgb(), _color.a()))
-          .setDiffuseColor(_color)
-          .setSpecularColor(Magnum::Color4{1.0f, 1.0f, 1.0f, 0.0f})
-          .setShininess(50.0f);
+    _shader = Magnum::Shaders::PhongGL{};
+    _shader.setAmbientColor(Magnum::Color4(0.2f * _color.rgb(), _color.a()))
+        .setDiffuseColor(_color)
+        .setSpecularColor(Magnum::Color4{1.0f, 1.0f, 1.0f, 0.0f})
+        .setShininess(50.0f);
 
-      // for transparency
-      Magnum::GL::Renderer::enable(Magnum::GL::Renderer::Feature::Blending);
-      Magnum::GL::Renderer::setBlendFunction(
-          Magnum::GL::Renderer::BlendFunction::SourceAlpha,
-          Magnum::GL::Renderer::BlendFunction::OneMinusSourceAlpha);
-
-      initialized = true;
-    }
-
-    _mesh = &mesh;
-    _shader = &shader;
+    // for transparency
+    Magnum::GL::Renderer::enable(Magnum::GL::Renderer::Feature::Blending);
+    Magnum::GL::Renderer::setBlendFunction(
+        Magnum::GL::Renderer::BlendFunction::SourceAlpha,
+        Magnum::GL::Renderer::BlendFunction::OneMinusSourceAlpha);
   }
 
   void setColor(Magnum::Color4 color) {
     _color = color;
-    _shader->setAmbientColor(Magnum::Color4(0.2f * _color.rgb(), _color.a()))
+    _shader.setAmbientColor(Magnum::Color4(0.2f * _color.rgb(), _color.a()))
         .setDiffuseColor(_color);
   }
 
+  Magnum::Color4 getColor() { return _color; }
+
   void draw(const Magnum::Matrix4 &transformationMatrix,
             Magnum::SceneGraph::Camera3D &camera) override {
-    _shader->setTransformationMatrix(transformationMatrix)
+
+    Magnum::GL::Renderer::setDepthMask(false);
+
+    _shader.setTransformationMatrix(transformationMatrix)
         .setNormalMatrix(transformationMatrix.normalMatrix())
         .setProjectionMatrix(camera.projectionMatrix());
-    Magnum::GL::Renderer::setDepthMask(false);
-    _shader->draw(*_mesh);
+
+    static Magnum::GL::Mesh box_mesh =
+        Magnum::MeshTools::compile(Magnum::Primitives::cubeSolid());
+    _shader.draw(box_mesh);
+
     Magnum::GL::Renderer::setDepthMask(true);
   }
 
 private:
+  Magnum::Shaders::Phong _shader;
   Magnum::Color4 _color;
-  Magnum::GL::Mesh *_mesh;
-  Magnum::Shaders::Phong *_shader;
 };

@@ -8,6 +8,7 @@
 #include "../uuid.h"
 #include "noise_operator.gen.h"
 #include "operator_friendly_names.h"
+#include "operator_traits.h"
 #include "rake_operator.gen.h"
 #include "range_filter_operator.gen.h"
 #include "rotate_operator.gen.h"
@@ -32,22 +33,22 @@ SessionOperatorHost::SessionOperatorHost(
     : _config(config), _scene(scene), _parent_group(parent_group) {
 
   // for loading an existing list of operators
-  for (auto &operator_instance : _config.operators) {
-    // we need to visit each possible operator variant
+  for (auto &operator_config_variant : _config.operators) {
     std::visit(
         [&](auto &&operator_config) {
-          // and declare it's saved ID with its parameters
+          // declare the serialised operator ID with its config parameters
           declare_parameters(std::to_string(operator_config.id),
                              operator_config);
 
           using T = std::decay_t<decltype(operator_config)>;
 
+          // call initialisation if its required
           if constexpr (std::is_same_v<T, RangeFilterOperatorConfiguration>) {
-            RangeFilterOperator::init(operator_config, _scene, _parent_group,
-                                      next_bounding_box_color());
+            RangeFilterOperator::init(operator_config, _scene, _parent_group);
           }
+
         },
-        operator_instance);
+        operator_config_variant);
   }
 
   using namespace std::chrono_literals;
@@ -57,7 +58,7 @@ SessionOperatorHost::SessionOperatorHost(
 
 bool operator_collapsing_header(
     uid operator_id, std::optional<std::function<void()>> delete_callback = {},
-    std::optional<std::function<void(std::string)>> title_edit_callback = {}) {
+    std::optional<std::function<void(std::string_view)>> title_edit_callback = {}) {
   const char *label = get_operator_friendly_name_cstr(operator_id);
   using namespace ImGui;
   PushID(gui::_parameter_index++);
@@ -130,7 +131,7 @@ bool operator_collapsing_header(
 
 void SessionOperatorHost::draw_gizmos() {
 
-  operator_bounding_boxes.clear();
+  // operator_bounding_boxes.clear();
 
   for (const auto &operator_config : _config.operators) {
     std::visit(
@@ -211,7 +212,7 @@ void SessionOperatorHost::draw_imgui_window() {
 
     apply_to_all_operators([this](auto &&operator_type) {
       // creating a new operator
-      using T = std::remove_reference_t<decltype(operator_type)>;
+      using T = std::decay_t<decltype(operator_type)>;
       if (ImGui::Selectable(T::Name)) {
 
         auto operator_config = T();
@@ -231,12 +232,11 @@ void SessionOperatorHost::draw_imgui_window() {
         set_operator_friendly_name(operator_config.id, friendly_name);
 
         // declare the instance as parameters to bind to this new operator's id
-        auto &config_instance = std::get<T>(variant_ref);
-        declare_parameters(std::to_string(operator_config.id), config_instance);
+        declare_parameters(std::to_string(operator_config.id),
+                           std::get<T>(variant_ref));
 
         if constexpr (std::is_same_v<T, RangeFilterOperatorConfiguration>) {
-          RangeFilterOperator::init(operator_config, _scene, _parent_group,
-                                    next_bounding_box_color());
+          RangeFilterOperator::init(operator_config, _scene, _parent_group);
         }
 
         ImGui::CloseCurrentPopup();
@@ -258,15 +258,24 @@ void SessionOperatorHost::draw_imgui_window() {
           auto id = std::to_string(gui::_parameter_index++);
           ImGui::PushID(gui::_parameter_index++);
           ImGui::BeginGroup();
-          if (operator_collapsing_header(
-                  config.id, [&] { marked_for_delete = config.id; },
-                  [operator_id = config.id](std::string new_title) {
-                    if (!operator_friendly_name_exists(new_title)) {
-                      set_operator_friendly_name(operator_id, new_title);
-                    } else {
-                      pc::logger->error("'{}' already exists", new_title);
-                    }
-                  })) {
+
+          const auto handle_delete = [&] {
+            marked_for_delete = config.id;
+            // any delete actions for specific operators
+            if constexpr (std::is_same_v<T, RangeFilterOperatorConfiguration>) {
+              operator_bounding_boxes.erase(config.id);
+            }
+          };
+          const auto handle_title_edit = [&](std::string_view new_title) {
+            if (!operator_friendly_name_exists(new_title)) {
+              set_operator_friendly_name(config.id, new_title);
+            } else {
+              pc::logger->error("'{}' already exists", new_title);
+            }
+          };
+
+          if (operator_collapsing_header(config.id, handle_delete,
+                                         handle_title_edit)) {
             config.unfolded = true;
 
             ImGui::Dummy({0, 6});
@@ -277,11 +286,11 @@ void SessionOperatorHost::draw_imgui_window() {
             ImGui::EndDisabled();
             ImGui::Dummy({0, 3});
 
-            if (pc::gui::draw_parameters(config.id)) {
-              if constexpr (std::is_same_v<T,
-                                           RangeFilterOperatorConfiguration>) {
-                RangeFilterOperator::init(config, _scene, _parent_group,
-                                          next_bounding_box_color());
+            bool updated_param = pc::gui::draw_parameters(config.id);
+
+            if (updated_param) {
+              if constexpr (std::same_as<T, RangeFilterOperatorConfiguration>) {
+                RangeFilterOperator::update(config, _scene, _parent_group);
               }
             }
           } else {
@@ -295,13 +304,11 @@ void SessionOperatorHost::draw_imgui_window() {
   }
 
   if (marked_for_delete.has_value()) {
-    const auto check_marked_id = [&](const auto &config) {
-      return config.id == marked_for_delete.value();
-    };
-    auto new_end = std::remove_if(
-        _config.operators.begin(), _config.operators.end(),
-        [&](const auto &op) { return std::visit(check_marked_id, op); });
-    _config.operators.erase(new_end, _config.operators.end());
+    std::erase_if(_config.operators, [&](const auto &operator_variant) {
+      return std::visit(
+          [&](const auto &op) { return op.id == marked_for_delete.value(); },
+          operator_variant);
+    });
   }
 
   ImGui::End();

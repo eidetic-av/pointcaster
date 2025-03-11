@@ -5,13 +5,9 @@
 
 namespace pc::operators {
 void RangeFilterOperator::init(const RangeFilterOperatorConfiguration &config,
-                               Scene3D &scene, DrawableGroup3D &parent_group,
-                               Vector3 bounding_box_color) {
+                               Scene3D &scene, DrawableGroup3D &parent_group) {
 
-  // TODO
-  const auto color = next_bounding_box_color();
-
-  set_or_create_bounding_box(config, scene, parent_group, color);
+  set_or_create_bounding_box(config, scene, parent_group);
 
   // need to make position and size param updates trigger a bounding
   // box update
@@ -21,13 +17,20 @@ void RangeFilterOperator::init(const RangeFilterOperatorConfiguration &config,
   const auto size_parameter = fmt::format("{}.transform.size", id);
 
   parameters::add_parameter_update_callback(
-      position_parameter, [&, color](const auto &, auto &) {
-        set_or_create_bounding_box(config, scene, parent_group, color);
+      position_parameter, [&](const auto &, auto &) {
+        set_or_create_bounding_box(config, scene, parent_group);
       });
 
   parameters::add_parameter_update_callback(
-      size_parameter, [&, color](const auto &, auto &) {
-        set_or_create_bounding_box(config, scene, parent_group, color);
+      size_parameter, [&](const auto &, auto &) {
+        set_or_create_bounding_box(config, scene, parent_group);
       });
 }
+
+void RangeFilterOperator::update(const RangeFilterOperatorConfiguration &config,
+                                 Scene3D &scene,
+                                 DrawableGroup3D &parent_group) {
+  set_or_create_bounding_box(config, scene, parent_group);
+}
+
 } // namespace pc::operators

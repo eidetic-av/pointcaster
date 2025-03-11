@@ -70,9 +70,13 @@ struct RangeFilterOperator : Operator {
 
   __device__ bool operator()(indexed_point_t point) const;
 
+  // TODO these static funcs are a bit random...
+  // should be replaced with something outside of the operator
+  // since all they really do is control bounding box gizmos
   static void init(const RangeFilterOperatorConfiguration &config,
-                   Scene3D &scene, DrawableGroup3D &parent_group,
-                   Vector3 bounding_box_color);
+                   Scene3D &scene, DrawableGroup3D &parent_group);
+  static void update(const RangeFilterOperatorConfiguration &config,
+                     Scene3D &scene, DrawableGroup3D &parent_group);
 };
 
 struct MinMaxXComparator {
