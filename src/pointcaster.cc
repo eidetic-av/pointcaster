@@ -268,7 +268,7 @@ PointCaster::PointCaster(const Arguments &args)
 
   // Set up the window
   Sdl2Application::Configuration conf;
-  conf.setTitle("pointcaster");
+  conf.setTitle("Pointcaster");
 
   // TODO figure out how to persist window size accross launches
   if (_display_resolution.has_value()) {
