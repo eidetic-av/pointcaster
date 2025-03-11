@@ -1120,7 +1120,7 @@ void PointCaster::draw_main_viewport() {
         _session_operator_graph->add_output_node(
             _camera_controllers.back()->config());
         new_camera_index = _camera_controllers.size() - 1;
-        pc::logger->info("new camera: {}", new_camera_index);
+        pc::logger->debug("new camera: {}", new_camera_index);
       }
 
       _interacting_camera_controller = std::nullopt;
@@ -1664,7 +1664,7 @@ void PointCaster::drawEvent() {
 
 void PointCaster::set_full_screen(bool full_screen) {
   if (full_screen && _display_resolution.has_value()) {
-    pc::logger->info("going full screen");
+    pc::logger->debug("going full screen");
     if (!_full_screen) {
       _restore_window_size = windowSize() / dpiScaling();
       SDL_GetWindowPosition(window(), &_restore_window_position.x(),
@@ -1674,7 +1674,7 @@ void PointCaster::set_full_screen(bool full_screen) {
     SDL_SetWindowPosition(window(), 0, 0);
     _full_screen = true;
   } else if (!full_screen) {
-    pc::logger->info("restoring out");
+    pc::logger->debug("restoring out");
     setWindowSize(_restore_window_size);
     SDL_SetWindowPosition(window(), _restore_window_position.x(),
                           _restore_window_position.y());
