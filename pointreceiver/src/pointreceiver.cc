@@ -126,6 +126,7 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
       log("Failed to connect");
       return;
     }
+    log("Listening for messages at '{}'", endpoint);
 
     // convenience map contains our message type signals pre-populated as
     // serialized buffers
@@ -152,8 +153,9 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
 
     // Send our server a connected message
     socket.send(make_msg(MessageType::Connected), zmq::send_flags::none);
-
-    log("Listening for messages at '{}'", endpoint);
+    
+    // Request all publishing parameters
+    socket.send(make_msg(MessageType::ParameterRequest), zmq::send_flags::none);
 
     using namespace std::chrono;
     using namespace std::chrono_literals;
@@ -174,7 +176,6 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
         zpp::bits::in in(buffer);
         SyncMessage message;
         if (success(in(message))) {
-          log("Got a message");
           bool msg_enqueue_result;
           std::visit(
               [&](auto &&sync_message) {
