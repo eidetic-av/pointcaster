@@ -51,11 +51,10 @@ typedef enum {
  * @brief Enumerates the possible types for parameter values.
  */
 typedef enum {
-  POINTRECEIVER_PARAM_VALUE_FLOAT = 0,   /**< Float value */
-  POINTRECEIVER_PARAM_VALUE_INT,         /**< Integer value */
-  POINTRECEIVER_PARAM_VALUE_FLOAT3,      /**< 3D float vector */
-  POINTRECEIVER_PARAM_VALUE_ARRAY3F,       /**< Array of 3 floats */
-  POINTRECEIVER_PARAM_VALUE_UNKNOWN        /**< Unknown parameter type */
+  POINTRECEIVER_PARAM_VALUE_FLOAT = 0, /**< Float value */
+  POINTRECEIVER_PARAM_VALUE_INT,       /**< Integer value */
+  POINTRECEIVER_PARAM_VALUE_FLOAT3,    /**< 3D float vector */
+  POINTRECEIVER_PARAM_VALUE_UNKNOWN    /**< Unknown parameter type */
 } pointreceiver_param_value_type;
 
 /**
