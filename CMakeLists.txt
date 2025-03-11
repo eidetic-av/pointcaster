@@ -404,6 +404,9 @@ if (WITH_POINTCASTER)
   target_link_libraries(pointcaster PRIVATE 
     ${LINK_LIBS} ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
 
+  target_precompile_headers(pointcaster PRIVATE 
+    ${CMAKE_SOURCE_DIR}/src/pch.h)
+
   # optimisations
 
   if (LINUX)
