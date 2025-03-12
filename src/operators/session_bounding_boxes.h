@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../objects/wireframe_objects.h"
-#include "../objects/solid_objects.h"
+#include "../objects/solid_box.h"
 
 #include "../gui/catpuccin.h"
 #include "../uuid.h"

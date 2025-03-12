@@ -37,11 +37,13 @@ public:
     _shader.setAmbientColor(Magnum::Color4(0.2f * _color.rgb(), _color.a()))
         .setDiffuseColor(_color);
   }
-
-  Magnum::Color4 getColor() { return _color; }
+  Magnum::Color4 getColor() const { return _color; }
+  void setVisible(bool visible) { _visible = visible; }
+  bool visible() const { return _visible; }
 
   void draw(const Magnum::Matrix4 &transformationMatrix,
             Magnum::SceneGraph::Camera3D &camera) override {
+    if (!_visible) return;
 
     Magnum::GL::Renderer::setDepthMask(false);
 
@@ -59,4 +61,5 @@ public:
 private:
   Magnum::Shaders::Phong _shader;
   Magnum::Color4 _color;
+  bool _visible = true;
 };
