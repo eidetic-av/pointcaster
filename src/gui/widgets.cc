@@ -356,31 +356,33 @@ bool vector_param(std::string_view group_id, std::string_view parameter_id,
       fmt::format("{}.{}", parameter_id, _parameter_index++);
   ImGui::PushID(imgui_parameter_id.c_str());
 
-  const float slider_range = max - min;
-  const float slider_speed = slider_range / 100.0f;
+  const float drag_range = max - min;
+  const float drag_speed = drag_range / 2000.0f;
 
-  if constexpr (std::same_as<typename T::vector_type, float>) {
+  using ElementT = typename T::vector_type;
+
+  if constexpr (std::same_as<ElementT, float>) {
     if constexpr (vector_size == 2) {
-      pc::gui::DragFloat2(parameter_id, vec.data(), 0.01f, min, max,
+      pc::gui::DragFloat2(parameter_id, vec.data(), drag_speed, min, max,
                           reset_values);
     } else if constexpr (vector_size == 3) {
-      pc::gui::DragFloat3(parameter_id, vec.data(), 0.01f, min, max,
+      pc::gui::DragFloat3(parameter_id, vec.data(), drag_speed, min, max,
                           reset_values);
     } else if constexpr (vector_size == 4) {
       pc::logger->warn("implement Float4 parameters");
-      // pc::gui::DragFloat4(parameter_label, vec.data(), 0.01f, min, max);
+      // pc::gui::DragFloat4(parameter_label, vec.data(), drag_speed, min, max);
     }
-  } else if constexpr (std::same_as<typename T::vector_type, int>) {
+  } else if constexpr (std::same_as<ElementT, int>) {
     if constexpr (vector_size == 2) {
       pc::gui::DragInt2(parameter_id, vec.data(), 1, min, max, reset_values);
     } else if constexpr (vector_size == 3) {
       pc::gui::DragInt3(parameter_id, vec.data(), 1, min, max, reset_values);
     } else if constexpr (vector_size == 4) {
       pc::logger->warn("implement Int4 parameters");
-      // pc::gui::DragInt4(parameter_label, vec.data(), 0.01f, min, max,
+      // pc::gui::DragInt4(parameter_label, vec.data(), drag_speed, min, max,
       // reset_values);
     }
-  } else if constexpr (std::same_as<typename T::vector_type, short>) {
+  } else if constexpr (std::same_as<ElementT, short>) {
     if constexpr (vector_size == 2) {
       pc::gui::DragShort2(parameter_id, vec.data(), 1, min, max, reset_values);
     }
