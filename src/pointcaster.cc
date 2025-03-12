@@ -157,6 +157,8 @@ protected:
   void load_session(std::filesystem::path file_path);
 
   std::atomic_bool loading_device = false;
+  void load_device(std::string_view device_id,
+                   const DeviceConfigurationVariant &config);
   void load_k4a_device(const DeviceConfiguration &config,
                        std::string_view target_id = "");
   void open_kinect_sensors();
@@ -652,14 +654,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
       // get saved device configurations and populate the device list
       run_async([this] {
         for (auto &[device_id, device_config] : _session.devices) {
-          pc::logger->info("Loading device '{}' from config file", device_id);
-          if (device_id.find("ob_") != std::string::npos) {
-            auto ip = std::string(device_id.begin() + 3, device_id.end());
-            std::replace(ip.begin(), ip.end(), '_', '.');
-            open_orbbec_sensor(ip);
-          } else {
-            load_k4a_device(device_config, device_id);
-          }
+          load_device(device_id, device_config);
         }
       });
     }
@@ -672,8 +667,10 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     }
   }
 
-  // unpack any saved friendly names
   auto &loaded_operators = _session.session_operator_host.operators;
+  // unpack any operator parameters saved outside its configuration struct
+
+  // check if we stored friendly names for the operator
   std::ranges::for_each(loaded_operators, [&](auto &op_variant) {
     std::visit(
         [&](auto &&op) {
@@ -688,19 +685,55 @@ void PointCaster::load_session(std::filesystem::path file_path) {
         },
         op_variant);
   });
+  _session.operator_names.clear();
 
-  // unpack any operator bounding boxes
-  for (auto &[friendly_name, color] : _session.operator_colors) {
-    const auto operator_id = _session.operator_names[friendly_name];
-    // start position & size is just default initialised, they'll get set when
-    // the main loop starts
-    set_or_create_bounding_box(
-        operator_id, Float3{}, Float3{}, *_scene.get(), *_scene_root.get(),
-        Magnum::Color4{color[0], color[1], color[2], color[3]});
-  }
+  std::ranges::for_each(loaded_operators, [&](auto &op_variant) {
+    std::visit(
+        [&](auto &&op) {
+          // bounding box colors
+          auto &colors = _session.operator_colors;
+          // search from the saved list and match them to any loaded operators
+          for (const auto &[friendly_name, color] : colors) {
+            if (operator_friendly_name_exists(friendly_name)) {
+              const auto operator_id =
+                  operator_ids_from_friendly_names.at(friendly_name);
+              // if we stored a color, create the bounding box it should be
+              // associated with, but set it to be invisible
+              set_or_create_bounding_box(
+                  operator_id, Float3{}, Float3{}, *_scene.get(),
+                  *_scene_root.get(), false,
+                  Magnum::Color4{color[0], color[1], color[2], color[3]});
+            }
+          }
+        },
+        op_variant);
+  });
+  _session.operator_colors.clear();
 
   pc::logger->info("Loaded session '{}'", file_path.filename().string());
 }
+
+void PointCaster::load_device(std::string_view device_id,
+                              const DeviceConfigurationVariant& config) {
+  std::visit(
+      [&](auto &&device_config) {
+        pc::logger->info("Loading device '{}'", device_id);
+        using T = std::decay_t<decltype(device_config)>;
+        // TODO the generic DeviceConfiguration should be split to OB
+        // and K4A variants
+        if constexpr (std::same_as<T, DeviceConfiguration>) {
+          if (device_id.find("ob_") != std::string::npos) {
+            auto ip = std::string(device_id.begin() + 3, device_id.end());
+            std::replace(ip.begin(), ip.end(), '_', '.');
+            open_orbbec_sensor(ip);
+          } else {
+            load_k4a_device(device_config, device_id);
+          }
+        }
+      },
+      config);
+}
+
 
 void PointCaster::render_cameras() {
 
