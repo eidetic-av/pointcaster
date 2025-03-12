@@ -15,6 +15,7 @@
 #include <set>
 #include <span>
 #include <thread>
+#include <variant>
 #include <vector>
 
 #include <Corrade/Utility/StlMath.h>
