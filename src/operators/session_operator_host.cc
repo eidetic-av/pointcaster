@@ -317,12 +317,13 @@ void SessionOperatorHost::draw_imgui_window() {
 void SessionOperatorHost::set_voxel(pc::types::Float3 position,
                                     pc::types::Float3 size) {
   set_or_create_bounding_box(pc::uuid::digit(), size, position, _scene,
-                             _parent_group, catpuccin::magnum::mocha_blue);
+                             _parent_group, true,
+                             catpuccin::magnum::mocha_blue);
 }
 
 void SessionOperatorHost::set_voxel(uid id, pc::types::Float3 position,
                                     pc::types::Float3 size) {
-  set_or_create_bounding_box(id, size, position, _scene, _parent_group,
+  set_or_create_bounding_box(id, size, position, _scene, _parent_group, true,
                              catpuccin::magnum::mocha_blue);
 }
 
@@ -333,7 +334,7 @@ void SessionOperatorHost::set_cluster(uid id, pc::types::Float3 position,
   // set_or_create_bounding_box(10000 + id, size, position, _scene,
   // _parent_group, color);
   set_or_create_bounding_box(10000 + id, size, position, _scene, _parent_group,
-                             catpuccin::magnum::mocha_red);
+                             true, catpuccin::magnum::mocha_red);
 }
 
 } // namespace pc::operators

@@ -33,11 +33,10 @@ inline Vector3 next_bounding_box_color() {
   return bounding_box_colors[current_index].rgb();
 }
 
-static void
-set_or_create_bounding_box(uid id, pc::types::Float3 size,
-                           pc::types::Float3 position, Scene3D &scene,
-                           SceneGraph::DrawableGroup3D &parent_group,
-                           std::optional<Color4> color = {}) {
+static void set_or_create_bounding_box(
+    uid id, pc::types::Float3 size, pc::types::Float3 position, Scene3D &scene,
+    SceneGraph::DrawableGroup3D &parent_group, bool visible = true,
+    std::optional<Color4> color = {}) {
   // get or create the bounding box in the scene
   auto [itr, created_new] = operator_bounding_boxes.emplace(
       id, std::make_unique<SolidBox>(&scene, &parent_group));
@@ -45,13 +44,12 @@ set_or_create_bounding_box(uid id, pc::types::Float3 size,
 
   // if it's a new box, set its initial color
   if (created_new) {
-    pc::logger->info("creating new: {}", id);
     constexpr auto default_transparency = 0.3f;
     box->setColor({color.value_or(next_bounding_box_color()).rgb(),
                    default_transparency});
   }
-
-  // and set its updated position / scale
+  box->setVisible(visible);
+  // set its updated position / scale
   box->setTransformation(Matrix4::scaling({size.x, size.y, size.z}) *
                          Matrix4::translation({0, 0, 0}));
   box->transform(Matrix4::translation({position.x, position.y, position.z}));
@@ -65,11 +63,9 @@ set_or_create_bounding_box(const T &operator_config, Scene3D &scene,
   const auto& id = operator_config.id;
   const auto &size = operator_config.transform.size;
   const auto &position = operator_config.transform.position;
-  set_or_create_bounding_box(id, size, position, scene, parent_group, color);
-
-  if constexpr (ToggleableDrawing<T>) {
-    // box->set_visible(operator_config.draw);
-  }
+  const auto draw = has_draw_v<T> ? operator_config.draw : true;
+  set_or_create_bounding_box(id, size, position, scene, parent_group,
+                             draw, color);
 }
 
 } // namespace pc::operators
