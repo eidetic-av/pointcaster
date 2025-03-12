@@ -128,10 +128,10 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
   bool updated = false;
 
   if (state != ParameterState::Bound) {
-    if constexpr (std::is_same_v<T, float>) {
+    if constexpr (std::same_as<T, float>) {
       updated = ImGui::DragFloat(parameter_id.data(), &value, 0.01f, min, max,
                                  "%.5g");
-    } else if constexpr (std::is_same_v<T, int>) {
+    } else if constexpr (std::same_as<T, int>) {
       updated = ImGui::DragInt(parameter_id.data(), &value, 1.0f, min, max);
     }
   } else {
@@ -356,7 +356,10 @@ bool vector_param(std::string_view group_id, std::string_view parameter_id,
       fmt::format("{}.{}", parameter_id, _parameter_index++);
   ImGui::PushID(imgui_parameter_id.c_str());
 
-  if constexpr (std::is_same<typename T::vector_type, float>::value) {
+  const float slider_range = max - min;
+  const float slider_speed = slider_range / 100.0f;
+
+  if constexpr (std::same_as<typename T::vector_type, float>) {
     if constexpr (vector_size == 2) {
       pc::gui::DragFloat2(parameter_id, vec.data(), 0.01f, min, max,
                           reset_values);
@@ -367,7 +370,7 @@ bool vector_param(std::string_view group_id, std::string_view parameter_id,
       pc::logger->warn("implement Float4 parameters");
       // pc::gui::DragFloat4(parameter_label, vec.data(), 0.01f, min, max);
     }
-  } else if constexpr (std::is_same<typename T::vector_type, int>::value) {
+  } else if constexpr (std::same_as<typename T::vector_type, int>) {
     if constexpr (vector_size == 2) {
       pc::gui::DragInt2(parameter_id, vec.data(), 1, min, max, reset_values);
     } else if constexpr (vector_size == 3) {
@@ -377,7 +380,7 @@ bool vector_param(std::string_view group_id, std::string_view parameter_id,
       // pc::gui::DragInt4(parameter_label, vec.data(), 0.01f, min, max,
       // reset_values);
     }
-  } else if constexpr (std::is_same<typename T::vector_type, short>::value) {
+  } else if constexpr (std::same_as<typename T::vector_type, short>) {
     if constexpr (vector_size == 2) {
       pc::gui::DragShort2(parameter_id, vec.data(), 1, min, max, reset_values);
     }
@@ -536,12 +539,12 @@ bool draw_parameter(std::string_view structure_name,
       [parameter_id, structure_name, &param](auto &&ref) {
         using T = std::decay_t<decltype(ref.get())>;
         // bools are drawn as check boxes
-        if constexpr (std::is_same_v<T, bool>) {
+        if constexpr (std::same_as<T, bool>) {
 
           return pc::gui::bool_param(structure_name, parameter_id, ref.get(),
                                      std::get<bool>(param.default_value));
 
-        } else if constexpr (std::is_same_v<T, std::string>) {
+        } else if constexpr (std::same_as<T, std::string>) {
           return pc::gui::string_param(
               structure_name, parameter_id, ref.get(),
               std::get<std::string>(param.default_value));
