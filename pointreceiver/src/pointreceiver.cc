@@ -13,7 +13,9 @@
 #include <thread>
 #include <variant>
 #include <vector>
+#ifndef ZMQ_BUILD_DRAFT_API
 #define ZMQ_BUILD_DRAFT_API
+#endif
 #include <zmq.hpp>
 #include <zpp_bits.h>
 
@@ -255,34 +257,81 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
     std::strncpy(out_message->id, param_update.id.c_str(), 256);
     out_message->id[255] = '\0';
 
+    bool set_message_success = true;
     // set the type of the update value.
     std::visit(
         [&](const auto &val) {
           using T = std::decay_t<decltype(val)>;
-          if constexpr (std::is_same_v<T, float>) {
+          if constexpr (std::same_as<T, float>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT;
             out_message->value.float_val = val;
-          } else if constexpr (std::is_same_v<T, int>) {
+          } else if constexpr (std::same_as<T, int>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_INT;
             out_message->value.int_val = val;
-          } else if constexpr (std::is_same_v<T, pc::types::Float3>) {
+          } else if constexpr (std::same_as<T, pc::types::Float3>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT3;
             out_message->value.float3_val.x = val.x;
             out_message->value.float3_val.y = val.y;
             out_message->value.float3_val.z = val.z;
-          } else if constexpr (std::is_same_v<T, std::array<float, 3>>) {
+          } else if constexpr (std::same_as<T, std::array<float, 3>>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT3;
             out_message->value.float3_val.x = val[0];
             out_message->value.float3_val.y = val[1];
             out_message->value.float3_val.z = val[2];
+          } else if constexpr (std::same_as<T, AABBList>) {
+            out_message->value_type = POINTRECEIVER_PARAM_VALUE_AABBLIST;
+            const auto &aabbList = val;
+            size_t count = aabbList.size();
+            out_message->value.aabb_list_val.count = count;
+            if (count > 0) {
+              // allocate memory for count AABB elements.
+              out_message->value.aabb_list_val.data =
+                  static_cast<aabb_t *>(std::malloc(count * sizeof(aabb_t)));
+              if (!out_message->value.aabb_list_val.data) {
+                out_message->value.aabb_list_val.count = 0;
+                set_message_success = false;
+                return;
+              }
+              // copy each AABB element.
+              for (size_t i = 0; i < count; ++i) {
+                const auto &aabb = aabbList[i]; 
+                for (int j = 0; j < 3; ++j) {
+                  out_message->value.aabb_list_val.data[i].min[j] = aabb[0][j];
+                  out_message->value.aabb_list_val.data[i].max[j] = aabb[1][j];
+                }
+              }
+            } else {
+              out_message->value.aabb_list_val.data = nullptr;
+            }
           } else {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_UNKNOWN;
           }
         },
         param_update.value);
+
+    if (!set_message_success) return false;
+
   } else {
     return false;
   }
+  return true;
+}
+
+bool pointreceiver_free_sync_message(pointreceiver_context *ctx,
+                                     pointreceiver_sync_message *out_message) {
+  if (!out_message) return false;
+
+  // if the message contains a type that uses dynamically allocated memory, we
+  // must free it
+  if (out_message->value_type == POINTRECEIVER_PARAM_VALUE_AABBLIST) {
+    if (out_message->value.aabb_list_val.data) {
+      free(out_message->value.aabb_list_val.data);
+      out_message->value.aabb_list_val.data = nullptr;
+    }
+    out_message->value.aabb_list_val.count = 0;
+  }
+
+  // For other message types, no cleanup is necessary.
   return true;
 }
 
@@ -440,12 +489,17 @@ void testMessageLoop(pointreceiver_context *ctx) {
           log("Value: ({}, {}, {})", msg.value.float3_val.x,
               msg.value.float3_val.y, msg.value.float3_val.z);
           break;
+        case POINTRECEIVER_PARAM_VALUE_AABBLIST:
+          // TODO log contents or at least size?
+          log("Got an AABBList here");
+          break;
         default: log("Unknown parameter update type"); break;
         }
       } else {
         log("Received message type: {}", (int)msg.message_type);
       }
     }
+    pointreceiver_free_sync_message(ctx, &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
 }

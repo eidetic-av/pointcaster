@@ -147,6 +147,8 @@ void SessionOperatorHost::draw_gizmos() {
               if (current_voxels.get() != nullptr) {
 
                 // TODO this block is too slow
+                // probably should be replaced by some instancing shader similar
+                // to how we render point-clouds, just as cubes
 
                 // using namespace std::chrono;
                 // using namespace std::chrono_literals;
@@ -173,15 +175,21 @@ void SessionOperatorHost::draw_gizmos() {
                 // using namespace std::chrono;
                 // using namespace std::chrono_literals;
                 // auto start = high_resolution_clock::now();
-                auto &latest_clusters = *latest_clusters_ptr;
-                auto cluster_count = latest_clusters.size();
-                // pc::logger->debug("cluster count: {}", cluster_count);
-                for (int i = 0; i < cluster_count; i++) {
-                  pc::AABB aabb = latest_clusters[i].bounding_box;
-                  auto position = aabb.center() / 1000.0f; // mm to metres
-                  auto size = aabb.extents() / 1000.0f;
-                  set_cluster(i, position, size);
+                auto &clusters = *latest_clusters_ptr;
+                auto cluster_count = clusters.size();
+                static size_t last_cluster_count = cluster_count;
+                for (size_t i = 0; i < last_cluster_count; i++) {
+                  Float3 position, size;
+                  bool visible = false;
+                  if (i < cluster_count) {
+                    pc::AABB aabb = clusters[i].bounding_box;
+                    position = aabb.center() / 1000.0f; // mm to metres
+                    size = aabb.extents() / 1000.0f;
+                    visible = true;
+                  }
+                  set_cluster(i, visible, position, size);
                 }
+                last_cluster_count = cluster_count;
                 // auto end = high_resolution_clock::now();
                 // int duration_us = duration_cast<microseconds>(end -
                 // start).count(); float duration_ms = duration_us / 1'000.0f;
@@ -327,14 +335,11 @@ void SessionOperatorHost::set_voxel(uid id, pc::types::Float3 position,
                              catpuccin::magnum::mocha_blue);
 }
 
-void SessionOperatorHost::set_cluster(uid id, pc::types::Float3 position,
+void SessionOperatorHost::set_cluster(uid id, bool visible,
+                                      pc::types::Float3 position,
                                       pc::types::Float3 size) {
-  // auto color_idx = id % bounding_box_colors.size();
-  // auto& color = bounding_box_colors[color_idx];
-  // set_or_create_bounding_box(10000 + id, size, position, _scene,
-  // _parent_group, color);
   set_or_create_bounding_box(10000 + id, size, position, _scene, _parent_group,
-                             true, catpuccin::magnum::mocha_red);
+                             visible, catpuccin::magnum::mocha_red);
 }
 
 } // namespace pc::operators

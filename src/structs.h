@@ -99,14 +99,14 @@ struct Float2 {
     switch(index) {
       case 0: return x;
       case 1: return y;
-      default: throw std::out_of_range("Index out of range for Float3");
+      default: throw std::out_of_range("Index out of range for Float2");
     }
   }
   const vector_type& operator[](std::size_t index) const {
     switch(index) {
       case 0: return x;
       case 1: return y;
-      default: throw std::out_of_range("Index out of range for Float3");
+      default: throw std::out_of_range("Index out of range for Float2");
     }
   }
 

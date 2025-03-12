@@ -43,8 +43,8 @@ public:
                  pc::types::Float3 size = {0.05f, 0.05f, 0.05f});
   void set_voxel(pc::types::uid id, pc::types::Float3 position,
                  pc::types::Float3 size = {0.05f, 0.05f, 0.05f});
-  void set_cluster(uid id, pc::types::Float3 position,
-                   pc::types::Float3 size = {0.05f, 0.05f, 0.05f});
+  void set_cluster(uid id, bool visible, pc::types::Float3 position = {},
+                                      pc::types::Float3 size = {0.05f, 0.05f, 0.05f});
 
 private:
   Scene3D &_scene;

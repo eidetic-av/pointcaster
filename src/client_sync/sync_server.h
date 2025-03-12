@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../aabb.h"
 #include "../logger.h"
 #include "../publisher/publishable_traits.h"
 #include "../publisher/publisher_utils.h"
@@ -56,6 +57,14 @@ public:
                                      std::is_same<T, array3f>>) {
       const auto id = publisher::construct_topic_string(topic, topic_nodes);
       enqueue_parameter_update(ParameterUpdate{id, {data}});
+    } else if constexpr (std::same_as<T, AABBList>) {
+      // create update for an AABB list thats binary serializable
+      const auto id = publisher::construct_topic_string(topic, topic_nodes);
+      enqueue_parameter_update(ParameterUpdate{id, {data}});
+    } else if constexpr (is_publishable_container_v<T>) {
+      pc::logger->warn("Sync server publishing unimplemented container type");
+    } else {
+      pc::logger->warn("Sync server publishing unimplemented type");
     }
   }
 

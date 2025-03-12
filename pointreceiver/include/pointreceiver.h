@@ -54,8 +54,30 @@ typedef enum {
   POINTRECEIVER_PARAM_VALUE_FLOAT = 0, /**< Float value */
   POINTRECEIVER_PARAM_VALUE_INT,       /**< Integer value */
   POINTRECEIVER_PARAM_VALUE_FLOAT3,    /**< 3D float vector */
+  POINTRECEIVER_PARAM_VALUE_AABBLIST,
   POINTRECEIVER_PARAM_VALUE_UNKNOWN    /**< Unknown parameter type */
 } pointreceiver_param_value_type;
+
+/**
+ * @brief Structure representing an Axis-Aligned Bounding Box (AABB).
+ *
+ * This structure contains the minimum and maximum coordinates of the box.
+ */
+typedef struct {
+  float min[3]; /**< Minimum coordinate (x, y, z) */
+  float max[3]; /**< Maximum coordinate (x, y, z) */
+} aabb_t;
+
+/**
+ * @brief Structure representing a list of AABBs.
+ *
+ * This structure encapsulates a pointer to an array of AABBs and the number
+ * of elements in the list.
+ */
+typedef struct {
+  aabb_t *data; /**< Pointer to an array of AABB values */
+  size_t count; /**< Number of AABB values in the array */
+} aabb_list_t;
 
 /**
  * @brief Structure representing a synchronized message.
@@ -64,16 +86,20 @@ typedef enum {
  * holding the associated value.
  */
 typedef struct {
-  pointreceiver_message_type message_type;         /**< Type of the message */
-  char id[256];                                    /**< Identifier string */
-  pointreceiver_param_value_type value_type;       /**< Type of the value contained in the union */
+  pointreceiver_message_type message_type; /**< Type of the message */
+  char id[256];                            /**< Identifier string */
+  pointreceiver_param_value_type
+      value_type; /**< Type of the value contained in the union */
   union {
-    float float_val;                               /**< Float value */
-    int int_val;                                   /**< Integer value */
+    float float_val; /**< Float value */
+    int int_val;     /**< Integer value */
     struct {
-      float x, y, z;                               /**< 3D float vector */
-    } float3_val;
-  } value;                                         /**< Union holding the message value */
+      float x;                 /**< X component of the 3D vector */
+      float y;                 /**< Y component of the 3D vector */
+      float z;                 /**< Z component of the 3D vector */
+    } float3_val;              /**< 3D float vector value */
+    aabb_list_t aabb_list_val; /**< List of AABB values */
+  } value;                     /**< Union holding the message value */
 } pointreceiver_sync_message;
 
 /**
@@ -127,16 +153,35 @@ PR_EXPORT int pointreceiver_stop_message_receiver(pointreceiver_context *ctx);
 /**
  * @brief Dequeues a message from the message queue.
  *
- * Attempts to dequeue a message within a specified timeout period.
+ * Attempts to dequeue a message within a specified timeout period. If a message
+ * is successfully retrieved, the caller must later call
+ * pointreceiver_free_sync_message to release any allocated resources associated
+ * with the message.
  *
  * @param ctx Pointer to the PointReceiver context.
- * @param[out] out_message Pointer to a structure where the dequeued message will be stored.
+ * @param[out] out_message Pointer to a structure where the dequeued message
+ * will be stored.
  * @param timeout_ms Timeout in milliseconds to wait for a message.
  * @return true if a message was successfully dequeued, false otherwise.
  */
 PR_EXPORT bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
-                              pointreceiver_sync_message *out_message,
-                              int timeout_ms);
+                                               pointreceiver_sync_message *out_message,
+                                               int timeout_ms);
+
+/**
+ * @brief Frees resources associated with a synchronized message.
+ *
+ * Releases any dynamically allocated memory within the provided
+ * pointreceiver_sync_message. This function must be called after the
+ * message has been processed to avoid memory leaks.
+ *
+ * @param ctx Pointer to the PointReceiver context.
+ * @param[out] out_message Pointer to the synchronized message whose resources
+ * will be freed.
+ * @return true if the resources were successfully released, false otherwise.
+ */
+PR_EXPORT bool pointreceiver_free_sync_message(pointreceiver_context *ctx,
+                                                 pointreceiver_sync_message *out_message);
 
 #ifdef __cplusplus
 }

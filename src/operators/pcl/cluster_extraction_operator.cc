@@ -1,16 +1,17 @@
-#include <oneapi/tbb.h>
-#include <memory>
+#include "../../client_sync/updates.h"
+#include "../../logger.h"
+#include "../../publisher/publisher.h"
+#include "cluster_extraction_operator.gen.h"
 #include <algorithm>
-#include <pcl/point_cloud.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/segmentation/extract_clusters.h>
+#include <limits>
+#include <memory>
+#include <oneapi/tbb.h>
 #include <pcl/common/common.h>
 #include <pcl/common/pca.h>
 #include <pcl/filters/statistical_outlier_removal.h>
-#include <limits>
-#include "cluster_extraction_operator.gen.h"
-#include "../../logger.h"
-#include "../../publisher/publisher.h"
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/point_cloud.h>
+#include <pcl/segmentation/extract_clusters.h>
 
 namespace pc::operators::pcl_cpu {
 
@@ -245,19 +246,16 @@ namespace pc::operators::pcl_cpu {
 						   [](const Cluster &c) { return c.bounding_box; });
 
 			if (config.publish_clusters) {
-				using AABBMinMax = std::array<std::array<float, 3>, 2>;
-				auto cluster_count = output_bounds.size();
-				std::vector<AABBMinMax> cluster_bounds_data(cluster_count);
-				for (int i = 0; i < cluster_count; i++) {
-					auto& bounds = output_bounds.at(i);
-					cluster_bounds_data[i] = { {
-						{ bounds.min.x, bounds.min.y, bounds.min.z },
-						{ bounds.max.x, bounds.max.y, bounds.max.z }
-					} };
-				}
 				// auto id_string = std::to_string(config.id);
-				auto id_string = "pcl";
-				publisher::publish_all("clusters", cluster_bounds_data, { id_string });
+				auto operator_name = operator_friendly_names.at(config.id);
+				// TODO pc::AABB is not serializable with some publishers... 
+				// we should make it serializable but for now we transform to a different data type
+				using namespace pc::client_sync;
+    			AABBList output_data;
+				std::ranges::transform(output_bounds, std::back_inserter(output_data), [](const auto &aabb) {
+      				return std::array<array3f, 2>({{aabb.min.x, aabb.min.y, aabb.min.z}, {aabb.max.x, aabb.max.y, aabb.max.z}});
+    			});
+				publisher::publish_all(std::format("{}.clusters", operator_name), output_data);
 			}
 
 			constexpr auto log_duration = [](std::string_view label, auto start_time, auto end_time) {

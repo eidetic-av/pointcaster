@@ -1,3 +1,5 @@
+#pragma once
+
 #include "../structs.h"
 
 #include <string>
@@ -7,6 +9,7 @@ namespace pc::client_sync {
 
 using array3f = std::array<float, 3>;
 using pc::types::Float3;
+using AABBList = std::vector< std::array<array3f, 2> >;
 
 enum class MessageType : uint8_t {
   Connected = 0x00,
@@ -18,7 +21,7 @@ enum class MessageType : uint8_t {
 
 struct ParameterUpdate {
   std::string id;
-  std::variant<float, int, Float3, array3f> value;
+  std::variant<float, int, Float3, array3f, AABBList> value;
 };
 
 using SyncMessage = std::variant<MessageType, ParameterUpdate>;
