@@ -290,7 +290,8 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
             if (count > 0) {
               // allocate memory for count AABB elements.
               out_message->value.aabb_list_val.data =
-                  static_cast<aabb_t *>(std::malloc(count * sizeof(aabb_t)));
+                  static_cast<pointreceiver_aabb_t *>(
+                      std::malloc(count * sizeof(pointreceiver_aabb_t)));
               if (!out_message->value.aabb_list_val.data) {
                 out_message->value.aabb_list_val.count = 0;
                 set_message_success = false;

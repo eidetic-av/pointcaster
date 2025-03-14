@@ -66,7 +66,7 @@ typedef enum {
 typedef struct {
   float min[3]; /**< Minimum coordinate (x, y, z) */
   float max[3]; /**< Maximum coordinate (x, y, z) */
-} aabb_t;
+} pointreceiver_aabb_t;
 
 /**
  * @brief Structure representing a list of AABBs.
@@ -75,9 +75,9 @@ typedef struct {
  * of elements in the list.
  */
 typedef struct {
-  aabb_t *data; /**< Pointer to an array of AABB values */
+  pointreceiver_aabb_t *data; /**< Pointer to an array of AABB values */
   size_t count; /**< Number of AABB values in the array */
-} aabb_list_t;
+} pointreceiver_aabb_list_t;
 
 /**
  * @brief Structure representing a synchronized message.
@@ -98,7 +98,7 @@ typedef struct {
       float y;                 /**< Y component of the 3D vector */
       float z;                 /**< Z component of the 3D vector */
     } float3_val;              /**< 3D float vector value */
-    aabb_list_t aabb_list_val; /**< List of AABB values */
+    pointreceiver_aabb_list_t aabb_list_val; /**< List of AABB values */
   } value;                     /**< Union holding the message value */
 } pointreceiver_sync_message;
 
