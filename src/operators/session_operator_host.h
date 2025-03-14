@@ -41,7 +41,7 @@ public:
 
   void set_voxel(pc::types::Float3 position,
                  pc::types::Float3 size = {0.05f, 0.05f, 0.05f});
-  void set_voxel(pc::types::uid id, pc::types::Float3 position,
+  void set_voxel(pc::types::uid id, bool visible, pc::types::Float3 position = {},
                  pc::types::Float3 size = {0.05f, 0.05f, 0.05f});
   void set_cluster(uid id, bool visible, pc::types::Float3 position = {},
                                       pc::types::Float3 size = {0.05f, 0.05f, 0.05f});
@@ -49,6 +49,7 @@ public:
 private:
   Scene3D &_scene;
   Magnum::SceneGraph::DrawableGroup3D &_parent_group;
+  std::optional<size_t> _last_voxel_count;
 
   void add_operator(OperatorConfigurationVariant operator_config) {
     _config.operators.push_back(operator_config);

@@ -9,6 +9,7 @@
 #include "noise_operator.gen.h"
 #include "operator_friendly_names.h"
 #include "operator_traits.h"
+#include "pcl/cluster_extraction_operator.gen.h"
 #include "rake_operator.gen.h"
 #include "range_filter_operator.gen.h"
 #include "rotate_operator.gen.h"
@@ -156,11 +157,21 @@ void SessionOperatorHost::draw_gizmos() {
                 auto voxel_count =
                     current_voxels->size(); // pc::logger->debug("voxel count:
                                             // {}", voxel_count);
-                for (int i = 0; i < voxel_count; i++) {
-                  pcl::PointXYZ p = current_voxels->points[i];
-                  // mm to metres
-                  set_voxel(i, {p.x / 1000.0f, p.y / 1000.0f, p.z / 1000.0f});
+                if (!_last_voxel_count.has_value()) {
+                  _last_voxel_count = voxel_count;
                 }
+                for (int i = 0; i < *_last_voxel_count; i++) {
+                  pcl::PointXYZ p{};
+                  bool visible = false;
+                  if (i < voxel_count) {
+                    p = current_voxels->points[i];
+                    visible = true;
+                  }
+                  // mm to metres
+                  set_voxel(i, visible,
+                            {p.x / 1000.0f, p.y / 1000.0f, p.z / 1000.0f});
+                }
+                _last_voxel_count = voxel_count;
                 // auto end = high_resolution_clock::now();
                 // int duration_us = duration_cast<microseconds>(end -
                 // start).count(); float duration_ms = duration_us / 1'000.0f;
@@ -294,11 +305,19 @@ void SessionOperatorHost::draw_imgui_window() {
             ImGui::EndDisabled();
             ImGui::Dummy({0, 3});
 
+            const auto previous_config = config;
             bool updated_param = pc::gui::draw_parameters(config.id);
 
             if (updated_param) {
               if constexpr (std::same_as<T, RangeFilterOperatorConfiguration>) {
                 RangeFilterOperator::update(config, _scene, _parent_group);
+              } else if constexpr (
+                  std::same_as<T, pcl_cpu::ClusterExtractionConfiguration>) {
+                if (previous_config.draw_voxels && !config.draw_voxels) {
+                  for (int i = 0; i < _last_voxel_count; i++) {
+                    set_voxel(i, false);
+                  }
+                }
               }
             }
           } else {
@@ -329,9 +348,10 @@ void SessionOperatorHost::set_voxel(pc::types::Float3 position,
                              catpuccin::magnum::mocha_blue);
 }
 
-void SessionOperatorHost::set_voxel(uid id, pc::types::Float3 position,
+void SessionOperatorHost::set_voxel(uid id, bool visible,
+                                    pc::types::Float3 position,
                                     pc::types::Float3 size) {
-  set_or_create_bounding_box(id, size, position, _scene, _parent_group, true,
+  set_or_create_bounding_box(id, size, position, _scene, _parent_group, visible,
                              catpuccin::magnum::mocha_blue);
 }
 
