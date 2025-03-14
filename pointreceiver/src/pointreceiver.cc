@@ -137,8 +137,12 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
           std::unordered_map<MessageType, std::vector<std::byte>> map;
           const auto add = [&map](MessageType type) {
             auto [buffer, out] = zpp::bits::data_out();
-            out(SyncMessage{type});
-            map.emplace(type, std::move(buffer));
+            auto result = out(SyncMessage{type});
+            if (success(result)) {
+              map.emplace(type, std::move(buffer));
+            } else {
+              throw std::runtime_error("Failed to serialize MessageType");
+            }
           };
           add(MessageType::Connected);
           add(MessageType::ClientHeartbeat);
