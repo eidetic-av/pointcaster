@@ -82,7 +82,7 @@ public:
                                                       const ValueType &value) {
     return _inner_map.emplace(key, value);
   }
-
+  
   std::pair<typename MapType::iterator, bool> emplace(const std::string &key,
                                                       ValueType &&value) {
     return _inner_map.emplace(key, std::move(value));
@@ -122,6 +122,11 @@ public:
                                                           Args &&...args) {
     return _inner_map.try_emplace(std::string(key),
                                   std::forward<Args>(args)...);
+  }
+
+  std::pair<typename MapType::iterator, bool>
+  insert_or_assign(const std::string &key, const ValueType &value) {
+    return _inner_map.insert_or_assign(key, value);
   }
 
   ValueType &operator[](const std::string &key) { return _inner_map[key]; }

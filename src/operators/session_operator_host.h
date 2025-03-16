@@ -50,6 +50,7 @@ private:
   Scene3D &_scene;
   Magnum::SceneGraph::DrawableGroup3D &_parent_group;
   std::optional<size_t> _last_voxel_count;
+  std::optional<size_t> _last_cluster_count;
 
   void add_operator(OperatorConfigurationVariant operator_config) {
     _config.operators.push_back(operator_config);

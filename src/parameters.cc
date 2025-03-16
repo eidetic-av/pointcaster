@@ -13,7 +13,16 @@ namespace pc::parameters {
 void declare_parameter(std::string_view parameter_id,
                        const Parameter &parameter) {
   pc::logger->debug(" -- param: {}", parameter_id.data());
-  parameter_bindings.emplace(parameter_id, parameter);
+  auto [_, new_binding] =
+      parameter_bindings.insert_or_assign(std::string{parameter_id}, parameter);
+
+  if (!new_binding) {
+    // just updating that parameter reference
+    return;
+  }
+
+  // otherwise if its a new binding, we need to recurse into the parameter and
+  // declare nested parameter structs
 
   // Ignored suffixes check
   static const std::array<std::string, 4> ignored_suffixes = {".x", ".y", ".z",
