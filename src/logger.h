@@ -29,12 +29,12 @@ inline std::shared_ptr<spdlog::logger> &get_logger() {
     instance =
         std::make_shared<spdlog::logger>("pc", sinks.begin(), sinks.end());
 
-#ifndef NDEBUG
+#ifdef NDEBUG
     instance->set_level(spdlog::level::info);
-    instance->info("Set log level to info");
+    instance->info("Release build - set log level to info");
 #else
     instance->set_level(spdlog::level::debug);
-    instance->info("Set log level to debug");
+    instance->info("Debug build - set log level to debug");
 #endif
   }
   return instance;

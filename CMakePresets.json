@@ -14,7 +14,7 @@
       "cacheVariables": {
         "ARCHIVE_NAME": "pointcaster_windows-release",
         "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-release",
         "CMAKE_TOOLCHAIN_FILE": "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_BUILD_TYPE": "Release",
         "WITH_POINTCASTER": true,
@@ -35,7 +35,9 @@
       "description": "Build with debug info",
       "cacheVariables": {
         "ARCHIVE_NAME": "pointcaster_windows-debug",
-        "CMAKE_BUILD_TYPE": "Debug"
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS_DEBUG": "/analyze"
       }
     },
     {
