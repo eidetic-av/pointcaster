@@ -118,13 +118,16 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
     current_voxels.store(voxelised_cloud);
 
     if (config.publish_voxels) {
-      // interpret the pcl point cloud as standard value types
-      static_assert(sizeof(pcl::PointXYZ) == sizeof(std::array<float, 4>));
-      auto point_data = reinterpret_cast<std::vector<std::array<float, 4>> &>(
-          voxelised_cloud->points);
-      // auto id_string = std::to_string(config.id);
-      auto id_string = "pcl";
-      publisher::publish_all("voxels", point_data, {id_string});
+      const auto &operator_name = operator_friendly_names.at(config.id);
+      std::vector<std::array<float, 3>> voxel_positions;
+      voxel_positions.reserve(voxelised_cloud->points.size());
+      std::ranges::transform(voxelised_cloud->points,
+                             std::back_inserter(voxel_positions),
+                             [](const auto &pt) {
+                               return std::array<float, 3>{pt.x, pt.y, pt.z};
+                             });
+      publisher::publish_all(std::format("{}.voxels", operator_name),
+                             voxel_positions);
     }
 
     auto voxelisation_time = system_clock::now();
