@@ -159,7 +159,7 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
 
     // Send our server a connected message
     socket.send(make_msg(MessageType::Connected), zmq::send_flags::none);
-    
+
     // Request all publishing parameters
     socket.send(make_msg(MessageType::ParameterRequest), zmq::send_flags::none);
 
@@ -191,7 +191,8 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
                     // stop our heartbeat response timer as successful?
                     msg_enqueue_result = true;
                   } else {
-                    msg_enqueue_result = ctx->message_queue.try_enqueue(message);
+                    msg_enqueue_result =
+                        ctx->message_queue.try_enqueue(message);
                   }
                   // check for heartbeat type
                   // pass other message types to our queue
@@ -282,6 +283,29 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
             out_message->value.float3_val.x = val[0];
             out_message->value.float3_val.y = val[1];
             out_message->value.float3_val.z = val[2];
+          } else if constexpr (std::same_as<T, Float3List>) {
+            out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT3LIST;
+            const auto &float3List = val;
+            size_t count = float3List.size();
+            out_message->value.float3_list_val.count = count;
+            if (count > 0) {
+              // allocate memory for count AABB elements.
+              out_message->value.float3_list_val.data =
+                  static_cast<pointreceiver_float3_t *>(
+                      std::malloc(count * sizeof(pointreceiver_float3_t)));
+              if (!out_message->value.float3_list_val.data) {
+                out_message->value.float3_list_val.count = 0;
+                set_message_success = false;
+                return;
+              }
+              for (size_t i = 0; i < count; i++) {
+                out_message->value.float3_list_val.data[i].x = float3List[i][0];
+                out_message->value.float3_list_val.data[i].y = float3List[i][1];
+                out_message->value.float3_list_val.data[i].z = float3List[i][2];
+              }
+            } else {
+              out_message->value.float3_list_val.data = nullptr;
+            }
           } else if constexpr (std::same_as<T, AABBList>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_AABBLIST;
             const auto &aabbList = val;
@@ -299,7 +323,7 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
               }
               // copy each AABB element.
               for (size_t i = 0; i < count; ++i) {
-                const auto &aabb = aabbList[i]; 
+                const auto &aabb = aabbList[i];
                 for (int j = 0; j < 3; ++j) {
                   out_message->value.aabb_list_val.data[i].min[j] = aabb[0][j];
                   out_message->value.aabb_list_val.data[i].max[j] = aabb[1][j];
@@ -328,7 +352,13 @@ bool pointreceiver_free_sync_message(pointreceiver_context *ctx,
 
   // if the message contains a type that uses dynamically allocated memory, we
   // must free it
-  if (out_message->value_type == POINTRECEIVER_PARAM_VALUE_AABBLIST) {
+  if (out_message->value_type == POINTRECEIVER_PARAM_VALUE_FLOAT3LIST) {
+    if (out_message->value.float3_list_val.data) {
+      free(out_message->value.float3_list_val.data);
+      out_message->value.float3_list_val.data = nullptr;
+    }
+    out_message->value.float3_list_val.count = 0;
+  } else if (out_message->value_type == POINTRECEIVER_PARAM_VALUE_AABBLIST) {
     if (out_message->value.aabb_list_val.data) {
       free(out_message->value.aabb_list_val.data);
       out_message->value.aabb_list_val.data = nullptr;
@@ -494,8 +524,11 @@ void testMessageLoop(pointreceiver_context *ctx) {
           log("Value: ({}, {}, {})", msg.value.float3_val.x,
               msg.value.float3_val.y, msg.value.float3_val.z);
           break;
-        case POINTRECEIVER_PARAM_VALUE_AABBLIST:
+        case POINTRECEIVER_PARAM_VALUE_FLOAT3LIST:
           // TODO log contents or at least size?
+          log("Got a Float3List here");
+          break;
+        case POINTRECEIVER_PARAM_VALUE_AABBLIST:
           log("Got an AABBList here");
           break;
         default: log("Unknown parameter update type"); break;

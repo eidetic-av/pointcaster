@@ -10,6 +10,7 @@ namespace pc::client_sync {
 using array3f = std::array<float, 3>;
 using pc::types::Float3;
 using AABBList = std::vector< std::array<array3f, 2> >;
+using Float3List = std::vector<array3f>;
 
 enum class MessageType : uint8_t {
   Connected = 0x00,
@@ -19,11 +20,25 @@ enum class MessageType : uint8_t {
   ParameterRequest = 0x11
 };
 
+using ParameterVariant =
+    std::variant<float, int, Float3, array3f, AABBList, Float3List>;
+
 struct ParameterUpdate {
   std::string id;
-  std::variant<float, int, Float3, array3f, AABBList> value;
+  ParameterVariant value;
 };
 
 using SyncMessage = std::variant<MessageType, ParameterUpdate>;
+
+template<typename T, typename Variant>
+struct is_variant_member;
+
+template<typename T, typename... Types>
+struct is_variant_member<T, std::variant<Types...>>
+    : std::disjunction<std::is_same<T, Types>...> {};
+
+template <typename T>
+constexpr bool IsConvertableToParameterUpdate =
+    is_variant_member<T, ParameterVariant>::value;
 
 } // namespace pc::client_sync

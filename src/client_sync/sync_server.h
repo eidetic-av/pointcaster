@@ -52,13 +52,7 @@ public:
   template <typename T>
   void publish(const std::string_view topic, const T &data,
                std::initializer_list<std::string_view> topic_nodes = {}) {
-    if constexpr (std::disjunction_v<std::is_same<T, float>,
-                                     std::is_same<T, Float3>,
-                                     std::is_same<T, array3f>>) {
-      const auto id = publisher::construct_topic_string(topic, topic_nodes);
-      enqueue_parameter_update(ParameterUpdate{id, {data}});
-    } else if constexpr (std::same_as<T, AABBList>) {
-      // create update for an AABB list thats binary serializable
+    if constexpr (IsConvertableToParameterUpdate<T>) {
       const auto id = publisher::construct_topic_string(topic, topic_nodes);
       enqueue_parameter_update(ParameterUpdate{id, {data}});
     } else if constexpr (is_publishable_container_v<T>) {
