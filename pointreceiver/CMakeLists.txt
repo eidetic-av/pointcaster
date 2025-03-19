@@ -2,12 +2,13 @@ message("-- Configuring pointreceiver lib for ${VCPKG_TARGET_TRIPLET}")
 
 # ----- Dependencies -----
 
-find_package(spdlog CONFIG REQUIRED)
-list(APPEND RECEIVER_LINK_LIBS spdlog::spdlog)
-
 find_package(ZeroMQ CONFIG REQUIRED)
-list(APPEND RECEIVER_LINK_LIBS libzmq-static)
-list(APPEND RECEIVER_COMPILE_DEFS ZMQ_STATIC)
+if(RECEIVER_LIB_SHARED AND NOT WIN32) 
+  list(APPEND RECEIVER_LINK_LIBS libzmq)
+else()
+  list(APPEND RECEIVER_LINK_LIBS libzmq-static)
+  list(APPEND RECEIVER_COMPILE_DEFS ZMQ_STATIC)
+endif()
 
 find_package(draco CONFIG REQUIRED)
 list(APPEND RECEIVER_LINK_LIBS draco::draco)
@@ -21,6 +22,11 @@ list(APPEND RECEIVER_INCLUDE_DIRS ${READERWRITERQUEUE_INCLUDE_DIRS})
 find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
 list(APPEND RECEIVER_INCLUDE_DIRS ${ZPP_BITS_INCLUDE_DIRS})
 
+if (WIN32)
+  find_package(spdlog CONFIG REQUIRED)
+  list(APPEND RECEIVER_LINK_LIBS spdlog::spdlog)
+endif()
+
 # ----- Pointreceiver library -----
 
 set(RECEIVER_SOURCE_FILES src/pointreceiver.cc)
@@ -28,7 +34,7 @@ set(RECEIVER_SOURCE_FILES src/pointreceiver.cc)
 add_library(pointreceiver_obj OBJECT ${RECEIVER_SOURCE_FILES})
 set_target_properties(pointreceiver_obj PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(pointreceiver_obj PRIVATE ${RECEIVER_INCLUDE_DIRS})
-target_compile_definitions(pointreceiver_obj PRIVATE ${RECEIVER_COMPILE_DEFS})
+target_compile_definitions(pointreceiver_obj PRIVATE ${RECEIVER_COMPILE_DEFS} LIBRARY_BUILD)
 
 if(RECEIVER_LIB_SHARED)
   add_library(pointreceiver SHARED $<TARGET_OBJECTS:pointreceiver_obj>)
@@ -58,6 +64,22 @@ add_custom_command(TARGET pointreceiver POST_BUILD
     $<TARGET_FILE_DIR:pointreceiver>
 )
 
+if (RECEIVER_LIB_SHARED AND NOT WIN32)
+  # make sure that each dependency is copied to the build output directory too
+  # not in win32 builds since all deps are static there
+  foreach(lib_target ${RECEIVER_LINK_LIBS})
+    if (NOT "${lib_target}" STREQUAL "")
+      get_target_property(lib_type ${lib_target} TYPE)
+      if(NOT lib_type STREQUAL "STATIC_LIBRARY")
+        add_custom_command(TARGET pointreceiver POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different
+	        "$<TARGET_FILE:${lib_target}>"
+          "$<TARGET_FILE_DIR:pointreceiver>")
+      endif()
+    endif()
+  endforeach()
+endif()
+
 if (WITH_TESTS)
   add_executable(pointreceiver-test ${RECEIVER_SOURCE_FILES})
   target_link_libraries(pointreceiver-test PRIVATE ${RECEIVER_LINK_LIBS} 
@@ -78,6 +100,7 @@ list(APPEND RECEIVER_DEPLOY_EXCLUDES
 
   add_custom_target(deploy DEPENDS pointreceiver
     COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/deploy.py
+    	  --name ${ARCHIVE_NAME}
           --exclude ${RECEIVER_DEPLOY_EXCLUDES}
           --directory ${CMAKE_CURRENT_BINARY_DIR}
           -- ${RECEIVER_DEPLOY_LOCATIONS})

@@ -5,12 +5,15 @@
 #include <concepts>
 #include <cstring>
 #include <execution>
+#include <format>
 #include <iostream>
 #include <mutex>
 #include <numeric>
 #include <readerwriterqueue/readerwritercircularbuffer.h>
 #include <readerwriterqueue/readerwriterqueue.h>
+#include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 #ifndef ZMQ_BUILD_DRAFT_API
@@ -35,17 +38,19 @@ using pc::client_sync::SyncMessage;
 static std::unique_ptr<zmq::context_t> zmq_ctx;
 static std::once_flag zmq_ctx_once;
 
-static moodycamel::BlockingReaderWriterCircularBuffer<PointCloud>
-    cloud_queue(1);
-
-std::unique_ptr<std::jthread> pointcloud_thread;
-
 struct pointreceiver_context {
   std::optional<std::string> client_name;
-  moodycamel::BlockingReaderWriterQueue<SyncMessage> message_queue;
-  std::unique_ptr<std::jthread> message_thread;
 
-  pointreceiver_context() : message_queue() {}
+  std::unique_ptr<std::thread> message_thread;
+  std::atomic<bool> message_thread_stop_flag{false};
+  moodycamel::BlockingReaderWriterQueue<SyncMessage> message_queue;
+
+  std::unique_ptr<std::thread> pointcloud_thread;
+  std::atomic<bool> pointcloud_thread_stop_flag{false};
+  moodycamel::BlockingReaderWriterCircularBuffer<PointCloud> pointcloud_queue;
+  PointCloud latest_point_cloud{};
+
+  pointreceiver_context() : message_queue(), pointcloud_queue(1) {}
 };
 
 static pointreceiver_message_type convertMessageType(MessageType message_type) {
@@ -64,10 +69,11 @@ static pointreceiver_message_type convertMessageType(MessageType message_type) {
 }
 
 #ifdef __ANDROID__
-void log(std::string text) {
-  auto text_cstr = text.c_str();
-  int (*alias)(int, const char *, const char *, ...) = __android_log_print;
-  alias(ANDROID_LOG_VERBOSE, APPNAME, text_cstr);
+void log(std::string_view arg) {
+  /*auto text_cstr = std::to_string(arg).c_str();*/
+  /*int (*alias)(int, const char *, const char *, ...) = __android_log_print;*/
+  /*alias(ANDROID_LOG_VERBOSE, APPNAME, text_cstr);*/
+  std::cout << arg << "\n";
 }
 #else
 template <typename... Args>
@@ -87,7 +93,7 @@ pointreceiver_context *pointreceiver_create_context() {
 
 void pointreceiver_destroy_context(pointreceiver_context *ctx) {
   if (ctx) {
-    if (ctx->message_thread) { ctx->message_thread->request_stop(); }
+    pointreceiver_stop_message_receiver(ctx);
   }
   delete ctx;
 }
@@ -100,9 +106,11 @@ void pointreceiver_set_client_name(pointreceiver_context *ctx,
 int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
                                          const char *pointcaster_address) {
   const std::string pointcaster_address_str(pointcaster_address);
+  
+  ctx->message_thread_stop_flag.store(false, std::memory_order_relaxed);
 
   ctx->message_thread = std::make_unique<
-      std::jthread>([ctx, pointcaster_address_str](std::stop_token stop_token) {
+      std::thread>([ctx, pointcaster_address_str]() {
     log("Beginning message receive thread");
 
     zmq::socket_t socket(*zmq_ctx, zmq::socket_type::dealer);
@@ -120,15 +128,15 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
       socket.set(zmq::sockopt::routing_id, "pointreceiver");
     }
 
-    auto endpoint = fmt::format("tcp://{}:{}", pointcaster_address_str,
-                                message_stream_port);
+    auto endpoint = std::format("tcp://{}:{}", pointcaster_address_str,
+		    message_stream_port);
     socket.connect(endpoint);
 
     if (socket.handle() == nullptr) {
       log("Failed to connect");
       return;
     }
-    log("Listening for messages at '{}'", endpoint);
+    /*log("Listening for messages at '{}'", endpoint);*/
 
     // convenience map contains our message type signals pre-populated as
     // serialized buffers
@@ -167,7 +175,7 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
     using namespace std::chrono_literals;
     auto time_since_heartbeat = 0ms;
 
-    while (!stop_token.stop_requested()) {
+    while (!ctx->message_thread_stop_flag.load(std::memory_order_relaxed)) {
       zmq::message_t incoming_msg;
       auto recv_start_time = steady_clock::now();
       // try check for incoming msg (this times out)
@@ -230,7 +238,8 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
 
 int pointreceiver_stop_message_receiver(pointreceiver_context *ctx) {
   if (ctx->message_thread) {
-    ctx->message_thread->request_stop();
+    ctx->message_thread_stop_flag.store(true);
+    ctx->message_thread->join();
     ctx->message_thread.reset();
   }
   return 0;
@@ -371,8 +380,8 @@ bool pointreceiver_free_sync_message(pointreceiver_context *ctx,
 }
 
 // Start a thread that handles networking for the point cloud
-int pointrecevier_start_point_receiver(const char *pointcaster_address,
-                                       int timeout_ms) {
+int pointreceiver_start_point_receiver(pointreceiver_context *ctx,
+                                       const char *pointcaster_address) {
 
   // initialise the zmq context if it hasn't already been initialised
   std::call_once(zmq_ctx_once,
@@ -380,8 +389,10 @@ int pointrecevier_start_point_receiver(const char *pointcaster_address,
 
   const std::string pointcaster_address_str(pointcaster_address);
 
-  pointcloud_thread = std::make_unique<std::jthread>(
-      [&, pointcaster_address_str, timeout_ms](std::stop_token stop_token) {
+  ctx->pointcloud_thread_stop_flag.store(false, std::memory_order_relaxed);
+
+  ctx->pointcloud_thread = std::make_unique<std::thread>(
+      [ctx, pointcaster_address_str]() {
         using namespace std::chrono;
         using namespace std::chrono_literals;
 
@@ -393,21 +404,22 @@ int pointrecevier_start_point_receiver(const char *pointcaster_address,
         // TODO something in the set calls here is crashing Unity
 
         // don't retain frames in memory
-        socket.set(zmq::sockopt::linger, 0);
+        // socket.set(zmq::sockopt::linger, 0);
         // TODO what should the high watermark be... 3 frames why?
-        socket.set(zmq::sockopt::rcvhwm, 3);
+        // socket.set(zmq::sockopt::rcvhwm, 3);
 
         // connection attempt should time out if requested
-        if (timeout_ms != 0)
-          socket.set(zmq::sockopt::connect_timeout, timeout_ms);
+        // if (timeout_ms != 0)
+        //   socket.set(zmq::sockopt::connect_timeout, timeout_ms);
 
         constexpr auto recv_timeout_ms = 100;
         socket.set(zmq::sockopt::rcvtimeo, recv_timeout_ms);
 
-        auto endpoint = fmt::format("tcp://{}:{}", pointcaster_address_str,
+        auto endpoint = std::format("tcp://{}:{}", pointcaster_address_str,
                                     pointcloud_stream_port);
         socket.connect(endpoint);
-        log("Listening for pointcloud stream at '{}'", endpoint);
+        /*log("Listening for pointcloud stream at '{}'", endpoint);*/
+        log("Connecting to pointcloud stream");
 
         if (socket.handle() == nullptr) {
           log("Failed to connect");
@@ -417,129 +429,145 @@ int pointrecevier_start_point_receiver(const char *pointcaster_address,
         socket.join("live");
         log("Connected");
 
-        while (!stop_token.stop_requested()) {
-
+        while (!ctx->pointcloud_thread_stop_flag.load(std::memory_order_relaxed)) {
           zmq::message_t incoming_msg;
-          auto result = socket.recv(incoming_msg, zmq::recv_flags::none);
-          if (!result) continue;
-
-          // deserialize the incoming message
-          auto msg_size = incoming_msg.size();
-          bob::types::bytes buffer(msg_size);
-          auto bytes_ptr = static_cast<std::byte *>(incoming_msg.data());
-          buffer.assign(bytes_ptr, bytes_ptr + msg_size);
-          // and place it in our queue
-          cloud_queue.try_enqueue(PointCloud::deserialize(buffer));
+          auto recv_result = socket.recv(incoming_msg, zmq::recv_flags::none);
+          if (recv_result) {
+            const auto msg_size = incoming_msg.size();
+            std::vector<std::byte> buffer(msg_size);
+            auto *bytes = static_cast<std::byte *>(incoming_msg.data());
+            buffer.assign(bytes, bytes + msg_size);
+            ctx->pointcloud_queue.try_enqueue(PointCloud::deserialize(buffer));
+          }
         }
 
         socket.disconnect(endpoint);
-
         log("Disconnected");
       });
 
   return 0;
 }
 
-int pointreceiver_stop_point_receiver() {
-  if (pointcloud_thread) {
-    pointcloud_thread->request_stop();
-    pointcloud_thread.reset();
+int pointreceiver_stop_point_receiver(pointreceiver_context *ctx) {
+  ctx->pointcloud_thread_stop_flag.store(true, std::memory_order_relaxed);
+  auto &thread = ctx->pointcloud_thread;
+  if (thread && thread->joinable()) {
+    thread->join();
+    thread.reset();
   }
   return 0;
 }
 
-static PointCloud point_cloud;
+bool pointreceiver_dequeue_point_cloud(
+    pointreceiver_context *ctx, pointreceiver_pointcloud_frame *out_frame,
+    int timeout_ms) {
+  if (!ctx || !out_frame) return false;
 
-bool pointreceiver_dequeue_points(int timeout_ms) {
-  point_cloud = PointCloud{};
-  return cloud_queue.wait_dequeue_timed(point_cloud,
-                                        std::chrono::milliseconds(timeout_ms));
+  auto& point_cloud = ctx->latest_point_cloud;
+
+  bool result = ctx->pointcloud_queue.wait_dequeue_timed(
+      point_cloud, std::chrono::milliseconds(timeout_ms));
+
+  if (!result) return false;
+
+  out_frame->point_count = static_cast<int>(point_cloud.size());
+  out_frame->positions = point_cloud.positions.data();
+  out_frame->colours = point_cloud.colors.data();
+
+  return true;
 }
 
-int pointreceiver_point_count() { return point_cloud.size(); }
+// int pointreceiver_point_count() { return point_cloud.size(); }
 
 // TODO make below compatible with C api
 
-bob::types::color *pointColors() { return point_cloud.colors.data(); }
+// bob::types::color *pointColors() { return point_cloud.colors.data(); }
 
-bob::types::position *pointPositions() { return point_cloud.positions.data(); }
+// bob::types::position *pointPositions() { return point_cloud.positions.data(); }
 
-std::vector<std::array<float, 4>> shader_friendly_point_positions_data;
+// std::vector<std::array<float, 4>> shader_friendly_point_positions_data;
 
-enum class OrientationType { unchanged = 0, flip_x, flip_x_z, flip_z };
-float *shaderFriendlyPointPositions(bool parallel_transform,
-                                    OrientationType orientation_type) {
-  std::size_t size = point_cloud.positions.size();
-  shader_friendly_point_positions_data.resize(size);
+// enum class OrientationType { unchanged = 0, flip_x, flip_x_z, flip_z };
+// float *shaderFriendlyPointPositions(bool parallel_transform,
+//                                     OrientationType orientation_type) {
+//   std::size_t size = point_cloud.positions.size();
+//   shader_friendly_point_positions_data.resize(size);
 
-  std::array<float, 3> orientation{1, 1, 1};
-  if (orientation_type == OrientationType::flip_x) {
-    orientation[0] = -1;
-  } else if (orientation_type == OrientationType::flip_z) {
-    orientation[2] = -1;
-  } else if (orientation_type == OrientationType::flip_x_z) {
-    orientation[0] = -1;
-    orientation[2] = -1;
-  }
+//   std::array<float, 3> orientation{1, 1, 1};
+//   if (orientation_type == OrientationType::flip_x) {
+//     orientation[0] = -1;
+//   } else if (orientation_type == OrientationType::flip_z) {
+//     orientation[2] = -1;
+//   } else if (orientation_type == OrientationType::flip_x_z) {
+//     orientation[0] = -1;
+//     orientation[2] = -1;
+//   }
 
-  const auto transform_func =
-      [&](const bob::types::position &pos) -> std::array<float, 4> {
-    return {static_cast<float>(pos.x) * orientation[0] / 1000.0f,
-            static_cast<float>(pos.y) * orientation[1] / 1000.0f,
-            static_cast<float>(pos.z) * orientation[2] / 1000.0f, 0.0f};
-  };
+//   const auto transform_func =
+//       [&](const bob::types::position &pos) -> std::array<float, 4> {
+//     return {static_cast<float>(pos.x) * orientation[0] / 1000.0f,
+//             static_cast<float>(pos.y) * orientation[1] / 1000.0f,
+//             static_cast<float>(pos.z) * orientation[2] / 1000.0f, 0.0f};
+//   };
 
-  if (parallel_transform) {
-    std::transform(std::execution::par, point_cloud.positions.begin(),
-                   point_cloud.positions.end(),
-                   shader_friendly_point_positions_data.begin(),
-                   transform_func);
-  } else {
-    std::transform(point_cloud.positions.begin(), point_cloud.positions.end(),
-                   shader_friendly_point_positions_data.begin(),
-                   transform_func);
-  }
+// #ifndef __ANDROID__
+//   if (parallel_transform) {
+//     std::transform(std::execution::par, point_cloud.positions.begin(),
+//                    point_cloud.positions.end(),
+//                    shader_friendly_point_positions_data.begin(),
+//                    transform_func);
+//   } else {
+//     std::transform(point_cloud.positions.begin(), point_cloud.positions.end(),
+//                    shader_friendly_point_positions_data.begin(),
+//                    transform_func);
+//   }
+// #else
+//   // android version doesn't support parallel execution in std lib
+//   std::transform(point_cloud.positions.begin(), point_cloud.positions.end(),
+//                  shader_friendly_point_positions_data.begin(), transform_func);
+// #endif
 
-  return shader_friendly_point_positions_data.front().data();
-}
+//   return shader_friendly_point_positions_data.front().data();
+// }
+
 }
 
 void testMessageLoop(pointreceiver_context *ctx) {
-  int count = 0;
-  while (count++ < 1000) {
-    pointreceiver_sync_message msg;
-    // dequeue with a 5-millisecond timeout.
-    if (pointreceiver_dequeue_message(ctx, &msg, 5)) {
-      if (msg.message_type == POINTRECEIVER_MSG_TYPE_PARAMETER_UPDATE) {
-        log("Parameter Update received: id = {}, value_type = {}", msg.id,
-            (int)msg.value_type);
-        switch (msg.value_type) {
-        case POINTRECEIVER_PARAM_VALUE_FLOAT:
-          log("Value: {}", msg.value.float_val);
-          break;
-        case POINTRECEIVER_PARAM_VALUE_INT:
-          log("Value: {}", msg.value.int_val);
-          break;
-        case POINTRECEIVER_PARAM_VALUE_FLOAT3:
-          log("Value: ({}, {}, {})", msg.value.float3_val.x,
-              msg.value.float3_val.y, msg.value.float3_val.z);
-          break;
-        case POINTRECEIVER_PARAM_VALUE_FLOAT3LIST:
-          // TODO log contents or at least size?
-          log("Got a Float3List here");
-          break;
-        case POINTRECEIVER_PARAM_VALUE_AABBLIST:
-          log("Got an AABBList here");
-          break;
-        default: log("Unknown parameter update type"); break;
-        }
-      } else {
-        log("Received message type: {}", (int)msg.message_type);
-      }
-    }
-    pointreceiver_free_sync_message(ctx, &msg);
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  }
+  /*int count = 0;*/
+  /*while (count++ < 1000) {*/
+  /*  pointreceiver_sync_message msg;*/
+  /*  // dequeue with a 5-millisecond timeout.*/
+  /*  if (pointreceiver_dequeue_message(ctx, &msg, 5)) {*/
+  /*    if (msg.message_type == POINTRECEIVER_MSG_TYPE_PARAMETER_UPDATE) {*/
+  /*      log("Parameter Update received: id = {}, value_type = {}", msg.id,*/
+  /*          (int)msg.value_type);*/
+  /*      switch (msg.value_type) {*/
+  /*      case POINTRECEIVER_PARAM_VALUE_FLOAT:*/
+  /*        log("Value: {}", msg.value.float_val);*/
+  /*        break;*/
+  /*      case POINTRECEIVER_PARAM_VALUE_INT:*/
+  /*        log("Value: {}", msg.value.int_val);*/
+  /*        break;*/
+  /*      case POINTRECEIVER_PARAM_VALUE_FLOAT3:*/
+  /*        log("Value: ({}, {}, {})", msg.value.float3_val.x,*/
+  /*            msg.value.float3_val.y, msg.value.float3_val.z);*/
+  /*        break;*/
+  /*      case POINTRECEIVER_PARAM_VALUE_FLOAT3LIST:*/
+  /*        // TODO log contents or at least size?*/
+  /*        log("Got a Float3List here");*/
+  /*        break;*/
+  /*      case POINTRECEIVER_PARAM_VALUE_AABBLIST:*/
+  /*        log("Got an AABBList here");*/
+  /*        break;*/
+  /*      default: log("Unknown parameter update type"); break;*/
+  /*      }*/
+  /*    } else {*/
+  /*      log("Received message type: {}", (int)msg.message_type);*/
+  /*    }*/
+  /*  }*/
+  /*  pointreceiver_free_sync_message(ctx, &msg);*/
+  /*  std::this_thread::sleep_for(std::chrono::milliseconds(5));*/
+  /*}*/
 }
 
 // void testPointcloudLoop() {
@@ -560,16 +588,17 @@ int main(int argc, char *argv[]) {
   auto *ctx = pointreceiver_create_context();
   pointreceiver_set_client_name(ctx, "test_application");
   if (argc < 2) {
-    // pointreceiver_start_point_receiver("127.0.0.1", 5);
-    pointreceiver_start_message_receiver(ctx, "127.0.0.1");
+    pointreceiver_start_point_receiver(ctx, "127.0.0.1");
+    // pointreceiver_start_message_receiver(ctx, "127.0.0.1");
   } else {
+    pointreceiver_start_point_receiver(ctx, argv[1]);
     // pointreceiver_start_point_receiver(argv[1], 5);
-    pointreceiver_start_message_receiver(ctx, argv[1]);
+    // pointreceiver_start_message_receiver(ctx, argv[1]);
   }
   // for (int i = 0; i < 3; i++) { testPointcloudLoop(); }
-  for (int i = 0; i < 3; i++) { testMessageLoop(ctx); }
-  pointreceiver_stop_message_receiver(ctx);
-  // pointreciever_stop_point_receiver();
+  // for (int i = 0; i < 3; i++) { testMessageLoop(ctx); }
+  // pointreceiver_stop_message_receiver(ctx);
+  pointreceiver_stop_point_receiver(ctx);
   pointreceiver_destroy_context(ctx);
   return 0;
 }

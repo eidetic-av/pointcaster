@@ -18,6 +18,7 @@
 #ifdef __ANDROID__
 #include <jni.h>
 #define PR_EXPORT JNIEXPORT
+#define APPNAME "PointReceiver"
 #elif _WIN32
 #define PR_EXPORT __declspec(dllexport)
 #else
@@ -126,6 +127,15 @@ typedef struct {
 } pointreceiver_sync_message;
 
 /**
+ * @brief A point cloud frame received from a Pointcaster instance.
+ */
+typedef struct {
+  int point_count; /**< Number of points in the frame */
+  void *positions; /**< Pointer to the point positions buffer */
+  void *colours;   /**< Pointer to the point colours buffer */
+} pointreceiver_pointcloud_frame;
+
+/**
  * @brief Creates a new PointReceiver context.
  *
  * @return A pointer to a new pointreceiver_context, or NULL on failure.
@@ -205,6 +215,45 @@ PR_EXPORT bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
  */
 PR_EXPORT bool pointreceiver_free_sync_message(pointreceiver_context *ctx,
                                                  pointreceiver_sync_message *out_message);
+
+/**
+ * @brief Starts the point cloud receiver thread.
+ *
+ * Initialises the receiver for point cloud streams on a separate socket.
+ *
+ * @param ctx Pointer to the PointReceiver context.
+ * @param pointcaster_address The network address for the point cloud stream.
+ * @return 0 on success, non-zero on failure.
+ */
+PR_EXPORT int pointreceiver_start_point_receiver(pointreceiver_context *ctx,
+                                                 const char *pointcaster_address);
+
+/**
+ * @brief Stops the point cloud receiver thread.
+ *
+ * Terminates the point cloud stream receiver.
+ *
+ * @param ctx Pointer to the PointReceiver context.
+ * @return 0 on success, non-zero on failure.
+ */
+PR_EXPORT int pointreceiver_stop_point_receiver(pointreceiver_context *ctx);
+
+/**
+ * @brief Dequeues a point cloud frame from pointcaster if one is available.
+ *
+ * This function attempts to dequeue a complete point cloud frame and fills in
+ * the provided frame structure with the point count and buffer pointers.
+ *
+ * @param ctx Pointer to the PointReceiver context.
+ * @param[out] out_frame Pointer to a pointreceiver_pointcloud_frame structure where
+ * the dequeued frame information will be stored.
+ * @param timeout_ms Timeout in milliseconds to wait for a point cloud frame.
+ * @return true if a frame was successfully dequeued, false otherwise.
+ */
+PR_EXPORT bool pointreceiver_dequeue_point_cloud(pointreceiver_context *ctx,
+                                                 pointreceiver_pointcloud_frame *out_frame,
+                                                 int timeout_ms);
+
 
 #ifdef __cplusplus
 }

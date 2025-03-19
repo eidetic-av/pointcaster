@@ -62,6 +62,24 @@
         "ARCHIVE_NAME": "pointreceiver_windows-debug",
         "CMAKE_BUILD_TYPE": "Debug"
       }
+    },
+    {
+      "name": "pointreceiver-android-armeabi-v7a",
+      "inherits": "pointreceiver-windows-release",
+      "displayName": "PointReceiver Lib Android armeabi-v7a",
+      "description": "Build libpointreceiver.so",
+      "cacheVariables": {
+        "ARCHIVE_NAME": "pointreceiver_android-armeabi-v7a",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
+        "VCPKG_TARGET_TRIPLET": "arm-android-dynamic",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_SYSTEM_NAME": "Android",
+        "CMAKE_ANDROID_ARCH_ABI": "armeabi-v7a",
+        "CMAKE_ANDROID_API": "29",
+        "CMAKE_ANDROID_NDK": "/opt/android",
+        "WITH_TESTS": false,
+        "RECEIVER_LIB_SHARED": true
+      }
     }
   ]
 }
