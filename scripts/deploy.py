@@ -72,6 +72,10 @@ def main():
         print(f"Error: {args.directory} is not a valid directory.")
         sys.exit(1)
 
+    # parse any destinations for substitutions
+    name_value = args.name if args.name is not None else ""
+    args.destinations = [dest.format(name=name_value) for dest in args.destinations]
+
     b2_destinations = [d for d in args.destinations if d.startswith("b2://")]
     remote_destinations = [d for d in args.destinations if not d.startswith("b2://")]
 
@@ -87,6 +91,8 @@ def main():
         if shutil.which("scp") is None:
             print(f"Error: Required executable 'scp' not found in PATH.")
             sys.exit(1)
+
+    deployment_failures = []
 
     # if --archive is specified, bundle directory contents into a zip archive.
     if args.archive:
@@ -156,9 +162,30 @@ def main():
                         if not any(fnmatch.fnmatch(normalized_path, pattern) for pattern in args.exclude):
                             files_to_send.append(os.path.join(root, file))
                 if files_to_send:
-                    scp_cmd = ["scp"] + files_to_send + [dest]
-                    subprocess.run(scp_cmd, check=True)
-                print("Deployment complete (raw files).")
+                    try:
+                        # Extract user@host and remote directory from dest, expecting format "user@host:/remote/path"
+                        try:
+                            user_host, remote_dir = dest.split(":", 1)
+                        except ValueError:
+                            raise ValueError(f"Destination '{dest}' is not in the expected format 'user@host:/remote/path'.")
+                        # TODO Run mkdir -p on the remote host.
+                        # Need to figure out how to determine whether to use pwsh or sh command
+                        # mkdir_cmd = ["ssh", user_host, "mkdir", "-p", remote_dir]
+                        # mkdir_cmd = ["New-Item", "-ItemType", "Directory", "-Force", remote_dir]
+                        # subprocess.run(mkdir_cmd, check=True)
+                        # Run scp to copy files.
+                        scp_cmd = ["scp"] + files_to_send + [dest]
+                        subprocess.run(scp_cmd, check=True)
+                    except subprocess.CalledProcessError as e:
+                        print(f"Error deploying to {dest}: {e}")
+                        deployment_failures.append(dest)
+                    except Exception as e:
+                        print(f"Unexpected error deploying to {dest}: {e}")
+                        deployment_failures.append(dest)
+            print("Deployment complete (raw files).")
+
+    if deployment_failures:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
