@@ -9,7 +9,7 @@ namespace pc::client_sync {
 
 using array3f = std::array<float, 3>;
 using pc::types::Float3;
-using AABBList = std::vector< std::array<array3f, 2> >;
+using AABBList = std::vector<std::array<array3f, 2>>;
 using Float3List = std::vector<array3f>;
 
 enum class MessageType : uint8_t {
@@ -30,10 +30,9 @@ struct ParameterUpdate {
 
 using SyncMessage = std::variant<MessageType, ParameterUpdate>;
 
-template<typename T, typename Variant>
-struct is_variant_member;
+template <typename T, typename Variant> struct is_variant_member;
 
-template<typename T, typename... Types>
+template <typename T, typename... Types>
 struct is_variant_member<T, std::variant<Types...>>
     : std::disjunction<std::is_same<T, Types>...> {};
 
