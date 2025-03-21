@@ -405,8 +405,6 @@ void SessionOperatorHost::draw_imgui_window() {
 
 void SessionOperatorHost::draw_gizmos() {
 
-  // operator_bounding_boxes.clear();
-
   for (const auto &operator_config : _config.operators) {
     std::visit(
         [this](auto &&config) {
