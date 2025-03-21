@@ -4,6 +4,7 @@
 #include "../path.h"
 #include "k4a/k4a_driver.h"
 #include "orbbec/orbbec_device.h"
+#include "sequence/ply_sequence_player.h"
 
 #include <imgui.h>
 #include <k4abttypes.h>
@@ -56,6 +57,12 @@ namespace pc::devices {
 			for (auto& device : OrbbecDevice::attached_devices) {
 				ZoneScopedN("orbbec operators & add result");
 				result += device.get().point_cloud();
+			}
+		}
+
+		{
+			for (const auto& player : pc::devices::PlySequencePlayer::players)	 {
+				result += player.get().point_cloud();
 			}
 		}
 

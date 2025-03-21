@@ -13,6 +13,7 @@
     "earcut-hpp",
     "eigen3",
     "fmt",
+    "happly",
     "imgui",
     {
       "name": "imgui",
@@ -53,6 +54,7 @@
     "mdns-cpp",
     "msgpack",
     "nanoflann",
+    "nativefiledialog-extended",
     "orbbec-sdk",
     "paho-mqttpp3",
     {

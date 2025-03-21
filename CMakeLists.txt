@@ -144,6 +144,9 @@ if (WITH_POINTCASTER)
   find_package(draco CONFIG REQUIRED)
   list(APPEND LINK_LIBS draco::draco)
 
+  find_path(HAPPLY_INCLUDE_DIRS "happly.h")
+  list(APPEND INCLUDE_DIRS ${HAPPLY_INCLUDE_DIRS})
+
   # ----- Networking -----
 
   if (WITH_MQTT)
@@ -321,6 +324,9 @@ if (WITH_POINTCASTER)
 
   find_package(unofficial-concurrentqueue CONFIG REQUIRED)
   list(APPEND LINK_LIBS unofficial::concurrentqueue::concurrentqueue)
+
+  find_package(nfd CONFIG REQUIRED)
+  list(APPEND LINK_LIBS nfd::nfd)
 
   # ----- Profiling -----
 

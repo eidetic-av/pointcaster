@@ -16,6 +16,7 @@
 #include "devices/device.h"
 #include "devices/k4a/k4a_device.h"
 #include "devices/orbbec/orbbec_device.h"
+#include "devices/sequence/ply_sequence_player.h"
 #include "devices/usb.h"
 #include "fonts/IconsFontAwesome6.h"
 #include "graph/operator_graph.h"
@@ -134,6 +135,7 @@ protected:
   std::unique_ptr<SyncServer> _sync_server;
 
   std::vector<std::unique_ptr<OrbbecDevice>> _orbbec_cameras;
+  std::vector<pc::devices::PlySequencePlayer> _ply_players;
 
 #ifndef WIN32
   std::unique_ptr<UsbMonitor> _usb_monitor;
@@ -1421,6 +1423,39 @@ void PointCaster::draw_devices_window() {
   }
   ImGui::Dummy({0, 12});
 
+  ImGui::Dummy({10, 0});
+  ImGui::SameLine();
+  if (ImGui::Button("Open PLY sequence")) {
+    run_async([this]() {
+      auto ply_sequence_config = pc::devices::PlySequencePlayer::load_directory();
+      if (!ply_sequence_config.directory.empty()) {
+        _ply_players.emplace_back(ply_sequence_config);
+        // TODO get rid of this stuff and use proper references
+        pc::devices::PlySequencePlayer::players.push_back(
+            std::ref(_ply_players.back()));
+      } else {
+        pc::logger->error("No directory");
+      }
+    });
+  };
+
+  for (auto& ply_player : _ply_players) {
+    ImGui::PushID(std::format("##ply_{}", ply_player.config().id).c_str());
+    ImGui::BeginDisabled();
+    ImGui::Dummy({10, 0});
+    ImGui::SameLine();
+    ImGui::Text("%s", ply_player.config().directory.c_str());
+    ImGui::Dummy({0, 4});
+    ImGui::Dummy({10, 0});
+    ImGui::SameLine();
+    ImGui::Text("Frame %d/%d", ply_player.current_frame(), ply_player.frame_count());
+    ImGui::EndDisabled();
+    if (pc::gui::draw_parameters(ply_player.config().id)) {
+      pc::logger->info("changed");
+    };
+    ImGui::PopID();
+  }
+
   ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
 
   std::optional<std::reference_wrapper<OrbbecDevice>> device_to_detach;
@@ -1577,6 +1612,8 @@ void PointCaster::drawEvent() {
     if (_session.layout.show_radio_window) _radio->draw_imgui_window();
     if (_session.layout.show_snapshots_window)
       _snapshots_context->draw_imgui_window();
+
+    // operator_bounding_boxes.clear();
     if (_session.layout.show_global_transform_window) {
       _session_operator_host->draw_imgui_window();
     }
@@ -1643,6 +1680,11 @@ void PointCaster::drawEvent() {
   swapBuffers();
 
   parameters::publish();
+
+  auto delta_secs = static_cast<float>(_timeline.previousFrameDuration());
+  for (auto& ply_player : _ply_players) {
+    ply_player.tick(delta_secs);
+  }
 
   _timeline.nextFrame();
   FrameMark;
