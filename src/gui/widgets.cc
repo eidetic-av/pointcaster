@@ -634,8 +634,11 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
 bool draw_parameters(std::string_view structure_id) {
   // TODO std::string creation every frame
   auto id = std::string{structure_id};
-  return draw_parameters(structure_id,
-                         struct_parameters.at(std::string{structure_id}));
+  if (!struct_parameters.contains(id)) {
+    pc::logger->warn("Unable to find parameter '{}' for drawing", id);
+    return false;
+  }
+  return draw_parameters(structure_id, struct_parameters.at(id));
 }
 
 bool draw_parameters(unsigned long int structure_id) {
