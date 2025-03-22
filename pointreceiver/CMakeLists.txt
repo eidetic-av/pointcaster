@@ -58,11 +58,20 @@ set_target_properties(pointreceiver PROPERTIES
   DEBUG_POSTFIX "d"
 )
 
+# copy our API header into the output directory
 add_custom_command(TARGET pointreceiver POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     ${CMAKE_CURRENT_SOURCE_DIR}/include/pointreceiver.h
     $<TARGET_FILE_DIR:pointreceiver>
 )
+
+# copy the required third-party notices into the output directory
+add_custom_command(TARGET pointreceiver POST_BUILD 
+  COMMAND ${Python_EXECUTABLE} 
+  ${CMAKE_SOURCE_DIR}/scripts/generate_license.py
+  --target ${CMAKE_BINARY_DIR} 
+  --triplet ${VCPKG_TARGET_TRIPLET} 
+  --output $<TARGET_FILE_DIR:pointreceiver>)
 
 if (RECEIVER_LIB_SHARED AND NOT WIN32)
   # make sure that each dependency is copied to the build output directory too
