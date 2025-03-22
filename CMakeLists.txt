@@ -13,7 +13,7 @@ get_filename_component(CMAKE_PRESET_NAME ${CMAKE_BINARY_DIR} NAME)
 
 ########################################################
 
-project(pointcaster LANGUAGES CXX CUDA)
+project(pointcaster LANGUAGES CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -28,6 +28,9 @@ option(WITH_ADDRESS_SANITIZER "Enable address sanitizer on Debug configuration b
 option(WITH_MARCH_NATIVE "Enable -march=native builds" ON)
 
 option(WITH_POINTCASTER "Build main application" ON)
+if (WITH_POINTCASTER)
+  enable_language(CUDA)
+endif()
 
 option(WITH_RECEIVER_LIB "Build pointreceiver client library" OFF)
 if(WIN32)
