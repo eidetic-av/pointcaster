@@ -490,6 +490,16 @@ if (LINUX)
     ${CMAKE_CURRENT_LIST_DIR})
 endif()
 
+# copy the required third-party notices into our output directory
+if (WITH_POINTCASTER)
+  add_custom_command(TARGET pointcaster POST_BUILD 
+    COMMAND ${Python_EXECUTABLE} 
+    ${CMAKE_SOURCE_DIR}/scripts/generate_license.py
+    --target ${CMAKE_BINARY_DIR} 
+    --triplet ${VCPKG_TARGET_TRIPLET} 
+    --output $<TARGET_FILE_DIR:pointcaster>)
+endif()
+
 # ----- Upload/deploy build artefacts -----
 
 if (WITH_POINTCASTER)
