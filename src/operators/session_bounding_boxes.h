@@ -1,17 +1,19 @@
 #pragma once
 
-#include "../objects/wireframe_objects.h"
 #include "../objects/solid_box.h"
+#include "../objects/wireframe_objects.h"
+
 
 #include "../gui/catpuccin.h"
 #include "../uuid.h"
-#include "range_filter_operator.gen.h"
 #include "operator_traits.h"
+#include "range_filter_operator.gen.h"
 #include <Magnum/Magnum.h>
 #include <map>
 #include <memory>
 #include <optional>
 #include <random>
+
 
 namespace pc::operators {
 
@@ -33,7 +35,7 @@ inline Vector3 next_bounding_box_color() {
   return bounding_box_colors[current_index].rgb();
 }
 
-static void set_or_create_bounding_box(
+inline void set_or_create_bounding_box(
     uid id, pc::types::Float3 size, pc::types::Float3 position, Scene3D &scene,
     SceneGraph::DrawableGroup3D &parent_group, bool visible = true,
     std::optional<Color4> color = {}) {
@@ -56,16 +58,16 @@ static void set_or_create_bounding_box(
 }
 
 template <typename T>
-static void
+inline void
 set_or_create_bounding_box(const T &operator_config, Scene3D &scene,
                            SceneGraph::DrawableGroup3D &parent_group,
                            std::optional<Color4> color = {}) {
-  const auto& id = operator_config.id;
+  const auto &id = operator_config.id;
   const auto &size = operator_config.transform.size;
   const auto &position = operator_config.transform.position;
   const auto draw = has_draw_v<T> ? operator_config.draw : true;
-  set_or_create_bounding_box(id, size, position, scene, parent_group,
-                             draw, color);
+  set_or_create_bounding_box(id, size, position, scene, parent_group, draw,
+                             color);
 }
 
 } // namespace pc::operators

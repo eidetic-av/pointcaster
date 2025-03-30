@@ -1,5 +1,8 @@
+#include "pointcaster.h"
+
 #include "devices/sequence/ply_sequence_player_configuration.gen.h"
 #include "gui/catpuccin.h"
+#include "gui/windows.h"
 #include "parameters.h"
 #include "pch.h"
 #include <imgui.h>
@@ -56,157 +59,6 @@
 #include <k4a/k4a.h>
 
 namespace pc {
-
-using namespace pc;
-using namespace pc::camera;
-using namespace pc::client_sync;
-using namespace pc::devices;
-using namespace pc::graph;
-using namespace pc::midi;
-using namespace pc::mqtt;
-using namespace pc::operators;
-using namespace pc::parameters;
-using namespace pc::radio;
-using namespace pc::snapshots;
-using namespace pc::tween;
-using namespace pc::types;
-
-#ifdef WITH_OSC
-using namespace pc::osc;
-#endif
-
-using namespace Magnum;
-using namespace Math::Literals;
-
-using pc::devices::Device;
-using pc::devices::K4ADevice;
-using pc::devices::OrbbecDevice;
-
-using uint = unsigned int;
-using Object3D = Magnum::SceneGraph::Object<SceneGraph::MatrixTransformation3D>;
-using Scene3D = Magnum::SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
-
-struct SphereInstanceData {
-  Matrix4 transformationMatrix;
-  Matrix3x3 normalMatrix;
-  Color3 color;
-};
-
-class PointCaster : public Platform::Application {
-
-public:
-  explicit PointCaster(const Arguments &args);
-
-  template <class Function, class... Args>
-  void run_async(Function &&f, Args &&...args) {
-    _async_tasks.emplace_back(f, args...);
-  }
-
-protected:
-  PointCasterSession _session;
-  std::mutex _session_devices_mutex;
-
-  Mode _current_mode{Mode::Normal};
-  std::array<char, modeline_buffer_size> _modeline_input =
-      std::array<char, modeline_buffer_size>({});
-
-  std::vector<std::jthread> _async_tasks;
-
-  std::unique_ptr<Scene3D> _scene;
-  std::unique_ptr<SceneGraph::DrawableGroup3D> _scene_root;
-
-  std::optional<Vector2i> _display_resolution;
-
-  std::vector<std::unique_ptr<CameraController>> _camera_controllers;
-  std::optional<std::reference_wrapper<CameraController>>
-      _interacting_camera_controller;
-
-  std::unique_ptr<PointCloudRenderer> _point_cloud_renderer;
-  std::unique_ptr<SphereRenderer> _sphere_renderer;
-
-  std::unique_ptr<WireframeGrid> _ground_grid;
-
-  std::unique_ptr<SessionOperatorHost> _session_operator_host;
-  std::unique_ptr<OperatorGraph> _session_operator_graph;
-
-  std::unique_ptr<Snapshots> _snapshots_context;
-
-  std::unique_ptr<Radio> _radio;
-  std::unique_ptr<MqttClient> _mqtt;
-  std::unique_ptr<MidiDevice> _midi;
-#ifdef WITH_OSC
-  std::unique_ptr<OscClient> _osc_client;
-  std::unique_ptr<OscServer> _osc_server;
-#endif
-  std::unique_ptr<SyncServer> _sync_server;
-
-#ifndef WIN32
-  std::unique_ptr<UsbMonitor> _usb_monitor;
-  std::mutex _usb_config_mutex;
-#endif
-
-  ImGuiIntegration::Context _imgui_context{NoCreate};
-
-  ImFont *_font;
-  ImFont *_mono_font;
-  std::shared_ptr<ImFont> _icon_font;
-  std::shared_ptr<ImFont> _icon_font_small;
-
-  /* Spheres rendering */
-  GL::Mesh _sphere_mesh{NoCreate};
-  GL::Buffer _sphere_instance_buffer{NoCreate};
-  Shaders::PhongGL _sphere_shader{NoCreate};
-  Containers::Array<SphereInstanceData> _sphere_instance_data;
-
-  void save_session();
-  void save_session(std::filesystem::path file_path);
-  void load_session(std::filesystem::path file_path);
-
-  std::atomic_bool loading_device = false;
-  void load_device(const DeviceConfigurationVariant &config);
-  void load_k4a_device(const DeviceConfiguration &config,
-                       std::string_view target_id = "");
-  void open_kinect_sensors();
-  void open_orbbec_sensor(std::string_view ip);
-
-  void render_cameras();
-  void publish_parameters();
-
-  void draw_menu_bar();
-  void draw_control_bar();
-  void draw_main_viewport();
-  void draw_viewport_controls(CameraController &selected_camera);
-  void draw_camera_control_windows();
-  void draw_devices_window();
-  void draw_onscreen_log();
-  void draw_modeline();
-
-  Vector2i _restore_window_size;
-  Vector2i _restore_window_position;
-  bool _full_screen;
-  void set_full_screen(bool full_screen);
-
-  void quit();
-  void save_and_quit();
-
-  Timeline _timeline;
-  std::vector<float> frame_durations;
-  void draw_stats(const float delta_time);
-
-  void drawEvent() override;
-  void viewportEvent(ViewportEvent &event) override;
-
-  void keyPressEvent(KeyEvent &event) override;
-  void keyReleaseEvent(KeyEvent &event) override;
-
-  void find_mode_keypress(KeyEvent &event);
-
-  void textInputEvent(TextInputEvent &event) override;
-  void mousePressEvent(MouseEvent &event) override;
-  void mouseReleaseEvent(MouseEvent &event) override;
-  void mouseMoveEvent(MouseMoveEvent &event) override;
-  void mouseScrollEvent(MouseScrollEvent &event) override;
-};
 
 PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
@@ -287,9 +139,10 @@ PointCaster::PointCaster(const Arguments &args)
   const auto icon_font_size_pixels =
       icon_font_size * framebufferSize().x() / size.x();
 
-  _icon_font = std::shared_ptr<ImFont>(ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-      const_cast<char *>(font_icons.data()), font_icons.size(),
-      icon_font_size_pixels, &icons_config, icons_ranges));
+  _icon_font =
+      std::shared_ptr<ImFont>(ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+          const_cast<char *>(font_icons.data()), font_icons.size(),
+          icon_font_size_pixels, &icons_config, icons_ranges));
   pc::gui::icon_font = _icon_font;
 
   ImFontConfig icons_config_small = icons_config;
@@ -408,7 +261,7 @@ PointCaster::PointCaster(const Arguments &args)
   if (!_session.usb.has_value()) {
     _session.usb = pc::devices::UsbConfiguration{};
   }
-  declare_parameters("usb", _session.usb.value());
+  parameters::declare_parameters("usb", _session.usb.value());
 
   const auto viewport_size = GL::defaultFramebuffer.viewport().size();
 
@@ -532,7 +385,7 @@ void PointCaster::save_session(std::filesystem::path file_path) {
 
   // parse devices
   output_session.devices.clear();
- {
+  {
     std::lock_guard lock(pc::devices::device_configs_access);
     for (const auto &device_config_variant_ref : pc::devices::device_configs) {
       std::visit(
@@ -590,11 +443,11 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   }(session_member_sequence);
 
   // parse parameter topic lists
-  output_session.published_params = published_parameter_topics();
+  output_session.published_params = parameters::published_parameter_topics();
 
   // save any friendly names assigned to operators
   output_session.operator_names.clear();
-  const auto& op_names = pc::operators::operator_friendly_names;
+  const auto &op_names = pc::operators::operator_friendly_names;
   std::for_each(op_names.begin(), op_names.end(), [&](auto &&kvp) {
     const auto &[id, name] = kvp;
     output_session.operator_names[name] = id;
@@ -691,7 +544,8 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   // unpack published parameters, initialising parameter state
   if (_session.published_params.has_value()) {
     for (auto &parameter_id : *_session.published_params) {
-      parameter_states.emplace(parameter_id, ParameterState::Publish);
+      parameters::parameter_states.emplace(parameter_id,
+                                           parameters::ParameterState::Publish);
     }
   }
 
@@ -741,7 +595,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   pc::logger->info("Loaded session '{}'", file_path.filename().string());
 }
 
-void PointCaster::load_device(const DeviceConfigurationVariant& config) {
+void PointCaster::load_device(const DeviceConfigurationVariant &config) {
   std::visit(
       [&](auto &&device_config) {
         using T = std::decay_t<decltype(device_config)>;
@@ -768,7 +622,6 @@ void PointCaster::load_device(const DeviceConfigurationVariant& config) {
       },
       config);
 }
-
 
 void PointCaster::render_cameras() {
 
@@ -901,6 +754,17 @@ void PointCaster::open_orbbec_sensor(std::string_view ip) {
     }
     loading_device = false;
   });
+}
+
+void PointCaster::open_ply_sequence() {
+  auto ply_sequence_config = PlySequencePlayer::load_directory();
+  if (!ply_sequence_config.directory.empty()) {
+    std::lock_guard lock(devices::devices_access);
+    devices::attached_devices.emplace_back(
+        std::make_shared<PlySequencePlayer>(ply_sequence_config));
+  } else {
+    pc::logger->error("No directory");
+  }
 }
 
 void PointCaster::draw_menu_bar() {
@@ -1349,464 +1213,129 @@ void PointCaster::draw_camera_control_windows() {
   }
 }
 
-void PointCaster::draw_devices_window() {
-  ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
+void PointCaster::draw_stats(const float delta_time) {
+  ImGui::PushID("FrameStats");
+  ImGui::SetNextWindowPos({50.0f, 200.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize({200.0f, 100.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
-  const ImVec2 window_padding{10, 10};
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, window_padding);
-  ImGui::Begin("Devices", nullptr);
+  ImGui::Begin("Frame Stats", nullptr);
+  ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
 
-  static unsigned int selected_device_row = 0;
-  static int editing_device_row_id = -1;
+  // calculate the mean, min and max frame times from our last 60 frames
+  frame_durations.push_back(delta_time);
+  constexpr auto frames_to_average = 60 * 2; // 2 seconds
+  if (frame_durations.size() < frames_to_average) {
+    ImGui::Text("Gathering data...");
+  } else {
+    frame_durations.erase(frame_durations.begin()); // pop_front
+    const float avg_duration =
+        std::reduce(frame_durations.begin(), frame_durations.end()) /
+        frame_durations.size();
+    const auto minmax_duration =
+        std::minmax_element(frame_durations.begin(), frame_durations.end());
 
-  // this ensures newly added devices are 'selected'
-  static int last_device_count = -1;
-  {
-    std::lock_guard lock(devices::device_configs_access);
-    if (last_device_count == -1) {
-      last_device_count = devices::device_configs.size();
-    }
-    if (last_device_count != devices::device_configs.size()) {
-      selected_device_row = devices::device_configs.size() - 1;
-    }
-  }
-
-  ImGui::PushFont(_icon_font.get());
-  const auto icon_width = ImGui::CalcTextSize(ICON_FA_CIRCLE).x +
-                          ImGui::GetStyle().FramePadding.x * 2.0f;
-  const auto row_height = ImGui::GetTextLineHeightWithSpacing() + 5;
-  ImGui::PopFont();
-  const auto window_width = ImGui::GetWindowWidth();
-
-  // top row of devices window
-
-  // includes the name of the selected device type
-  if (last_device_count > 0) {
-    ImGui::Dummy({5, 0});
-    ImGui::BeginDisabled();
-    {
-      std::lock_guard lock(devices::device_configs_access);
-      std::visit(
-          [](auto &&config) {
-            using T = std::decay_t<decltype(config)>;
-            ImGui::Text(T::Name);
-          },
-          devices::device_configs[selected_device_row].get());
-    }
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-  }
-
-  // and a button to add a new device
-  ImGui::SetCursorPosX(window_width - icon_width - window_padding.x);
-  ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 2);
-  if (gui::draw_icon_button(ICON_FA_CIRCLE_PLUS, false,
-                            with_alpha(catpuccin::imgui::mocha_green, 0.75f),
-                            catpuccin::imgui::mocha_green)) {
-    ImGui::OpenPopup("AddDevicePopup");
-  }
-  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add Device");
-
-  ImGui::Dummy({0, 5});
-
-  // create the scrollable list of device names
-
-  static constexpr size_t visible_device_rows = 6;
-  std::optional<int> device_to_delete;
-  std::optional<int> device_to_toggle_active;
-  std::optional<std::string> edited_device_id;
-
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-  ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 8.0f);
-  if (ImGui::BeginChild("DevicesScrollable",
-                        ImVec2(0, visible_device_rows * row_height), true)) {
-    if (ImGui::BeginTable("DevicesTable", 3, ImGuiTableFlags_RowBg,
-                          ImVec2(-FLT_MIN, visible_device_rows * row_height))) {
-      ImGui::TableSetupColumn("view_button", ImGuiTableColumnFlags_WidthFixed,
-                              icon_width + 5);
-      ImGui::TableSetupColumn("device", ImGuiTableColumnFlags_WidthStretch);
-      ImGui::TableSetupColumn("delete_button", ImGuiTableColumnFlags_WidthFixed,
-                              icon_width + 5);
-
-      // get the table's total width from the available content region.
-      float table_width = ImGui::GetContentRegionAvail().x;
-
-      for (int i = 0; i < devices::device_configs.size(); i++) {
-        std::string_view device_id;
-        bool is_active;
-        bool is_selected = (i == selected_device_row);
-        std::visit(
-            [&](auto &&device_config) {
-              device_id = device_config.id;
-              is_active = device_config.active;
-            },
-            devices::device_configs[i].get());
-
-        ImGui::TableNextRow();
-
-        // column 0: view button
-        ImGui::TableSetColumnIndex(0);
-        ImVec2 cell0_content_min = ImGui::GetCursorPos();
-        ImGui::SameLine();
-        std::string_view view_icon;
-        if (is_active) {
-          ImGui::SetCursorPos(
-              {cell0_content_min.x + 5, cell0_content_min.y + 1.0f});
-          view_icon = ICON_FA_EYE;
-        } else {
-          ImGui::SetCursorPos(
-              {cell0_content_min.x + 4, cell0_content_min.y + 1.0f});
-          view_icon = ICON_FA_EYE_SLASH;
-        }
-        if (gui::draw_icon_button(view_icon.data(), true,
-                             catpuccin::imgui::mocha_overlay,
-                             catpuccin::imgui::mocha_overlay2)) {
-          device_to_toggle_active = i;
-        }
-
-        if (!is_active) ImGui::BeginDisabled();
-
-        // column 1: device id text
-        ImGui::TableSetColumnIndex(1);
-        ImVec2 cell1_min = ImGui::GetCursorScreenPos();
-        ImVec2 cell1_content_min = ImGui::GetCursorPos();
-        ImGui::SetCursorPos({cell1_content_min.x, cell1_content_min.y + 1.0f});
-        ImGui::TextUnformatted(device_id.data());
-
-        // compute the width for the device cell: table width minus view and
-        // delete columns and spacing
-        float cell1_width = table_width - (icon_width + 5) - (icon_width + 5) -
-                            ImGui::GetStyle().ItemSpacing.x;
-        ImVec2 full_cell_max =
-            ImVec2(cell1_min.x + cell1_width, cell1_min.y + row_height);
-
-        if (editing_device_row_id == i) {
-          auto popup_label = fmt::format("##device_edit_popup.{}", device_id);
-          static std::string edit_buf_device;
-          static bool device_edit_popup_opened = false;
-          if (!device_edit_popup_opened) {
-            edit_buf_device = std::string(device_id);
-            device_edit_popup_opened = true;
-          }
-          ImGui::SetNextWindowPos({cell1_min.x - 2.0f, cell1_min.y + 1.0f});
-          ImGui::SetNextWindowSize({cell1_width - 20.0f, row_height});
-          ImGui::OpenPopup(popup_label.c_str());
-          if (ImGui::BeginPopup(popup_label.c_str())) {
-            // use &edit_buf_device so the std::string overload is used
-            if (ImGui::InputText(fmt::format("##rename_device_{}", i).c_str(),
-                                 &edit_buf_device,
-                                 ImGuiInputTextFlags_AutoSelectAll |
-                                     ImGuiInputTextFlags_EnterReturnsTrue)) {
-              edited_device_id = edit_buf_device;
-              if (edited_device_id.value().empty())
-                edited_device_id = std::string(device_id);
-              ImGui::CloseCurrentPopup();
-              device_edit_popup_opened = false;
-            }
-            if (!ImGui::IsItemActive() && ImGui::IsMouseClicked(0)) {
-              edited_device_id = std::string(device_id);
-              ImGui::CloseCurrentPopup();
-              device_edit_popup_opened = false;
-            }
-            ImGui::EndPopup();
-          }
-        }
-
-        // extend the cell's rect across the entire row (for background)
-        ImVec2 row_min = cell1_min;
-        ImVec2 row_max =
-            ImVec2(cell1_min.x + table_width, cell1_min.y + row_height);
-        bool row_hovered = ImGui::IsMouseHoveringRect(row_min, row_max);
-
-        ImU32 bg_color;
-        if (is_selected || row_hovered) {
-          bg_color = ImGui::GetColorU32(catpuccin::imgui::mocha_surface);
-        } else {
-          bg_color = ImGui::GetColorU32(catpuccin::imgui::mocha_base);
-        }
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, bg_color);
-
-        // detect clicks for selection using the full cell's rectangle
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-            ImGui::IsMouseHoveringRect(cell1_min, full_cell_max)) {
-          selected_device_row = i;
-        }
-        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
-            ImGui::IsMouseHoveringRect(cell1_min, full_cell_max)) {
-          editing_device_row_id = i;
-        }
-
-        if (!is_active) ImGui::EndDisabled();
-
-        // column 2: delete icon button
-        ImGui::TableSetColumnIndex(2);
-        ImVec2 cell2_content_min = ImGui::GetCursorPos();
-        ImGui::SameLine();
-        ImGui::SetCursorPos({cell2_content_min.x, cell2_content_min.y + 1.0f});
-        if (gui::draw_icon_button(ICON_FA_CIRCLE_XMARK, false,
-                             catpuccin::imgui::mocha_overlay,
-                             catpuccin::imgui::mocha_overlay2)) {
-          device_to_delete = i;
-        }
-        ImGui::SameLine();
-        ImGui::Dummy({5, 0});
-      }
+    if (ImGui::CollapsingHeader("Rendering", true)) {
+      ImGui::Text("Frame Duration");
+      ImGui::BeginTable("duration", 2);
+      ImGui::TableNextColumn();
+      ImGui::Text("Average");
+      ImGui::TableNextColumn();
+      ImGui::Text("%.2fms", avg_duration * 1000);
+      ImGui::TableNextColumn();
+      ImGui::Text("Min");
+      ImGui::TableNextColumn();
+      ImGui::Text("%.2fms", *minmax_duration.first * 1000);
+      ImGui::TableNextColumn();
+      ImGui::Text("Max");
+      ImGui::TableNextColumn();
+      ImGui::Text("%.2fms", *minmax_duration.second * 1000);
       ImGui::EndTable();
+      ImGui::Spacing();
+      ImGui::Text("%.0f FPS", 1000.0f / (avg_duration * 1000));
     }
-    ImGui::EndChild();
-  }
-  ImGui::PopStyleVar();
-  ImGui::PopStyleVar();
 
-  // after the list, process any modifications
-  if (device_to_toggle_active.has_value()) {
-    std::lock_guard lock(devices::device_configs_access);
-    auto &device_config =
-        devices::device_configs[device_to_toggle_active.value()];
-    std::visit([](auto &&config) { config.active = !config.active; },
-               device_config.get());
-  }
-  if (device_to_delete.has_value()) {
-    std::lock_guard lock(devices::devices_access);
-    if (device_to_delete < devices::attached_devices.size()) {
-      devices::attached_devices.erase(attached_devices.begin() +
-                                      device_to_delete.value());
-      // we can't select a device row if it no longer exists
-      selected_device_row = std::min(static_cast<size_t>(selected_device_row),
-                                     devices::attached_devices.size() - 1);
-    }
-  }
-  if (edited_device_id.has_value()) {
-    std::lock_guard lock(devices::device_configs_access);
-    if (editing_device_row_id < devices::device_configs.size()) {
-      auto &device_config = devices::device_configs[editing_device_row_id];
-      std::visit(
-          [&](auto &&config) {
-            parameters::unbind_parameters(config.id);
-            config.id = edited_device_id.value();
-            parameters::declare_parameters(config.id, config);
-          },
-          device_config.get());
-    }
-    editing_device_row_id = -1;
-    edited_device_id.reset();
-  }
-
-  ImGui::Dummy({0, 10});
-
-  // the scrollable child that contains the device configuration parameters of
-  // the selected device in the list
-
-  if (!devices::device_configs.empty()) {
-    auto &selected_device_config = devices::device_configs[selected_device_row];
-    auto selected_device = devices::attached_devices[selected_device_row];
-    std::visit(
-        [&](auto &&device_config) {
-          selected_device->draw_controls();
-          ImGui::Dummy({0, 10});
-          const auto available_space = ImGui::GetContentRegionAvail();
-          ImGui::BeginChild(std::format("##scroll_", device_config.id).c_str(),
-                            {-FLT_MIN, available_space.y});
-          pc::gui::draw_parameters(device_config.id);
-          ImGui::EndChild();
-        },
-        selected_device_config.get());
-  }
-
-  // the popup for adding devices if the add device button is pressed
-  if (ImGui::BeginPopup("AddDevicePopup")) {
-    if (ImGui::BeginMenu("USB device")) {
-      if (ImGui::MenuItem("Azure Kinect")) { open_kinect_sensors(); }
-      if (ImGui::MenuItem("Orbbec")) {
-        pc::logger->error("Orbbec USB device is not yet implemented");
+    for (auto &camera_controller : _camera_controllers) {
+      if (ImGui::CollapsingHeader(camera_controller->name().data())) {
+        if (camera_controller->config().analysis.enabled) {
+          ImGui::Text("Analysis Duration");
+          ImGui::BeginTable("analysis_duration", 2);
+          ImGui::TableNextColumn();
+          ImGui::Text("Current");
+          ImGui::TableNextColumn();
+          auto duration = camera_controller->analysis_time();
+          ImGui::Text("%ims", duration);
+          ImGui::EndTable();
+          ImGui::Text("%.0f FPS", 1000.0f / duration);
+        }
       }
-      ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Network device")) {
-      static bool orbbec_menu_open = false;
-      if (ImGui::BeginMenu("Orbbec")) {
-        if (!orbbec_menu_open) {
-          run_async([] { OrbbecDevice::discover_devices(); });
-        }
-        if (OrbbecDevice::discovering_devices) {
-          ImGui::MenuItem("Searching for devices...", nullptr, false, false);
-        } else {
-          size_t orbbec_list_size = 0;
-          std::lock_guard lock(OrbbecDevice::devices_access);
-          for (auto discovered_device : OrbbecDevice::discovered_devices) {
-            auto already_connected = std::ranges::any_of(
-                OrbbecDevice::attached_devices,
-                [&](const auto &attached_device) {
-                  return attached_device.get().ip() == discovered_device.ip;
-                });
-            if (!already_connected) {
-              auto option_string = fmt::format("{} ({})", discovered_device.ip,
-                                               discovered_device.serial_num);
-              if (ImGui::MenuItem(option_string.c_str())) {
-                ImGui::CloseCurrentPopup();
-                open_orbbec_sensor(discovered_device.ip);
-              }
-              orbbec_list_size++;
-            }
-          }
-          if (OrbbecDevice::discovered_devices.empty() ||
-              orbbec_list_size == 0) {
-            ImGui::MenuItem("No devices found", nullptr, false, false);
-          }
-        }
-        ImGui::EndMenu();
-        orbbec_menu_open = true;
-      } else {
-        orbbec_menu_open = false;
-      }
-      ImGui::EndMenu();
-    }
-    if (ImGui::MenuItem("PLY Sequence")) {
-      run_async([this]() {
-        auto ply_sequence_config = PlySequencePlayer::load_directory();
-        if (!ply_sequence_config.directory.empty()) {
-          std::lock_guard lock(devices::devices_access);
-          devices::attached_devices.emplace_back(
-              std::make_shared<PlySequencePlayer>(ply_sequence_config));
-        } else {
-          pc::logger->error("No directory");
-        }
-      });
-    }
-    ImGui::EndPopup();
   }
 
-  {
-    std::lock_guard lock(devices::device_configs_access);
-    last_device_count = devices::device_configs.size();
-  }
-
+  ImGui::PopItemWidth();
   ImGui::End();
-  ImGui::PopStyleVar();
+  ImGui::PopID();
 }
 
-  void PointCaster::draw_stats(const float delta_time) {
-    ImGui::PushID("FrameStats");
-    ImGui::SetNextWindowPos({50.0f, 200.0f}, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize({200.0f, 100.0f}, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowBgAlpha(0.8f);
-    ImGui::Begin("Frame Stats", nullptr);
-    ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.8f);
+auto output_count = 0;
 
-    // calculate the mean, min and max frame times from our last 60 frames
-    frame_durations.push_back(delta_time);
-    constexpr auto frames_to_average = 60 * 2; // 2 seconds
-    if (frame_durations.size() < frames_to_average) {
-      ImGui::Text("Gathering data...");
-    } else {
-      frame_durations.erase(frame_durations.begin()); // pop_front
-      const float avg_duration =
-          std::reduce(frame_durations.begin(), frame_durations.end()) /
-          frame_durations.size();
-      const auto minmax_duration =
-          std::minmax_element(frame_durations.begin(), frame_durations.end());
+void PointCaster::drawEvent() {
 
-      if (ImGui::CollapsingHeader("Rendering", true)) {
-        ImGui::Text("Frame Duration");
-        ImGui::BeginTable("duration", 2);
-        ImGui::TableNextColumn();
-        ImGui::Text("Average");
-        ImGui::TableNextColumn();
-        ImGui::Text("%.2fms", avg_duration * 1000);
-        ImGui::TableNextColumn();
-        ImGui::Text("Min");
-        ImGui::TableNextColumn();
-        ImGui::Text("%.2fms", *minmax_duration.first * 1000);
-        ImGui::TableNextColumn();
-        ImGui::Text("Max");
-        ImGui::TableNextColumn();
-        ImGui::Text("%.2fms", *minmax_duration.second * 1000);
-        ImGui::EndTable();
-        ImGui::Spacing();
-        ImGui::Text("%.0f FPS", 1000.0f / (avg_duration * 1000));
-      }
+  const auto delta_time = _timeline.previousFrameDuration();
+  const auto delta_ms = static_cast<int>(delta_time * 1000);
+  TweenManager::instance()->tick(delta_ms);
 
-      for (auto &camera_controller : _camera_controllers) {
-        if (ImGui::CollapsingHeader(camera_controller->name().data())) {
-          if (camera_controller->config().analysis.enabled) {
-            ImGui::Text("Analysis Duration");
-            ImGui::BeginTable("analysis_duration", 2);
-            ImGui::TableNextColumn();
-            ImGui::Text("Current");
-            ImGui::TableNextColumn();
-            auto duration = camera_controller->analysis_time();
-            ImGui::Text("%ims", duration);
-            ImGui::EndTable();
-            ImGui::Text("%.0f FPS", 1000.0f / duration);
-          }
-        }
-      }
-    }
-
-    ImGui::PopItemWidth();
-    ImGui::End();
-    ImGui::PopID();
+  std::function<void()> main_thread_callback;
+  while (MainThreadDispatcher::try_dequeue(main_thread_callback)) {
+    main_thread_callback();
   }
 
-  auto output_count = 0;
+  GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
+                               GL::FramebufferClear::Depth);
 
-  void PointCaster::drawEvent() {
+  render_cameras();
 
-    const auto delta_time = _timeline.previousFrameDuration();
-    const auto delta_ms = static_cast<int>(delta_time * 1000);
-    TweenManager::instance()->tick(delta_ms);
+  _imgui_context.newFrame();
+  pc::gui::begin_gui_helpers(_current_mode, _modeline_input);
 
-    std::function<void()> main_thread_callback;
-    while (MainThreadDispatcher::try_dequeue(main_thread_callback)) {
-      main_thread_callback();
+  // Enable text input, if needed/
+  if (ImGui::GetIO().WantTextInput && !isTextInputActive()) startTextInput();
+  else if (!ImGui::GetIO().WantTextInput && isTextInputActive())
+    stopTextInput();
+
+  // Draw gui windows
+
+  // draw_menu_bar();
+  // draw_control_bar();
+
+  draw_main_viewport();
+
+  if (!_session.layout.hide_ui) {
+    draw_camera_control_windows();
+    if (_session.layout.show_devices_window) {
+      pc::gui::draw_devices_window(*this);
     }
+    if (_session.layout.show_stats) draw_stats(delta_time);
+    if (_session.layout.show_radio_window) _radio->draw_imgui_window();
+    if (_session.layout.show_snapshots_window)
+      _snapshots_context->draw_imgui_window();
 
-    GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
-                                 GL::FramebufferClear::Depth);
+    // operator_bounding_boxes.clear();
+    if (_session.layout.show_global_transform_window) {
+      _session_operator_host->draw_imgui_window();
+    }
+    _session_operator_host->draw_gizmos();
+    if (_session.layout.show_session_operator_graph_window)
+      _session_operator_graph->draw();
 
-    render_cameras();
+    if (_session.mqtt.has_value() && (*_session.mqtt).show_window)
+      _mqtt->draw_imgui_window();
 
-    _imgui_context.newFrame();
-    pc::gui::begin_gui_helpers(_current_mode, _modeline_input);
-
-    // Enable text input, if needed/
-    if (ImGui::GetIO().WantTextInput && !isTextInputActive()) startTextInput();
-    else if (!ImGui::GetIO().WantTextInput && isTextInputActive())
-      stopTextInput();
-
-    // Draw gui windows
-
-    // draw_menu_bar();
-    // draw_control_bar();
-
-    draw_main_viewport();
-
-    if (!_session.layout.hide_ui) {
-      draw_camera_control_windows();
-      if (_session.layout.show_devices_window) draw_devices_window();
-      if (_session.layout.show_stats) draw_stats(delta_time);
-      if (_session.layout.show_radio_window) _radio->draw_imgui_window();
-      if (_session.layout.show_snapshots_window)
-        _snapshots_context->draw_imgui_window();
-
-      // operator_bounding_boxes.clear();
-      if (_session.layout.show_global_transform_window) {
-        _session_operator_host->draw_imgui_window();
-      }
-      _session_operator_host->draw_gizmos();
-      if (_session.layout.show_session_operator_graph_window)
-        _session_operator_graph->draw();
-
-      if (_session.mqtt.has_value() && (*_session.mqtt).show_window)
-        _mqtt->draw_imgui_window();
-
-      if (_session.midi.has_value() && (*_session.midi).show_window) {
-        ImGui::SetNextWindowSize({600, 400}, ImGuiCond_FirstUseEver);
-        ImGui::Begin("MIDI");
-        _midi->draw_imgui_window();
-        ImGui::End();
-      }
+    if (_session.midi.has_value() && (*_session.midi).show_window) {
+      ImGui::SetNextWindowSize({600, 400}, ImGuiCond_FirstUseEver);
+      ImGui::Begin("MIDI");
+      _midi->draw_imgui_window();
+      ImGui::End();
+    }
 
 #ifdef WITH_OSC
     if (_session.osc_client.has_value() && (*_session.osc_client).show_window)

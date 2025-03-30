@@ -360,6 +360,7 @@ if (WITH_POINTCASTER)
     src/gui/widgets.cc
     src/gui/range_slider.cc
     src/gui/drag_slider.cc
+    src/gui/windows.cc
     src/parameters.cc
     src/path.cc
     src/uuid.cc

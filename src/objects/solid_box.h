@@ -7,6 +7,7 @@
 #include <Magnum/SceneGraph/Drawable.h>
 #include <Magnum/SceneGraph/SceneGraph.h>
 #include <Magnum/Shaders/PhongGL.h>
+#include <Magnum/Trade/MeshData.h>
 
 using Object3D =
     Magnum::SceneGraph::Object<Magnum::SceneGraph::MatrixTransformation3D>;

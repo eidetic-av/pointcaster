@@ -1,6 +1,9 @@
 #include "device.h"
+
+#include "../gui/widgets.h"
 #include "../logger.h"
 #include "../operators/session_operator_host.h"
+#include "../parameters.h"
 #include "../path.h"
 #include "k4a/k4a_device.h"
 #include "k4a/k4a_driver.h"

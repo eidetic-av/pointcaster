@@ -1,30 +1,20 @@
 #pragma once
 
-#ifndef __CUDACC__
-#include "../gui/widgets.h"
-#endif
-
-#include "../logger.h"
 #include "../operators/session_operator_host.h"
 #include "../pointer.h"
-#include "../profiling.h"
 #include "../uuid.h"
 #include "device_config.gen.h"
-#include "driver.h"
 #include <Corrade/Containers/Pointer.h>
-#include <filesystem>
-#include <fstream>
 #include <imgui.h>
-#include <iterator>
 #include <k4abttypes.h>
 #include <memory>
 #include <mutex>
 #include <pointclouds.h>
-#include <thread>
-#include <variant>
 #include <vector>
 
 namespace pc::devices {
+
+enum class DeviceStatus { Loaded, Active, Inactive, Missing };
 
 // abstract class provides a polymorphic interface over devices, used
 // to hold our main collection of attached devices
@@ -35,6 +25,7 @@ public:
   virtual pc::types::PointCloud
   point_cloud(pc::operators::OperatorList operators = {}) = 0;
 
+  virtual DeviceStatus status() { return DeviceStatus::Loaded; };
   virtual bool draw_controls() { return false; }
 };
 

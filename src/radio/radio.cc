@@ -1,7 +1,9 @@
 #include "radio.h"
 #include "../devices/device.h"
+#include "../gui/widgets.h"
 #include "../logger.h"
 #include "../network_globals.h"
+#include "../parameters.h"
 #include "../snapshots.h"
 #include <chrono>
 #include <fmt/format.h>
@@ -39,16 +41,15 @@ Radio::Radio(RadioConfiguration &config,
         // and don't keep excess frames in memory
         radio.set(zmq::sockopt::linger, 0);
 
-        auto destination = fmt::format("tcp://{}:{}", _config.address, _config.port);
+        auto destination =
+            fmt::format("tcp://{}:{}", _config.address, _config.port);
         pc::logger->info("Starting radio on '{}'", destination);
         try {
-			radio.bind(destination);
-		}
-		catch (const zmq::error_t& e)
-		{
-			pc::logger->error(e.what());
-			return;
-		}
+          radio.bind(destination);
+        } catch (const zmq::error_t &e) {
+          pc::logger->error(e.what());
+          return;
+        }
         pc::logger->info("Radio started", destination);
 
         using delta_time = duration<unsigned int, milliseconds>;
@@ -106,14 +107,15 @@ Radio::Radio(RadioConfiguration &config,
             auto live_point_cloud =
                 pc::devices::synthesized_point_cloud({_session_operator_host});
             // TODO temporarily disable session operators on radio output
-            // auto live_point_cloud = pc::devices::synthesized_point_cloud({ });
+            // auto live_point_cloud = pc::devices::synthesized_point_cloud({
+            // });
 
             if (live_point_cloud.size() > 0) {
               auto bytes = live_point_cloud.serialize(_config.compress_frames);
               zmq::message_t point_cloud_msg(bytes);
               point_cloud_msg.set_group("live");
               {
-		  ZoneScopedN("Send");
+                ZoneScopedN("Send");
                 radio.send(point_cloud_msg, zmq::send_flags::none);
                 packet_bytes += point_cloud_msg.size();
               }
@@ -141,7 +143,7 @@ Radio::Radio(RadioConfiguration &config,
 }
 
 void Radio::draw_imgui_window() {
-  
+
   ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
 
   ImGui::Begin("Radio", nullptr);

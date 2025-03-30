@@ -1,13 +1,15 @@
 #include "ply_sequence_player.h"
+#include "../../logger.h"
 #include "../../uuid.h"
 #include <algorithm>
 #include <execution>
 #include <filesystem>
+#include <functional>
 #include <happly.h>
 #include <nfd.hpp>
-#include <tbb/tbb.h>
 #include <ranges>
-#include <functional>
+#include <tbb/tbb.h>
+
 
 namespace pc::devices {
 
