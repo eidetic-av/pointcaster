@@ -17,6 +17,10 @@ constexpr VectorType rgba(const auto &rgb, float a) {
   return {rgb.x, rgb.y, rgb.z, a};
 };
 
+inline ImVec4 with_alpha(const ImVec4 &rgb, float a) {
+  return {rgb.x, rgb.y, rgb.z, a};
+};
+
 constexpr uint32_t to_uint(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) {
     return (r << 24) | (g << 16) | (b << 8) | a;
 }
@@ -35,6 +39,8 @@ namespace imgui {
 	constexpr auto mocha_surface2 = rgb<ImVec4>(88, 91, 112);
 
 	constexpr auto mocha_overlay = rgb<ImVec4>(108, 112, 134);
+	constexpr auto mocha_overlay1 = rgb<ImVec4>(127, 132, 156);
+	constexpr auto mocha_overlay2 = rgb<ImVec4>(147, 153, 178);
 
 	constexpr auto mocha_blue = rgb<ImVec4>(137, 180, 250);
 	constexpr auto mocha_rosewater = rgb<ImVec4>(245, 224, 220);
@@ -43,6 +49,7 @@ namespace imgui {
 	constexpr auto mocha_lavender = rgb<ImVec4>(180, 190, 254);
 	constexpr auto mocha_red = rgb<ImVec4>(243, 139, 168);
 	constexpr auto mocha_yellow = rgb<ImVec4>(249, 226, 175);
+	constexpr auto mocha_green = rgb<ImVec4>(166, 227, 161);
 
 	constexpr auto macchiato_base = rgb<ImVec4>(36, 39, 58);
 	constexpr auto macchiato_mantle = rgb<ImVec4>(30, 32, 48);
@@ -85,6 +92,7 @@ constexpr auto mocha_peach = rgb<Color4f>(250, 179, 135);
 constexpr auto mocha_lavender = rgb<Color4f>(180, 190, 254);
 constexpr auto mocha_red = rgb<Color4f>(243, 139, 168);
 constexpr auto mocha_yellow = rgb<Color4f>(249, 226, 175);
+constexpr auto mocha_green = rgb<Color4f>(166, 227, 161);
 
 constexpr auto macchiato_base = rgb<Color4f>(36, 39, 58);
 constexpr auto macchiato_mantle = rgb<Color4f>(30, 32, 48);

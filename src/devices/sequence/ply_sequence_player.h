@@ -11,27 +11,30 @@
 
 namespace pc::devices {
 
-class PlySequencePlayer {
+class PlySequencePlayer : public DeviceBase<PlySequencePlayerConfiguration> {
 public:
-  static PlySequencePlayerConfiguration load_directory();
+  inline static std::vector<std::reference_wrapper<PlySequencePlayer>> attached_devices;
+  inline static std::mutex devices_access;
 
-  // TODO get rid of this stuff and handle references properly
-  inline static std::vector<std::reference_wrapper<PlySequencePlayer>> players;
+  static PlySequencePlayerConfiguration load_directory();
 
   float sequence_length_seconds;
 
   explicit PlySequencePlayer(PlySequencePlayerConfiguration &config);
+  ~PlySequencePlayer();
 
-  PlySequencePlayerConfiguration& config() { return _config; }
+  PlySequencePlayer(const PlySequencePlayer &) = delete;
+  PlySequencePlayer &operator=(const PlySequencePlayer &) = delete;
+  PlySequencePlayer(PlySequencePlayer &&) = delete;
+  PlySequencePlayer &operator=(PlySequencePlayer &&) = delete;
 
   void tick(float delta_time);
 
   size_t frame_count() const;
   size_t current_frame() const;
-  pc::types::PointCloud point_cloud() const;
+  pc::types::PointCloud point_cloud(pc::operators::OperatorList operators = {}) override;
 
 private:
-  PlySequencePlayerConfiguration _config;
   std::unique_ptr<std::jthread> _io_thread;
   std::vector<std::string> _file_paths;
 

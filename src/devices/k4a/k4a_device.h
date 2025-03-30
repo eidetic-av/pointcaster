@@ -10,8 +10,11 @@
 
 namespace pc::devices {
 
-class K4ADevice : public Device {
+class K4ADevice : public DeviceBase<DeviceConfiguration> {
 public:
+  inline static std::vector<std::reference_wrapper<K4ADevice>> attached_devices;
+  inline static std::mutex devices_access;
+
   K4ADevice(DeviceConfiguration config, std::string_view target_id = "");
   ~K4ADevice();
 
@@ -20,9 +23,29 @@ public:
   K4ADevice(K4ADevice &&) = delete;
   K4ADevice &operator=(K4ADevice &&) = delete;
 
-  std::string id() override;
+  std::unique_ptr<Driver> _driver;
+  std::string name = "";
+  bool is_sensor = true;
+  bool paused = false;
+  bool lost_device() { return _driver->lost_device; }
+  bool broadcast_enabled() { return _enable_broadcast; }
 
-  void draw_device_controls() override;
+  pc::types::PointCloud point_cloud(pc::operators::OperatorList operators = {}) override {
+    return _driver->point_cloud(this->config(), operators);
+  };
+
+  void draw_imgui_controls();
+  DeviceConfiguration _config;
+  bool _enable_broadcast = true;
+
+  const std::string label(std::string label_text, int index = 0) {
+    ImGui::Text("%s", label_text.c_str());
+    ImGui::SameLine();
+    return "##" + name + "_" + _driver->id() + "_" + label_text + "_" +
+           std::to_string(index);
+  }
+
+  void draw_device_controls();
   void update_device_control(int *target, int value,
 			     std::function<void(int)> set_func);
 

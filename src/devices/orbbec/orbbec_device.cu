@@ -196,7 +196,9 @@ void OrbbecDevice::free_device_memory() {
 
 pc::types::PointCloud
 OrbbecDevice::point_cloud(pc::operators::OperatorList operators) {
-  
+
+  if (!config().active) return {};
+
   if (!_device_memory_ready || !_buffer_updated) {
     return _current_point_cloud;
   }
@@ -209,7 +211,7 @@ OrbbecDevice::point_cloud(pc::operators::OperatorList operators) {
   auto &output_positions = _device_memory->output_positions;
   auto &output_colors = _device_memory->output_colors;
 
-  auto& transform_config = _config.transform;
+  auto& transform_config = config().transform;
 
   // copy data from other threads
   {

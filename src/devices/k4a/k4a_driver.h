@@ -44,7 +44,7 @@ public:
 
   static inline std::atomic<unsigned int> active_count = 0;
 
-  K4ADriver(const DeviceConfiguration& config, std::string_view target_id = "");
+  K4ADriver(DeviceConfiguration& config, std::string_view target_id = "");
   ~K4ADriver();
 
   K4ADriver(const K4ADriver &) = delete;

@@ -203,6 +203,8 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
                                   OperatorList operator_list) {
 
   ZoneScopedN("K4ADriver::point_cloud");
+  
+  if (!config.active) return {};
 
   if (!_device_memory_ready || !_open || !_buffers_updated)
     return _point_cloud;

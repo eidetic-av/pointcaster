@@ -536,8 +536,9 @@ bool draw_parameter(std::string_view structure_name,
   }
 
   auto param = parameter_bindings.at(parameter_id);
+  auto original_param = param;
 
-  return std::visit(
+  bool updated = std::visit(
       [parameter_id, structure_name, &param](auto &&ref) {
         using T = std::decay_t<decltype(ref.get())>;
         // bools are drawn as check boxes
@@ -568,6 +569,11 @@ bool draw_parameter(std::string_view structure_name,
         }
       },
       param.value);
+
+  if (updated) {
+    for (const auto &cb : param.update_callbacks) { cb(original_param, param); }
+  }
+  return updated;
 }
 
 bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
@@ -576,8 +582,12 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
   ImGui::PushID(std::to_string(_parameter_index++).c_str());
   for (const auto &entry : map) {
     if (std::holds_alternative<std::string>(entry)) {
+      auto entry_str = std::get<std::string>(entry);
+      // don't allow editable string ids through automated parameter drawing
+      if (std::string_view(entry_str).contains(".id")) { continue; }
+      if (std::string_view(entry_str).contains(".active")) { continue; }
       ImGui::PushID(std::to_string(_parameter_index++).c_str());
-      changed |= draw_parameter(structure_name, std::get<std::string>(entry));
+      changed |= draw_parameter(structure_name, entry_str);
       ImGui::Dummy({0, 1});
       ImGui::PopID();
     } else {

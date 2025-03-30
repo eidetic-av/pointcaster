@@ -123,7 +123,7 @@ int UsbMonitor::handle_hotplug_event(struct libusb_context *ctx,
     // check if this is them returning
 
     std::vector<std::shared_ptr<Device>> lost_devices;
-    for (const auto &device : Device::attached_devices) {
+    for (const auto &device : pc::devices::attached_devices) {
       if (device->lost_device()) lost_devices.push_back(device);
     }
 

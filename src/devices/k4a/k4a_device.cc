@@ -7,12 +7,14 @@
 
 namespace pc::devices {
 
-K4ADevice::K4ADevice(DeviceConfiguration config, std::string_view target_id) : Device(config) {
+K4ADevice::K4ADevice(DeviceConfiguration config, std::string_view target_id) : DeviceBase<DeviceConfiguration>(config) {
   pc::logger->info("Initialising K4ADevice");
 
-  auto connection_index = Device::attached_devices.size() + 1;
+  // TODO should be an index of kinect devices
+  auto connection_index = pc::devices::attached_devices.size() + 1;
 
-  _driver = std::make_unique<K4ADriver>(config, target_id);
+  // TODO just get rid of this 'Driver' concept entirely
+  _driver = std::make_unique<K4ADriver>(this->config(), target_id);
 
   name = "Azure Kinect " + std::to_string(connection_index);
   if (connection_index == 1) _driver->primary_aligner = true;
@@ -24,18 +26,22 @@ K4ADevice::K4ADevice(DeviceConfiguration config, std::string_view target_id) : D
   // _config.k4a.contrast = driver->get_contrast();
   // _config.k4a.saturation = driver->get_saturation();
   // _config.k4a.gain = driver->get_gain();
-
+  {
+    std::lock_guard lock(K4ADevice::devices_access);
+    K4ADevice::attached_devices.push_back(std::ref(*this));
+  }
   count++;
-
-  parameters::declare_parameters(_driver->id(), _config);
 }
 
 K4ADevice::~K4ADevice() {
   pc::logger->info("Closing {}", name);
+  {
+    std::lock_guard lock(K4ADevice::devices_access);
+    std::erase_if(K4ADevice::attached_devices,
+                  [this](auto &device) { return &(device.get()) == this; });
+  }
   count--;
 }
-
-std::string K4ADevice::id() { return _driver->id(); }
 
 void K4ADevice::update_device_control(int *target, int value,
                                       std::function<void(int)> set_func) {
@@ -51,8 +57,8 @@ void K4ADevice::update_device_control(int *target, int value,
 
 void K4ADevice::draw_device_controls() {
 
-  pc::gui::draw_parameters(_driver->id(),
-                           parameters::struct_parameters.at(_driver->id()));
+  // pc::gui::draw_parameters(_driver->id(),
+  //                          parameters::struct_parameters.at(_driver->id()));
 
   // using pc::gui::slider;
   

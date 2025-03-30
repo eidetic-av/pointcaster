@@ -19,7 +19,7 @@ struct OrbbecDeviceInfo
     std::string serial_num;
 };
 
-class OrbbecDevice {
+class OrbbecDevice : public DeviceBase<DeviceConfiguration> {
 
 public:
   inline static std::vector<std::reference_wrapper<OrbbecDevice>>
@@ -41,7 +41,7 @@ public:
   OrbbecDevice(OrbbecDevice &&) = delete;
   OrbbecDevice &operator=(OrbbecDevice &&) = delete;
 
-  pc::types::PointCloud point_cloud(pc::operators::OperatorList operators = {});
+  pc::types::PointCloud point_cloud(pc::operators::OperatorList operators = {}) override;
 
   void start();
   void stop();
@@ -49,18 +49,17 @@ public:
 
   void start_sync();
   void stop_sync();
+  void restart_sync();
 
   /// returns signal_detach bool, a request for if the device should be detached
   bool draw_imgui_controls();
 
-  DeviceConfiguration &config() { return _config; }
   const std::string& ip() { return _ip; }
 
 private:
   inline static std::unique_ptr<ob::Context> _ob_ctx;
   inline static std::shared_ptr<ob::DeviceList> _ob_device_list;
 
-  DeviceConfiguration &_config;
   std::string _ip;
 
   std::shared_ptr<ob::Config> _ob_config;

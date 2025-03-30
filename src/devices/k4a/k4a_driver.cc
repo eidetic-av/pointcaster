@@ -10,7 +10,7 @@ namespace pc::devices {
 using namespace std::chrono_literals;
 using namespace pc::k4a_utils;
 
-K4ADriver::K4ADriver(const DeviceConfiguration &config, std::string_view target_id)
+K4ADriver::K4ADriver(DeviceConfiguration &config, std::string_view target_id)
     : _capture_loop(&K4ADriver::capture_frames, this),
       _tracker_loop(&K4ADriver::track_bodies, this),
       _imu_loop(&K4ADriver::process_imu, this)

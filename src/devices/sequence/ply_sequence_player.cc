@@ -1,5 +1,4 @@
 #include "ply_sequence_player.h"
-#include "../../parameters.h"
 #include "../../uuid.h"
 #include <algorithm>
 #include <execution>
@@ -26,7 +25,7 @@ PlySequencePlayerConfiguration PlySequencePlayer::load_directory() {
 }
 
 PlySequencePlayer::PlySequencePlayer(PlySequencePlayerConfiguration &config)
-    : _config(config), _current_frame(0), sequence_length_seconds(0) {
+    : DeviceBase<PlySequencePlayerConfiguration>(config), _current_frame(0), sequence_length_seconds(0) {
   if (!config.directory.empty()) {
     if (!std::filesystem::exists(config.directory)) {
       pc::logger->error("Can't find source directory '{}'", config.directory);
@@ -41,21 +40,33 @@ PlySequencePlayer::PlySequencePlayer(PlySequencePlayerConfiguration &config)
     sequence_length_seconds = frame_count() / frame_rate;
     load_all_frames();
   }
+  {
+    std::lock_guard lock(PlySequencePlayer::devices_access);
+    PlySequencePlayer::attached_devices.push_back(std::ref(*this));
+  }
+}
 
-  pc::parameters::declare_parameters(_config.id, _config);
+PlySequencePlayer::~PlySequencePlayer() {
+  std::lock_guard lock(PlySequencePlayer::devices_access);
+  std::erase_if(PlySequencePlayer::attached_devices,
+                [this](auto &device) { return &(device.get()) == this; });
 }
 
 size_t PlySequencePlayer::frame_count() const { return _file_paths.size(); }
 
 size_t PlySequencePlayer::current_frame() const { return _current_frame; }
 
-pc::types::PointCloud PlySequencePlayer::point_cloud() const {
+pc::types::PointCloud
+PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
+  if (!config().active) return {};
+  // TODO apply any passed in operators,
+  // TODO really any transforms should be handled in cuda code
   pc::types::PointCloud cloud = _pointcloud_buffer.at(
       std::min(_current_frame, _pointcloud_buffer.size()));
   const auto point_indices =
       std::views::iota(0, static_cast<int>(cloud.size()));
   std::for_each(std::execution::par, point_indices.begin(), point_indices.end(),
-                [&, config = _config](int i) {
+                [&, config = this->config()](int i) {
                   // transform positions as per config
                   const auto &pos = cloud.positions[i];
                   cloud.positions[i] = {
@@ -67,6 +78,7 @@ pc::types::PointCloud PlySequencePlayer::point_cloud() const {
 }
 
 void PlySequencePlayer::tick(float delta_time) {
+  if (!config().active) return;
   constexpr float frame_rate = 30.0f;
   _frame_accumulator += delta_time * frame_rate;
   const size_t frames_to_advance = static_cast<size_t>(_frame_accumulator);
@@ -106,12 +118,11 @@ void PlySequencePlayer::load_all_frames() {
 
       std::for_each(
           std::execution::par, point_indices.begin(), point_indices.end(),
-          [&, config = _config](int i) {
+          [&, config = this->config()](int i) {
             // positions m to mm
-            const auto& translate = config.translate;
-            const auto x = static_cast<short>(x_values[i] * 1000 + translate.x);
-            const auto y = static_cast<short>(y_values[i] * 1000 + translate.y);
-            const auto z = static_cast<short>(z_values[i] * 1000 + translate.z);
+            const auto x = static_cast<short>(x_values[i] * 1000);
+            const auto y = static_cast<short>(y_values[i] * 1000);
+            const auto z = static_cast<short>(z_values[i] * 1000);
             cloud.positions[i] = {x, y, z};
             // color rgb to bgr
             cloud.colors[i] = {b_values[i], g_values[i], r_values[i]};
@@ -119,7 +130,7 @@ void PlySequencePlayer::load_all_frames() {
 
       _pointcloud_buffer.push_back(cloud);
 
-      pc::logger->info(file_path);
+      // pc::logger->info(file_path);
    }
 }
 

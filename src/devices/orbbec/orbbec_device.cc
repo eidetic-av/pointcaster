@@ -40,27 +40,38 @@ void OrbbecDevice::discover_devices()
 }
 
 OrbbecDevice::OrbbecDevice(DeviceConfiguration &config)
-    : _config(config) {
+    : DeviceBase<DeviceConfiguration>(config) {
 
-  parameters::declare_parameters(_config.id, _config);
-
-  _ip = std::string(_config.id.begin() + 3, _config.id.end());
+  _ip = std::string(config.id.begin() + 3, config.id.end());
   std::replace(_ip.begin(), _ip.end(), '_', '.');
 
-  OrbbecDevice::attached_devices.push_back(std::ref(*this));
+  // if the depth_mode or acquisition_mode changes, the device must be restarted
+  // TODO would be better if these callbacks are async but need to figure out
+  // thread safety for that
+  pc::parameters::add_parameter_update_callback(
+      std::format("{}.depth_mode", config.id),
+      [this](auto &, auto &) { restart_sync(); });
+  pc::parameters::add_parameter_update_callback(
+      std::format("{}.acquisition_mode", config.id),
+      [this](auto &, auto &) { restart_sync(); });
+
+  {
+    std::lock_guard lock(OrbbecDevice::devices_access);
+    OrbbecDevice::attached_devices.push_back(std::ref(*this));
+  }
+
   start();
 }
 
 OrbbecDevice::~OrbbecDevice() {
-	stop_sync();
-
-	parameters::unbind_parameters(_config.id);
-
-	// remove this instance from attached devices
-	std::erase_if(attached_devices, [this](auto& device) {
-		return &(device.get()) == this;
-	});
-	pc::logger->debug("Destroyed OrbbecDevice");
+  stop_sync();
+  // remove this instance from attached devices
+  {
+    std::lock_guard lock(OrbbecDevice::devices_access);
+    std::erase_if(OrbbecDevice::attached_devices,
+                  [this](auto &device) { return &(device.get()) == this; });
+  }
+  pc::logger->info("Destroyed OrbbecDevice");
 }
 
 void OrbbecDevice::start() {
@@ -86,6 +97,11 @@ void OrbbecDevice::restart() {
 		stop_sync();
 		start_sync();
 	});
+}
+
+void OrbbecDevice::restart_sync() {
+	stop_sync();
+	start_sync();
 }
 
 void OrbbecDevice::start_sync() {
@@ -135,11 +151,13 @@ void OrbbecDevice::start_sync() {
   constexpr auto color_width = 1280;
   constexpr auto color_height = 720;
 
+  auto& config = this->config();
+
   // Default to using Narrow FOV
   auto depth_width = 640;
   auto depth_height = 576;
   // Wide FOV depth mode
-  if (_config.depth_mode == 1)
+  if (config.depth_mode == 1)
   {
     depth_width = 512;
     depth_height = 512;
@@ -147,7 +165,7 @@ void OrbbecDevice::start_sync() {
 
 
   // default acquisition mode is RGBD
-  if (_config.acquisition_mode == 0) {
+  if (config.acquisition_mode == 0) {
 
     _ob_config->setAlignMode(ALIGN_D2C_HW_MODE);
     _ob_config->setFrameAggregateOutputMode(
@@ -191,7 +209,7 @@ void OrbbecDevice::start_sync() {
   }
 
   // depth_only acquisition_mode
-  else if (_config.acquisition_mode == 1) {
+  else if (config.acquisition_mode == 1) {
 
     auto depth_profiles = _ob_pipeline->getStreamProfileList(OB_SENSOR_DEPTH);
     auto depth_profile = depth_profiles->getVideoStreamProfile(depth_width, depth_height, OB_FORMAT_Y16, fps);
@@ -289,13 +307,14 @@ bool OrbbecDevice::draw_imgui_controls() {
   bool signal_detach = ImGui::Button("Detach");
   ImGui::Dummy({10, 10});
 
-  DeviceConfiguration last_config = _config;
-  if (pc::gui::draw_parameters(_config.id)) {
-    if (_config.depth_mode != last_config.depth_mode
-      || _config.acquisition_mode != last_config.acquisition_mode) {
+  DeviceConfiguration last_config = this->config();
+  if (pc::gui::draw_parameters(last_config.id)) {
+    auto &new_config = this->config();
+    if (new_config.depth_mode != last_config.depth_mode ||
+        new_config.acquisition_mode != last_config.acquisition_mode) {
       restart();
-		}
-	};
+    }
+  };
 
   return signal_detach;
 }

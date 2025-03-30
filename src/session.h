@@ -32,7 +32,7 @@ struct PointCasterSessionLayout {
 };
 
 // these are necessary for the python pre-processor for now, doesn't handle nested types <<<>>> well
-using DeviceMap = std::map<std::string, devices::DeviceConfiguration>;
+using DeviceMap = std::map<std::string, devices::DeviceConfigurationVariant>;
 using CameraMap = std::map<std::string, camera::CameraConfiguration>;
 using OperatorNameMap = std::map<std::string, operators::uid>;
 using SerializedColor = std::vector<float>;

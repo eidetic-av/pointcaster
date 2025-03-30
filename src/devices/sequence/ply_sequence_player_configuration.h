@@ -9,6 +9,7 @@ using pc::types::Float3;
 
 struct PlySequencePlayerConfiguration {
   std::string id;
+  bool active = true;
   std::string directory;
   Float3 translate; // @minmax(-5000, 5000)
 };

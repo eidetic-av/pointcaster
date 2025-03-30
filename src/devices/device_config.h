@@ -54,6 +54,7 @@ struct DeviceTransformConfiguration {
 
 struct DeviceConfiguration {
   std::string id;
+  bool active = true;
   int depth_mode = 0; // @minmax(0, 1)
   int acquisition_mode = 0; // @minmax(0, 1)
   DeviceTransformConfiguration transform; // @optional
@@ -61,7 +62,13 @@ struct DeviceConfiguration {
   AutoTiltConfiguration auto_tilt; // @optional
 };
 
+struct PlySequencePlayerConfiguration;
+
 using DeviceConfigurationVariant =
     std::variant<DeviceConfiguration, PlySequencePlayerConfiguration>;
+
+template <typename T>
+concept ValidDeviceConfig = std::same_as<T, DeviceConfiguration> ||
+                            std::same_as<T, PlySequencePlayerConfiguration>;
 
 } // namespace pc::devices
