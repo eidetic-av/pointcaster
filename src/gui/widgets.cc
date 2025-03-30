@@ -4,6 +4,7 @@
 #include "catpuccin.h"
 #include "drag_slider.h"
 #include <array>
+#include <imgui.h>
 #include <imgui_internal.h>
 #include <tweeny/easing.h>
 
@@ -653,6 +654,41 @@ bool draw_parameters(std::string_view structure_id) {
 
 bool draw_parameters(unsigned long int structure_id) {
   return draw_parameters(std::to_string(structure_id));
+}
+
+bool draw_icon_button(std::string_view icon, bool small, ImVec4 default_color,
+                      ImVec4 hover_color) {
+  ImGuiWindow *window = ImGui::GetCurrentWindow();
+  if (window->SkipItems) return false;
+
+  ImGui::PushFont(icon_font.get());
+
+  ImGuiContext &g = *ImGui::GetCurrentContext();
+  const ImGuiID id = window->GetID(pc::gui::_parameter_index++);
+  const ImVec2 pos = window->DC.CursorPos;
+  const ImVec2 text_size = ImGui::CalcTextSize(icon.data());
+  const ImVec2 padding = g.Style.FramePadding;
+  const ImVec2 button_size = ImGui::CalcItemSize(
+      {0, 0}, text_size.x + padding.x * 2.0f, text_size.y + padding.y * 2.0f);
+  const ImRect bb(pos, pos + button_size);
+  ImGui::ItemSize(bb, padding.y);
+  if (!ImGui::ItemAdd(bb, id)) {
+    ImGui::PopFont();
+    return false;
+  }
+
+  bool hovered, held;
+  bool pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held);
+
+  auto text_color = hovered ? hover_color : default_color;
+  ImVec2 text_pos(pos.x + (button_size.x - text_size.x) * 0.5f,
+                  pos.y + (button_size.y - text_size.y) * 0.5f);
+  window->DrawList->AddText(text_pos, ImGui::GetColorU32(text_color),
+                            icon.data());
+
+  ImGui::PopFont();
+
+  return pressed;
 }
 
 } // namespace pc::gui

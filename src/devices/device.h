@@ -31,8 +31,11 @@ namespace pc::devices {
 class IDevice {
 public:
   virtual ~IDevice() = default;
+
   virtual pc::types::PointCloud
   point_cloud(pc::operators::OperatorList operators = {}) = 0;
+
+  virtual bool draw_controls() { return false; }
 };
 
 // all devices live here to be

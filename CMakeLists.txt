@@ -347,6 +347,7 @@ if (WITH_POINTCASTER)
     src/devices/device.cc
     src/devices/usb.cc
     src/devices/sequence/ply_sequence_player.cc
+    src/devices/sequence/ply_sequence_player_gui.cc
     src/camera/camera_controller.cc
     src/analysis/analyser_2d.cc
     src/radio/radio.cc

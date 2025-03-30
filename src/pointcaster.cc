@@ -149,8 +149,8 @@ protected:
 
   ImFont *_font;
   ImFont *_mono_font;
-  ImFont *_icon_font;
-  ImFont *_icon_font_small;
+  std::shared_ptr<ImFont> _icon_font;
+  std::shared_ptr<ImFont> _icon_font_small;
 
   /* Spheres rendering */
   GL::Mesh _sphere_mesh{NoCreate};
@@ -287,9 +287,10 @@ PointCaster::PointCaster(const Arguments &args)
   const auto icon_font_size_pixels =
       icon_font_size * framebufferSize().x() / size.x();
 
-  _icon_font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+  _icon_font = std::shared_ptr<ImFont>(ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       const_cast<char *>(font_icons.data()), font_icons.size(),
-      icon_font_size_pixels, &icons_config, icons_ranges);
+      icon_font_size_pixels, &icons_config, icons_ranges));
+  pc::gui::icon_font = _icon_font;
 
   ImFontConfig icons_config_small = icons_config;
   const auto small_icon_font_size = 12.0f;
@@ -297,9 +298,11 @@ PointCaster::PointCaster(const Arguments &args)
   const auto small_icon_font_size_pixels =
       small_icon_font_size * framebufferSize().x() / size.x();
 
-  _icon_font_small = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-      const_cast<char *>(font_icons.data()), font_icons.size(),
-      small_icon_font_size_pixels, &icons_config_small, icons_ranges);
+  _icon_font_small =
+      std::shared_ptr<ImFont>(ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+          const_cast<char *>(font_icons.data()), font_icons.size(),
+          small_icon_font_size_pixels, &icons_config_small, icons_ranges));
+  pc::gui::icon_font_small = _icon_font_small;
 
   // enable window docking
   ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
@@ -1309,7 +1312,7 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
     ImGui::PopStyleVar();
   };
 
-  ImGui::PushFont(_icon_font);
+  ImGui::PushFont(_icon_font.get());
 
   draw_button(
       ICON_FA_SLIDERS,
@@ -1369,62 +1372,46 @@ void PointCaster::draw_devices_window() {
     }
   }
 
-  // device list action buttons
-  const auto icon_button = [this](const char *icon, auto *icon_font,
-                                  const ImColor &default_color,
-                                  const ImColor &hover_color) -> bool {
-    ImGuiWindow *window = ImGui::GetCurrentWindow();
-    if (window->SkipItems) return false;
-
-    ImGui::PushFont(icon_font);
-
-    ImGuiContext &g = *ImGui::GetCurrentContext();
-    const ImGuiID id = window->GetID(pc::gui::_parameter_index++);
-    const ImVec2 pos = window->DC.CursorPos;
-    const ImVec2 text_size = ImGui::CalcTextSize(icon);
-    const ImVec2 padding = g.Style.FramePadding;
-    const ImVec2 button_size = ImGui::CalcItemSize(
-        {0, 0}, text_size.x + padding.x * 2.0f, text_size.y + padding.y * 2.0f);
-    const ImRect bb(pos, pos + button_size);
-    ImGui::ItemSize(bb, padding.y);
-    if (!ImGui::ItemAdd(bb, id)) {
-      ImGui::PopFont();
-      return false;
-    }
-
-    bool hovered, held;
-    bool pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held);
-
-    ImU32 text_color = hovered ? hover_color : default_color;
-    ImVec2 text_pos(pos.x + (button_size.x - text_size.x) * 0.5f,
-                    pos.y + (button_size.y - text_size.y) * 0.5f);
-    window->DrawList->AddText(text_pos, text_color, icon);
-
-    ImGui::PopFont();
-
-    return pressed;
-  };
-
-  ImGui::PushFont(_icon_font);
+  ImGui::PushFont(_icon_font.get());
   const auto icon_width = ImGui::CalcTextSize(ICON_FA_CIRCLE).x +
                           ImGui::GetStyle().FramePadding.x * 2.0f;
   const auto row_height = ImGui::GetTextLineHeightWithSpacing() + 5;
   ImGui::PopFont();
   const auto window_width = ImGui::GetWindowWidth();
 
-  ImGui::SetCursorPosX(window_width - icon_width - window_padding.x);
+  // top row of devices window
 
-  ImVec2 add_device_button_pos = ImGui::GetCursorPos();
-  if (icon_button(ICON_FA_CIRCLE_PLUS, _icon_font,
-                  with_alpha(catpuccin::imgui::mocha_green, 0.75f),
-                  catpuccin::imgui::mocha_green)) {
+  // includes the name of the selected device type
+  if (last_device_count > 0) {
+    ImGui::Dummy({5, 0});
+    ImGui::BeginDisabled();
+    {
+      std::lock_guard lock(devices::device_configs_access);
+      std::visit(
+          [](auto &&config) {
+            using T = std::decay_t<decltype(config)>;
+            ImGui::Text(T::Name);
+          },
+          devices::device_configs[selected_device_row].get());
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+  }
+
+  // and a button to add a new device
+  ImGui::SetCursorPosX(window_width - icon_width - window_padding.x);
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 2);
+  if (gui::draw_icon_button(ICON_FA_CIRCLE_PLUS, false,
+                            with_alpha(catpuccin::imgui::mocha_green, 0.75f),
+                            catpuccin::imgui::mocha_green)) {
     ImGui::OpenPopup("AddDevicePopup");
   }
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add Device");
 
   ImGui::Dummy({0, 5});
 
-  // the scrollable list of devices
+  // create the scrollable list of device names
+
   static constexpr size_t visible_device_rows = 6;
   std::optional<int> device_to_delete;
   std::optional<int> device_to_toggle_active;
@@ -1472,9 +1459,9 @@ void PointCaster::draw_devices_window() {
               {cell0_content_min.x + 4, cell0_content_min.y + 1.0f});
           view_icon = ICON_FA_EYE_SLASH;
         }
-        if (icon_button(view_icon.data(), _icon_font_small,
-                        catpuccin::imgui::mocha_overlay,
-                        catpuccin::imgui::mocha_overlay2)) {
+        if (gui::draw_icon_button(view_icon.data(), true,
+                             catpuccin::imgui::mocha_overlay,
+                             catpuccin::imgui::mocha_overlay2)) {
           device_to_toggle_active = i;
         }
 
@@ -1557,9 +1544,9 @@ void PointCaster::draw_devices_window() {
         ImVec2 cell2_content_min = ImGui::GetCursorPos();
         ImGui::SameLine();
         ImGui::SetCursorPos({cell2_content_min.x, cell2_content_min.y + 1.0f});
-        if (icon_button(ICON_FA_CIRCLE_XMARK, _icon_font,
-                        catpuccin::imgui::mocha_overlay,
-                        catpuccin::imgui::mocha_overlay2)) {
+        if (gui::draw_icon_button(ICON_FA_CIRCLE_XMARK, false,
+                             catpuccin::imgui::mocha_overlay,
+                             catpuccin::imgui::mocha_overlay2)) {
           device_to_delete = i;
         }
         ImGui::SameLine();
@@ -1613,15 +1600,11 @@ void PointCaster::draw_devices_window() {
 
   if (!devices::device_configs.empty()) {
     auto &selected_device_config = devices::device_configs[selected_device_row];
+    auto selected_device = devices::attached_devices[selected_device_row];
     std::visit(
-        [](auto &&device_config) {
-          ImGui::BeginDisabled();
-          ImGui::Dummy({5, 0});
-          ImGui::SameLine();
-          using T = std::decay_t<decltype(device_config)>;
-          ImGui::Text(T::Name);
-          ImGui::EndDisabled();
-          ImGui::Dummy({0, 5});
+        [&](auto &&device_config) {
+          selected_device->draw_controls();
+          ImGui::Dummy({0, 10});
           const auto available_space = ImGui::GetContentRegionAvail();
           ImGui::BeginChild(std::format("##scroll_", device_config.id).c_str(),
                             {-FLT_MIN, available_space.y});

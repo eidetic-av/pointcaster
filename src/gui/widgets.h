@@ -51,6 +51,9 @@ inline std::string learning_parameter_id;
 inline std::optional<Parameter> learning_parameter_info;
 inline std::mutex learning_parameter_mutex;
 
+inline std::shared_ptr<ImFont> icon_font;
+inline std::shared_ptr<ImFont> icon_font_small;
+
 template <typename T>
 void store_learning_parameter_info(std::string_view id, float min, float max,
                                     T &value) {
@@ -143,5 +146,8 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
 bool draw_parameters(std::string_view structure_id);
 
 bool draw_parameters(unsigned long int structure_id);
+
+bool draw_icon_button(std::string_view icon, bool small, ImVec4 default_color,
+                      ImVec4 hover_color);
 
 } // namespace pc::gui

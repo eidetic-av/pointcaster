@@ -25,7 +25,8 @@ PlySequencePlayerConfiguration PlySequencePlayer::load_directory() {
 }
 
 PlySequencePlayer::PlySequencePlayer(PlySequencePlayerConfiguration &config)
-    : DeviceBase<PlySequencePlayerConfiguration>(config), _current_frame(0), sequence_length_seconds(0) {
+    : DeviceBase<PlySequencePlayerConfiguration>(config),
+      sequence_length_seconds(0) {
   if (!config.directory.empty()) {
     if (!std::filesystem::exists(config.directory)) {
       pc::logger->error("Can't find source directory '{}'", config.directory);
@@ -54,15 +55,18 @@ PlySequencePlayer::~PlySequencePlayer() {
 
 size_t PlySequencePlayer::frame_count() const { return _file_paths.size(); }
 
-size_t PlySequencePlayer::current_frame() const { return _current_frame; }
+size_t PlySequencePlayer::current_frame() const {
+  return config().current_frame;
+}
 
 pc::types::PointCloud
 PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
   if (!config().active) return {};
+  auto frame = current_frame();
   // TODO apply any passed in operators,
   // TODO really any transforms should be handled in cuda code
-  pc::types::PointCloud cloud = _pointcloud_buffer.at(
-      std::min(_current_frame, _pointcloud_buffer.size()));
+  pc::types::PointCloud cloud =
+      _pointcloud_buffer.at(std::min(frame, _pointcloud_buffer.size()));
   const auto point_indices =
       std::views::iota(0, static_cast<int>(cloud.size()));
   std::for_each(std::execution::par, point_indices.begin(), point_indices.end(),
@@ -78,14 +82,16 @@ PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
 }
 
 void PlySequencePlayer::tick(float delta_time) {
-  if (!config().active) return;
+  auto& conf = config();
+  if (!conf.active || !conf.playing) return;
   constexpr float frame_rate = 30.0f;
   _frame_accumulator += delta_time * frame_rate;
   const size_t frames_to_advance = static_cast<size_t>(_frame_accumulator);
   _frame_accumulator -= frames_to_advance;
   const size_t total_frames = frame_count();
+  auto frame = current_frame();
   if (total_frames > 0) {
-    _current_frame = (_current_frame + frames_to_advance) % total_frames;
+    config().current_frame = (frame + frames_to_advance) % total_frames;
   }
 }
 

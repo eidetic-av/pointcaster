@@ -34,6 +34,8 @@ public:
   size_t current_frame() const;
   pc::types::PointCloud point_cloud(pc::operators::OperatorList operators = {}) override;
 
+  bool draw_controls() override;
+
 private:
   std::unique_ptr<std::jthread> _io_thread;
   std::vector<std::string> _file_paths;
@@ -41,7 +43,6 @@ private:
   std::vector<pc::types::PointCloud> _pointcloud_buffer;
   
   float _frame_accumulator;
-  size_t _current_frame;
 
   void load_all_frames();
 };
