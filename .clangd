@@ -1,0 +1,6 @@
+CompileFlags:
+    Add: ["-std:c++23", "/clang:-std=c++23"]
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: No

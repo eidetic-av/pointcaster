@@ -3,6 +3,6 @@ BasedOnStyle: LLVM
 AllowShortBlocksOnASingleLine: 'true'
 AllowShortCaseLabelsOnASingleLine: 'true'
 AllowShortFunctionsOnASingleLine: All
+AllowShortLambdasOnASingleLine: 'true'
 AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 AllowShortLoopsOnASingleLine: 'true'
-...
