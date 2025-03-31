@@ -26,7 +26,7 @@ public:
   virtual pc::types::PointCloud
   point_cloud(pc::operators::OperatorList operators = {}) = 0;
 
-  virtual DeviceStatus status() { return DeviceStatus::Loaded; };
+  virtual DeviceStatus status() const { return DeviceStatus::Loaded; };
   virtual bool draw_controls() { return false; }
 };
 

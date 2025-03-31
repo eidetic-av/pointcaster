@@ -78,7 +78,7 @@ void draw_devices_window(PointCaster &app) {
                         ImVec2(0, visible_device_rows * row_height), true)) {
     if (ImGui::BeginTable("DevicesTable", 3, ImGuiTableFlags_RowBg,
                           ImVec2(-FLT_MIN, visible_device_rows * row_height))) {
-      ImGui::TableSetupColumn("view_button", ImGuiTableColumnFlags_WidthFixed,
+      ImGui::TableSetupColumn("active_button", ImGuiTableColumnFlags_WidthFixed,
                               icon_width + 5);
       ImGui::TableSetupColumn("device", ImGuiTableColumnFlags_WidthStretch);
       ImGui::TableSetupColumn("delete_button", ImGuiTableColumnFlags_WidthFixed,
@@ -87,10 +87,14 @@ void draw_devices_window(PointCaster &app) {
       // get the table's total width from the available content region.
       float table_width = ImGui::GetContentRegionAvail().x;
 
+      // TODO this device_configs and device access is not thread safe
+
       for (int i = 0; i < devices::device_configs.size(); i++) {
         std::string_view device_id;
-        bool is_active;
+        const auto &device = *devices::attached_devices[i].get();
+        devices::DeviceStatus device_status = device.status();
         bool is_selected = (i == selected_device_row);
+        bool is_active;
         std::visit(
             [&](auto &&device_config) {
               device_id = device_config.id;
@@ -100,21 +104,21 @@ void draw_devices_window(PointCaster &app) {
 
         ImGui::TableNextRow();
 
-        // column 0: view button
+        // column 1: view button
         ImGui::TableSetColumnIndex(0);
         ImVec2 cell0_content_min = ImGui::GetCursorPos();
         ImGui::SameLine();
-        std::string_view view_icon;
+        std::string_view active_icon;
         if (is_active) {
           ImGui::SetCursorPos(
               {cell0_content_min.x + 5, cell0_content_min.y + 1.0f});
-          view_icon = ICON_FA_EYE;
+          active_icon = ICON_FA_TOGGLE_ON;
         } else {
           ImGui::SetCursorPos(
-              {cell0_content_min.x + 4, cell0_content_min.y + 1.0f});
-          view_icon = ICON_FA_EYE_SLASH;
+              {cell0_content_min.x + 5, cell0_content_min.y + 1.0f});
+          active_icon = ICON_FA_TOGGLE_OFF;
         }
-        if (gui::draw_icon_button(view_icon.data(), true,
+        if (gui::draw_icon_button(active_icon.data(), false,
                                   catpuccin::imgui::mocha_overlay,
                                   catpuccin::imgui::mocha_overlay2)) {
           device_to_toggle_active = i;
@@ -122,19 +126,41 @@ void draw_devices_window(PointCaster &app) {
 
         if (!is_active) ImGui::BeginDisabled();
 
-        // column 1: device id text
+        constexpr auto color_from_status = [](DeviceStatus status) -> ImVec4 {
+          switch (status) {
+          case DeviceStatus::Active: return catpuccin::imgui::mocha_green;
+          case DeviceStatus::Inactive: return catpuccin::imgui::mocha_surface2;
+          case DeviceStatus::Loaded: return catpuccin::imgui::mocha_blue;
+          case DeviceStatus::Missing: return catpuccin::imgui::mocha_red;
+          }
+        };
+        auto status_color = color_from_status(device_status);
+
+        // column 2: device id with status icon
         ImGui::TableSetColumnIndex(1);
-        ImVec2 cell1_min = ImGui::GetCursorScreenPos();
-        ImVec2 cell1_content_min = ImGui::GetCursorPos();
-        ImGui::SetCursorPos({cell1_content_min.x, cell1_content_min.y + 1.0f});
+        ImVec2 device_id_cell_min = ImGui::GetCursorScreenPos();
+        {
+          // status icon, grouped for positioning
+          ImGui::BeginGroup();
+          ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
+          ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 2);
+          gui::draw_icon_button(ICON_FA_CIRCLE, true, status_color,
+                                status_color);
+          ImGui::EndGroup();
+        }
+        // device id
+        ImGui::SameLine();
+        ImGui::Dummy({2, 0});
+        ImGui::SameLine();
         ImGui::TextUnformatted(device_id.data());
 
-        // compute the width for the device cell: table width minus view and
-        // delete columns and spacing
-        float cell1_width = table_width - (icon_width + 5) - (icon_width + 5) -
-                            ImGui::GetStyle().ItemSpacing.x;
-        ImVec2 full_cell_max =
-            ImVec2(cell1_min.x + cell1_width, cell1_min.y + row_height);
+        // compute the width for the device cell: table width minus active,
+        // extra and delete columns and spacing
+        float device_id_cell_width = table_width - ((icon_width + 5) * 2) -
+                                     ImGui::GetStyle().ItemSpacing.x;
+        ImVec2 device_id_cell_max =
+            ImVec2(device_id_cell_min.x + device_id_cell_width,
+                   device_id_cell_min.y + row_height);
 
         if (editing_device_row_id == i) {
           auto popup_label = fmt::format("##device_edit_popup.{}", device_id);
@@ -144,8 +170,9 @@ void draw_devices_window(PointCaster &app) {
             edit_buf_device = std::string(device_id);
             device_edit_popup_opened = true;
           }
-          ImGui::SetNextWindowPos({cell1_min.x - 2.0f, cell1_min.y + 1.0f});
-          ImGui::SetNextWindowSize({cell1_width - 20.0f, row_height});
+          ImGui::SetNextWindowPos(
+              {device_id_cell_min.x - 2.0f, device_id_cell_min.y + 1.0f});
+          ImGui::SetNextWindowSize({device_id_cell_width - 20.0f, row_height});
           ImGui::OpenPopup(popup_label.c_str());
           if (ImGui::BeginPopup(popup_label.c_str())) {
             // use &edit_buf_device so the std::string overload is used
@@ -169,9 +196,9 @@ void draw_devices_window(PointCaster &app) {
         }
 
         // extend the cell's rect across the entire row (for background)
-        ImVec2 row_min = cell1_min;
-        ImVec2 row_max =
-            ImVec2(cell1_min.x + table_width, cell1_min.y + row_height);
+        ImVec2 row_min = device_id_cell_min;
+        ImVec2 row_max = ImVec2(device_id_cell_min.x + table_width,
+                                device_id_cell_min.y + row_height);
         bool row_hovered = ImGui::IsMouseHoveringRect(row_min, row_max);
 
         ImU32 bg_color;
@@ -184,21 +211,24 @@ void draw_devices_window(PointCaster &app) {
 
         // detect clicks for selection using the full cell's rectangle
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-            ImGui::IsMouseHoveringRect(cell1_min, full_cell_max)) {
+            ImGui::IsMouseHoveringRect(device_id_cell_min,
+                                       device_id_cell_max)) {
           selected_device_row = i;
         }
         if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
-            ImGui::IsMouseHoveringRect(cell1_min, full_cell_max)) {
+            ImGui::IsMouseHoveringRect(device_id_cell_min,
+                                       device_id_cell_max)) {
           editing_device_row_id = i;
         }
 
         if (!is_active) ImGui::EndDisabled();
 
-        // column 2: delete icon button
+        // column 3: delete icon button
         ImGui::TableSetColumnIndex(2);
-        ImVec2 cell2_content_min = ImGui::GetCursorPos();
+        ImVec2 delete_cell_content_min = ImGui::GetCursorPos();
         ImGui::SameLine();
-        ImGui::SetCursorPos({cell2_content_min.x, cell2_content_min.y + 1.0f});
+        ImGui::SetCursorPos(
+            {delete_cell_content_min.x, delete_cell_content_min.y + 1.0f});
         if (gui::draw_icon_button(ICON_FA_CIRCLE_XMARK, false,
                                   catpuccin::imgui::mocha_overlay,
                                   catpuccin::imgui::mocha_overlay2)) {

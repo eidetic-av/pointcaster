@@ -661,7 +661,8 @@ bool draw_icon_button(std::string_view icon, bool small, ImVec4 default_color,
   ImGuiWindow *window = ImGui::GetCurrentWindow();
   if (window->SkipItems) return false;
 
-  ImGui::PushFont(icon_font.get());
+  auto *font = (small ? icon_font_small : icon_font).get();
+  ImGui::PushFont(font);
 
   ImGuiContext &g = *ImGui::GetCurrentContext();
   const ImGuiID id = window->GetID(pc::gui::_parameter_index++);
