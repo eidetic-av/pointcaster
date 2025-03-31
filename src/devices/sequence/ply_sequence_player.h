@@ -3,13 +3,16 @@
 #include "../../structs.h"
 #include "../device.h"
 #include "ply_sequence_player_configuration.gen.h"
+#include <functional>
+#include <memory>
 #include <optional>
 #include <string_view>
-#include <memory>
 #include <thread>
-#include <functional>
+
 
 namespace pc::devices {
+
+struct PlySequencePlayerImplDeviceMemory;
 
 class PlySequencePlayer : public DeviceBase<PlySequencePlayerConfiguration> {
 public:
@@ -39,10 +42,20 @@ public:
 private:
   std::unique_ptr<std::jthread> _io_thread;
   std::vector<std::string> _file_paths;
+  size_t _max_point_count;
+  float _frame_accumulator;
 
   std::vector<pc::types::PointCloud> _pointcloud_buffer;
-  
-  float _frame_accumulator;
+  std::mutex _pointcloud_buffer_access;
+  std::atomic_bool _buffer_updated;
+
+  pc::types::PointCloud _current_point_cloud;
+
+  PlySequencePlayerImplDeviceMemory *_device_memory;
+  std::atomic_bool _device_memory_ready{false};
+
+  bool init_device_memory();
+  void free_device_memory();
 
   void load_all_frames();
 };

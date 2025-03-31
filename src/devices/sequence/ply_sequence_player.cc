@@ -43,6 +43,7 @@ PlySequencePlayer::PlySequencePlayer(PlySequencePlayerConfiguration &config)
     sequence_length_seconds = frame_count() / frame_rate;
     load_all_frames();
   }
+  init_device_memory();
   {
     std::lock_guard lock(PlySequencePlayer::devices_access);
     PlySequencePlayer::attached_devices.push_back(std::ref(*this));
@@ -55,6 +56,7 @@ PlySequencePlayer::~PlySequencePlayer() {
   std::lock_guard lock(PlySequencePlayer::devices_access);
   std::erase_if(PlySequencePlayer::attached_devices,
                 [this](auto &device) { return &(device.get()) == this; });
+  free_device_memory();
 }
 
 size_t PlySequencePlayer::frame_count() const { return _file_paths.size(); }
@@ -70,9 +72,11 @@ void PlySequencePlayer::tick(float delta_time) {
   const size_t frames_to_advance = static_cast<size_t>(_frame_accumulator);
   _frame_accumulator -= frames_to_advance;
   const size_t total_frames = frame_count();
-  auto frame = current_frame();
+  auto current_frame_index = current_frame();
   if (total_frames > 0) {
-    config().current_frame = (frame + frames_to_advance) % total_frames;
+    auto new_frame_index = (current_frame_index + frames_to_advance) % total_frames;
+    config().current_frame = new_frame_index;
+    _buffer_updated = new_frame_index != current_frame_index;
   }
 }
 
@@ -99,6 +103,8 @@ void PlySequencePlayer::load_all_frames() {
     auto point_count = x_values.size();
     cloud.positions.resize(point_count);
     cloud.colors.resize(point_count);
+
+    if (point_count > _max_point_count) _max_point_count = point_count;
 
     const auto point_indices =
         std::views::iota(0, static_cast<int>(point_count));
