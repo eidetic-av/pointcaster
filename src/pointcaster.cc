@@ -130,27 +130,29 @@ PointCaster::PointCaster(const Arguments &args)
   auto font_icons = rs.getRaw("FontAwesomeSolid");
   static const ImWchar icons_ranges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
 
+  const auto icon_font_size = 15.0f;
+  const auto icon_font_size_pixels =
+      icon_font_size * framebufferSize().x() / size.x();
   ImFontConfig icons_config;
   icons_config.MergeMode = true;
   icons_config.PixelSnapH = true;
   icons_config.FontDataOwnedByAtlas = false;
-  const auto icon_font_size = 15.0f;
   icons_config.GlyphMinAdvanceX = icon_font_size;
-  const auto icon_font_size_pixels =
-      icon_font_size * framebufferSize().x() / size.x();
-
   _icon_font =
       std::shared_ptr<ImFont>(ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
           const_cast<char *>(font_icons.data()), font_icons.size(),
           icon_font_size_pixels, &icons_config, icons_ranges));
   pc::gui::icon_font = _icon_font;
 
-  ImFontConfig icons_config_small = icons_config;
-  const auto small_icon_font_size = 12.0f;
+  const auto small_icon_font_size = 6.0f;
+  const auto small_icon_font_size_pixels = small_icon_font_size *
+                                           framebufferSize().x() /
+                                           static_cast<float>(size.x());
+  ImFontConfig icons_config_small;
+  icons_config.MergeMode = false;
+  icons_config.PixelSnapH = true;
+  icons_config.FontDataOwnedByAtlas = false;
   icons_config_small.GlyphMinAdvanceX = small_icon_font_size;
-  const auto small_icon_font_size_pixels =
-      small_icon_font_size * framebufferSize().x() / size.x();
-
   _icon_font_small =
       std::shared_ptr<ImFont>(ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
           const_cast<char *>(font_icons.data()), font_icons.size(),
