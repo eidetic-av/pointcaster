@@ -2,7 +2,6 @@
 
 #include "../serialization.h"
 #include "../structs.h"
-#include "sequence/ply_sequence_player_configuration.gen.h"
 
 #include <k4a/k4atypes.h>
 #include <variant>
@@ -61,14 +60,5 @@ struct DeviceConfiguration {
   BodyTrackingConfiguration body; // @optional
   AutoTiltConfiguration auto_tilt; // @optional
 };
-
-struct PlySequencePlayerConfiguration;
-
-using DeviceConfigurationVariant =
-    std::variant<DeviceConfiguration, PlySequencePlayerConfiguration>;
-
-template <typename T>
-concept ValidDeviceConfig = std::same_as<T, DeviceConfiguration> ||
-                            std::same_as<T, PlySequencePlayerConfiguration>;
 
 } // namespace pc::devices

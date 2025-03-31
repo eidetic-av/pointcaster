@@ -6,6 +6,7 @@ namespace pc::devices {
 
 using uid = pc::types::uid;
 using pc::types::Float3;
+using pc::devices::DeviceTransformConfiguration;
 
 struct PlySequencePlayerConfiguration {
   std::string id;
@@ -13,7 +14,8 @@ struct PlySequencePlayerConfiguration {
   std::string directory;
   bool playing = true;
   int current_frame = 0;
-  Float3 translate; // @minmax(-5000, 5000)
+
+  DeviceTransformConfiguration transform; // @optional
 };
 
 } // namespace pc::devices

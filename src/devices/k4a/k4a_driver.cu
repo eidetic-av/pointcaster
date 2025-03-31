@@ -60,9 +60,6 @@ void K4ADriver::free_device_memory() {
   pc::logger->info("K4A GPU Device memory freed ({})", id());
 }
 
-// TODO these GPU kernels can probably be taken outside of the k4a classes and
-// used with any sensor type
-
 struct input_filter {
   DeviceTransformConfiguration config;
 

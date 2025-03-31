@@ -4,6 +4,7 @@
 #include "../pointer.h"
 #include "../uuid.h"
 #include "device_config.gen.h"
+#include "device_variants.h"
 #include <Corrade/Containers/Pointer.h>
 #include <imgui.h>
 #include <k4abttypes.h>
@@ -100,8 +101,8 @@ public:
   }
   virtual ~DeviceBase() { remove_config(&_config); }
 
-  Config& config() { return std::get<Config>(_config); }
-  const Config& config() const { return std::get<Config>(_config); }
+  Config &config() { return std::get<Config>(_config); }
+  const Config &config() const { return std::get<Config>(_config); }
 
   using id_type = decltype(std::declval<Config>().id);
   id_type id() const { return config().id; };
@@ -121,7 +122,7 @@ private:
   }
 };
 
-class Device { };
+class Device {};
 enum class DeviceType { UnknownDevice, K4A, K4W2, Rs2 };
 
 extern pc::types::PointCloud

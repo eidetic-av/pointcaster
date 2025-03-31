@@ -63,28 +63,6 @@ size_t PlySequencePlayer::current_frame() const {
   return config().current_frame;
 }
 
-pc::types::PointCloud
-PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
-  if (!config().active) return {};
-  auto frame = current_frame();
-  // TODO apply any passed in operators,
-  // TODO really any transforms should be handled in cuda code
-  pc::types::PointCloud cloud =
-      _pointcloud_buffer.at(std::min(frame, _pointcloud_buffer.size()));
-  const auto point_indices =
-      std::views::iota(0, static_cast<int>(cloud.size()));
-  std::for_each(std::execution::par, point_indices.begin(), point_indices.end(),
-                [&, config = this->config()](int i) {
-                  // transform positions as per config
-                  const auto &pos = cloud.positions[i];
-                  cloud.positions[i] = {
-                      static_cast<short>(pos.x + config.translate.x),
-                      static_cast<short>(pos.y + config.translate.y),
-                      static_cast<short>(pos.z + config.translate.z)};
-                });
-  return cloud;
-}
-
 void PlySequencePlayer::tick(float delta_time) {
   if (!config().playing) return;
   constexpr float frame_rate = 30.0f;
