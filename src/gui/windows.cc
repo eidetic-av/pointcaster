@@ -36,7 +36,7 @@ void draw_devices_window(PointCaster &app) {
 
   // includes the name of the selected device type
   if (last_device_count > 0) {
-    ImGui::Dummy({5, 0});
+    ImGui::Dummy({2, 0});
     ImGui::SameLine();
     ImGui::BeginDisabled();
     {
@@ -54,7 +54,7 @@ void draw_devices_window(PointCaster &app) {
 
   // and a button to add a new device
   ImGui::SetCursorPosX(window_width - icon_width - window_padding.x);
-  ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 2);
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
   if (gui::draw_icon_button(
           ICON_FA_CIRCLE_PLUS, false,
           catpuccin::with_alpha(catpuccin::imgui::mocha_green, 0.75f),

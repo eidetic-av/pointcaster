@@ -1,5 +1,6 @@
 #include "ply_sequence_player.h"
 #include "../../logger.h"
+#include "../../parameters.h"
 #include "../../uuid.h"
 #include <algorithm>
 #include <execution>
@@ -9,7 +10,6 @@
 #include <nfd.hpp>
 #include <ranges>
 #include <tbb/tbb.h>
-
 
 namespace pc::devices {
 
@@ -47,6 +47,8 @@ PlySequencePlayer::PlySequencePlayer(PlySequencePlayerConfiguration &config)
     std::lock_guard lock(PlySequencePlayer::devices_access);
     PlySequencePlayer::attached_devices.push_back(std::ref(*this));
   }
+  // parameters::set_parameter_minmax(std::format("{}.current_frame", id()), 0,
+  //                                  frame_count());
 }
 
 PlySequencePlayer::~PlySequencePlayer() {
@@ -84,8 +86,7 @@ PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
 }
 
 void PlySequencePlayer::tick(float delta_time) {
-  auto& conf = config();
-  if (!conf.active || !conf.playing) return;
+  if (!config().playing) return;
   constexpr float frame_rate = 30.0f;
   _frame_accumulator += delta_time * frame_rate;
   const size_t frames_to_advance = static_cast<size_t>(_frame_accumulator);
@@ -98,48 +99,47 @@ void PlySequencePlayer::tick(float delta_time) {
 }
 
 void PlySequencePlayer::load_all_frames() {
-   for (const auto& file_path : _file_paths) {
+  for (const auto &file_path : _file_paths) {
 
-      happly::PLYData ply_in(file_path);
-      pc::types::PointCloud cloud;
+    happly::PLYData ply_in(file_path);
+    pc::types::PointCloud cloud;
 
-      constexpr auto vertex_element_name = "vertex";
-      auto x_values =
-          ply_in.getElement(vertex_element_name).getProperty<float>("x");
-      auto y_values =
-          ply_in.getElement(vertex_element_name).getProperty<float>("y");
-      auto z_values =
-          ply_in.getElement(vertex_element_name).getProperty<float>("z");
-      auto r_values = ply_in.getElement(vertex_element_name)
-                          .getProperty<unsigned char>("red");
-      auto g_values = ply_in.getElement(vertex_element_name)
-                          .getProperty<unsigned char>("green");
-      auto b_values = ply_in.getElement(vertex_element_name)
-                          .getProperty<unsigned char>("blue");
+    constexpr auto vertex_element_name = "vertex";
+    auto x_values =
+        ply_in.getElement(vertex_element_name).getProperty<float>("x");
+    auto y_values =
+        ply_in.getElement(vertex_element_name).getProperty<float>("y");
+    auto z_values =
+        ply_in.getElement(vertex_element_name).getProperty<float>("z");
+    auto r_values = ply_in.getElement(vertex_element_name)
+                        .getProperty<unsigned char>("red");
+    auto g_values = ply_in.getElement(vertex_element_name)
+                        .getProperty<unsigned char>("green");
+    auto b_values = ply_in.getElement(vertex_element_name)
+                        .getProperty<unsigned char>("blue");
 
-      auto point_count = x_values.size();
-      cloud.positions.resize(point_count);
-      cloud.colors.resize(point_count);
+    auto point_count = x_values.size();
+    cloud.positions.resize(point_count);
+    cloud.colors.resize(point_count);
 
-      const auto point_indices =
-          std::views::iota(0, static_cast<int>(point_count));
+    const auto point_indices =
+        std::views::iota(0, static_cast<int>(point_count));
 
-      std::for_each(
-          std::execution::par, point_indices.begin(), point_indices.end(),
-          [&, config = this->config()](int i) {
-            // positions m to mm
-            const auto x = static_cast<short>(x_values[i] * 1000);
-            const auto y = static_cast<short>(y_values[i] * 1000);
-            const auto z = static_cast<short>(z_values[i] * 1000);
-            cloud.positions[i] = {x, y, z};
-            // color rgb to bgr
-            cloud.colors[i] = {b_values[i], g_values[i], r_values[i]};
-          });
+    std::for_each(std::execution::par, point_indices.begin(),
+                  point_indices.end(), [&, config = this->config()](int i) {
+                    // positions m to mm
+                    const auto x = static_cast<short>(x_values[i] * 1000);
+                    const auto y = static_cast<short>(y_values[i] * 1000);
+                    const auto z = static_cast<short>(z_values[i] * 1000);
+                    cloud.positions[i] = {x, y, z};
+                    // color rgb to bgr
+                    cloud.colors[i] = {b_values[i], g_values[i], r_values[i]};
+                  });
 
-      _pointcloud_buffer.push_back(cloud);
+    _pointcloud_buffer.push_back(cloud);
 
-      // pc::logger->info(file_path);
-   }
+    // pc::logger->info(file_path);
+  }
 }
 
 } // namespace pc::devices

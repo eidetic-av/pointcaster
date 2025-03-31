@@ -195,8 +195,8 @@ void declare_parameters(std::string_view parameter_id, T &basic_value,
                         std::string_view parent_struct_name) {
 
   // numeric values
-  if constexpr (std::is_same_v<T, float> || std::is_same_v<T, int> ||
-                std::is_same_v<T, short>) {
+  if constexpr (std::same_as<T, float> || std::same_as<T, int> ||
+                std::same_as<T, short>) {
     Parameter p(basic_value);
     p.parent_struct_name = parent_struct_name;
     p.default_value = default_value;
@@ -210,8 +210,8 @@ void declare_parameters(std::string_view parameter_id, T &basic_value,
     declare_parameter(parameter_id, std::move(p));
   }
   // bools and strings
-  else if constexpr (std::is_same_v<T, bool> ||
-                     std::is_same_v<T, std::string>) {
+  else if constexpr (std::same_as<T, bool> ||
+                     std::same_as<T, std::string>) {
     Parameter p(basic_value);
     p.parent_struct_name = parent_struct_name;
     p.default_value = default_value;
@@ -324,25 +324,33 @@ void set_parameter_value(std::string_view parameter_id, T new_value,
   auto &parameter = parameter_bindings.at(parameter_id);
   auto old_binding = parameter;
 
-  if (std::holds_alternative<FloatReference>(parameter.value)) {
-    float &value = std::get<FloatReference>(parameter.value).get();
-    value = math::remap(input_min, input_max, std::get<float>(parameter.min),
-                        std::get<float>(parameter.max), new_value, true);
-  } else if (std::holds_alternative<IntReference>(parameter.value)) {
-    int &value = std::get<IntReference>(parameter.value).get();
-    auto min = static_cast<float>(std::get<int>(parameter.min));
-    auto max = static_cast<float>(std::get<int>(parameter.max));
-    auto float_value =
-        math::remap(input_min, input_max, min, max, new_value, true);
-    value = static_cast<int>(std::round(float_value));
-  } else if (std::holds_alternative<ShortReference>(parameter.value)) {
-    short &value = std::get<ShortReference>(parameter.value).get();
-    auto min = static_cast<float>(std::get<short>(parameter.min));
-    auto max = static_cast<float>(std::get<short>(parameter.max));
-    auto float_value =
-        math::remap(input_min, input_max, min, max, new_value, true);
-    value = static_cast<short>(std::round(float_value));
-  }
+      pc::logger->info("overload a");
+
+  std::visit([&](auto &ref_variant) {
+    using R = std::decay_t<decltype(ref_variant)>;
+    if constexpr (std::same_as<R, FloatReference>) {
+      float &value = ref_variant.get();
+      value = math::remap(input_min, input_max, std::get<float>(parameter.min),
+                          std::get<float>(parameter.max), new_value, true);
+    } else if constexpr (std::same_as<R, IntReference>) {
+      int &value = ref_variant.get();
+      auto min = static_cast<float>(std::get<int>(parameter.min));
+      auto max = static_cast<float>(std::get<int>(parameter.max));
+      auto float_value =
+          math::remap(input_min, input_max, min, max, new_value, true);
+      value = static_cast<int>(std::round(float_value));
+    } else if constexpr (std::same_as<R, ShortReference>) {
+      short &value = ref_variant.get();
+      auto min = static_cast<float>(std::get<short>(parameter.min));
+      auto max = static_cast<float>(std::get<short>(parameter.max));
+      auto float_value =
+          math::remap(input_min, input_max, min, max, new_value, true);
+      value = static_cast<short>(std::round(float_value));
+    } else if constexpr (std::same_as<R, BoolReference>) {
+      // handle bool here
+      pc::logger->info("we got ze bool");
+    }
+  }, parameter.value);
 
   MainThreadDispatcher::enqueue([&] {
     for (const auto &cb : parameter.update_callbacks) {
@@ -350,6 +358,7 @@ void set_parameter_value(std::string_view parameter_id, T new_value,
     }
   });
 }
+
 
 inline void set_parameter_value(std::string_view parameter_id, int new_value,
                                 int input_min, int input_max) {
@@ -361,60 +370,70 @@ inline void set_parameter_value(std::string_view parameter_id, int new_value,
 template <typename T>
 void set_parameter_value(std::string_view parameter_id, T new_value) {
 
+  pc::logger->info("overload b");
+
   auto &parameter = parameter_bindings.at(parameter_id);
   auto old_binding = parameter;
 
-  if (std::holds_alternative<FloatReference>(parameter.value)) {
+  std::visit(
+      [&](auto &ref_variant) {
+        // TODO we should specialize the function itself to keep unwanted types
+        // out, i don't think any of these branches that error are ever hit, but
+        // they're necessary for compile without working on the function
+        // definition itself
 
-    // TODO we should specialize the function itself to keep unwanted types out,
-    // i don't think any of these branches that error are ever hit, but they're
-    // necessary for compile without working on the function definition itself
-
-    if constexpr (pc::types::VectorType<T>) {
-      pc::logger->error("Setting float ref with vector type");
-    } else {
-      float &value = std::get<FloatReference>(parameter.value).get();
-      value = static_cast<float>(new_value);
-    }
-
-  } else if (std::holds_alternative<IntReference>(parameter.value)) {
-
-    if constexpr (pc::types::VectorType<T>) {
-      pc::logger->error("Setting int ref with vector type");
-    } else {
-      int &value = std::get<IntReference>(parameter.value).get();
-      value = static_cast<int>(new_value);
-    }
-
-  } else if (std::holds_alternative<IntReference>(parameter.value)) {
-
-    if constexpr (pc::types::VectorType<T>) {
-      pc::logger->error("Setting short ref with vector type");
-    } else {
-      short &value = std::get<ShortReference>(parameter.value).get();
-      value = static_cast<short>(new_value);
-    }
-
-  } else if (std::holds_alternative<Float3Reference>(parameter.value)) {
-
-    if constexpr (std::is_same_v<T, Float3>) {
-      Float3 &value = std::get<Float3Reference>(parameter.value).get();
-      value = new_value;
-    } else {
-      pc::logger->error("Setting float3 ref with non-float3 val");
-    }
-  }
+        using ref_type = std::decay_t<decltype(ref_variant)>;
+        if constexpr (std::same_as<ref_type, FloatReference>) {
+          if constexpr (pc::types::VectorType<T>) {
+            pc::logger->error("Setting float ref with vector type");
+          } else {
+            float &value = std::get<FloatReference>(parameter.value).get();
+            value = static_cast<float>(new_value);
+          }
+        } else if constexpr (std::same_as<ref_type, IntReference>) {
+          if constexpr (pc::types::VectorType<T>) {
+            pc::logger->error("Setting int ref with vector type");
+          } else {
+            int &value = std::get<IntReference>(parameter.value).get();
+            value = static_cast<int>(new_value);
+          }
+        } else if constexpr (std::same_as<ref_type, ShortReference>) {
+          if constexpr (pc::types::VectorType<T>) {
+            pc::logger->error("Setting short ref with vector type");
+          } else {
+            short &value = std::get<ShortReference>(parameter.value).get();
+            value = static_cast<short>(new_value);
+          }
+        } else if constexpr (std::same_as<ref_type, Float3Reference>) {
+          if constexpr (std::same_as<T, Float3>) {
+            Float3 &value = std::get<Float3Reference>(parameter.value).get();
+            value = new_value;
+          } else {
+            pc::logger->error("Setting float3 ref with non-float3 val");
+          }
+        } else if constexpr (std::same_as<ref_type, BoolReference>) {
+          // for bools, we say that any scalar value > 0 is 'true' and
+          // any value <= 0 is 'false'
+          if constexpr (std::is_convertible_v<T, float>) {
+            bool &value = std::get<BoolReference>(parameter.value).get();
+            value = static_cast<float>(new_value) > 0;
+          } else {
+            pc::logger->error("Setting bool ref with unconvertible value");
+          }
+        }
+      },
+      parameter.value);
 
   // else if (std::holds_alternative<Int2Reference>(parameter.value)) {
-  //    Int2 &value = std::get<Int2Reference>(parameter.value).get();
-  //    value = new_value;
-  //  } else if (std::holds_alternative<Int3Reference>(parameter.value)) {
-  //    Int3 &value = std::get<Int3Reference>(parameter.value).get();
-  //    value = new_value;
-  //  } else if (std::holds_alternative<Float2Reference>(parameter.value)) {
-  //    Float2 &value = std::get<Float2Reference>(parameter.value).get();
-  //    value = new_value;
-  //  }
+  //   Int2 &value = std::get<Int2Reference>(parameter.value).get();
+  //   value = new_value;
+  // } else if (std::holds_alternative<Int3Reference>(parameter.value)) {
+  //   Int3 &value = std::get<Int3Reference>(parameter.value).get();
+  //   value = new_value;
+  // } else if (std::holds_alternative<Float2Reference>(parameter.value)) {
+  //   Float2 &value = std::get<Float2Reference>(parameter.value).get();
+  //   value = new_value;
+  // }
 
   MainThreadDispatcher::enqueue([&] {
     for (const auto &cb : parameter.update_callbacks) {

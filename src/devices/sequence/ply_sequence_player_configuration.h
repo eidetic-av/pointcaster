@@ -12,7 +12,7 @@ struct PlySequencePlayerConfiguration {
   bool active = true;
   std::string directory;
   bool playing = true;
-  size_t current_frame = 0;
+  int current_frame = 0;
   Float3 translate; // @minmax(-5000, 5000)
 };
 
