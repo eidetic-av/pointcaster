@@ -1,4 +1,5 @@
 #include "windows.h"
+#include <imgui.h>
 
 namespace pc::gui {
 
@@ -142,7 +143,7 @@ void draw_devices_window(PointCaster &app) {
         {
           // status icon, grouped for positioning
           ImGui::BeginGroup();
-          ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
+          ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
           ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 2);
           gui::draw_icon_button(ICON_FA_CIRCLE, true, status_color,
                                 status_color);
@@ -300,58 +301,71 @@ void draw_devices_window(PointCaster &app) {
   }
 
   // the popup for adding devices if the add device button is pressed
-  if (ImGui::BeginPopup("AddDevicePopup")) {
-    if (ImGui::BeginMenu("USB device")) {
-      if (ImGui::MenuItem("Azure Kinect")) { app.open_kinect_sensors(); }
-      if (ImGui::MenuItem("Orbbec")) {
-        pc::logger->error("Orbbec USB device is not yet implemented");
-      }
-      ImGui::EndMenu();
+  ImGui::SetNextWindowSize({180, 0});
+  ImGui::SetNextWindowBgAlpha(0.9f);
+  ImGui::PushStyleColor(ImGuiCol_PopupBg, catpuccin::imgui::mocha_surface);
+  ImGui::PushStyleColor(ImGuiCol_HeaderHovered, catpuccin::imgui::mocha_surface1);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 10});
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10, 10});
+  ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextBorderSize, 1.0f);
+  if (ImGui::BeginPopup("AddDevicePopup", ImGuiWindowFlags_AlwaysAutoResize)) {
+    // USB devices
+    ImGui::SeparatorText("USB Devices");
+    if (ImGui::MenuItem("Azure Kinect")) { app.open_kinect_sensors(); }
+    if (ImGui::MenuItem("Orbbec (USB)")) {
+      pc::logger->error("Orbbec USB device is not yet implemented");
     }
-    if (ImGui::BeginMenu("Network device")) {
-      static bool orbbec_menu_open = false;
-      if (ImGui::BeginMenu("Orbbec")) {
-        if (!orbbec_menu_open) {
-          app.run_async([] { OrbbecDevice::discover_devices(); });
-        }
-        if (OrbbecDevice::discovering_devices) {
-          ImGui::MenuItem("Searching for devices...", nullptr, false, false);
-        } else {
-          size_t orbbec_list_size = 0;
-          std::lock_guard lock(OrbbecDevice::devices_access);
-          for (auto discovered_device : OrbbecDevice::discovered_devices) {
-            auto already_connected = std::ranges::any_of(
-                OrbbecDevice::attached_devices,
-                [&](const auto &attached_device) {
-                  return attached_device.get().ip() == discovered_device.ip;
-                });
-            if (!already_connected) {
-              auto option_string = fmt::format("{} ({})", discovered_device.ip,
-                                               discovered_device.serial_num);
-              if (ImGui::MenuItem(option_string.c_str())) {
-                ImGui::CloseCurrentPopup();
-                app.open_orbbec_sensor(discovered_device.ip);
-              }
-              orbbec_list_size++;
+
+    // Network devices
+    ImGui::SeparatorText("Network Devices");
+
+    // Start discovery once if needed
+    static bool requested_orbbec_discovery = false;
+    if (!requested_orbbec_discovery) {
+      requested_orbbec_discovery = true;
+      app.run_async([] { OrbbecDevice::discover_devices(); });
+    }
+
+    if (OrbbecDevice::discovering_devices) {
+      ImGui::MenuItem("Searching for Orbbec devices...", nullptr, false, false);
+    } else {
+      size_t orbbec_list_size = 0;
+      {
+        std::lock_guard lock(OrbbecDevice::devices_access);
+        for (auto &dev : OrbbecDevice::discovered_devices) {
+          const bool already_connected = std::ranges::any_of(
+              OrbbecDevice::attached_devices, [&](const auto &attached) {
+                return attached.get().ip() == dev.ip;
+              });
+
+          if (!already_connected) {
+            auto label = fmt::format("Orbbec - {}", dev.ip);
+            if (ImGui::MenuItem(label.c_str())) {
+              ImGui::CloseCurrentPopup();
+              app.open_orbbec_sensor(dev.ip);
             }
-          }
-          if (OrbbecDevice::discovered_devices.empty() ||
-              orbbec_list_size == 0) {
-            ImGui::MenuItem("No devices found", nullptr, false, false);
+            orbbec_list_size++;
           }
         }
-        ImGui::EndMenu();
-        orbbec_menu_open = true;
-      } else {
-        orbbec_menu_open = false;
       }
-      ImGui::EndMenu();
+      if (OrbbecDevice::discovered_devices.empty() || orbbec_list_size == 0) {
+        ImGui::MenuItem("None", nullptr, false, false);
+      }
     }
+
+    // Sequences
+    ImGui::SeparatorText("Files");
     if (ImGui::MenuItem("PLY Sequence")) {
       app.run_async([&] { app.open_ply_sequence(); });
     }
+
     ImGui::EndPopup();
   }
+  ImGui::PopStyleVar();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleColor();
 
   {
     std::lock_guard lock(devices::device_configs_access);
