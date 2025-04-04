@@ -41,7 +41,9 @@ public:
   OrbbecDevice(OrbbecDevice &&) = delete;
   OrbbecDevice &operator=(OrbbecDevice &&) = delete;
 
-  pc::types::PointCloud point_cloud(pc::operators::OperatorList operators = {}) override;
+  DeviceStatus status() const override;
+  pc::types::PointCloud
+  point_cloud(pc::operators::OperatorList operators = {}) override;
 
   void start();
   void stop();

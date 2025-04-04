@@ -71,6 +71,13 @@ OrbbecDevice::~OrbbecDevice() {
   pc::logger->info("Destroyed OrbbecDevice");
 }
 
+DeviceStatus OrbbecDevice::status() const {
+  if (_ob_device) {
+    return _running_pipeline ? DeviceStatus::Active : DeviceStatus::Inactive;
+  }
+  return DeviceStatus::Missing;
+};
+
 void OrbbecDevice::start() {
   _initialisation_thread = std::jthread([this](std::stop_token stop_token) {
     // TODO stop_token is currently unused,
