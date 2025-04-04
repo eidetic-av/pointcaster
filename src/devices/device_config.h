@@ -35,6 +35,11 @@ struct K4AConfiguration {
 };
 
 struct DeviceTransformConfiguration {
+  Float3 translate{0, 0, 0}; // @minmax(-10000, 10000)
+  Float3 rotation_deg{0, 0, 0}; // @minmax(-360, 360)
+  Float3 offset{0, 0, 0}; // @minmax(-10000, 10000)
+  float scale = 1; // @minmax(0, 10)
+  int sample = 1;  // @minmax(1, 1000)
   bool flip_x = false; 
   bool flip_y = false;
   bool flip_z = false;
@@ -44,11 +49,6 @@ struct DeviceTransformConfiguration {
   MinMaxShort bound_x{-10000, 10000}; // @minmax(-10000, 10000)
   MinMaxShort bound_y{-10000, 10000}; // @minmax(-10000, 10000)
   MinMaxShort bound_z{-10000, 10000}; // @minmax(-10000, 10000)
-  Float3 translate{0, 0, 0}; // @minmax(-10000, 10000)
-  Float3 offset{0, 0, 0}; // @minmax(-10000, 10000)
-  Float3 rotation_deg{0, 0, 0}; // @minmax(-360, 360)
-  float scale = 1; // @minmax(0, 10)
-  int sample = 1;  // @minmax(1, 1000)
 };
 
 struct DeviceConfiguration {
