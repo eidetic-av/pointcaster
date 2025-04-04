@@ -9,19 +9,17 @@
 #include <string_view>
 #include <thread>
 
-
 namespace pc::devices {
 
 struct PlySequencePlayerImplDeviceMemory;
 
 class PlySequencePlayer : public DeviceBase<PlySequencePlayerConfiguration> {
 public:
-  inline static std::vector<std::reference_wrapper<PlySequencePlayer>> attached_devices;
+  inline static std::vector<std::reference_wrapper<PlySequencePlayer>>
+      attached_devices;
   inline static std::mutex devices_access;
 
   static PlySequencePlayerConfiguration load_directory();
-
-  float sequence_length_seconds;
 
   explicit PlySequencePlayer(PlySequencePlayerConfiguration &config);
   ~PlySequencePlayer();
@@ -35,15 +33,18 @@ public:
 
   size_t frame_count() const;
   size_t current_frame() const;
-  pc::types::PointCloud point_cloud(pc::operators::OperatorList operators = {}) override;
+
+  DeviceStatus status() const override;
+  pc::types::PointCloud
+  point_cloud(pc::operators::OperatorList operators = {}) override;
 
   bool draw_controls() override;
 
 private:
   std::unique_ptr<std::jthread> _io_thread;
   std::vector<std::string> _file_paths;
-  size_t _max_point_count;
-  float _frame_accumulator;
+  float _frame_accumulator{0};
+  size_t _max_point_count{0};
 
   std::vector<pc::types::PointCloud> _pointcloud_buffer;
   std::mutex _pointcloud_buffer_access;
@@ -54,10 +55,10 @@ private:
   PlySequencePlayerImplDeviceMemory *_device_memory;
   std::atomic_bool _device_memory_ready{false};
 
-  bool init_device_memory();
+  bool init_device_memory(size_t point_count);
   void free_device_memory();
 
-  void load_all_frames();
+  size_t load_all_frames(std::stop_token stop_token);
 };
 
 } // namespace pc::devices

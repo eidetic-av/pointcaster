@@ -46,11 +46,11 @@ struct ply_to_input_points
   }
 };
 
-bool PlySequencePlayer::init_device_memory() {
+bool PlySequencePlayer::init_device_memory(size_t point_count) {
   _device_memory_ready = false;
   try {
-    pc::logger->info("Max point count: {}", _max_point_count);
-    _device_memory = new PlySequencePlayerImplDeviceMemory(_max_point_count);
+    pc::logger->info("Max point count: {}", point_count);
+    _device_memory = new PlySequencePlayerImplDeviceMemory(point_count);
     _device_memory_ready = true;
   } catch (std::exception &e) {
     pc::logger->error("Failed to initialise GPU memory for PlySequencePlayer");
@@ -81,7 +81,6 @@ PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
       std::min(current_frame(), _pointcloud_buffer.size() - 1);
   pc::types::PointCloud cloud = _pointcloud_buffer.at(frame_index);
 
-  // If no device memory is available or the cloud is empty, return early.
   if (cloud.positions.empty()) return cloud;
   
   auto &incoming_positions = _device_memory->incoming_positions;
@@ -96,24 +95,22 @@ PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
   
   const size_t point_count = cloud.positions.size();
   
-  // Copy host data into device memory.
+  // copy host data into device memory.
   thrust::copy(cloud.positions.begin(), cloud.positions.end(),
                incoming_positions.begin());
   thrust::copy(cloud.colors.begin(), cloud.colors.end(),
                incoming_colors.begin());
 
-  // Build a zip iterator to combine positions, colours and indices.
+  //combine positions, colours and indices
   auto ply_indexed_points_begin = thrust::make_zip_iterator(thrust::make_tuple(
       incoming_positions.begin(), incoming_colors.begin(), indices.begin()));
 
-  // Convert into a unified indexed point format.
+  // transform points into the format required form our transform filter kernels
   thrust::transform(ply_indexed_points_begin,
                     ply_indexed_points_begin + point_count,
                     incoming_point_data.begin(), ply_to_input_points());
 
   auto incoming_points_end = incoming_point_data.begin() + point_count;
-  // Filter incoming points using the input_transform_filter from
-  // transform_filters.cuh.
   auto filtered_points_end = thrust::copy_if(
       incoming_point_data.begin(), incoming_points_end, filtered_data.begin(),
       input_transform_filter(config().transform));
@@ -121,7 +118,6 @@ PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
   const auto filtered_point_count =
       thrust::distance(filtered_data.begin(), filtered_points_end);
 
-  // Transform the filtered points.
   auto transformed_points_begin = thrust::make_zip_iterator(
       thrust::make_tuple(transformed_positions.begin(),
                          transformed_colors.begin(), indices.begin()));

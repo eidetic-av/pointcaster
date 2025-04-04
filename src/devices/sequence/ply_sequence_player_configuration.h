@@ -13,6 +13,7 @@ struct PlySequencePlayerConfiguration {
   bool active = true;
   std::string directory;
   bool playing = true;
+  int frame_rate = 30;
   int current_frame = 0;
 
   DeviceTransformConfiguration transform; // @optional

@@ -27,36 +27,45 @@ PlySequencePlayerConfiguration PlySequencePlayer::load_directory() {
 }
 
 PlySequencePlayer::PlySequencePlayer(PlySequencePlayerConfiguration &config)
-    : DeviceBase<PlySequencePlayerConfiguration>(config),
-      sequence_length_seconds(0) {
+    : DeviceBase<PlySequencePlayerConfiguration>(config) {
   if (!config.directory.empty()) {
     if (!std::filesystem::exists(config.directory)) {
       pc::logger->error("Can't find source directory '{}'", config.directory);
       return;
     }
+    pc::logger->info("Loading PLY sequence from directory '{}'",
+                     config.directory);
     for (const auto &file :
          std::filesystem::directory_iterator(config.directory)) {
       if (file.path().extension() != ".ply") continue;
       _file_paths.emplace_back(file.path().string());
     }
-    constexpr float frame_rate = 30.0f;
-    sequence_length_seconds = frame_count() / frame_rate;
-    load_all_frames();
   }
-  init_device_memory();
   {
     std::lock_guard lock(PlySequencePlayer::devices_access);
     PlySequencePlayer::attached_devices.push_back(std::ref(*this));
   }
+  _io_thread =
+      std::make_unique<std::jthread>([this](std::stop_token stop_token) {
+        try {
+          _max_point_count = load_all_frames(stop_token);
+          if (_max_point_count > 0) init_device_memory(_max_point_count);
+          else throw std::runtime_error("Empty PLY files or load interrupted.");
+        } catch (const std::exception &e) {
+          pc::logger->error("Failed to load PLY sequence");
+          pc::logger->error("Encountered exception: {}", e.what());
+        }
+      });
   // parameters::set_parameter_minmax(std::format("{}.current_frame", id()), 0,
   //                                  frame_count());
 }
 
 PlySequencePlayer::~PlySequencePlayer() {
+  if (_io_thread && _io_thread->joinable()) _io_thread->request_stop();
+  free_device_memory();
   std::lock_guard lock(PlySequencePlayer::devices_access);
   std::erase_if(PlySequencePlayer::attached_devices,
                 [this](auto &device) { return &(device.get()) == this; });
-  free_device_memory();
 }
 
 size_t PlySequencePlayer::frame_count() const { return _file_paths.size(); }
@@ -65,23 +74,31 @@ size_t PlySequencePlayer::current_frame() const {
   return config().current_frame;
 }
 
+DeviceStatus PlySequencePlayer::status() const {
+  if (_device_memory_ready) return DeviceStatus::Loaded;
+  return _max_point_count == 0 ? DeviceStatus::Missing : DeviceStatus::Inactive;
+}
+
 void PlySequencePlayer::tick(float delta_time) {
-  if (!config().playing) return;
-  constexpr float frame_rate = 30.0f;
-  _frame_accumulator += delta_time * frame_rate;
+  auto& conf = config();
+  if (!conf.playing) return;
+  _frame_accumulator += delta_time * conf.frame_rate;
   const size_t frames_to_advance = static_cast<size_t>(_frame_accumulator);
   _frame_accumulator -= frames_to_advance;
   const size_t total_frames = frame_count();
-  auto current_frame_index = current_frame();
+  auto current_frame_index = conf.current_frame;
   if (total_frames > 0) {
     auto new_frame_index = (current_frame_index + frames_to_advance) % total_frames;
-    config().current_frame = new_frame_index;
+    conf.current_frame = new_frame_index;
     _buffer_updated = new_frame_index != current_frame_index;
   }
 }
 
-void PlySequencePlayer::load_all_frames() {
+size_t PlySequencePlayer::load_all_frames(std::stop_token stop_token) {
+  size_t max_point_count = 0;
   for (const auto &file_path : _file_paths) {
+
+    if (stop_token.stop_requested()) return 0;
 
     happly::PLYData ply_in(file_path);
     pc::types::PointCloud cloud;
@@ -100,11 +117,11 @@ void PlySequencePlayer::load_all_frames() {
     auto b_values = ply_in.getElement(vertex_element_name)
                         .getProperty<unsigned char>("blue");
 
-    auto point_count = x_values.size();
+    const auto point_count = x_values.size();
     cloud.positions.resize(point_count);
     cloud.colors.resize(point_count);
 
-    if (point_count > _max_point_count) _max_point_count = point_count;
+    if (point_count > max_point_count) max_point_count = point_count;
 
     const auto point_indices =
         std::views::iota(0, static_cast<int>(point_count));
@@ -121,9 +138,8 @@ void PlySequencePlayer::load_all_frames() {
                   });
 
     _pointcloud_buffer.push_back(cloud);
-
-    // pc::logger->info(file_path);
   }
+  return max_point_count;
 }
 
 } // namespace pc::devices
