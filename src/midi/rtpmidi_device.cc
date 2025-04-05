@@ -366,16 +366,22 @@ RtpMidiDevice::~RtpMidiDevice() {
     auto &peer = peer_entry.second;
     peer->disconnect(_rtp_midi_session);
   }
-  _rtp_clock_thread.request_stop();
-  _rtp_clock_thread.join();
+  if (_rtp_clock_thread.joinable()) {
+    _rtp_clock_thread.request_stop();
+    _rtp_clock_thread.join();
+  }
 
   rtpMidiSessionFree(_rtp_midi_session);
   rtpMidiFinalize();
 
-  _ctrl_recv_thread.request_stop();
-  _ctrl_recv_thread.join();
-  _data_recv_thread.request_stop();
-  _data_recv_thread.join();
+  if (_ctrl_recv_thread.joinable()) {
+    _ctrl_recv_thread.request_stop();
+    _ctrl_recv_thread.join();
+  }
+  if (_data_recv_thread.joinable()) {
+    _data_recv_thread.request_stop();
+    _data_recv_thread.join();
+  }
 
 #ifdef WIN32
   bool do_cleanup = false;
