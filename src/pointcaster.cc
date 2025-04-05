@@ -112,51 +112,71 @@ PointCaster::PointCaster(const Arguments &args)
   Utility::Resource rs("data");
 
   auto font = rs.getRaw("AtkinsonHyperlegibleRegular");
+  // we need to malloc font_data because once we pass it to imgui, imgui expects
+  // to be responsible for freeing it
+  char *font_data = static_cast<char *>(malloc(font.size()));
+  memcpy(font_data, font.data(), font.size());
+
   ImFontConfig font_config;
-  font_config.FontDataOwnedByAtlas = false;
+  font_config.FontDataOwnedByAtlas = true;
   constexpr auto font_size = 15.0f;
   _font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-      const_cast<char *>(font.data()), font.size(),
-      font_size * framebufferSize().x() / size.x(), &font_config);
+      font_data, font.size(), font_size * framebufferSize().x() / size.x(),
+      &font_config);
 
   auto mono_font = rs.getRaw("IosevkaArtisan");
+  char *mono_font_data = static_cast<char *>(malloc(mono_font.size()));
+  memcpy(mono_font_data, mono_font.data(), mono_font.size());
+
   ImFontConfig mono_font_config;
-  mono_font_config.FontDataOwnedByAtlas = false;
+  mono_font_config.FontDataOwnedByAtlas = true;
   const auto mono_font_size = 14.5f;
   _mono_font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-      const_cast<char *>(mono_font.data()), mono_font.size(),
+      mono_font_data, mono_font.size(),
       mono_font_size * framebufferSize().x() / size.x(), &mono_font_config);
 
-  auto font_icons = rs.getRaw("FontAwesomeSolid");
   static const ImWchar icons_ranges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
-
   const auto icon_font_size = 15.0f;
   const auto icon_font_size_pixels =
       icon_font_size * framebufferSize().x() / size.x();
+
+  auto font_icons = rs.getRaw("FontAwesomeSolid");
+  char *font_icons_data = static_cast<char *>(malloc(font_icons.size()));
+  memcpy(font_icons_data, font_icons.data(), font_icons.size());
+
   ImFontConfig icons_config;
   icons_config.MergeMode = true;
   icons_config.PixelSnapH = true;
-  icons_config.FontDataOwnedByAtlas = false;
+  icons_config.FontDataOwnedByAtlas = true;
   icons_config.GlyphMinAdvanceX = icon_font_size;
-  _icon_font =
-      std::shared_ptr<ImFont>(ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-          const_cast<char *>(font_icons.data()), font_icons.size(),
-          icon_font_size_pixels, &icons_config, icons_ranges));
+
+  constexpr auto empty_deleter = [](auto* ptr) {};
+
+  _icon_font = std::shared_ptr<ImFont>(
+      ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+          font_icons_data, font_icons.size(), icon_font_size_pixels,
+          &icons_config, icons_ranges),
+      empty_deleter);
   pc::gui::icon_font = _icon_font;
 
   const auto small_icon_font_size = 6.0f;
   const auto small_icon_font_size_pixels = small_icon_font_size *
                                            framebufferSize().x() /
                                            static_cast<float>(size.x());
+
+  char *small_icon_font_data = static_cast<char *>(malloc(font_icons.size()));
+  memcpy(small_icon_font_data, font_icons.data(), font_icons.size());
+
   ImFontConfig icons_config_small;
   icons_config.MergeMode = false;
   icons_config.PixelSnapH = true;
-  icons_config.FontDataOwnedByAtlas = false;
+  icons_config.FontDataOwnedByAtlas = true;
   icons_config_small.GlyphMinAdvanceX = small_icon_font_size;
-  _icon_font_small =
-      std::shared_ptr<ImFont>(ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-          const_cast<char *>(font_icons.data()), font_icons.size(),
-          small_icon_font_size_pixels, &icons_config_small, icons_ranges));
+  _icon_font_small = std::shared_ptr<ImFont>(
+      ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+          small_icon_font_data, font_icons.size(), small_icon_font_size_pixels,
+          &icons_config_small, icons_ranges),
+      empty_deleter);
   pc::gui::icon_font_small = _icon_font_small;
 
   // enable window docking
