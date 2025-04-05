@@ -1340,10 +1340,10 @@ void PointCaster::drawEvent() {
   draw_main_viewport();
 
   if (!_session.layout.hide_ui) {
-    draw_camera_control_windows();
     if (_session.layout.show_devices_window) {
       pc::gui::draw_devices_window(*this);
     }
+    if (_session.layout.show_camera_window) { draw_camera_control_windows(); }
     if (_session.layout.show_stats) draw_stats(delta_time);
     if (_session.layout.show_radio_window) _radio->draw_imgui_window();
     if (_session.layout.show_snapshots_window)
