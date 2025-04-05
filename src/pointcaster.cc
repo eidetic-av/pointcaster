@@ -1,6 +1,6 @@
 #include "pointcaster.h"
 
-#include "devices/sequence/ply_sequence_player_configuration.gen.h"
+#include "devices/sequence/ply_sequence_player_config.gen.h"
 #include "gui/catpuccin.h"
 #include "gui/windows.h"
 #include "parameters.h"
@@ -25,7 +25,7 @@
 #include "devices/k4a/k4a_device.h"
 #include "devices/orbbec/orbbec_device.h"
 #include "devices/sequence/ply_sequence_player.h"
-#include "devices/sequence/ply_sequence_player_configuration.gen.h"
+#include "devices/sequence/ply_sequence_player_config.gen.h"
 #include "devices/usb.h"
 #include "fonts/IconsFontAwesome6.h"
 #include "graph/operator_graph.h"
@@ -648,7 +648,15 @@ void PointCaster::render_cameras() {
     // - make sure to cache already synthesised configurations
     if (points.empty()) {
 
-      points = devices::synthesized_point_cloud({*_session_operator_host});
+      // TODO this vector should defs be removed
+      // the synthesized_point_cloud api just requires a reference to a
+      // list which we dont have at the moment
+      std::vector<operators::OperatorHostConfiguration> fix_me_operator_list{
+          _session_operator_host->_config};
+
+      points = devices::synthesized_point_cloud(fix_me_operator_list);
+
+      _session_operator_host->_config = fix_me_operator_list[0];
 
       // TODO
       // get the points from THIS camera

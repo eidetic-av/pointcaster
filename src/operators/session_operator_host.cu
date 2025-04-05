@@ -3,6 +3,7 @@
 #include "denoise/denoise_operator.cuh"
 #include "denoise/kdtree.h"
 #include "noise_operator.cuh"
+#include "pcl/cluster_extraction_operator.gen.h"
 #include "rake_operator.cuh"
 #include "range_filter_operator.cuh"
 #include "rotate_operator.cuh"
@@ -22,6 +23,7 @@
 #include <thrust/transform.h>
 #include <variant>
 
+
 // #include <pcl/filters/voxel_grid.h>
 // #include <pcl/gpu/containers/device_array.hpp>
 // #include <pcl/gpu/octree/octree.hpp>
@@ -34,12 +36,11 @@
 #include <tracy/Tracy.hpp>
 #endif
 
-#include "pcl/operators.h"
-
 namespace pc::operators {
 
+// TODO this function definintion probs shouldnt be in this file
 pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
-                            const OperatorList &operator_list) {
+                            OperatorList &operator_list) {
   thrust::device_vector<position> positions(point_cloud.size());
   thrust::copy(point_cloud.positions.begin(), point_cloud.positions.end(),
                positions.begin());
@@ -56,10 +57,9 @@ pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
   auto operator_output_end = thrust::make_zip_iterator(
       thrust::make_tuple(positions.end(), colors.end(), indices.end()));
 
-  for (auto &operator_host_ref : operator_list) {
+  for (auto &operator_host_config : operator_list) {
     operator_output_end = pc::operators::SessionOperatorHost::run_operators(
-        operator_output_begin, operator_output_end,
-        operator_host_ref.get()._config);
+        operator_output_begin, operator_output_end, operator_host_config);
   }
 
   cudaDeviceSynchronize();
@@ -78,6 +78,16 @@ pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
                result.colors.begin());
 
   return result;
+}
+
+// TODO this function definintion probs shouldnt be in this file
+operator_in_out_t apply(operator_in_out_t begin, operator_in_out_t end,
+                        OperatorList &operator_list) {
+  for (auto &operator_host_config : operator_list) {
+    end = pc::operators::SessionOperatorHost::run_operators(
+        begin, end, operator_host_config);
+  }
+  return end;
 }
 
 operator_in_out_t
@@ -305,7 +315,6 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
             //      "fill"});
             // }
 
-            // TODO these three kernels could probably be fused into one
             // if (config.minmax.publish) {
             //   auto &mm = config.minmax;
             //   auto id = std::to_string(config.id);
@@ -341,15 +350,5 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
 
   return end;
 };
-
-operator_in_out_t apply(operator_in_out_t begin, operator_in_out_t end,
-                        const OperatorList &operator_list) {
-  for (auto &operator_host_ref : operator_list) {
-    auto &operator_host = operator_host_ref.get();
-    end = pc::operators::SessionOperatorHost::run_operators(
-        begin, end, operator_host._config);
-  }
-  return end;
-}
 
 } // namespace pc::operators

@@ -131,10 +131,9 @@ OrbbecDevice::point_cloud(pc::operators::OperatorList operators) {
       transformed_points_begin, transformed_points_begin + filtered_point_count,
       operator_output_begin, output_transform_filter{transform_config});
 
-  for (auto &operator_host_ref : operators) {
-    auto &operator_host = operator_host_ref.get();
+  for (auto &operator_host_config : operators) {
     operator_output_end = pc::operators::SessionOperatorHost::run_operators(
-        operator_output_begin, operator_output_end, operator_host._config);
+        operator_output_begin, operator_output_end, operator_host_config);
   }
 
   // wait for the kernels to complete

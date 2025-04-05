@@ -2,7 +2,7 @@
 
 #include "../../structs.h"
 #include "../device.h"
-#include "ply_sequence_player_configuration.gen.h"
+#include "ply_sequence_player_config.gen.h"
 #include <functional>
 #include <memory>
 #include <optional>

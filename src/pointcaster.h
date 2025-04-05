@@ -2,7 +2,7 @@
 
 #include "pch.h"
 
-#include "devices/sequence/ply_sequence_player_configuration.gen.h"
+#include "devices/sequence/ply_sequence_player_config.gen.h"
 #include "gui/catpuccin.h"
 #include "parameters.h"
 #include <imgui.h>
@@ -25,7 +25,7 @@
 #include "devices/k4a/k4a_device.h"
 #include "devices/orbbec/orbbec_device.h"
 #include "devices/sequence/ply_sequence_player.h"
-#include "devices/sequence/ply_sequence_player_configuration.gen.h"
+#include "devices/sequence/ply_sequence_player_config.gen.h"
 #include "devices/usb.h"
 #include "fonts/IconsFontAwesome6.h"
 #include "graph/operator_graph.h"

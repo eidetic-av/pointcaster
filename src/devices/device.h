@@ -126,7 +126,7 @@ class Device {};
 enum class DeviceType { UnknownDevice, K4A, K4W2, Rs2 };
 
 extern pc::types::PointCloud
-synthesized_point_cloud(pc::operators::OperatorList operators = {});
+synthesized_point_cloud(pc::operators::OperatorList &operators);
 
 // TODO make all the k4a stuff more generic
 using pc::types::Float4;

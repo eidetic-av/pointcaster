@@ -7,6 +7,7 @@ namespace pc::devices {
 using uid = pc::types::uid;
 using pc::types::Float3;
 using pc::devices::DeviceTransformConfiguration;
+using pc::operators::OperatorList;
 
 struct PlySequencePlayerConfiguration {
   std::string id;

@@ -8,6 +8,7 @@
 // TODO capturing a synthesized pointcloud shouldn't be coming from the
 // sensors namespace
 #include "devices/device.h"
+#include "operators/operator_host_config.gen.h"
 
 namespace pc::snapshots {
 
@@ -57,7 +58,9 @@ void Snapshots::draw_imgui_window() {
 
 void Snapshots::capture() {
   pc::logger->info("Capturing frame");
-  frames.push_back({pc::devices::synthesized_point_cloud()});
+  // TODO
+  static std::vector<operators::OperatorHostConfiguration> empty_list{};
+  frames.push_back({pc::devices::synthesized_point_cloud(empty_list)});
 }
 
 } // namespace pc::snapshots

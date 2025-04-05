@@ -1,4 +1,5 @@
 #include "../../logger.h"
+#include "../../operators/operator.h"
 #include "k4a_driver.h"
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
@@ -7,6 +8,7 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sequence.h>
 #include <tracy/Tracy.hpp>
+
 
 // #include "../../operators/noise_operator.gen.h"
 // #include "../../operators/noise_operator.cuh"
@@ -274,10 +276,9 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
   // operator_output_end = pc::operators::apply(
   //     operator_output_begin, operator_output_end, operator_list);
 
-  for (auto &operator_host_ref : operator_list) {
-    auto &operator_host = operator_host_ref.get();
+  for (auto &operator_host_config : operator_list) {
     operator_output_end = pc::operators::SessionOperatorHost::run_operators(
-	operator_output_begin, operator_output_end, operator_host._config);
+        operator_output_begin, operator_output_end, operator_host_config);
   }
 
   // wait for the kernels to complete

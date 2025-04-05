@@ -48,7 +48,7 @@ using pc::operators::OperatorList;
 
 // Device::Device(DeviceConfiguration config) : _config(config) {};
 
-pc::types::PointCloud synthesized_point_cloud(OperatorList operators) {
+pc::types::PointCloud synthesized_point_cloud(OperatorList& operators) {
   ZoneScopedN("PointCloud::synthesized_point_cloud");
 
   // TODO
@@ -59,36 +59,25 @@ pc::types::PointCloud synthesized_point_cloud(OperatorList operators) {
   // For the += operator, return PointCloud& instead of PointCloud to avoid
   // copying the result?
 
-  // would it be good to be able to preallocate memory here?
-
-  std::lock_guard lock(devices_access);
-
+  // would it be good to be able to preallocate and/or reuse memory here?
   pc::types::PointCloud result{};
-  for (const auto& device : attached_devices) {
-    result += device->point_cloud();
+  {
+
+    std::lock_guard device_lock(devices_access);
+    std::lock_guard config_lock(device_configs_access);
+
+    static std::vector<operators::OperatorHostConfiguration> empty_list{};
+
+    for (size_t i = 0; i < attached_devices.size(); i++) {
+      auto& device = attached_devices[i];
+      std::visit(
+          [&](auto &&config) {
+            // result += device->point_cloud(config.operators);
+            result += device->point_cloud(empty_list);
+          },
+          device_configs[i].get());
+    }
   }
-  
-  // TODO the following parallelisation didnt really speed anything up
-  // remember to test this with lots of cameras
-
-  // using namespace std::chrono;
-  // auto start = high_resolution_clock::now();
-
-  // auto result = tbb::parallel_reduce(
-  //     tbb::blocked_range<size_t>(0, attached_devices.size(), 1),
-  //     pc::types::PointCloud{},
-  //     [&](const tbb::blocked_range<size_t> &r, pc::types::PointCloud pc) {
-  //       for (size_t i = r.begin(); i != r.end(); i++) {
-  //         pc += attached_devices[i]->point_cloud();
-  //       }
-  //       return pc;
-  //     },
-  //     [](pc::types::PointCloud a, pc::types::PointCloud b) { return a += b; });
-
-  // auto end = high_resolution_clock::now();
-
-  // pc::logger->info("parallel took: {}ms",
-  //                  duration_cast<milliseconds>(end - start).count());
 
   return pc::operators::apply(result, operators);
 }

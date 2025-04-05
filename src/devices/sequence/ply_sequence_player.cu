@@ -132,10 +132,9 @@ PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
       operator_output_begin, output_transform_filter{config().transform});
 
   // run additional session operators.
-  for (auto &operator_host_ref : operators) {
-    auto &operator_host = operator_host_ref.get();
+  for (auto &operator_host_config : operators) {
     operator_output_end = pc::operators::SessionOperatorHost::run_operators(
-        operator_output_begin, operator_output_end, operator_host._config);
+        operator_output_begin, operator_output_end, operator_host_config);
   }
 
   cudaDeviceSynchronize();

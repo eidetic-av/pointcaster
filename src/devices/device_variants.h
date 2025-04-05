@@ -1,7 +1,7 @@
 #pragma once
 
 #include "device_config.gen.h"
-#include "sequence/ply_sequence_player_configuration.gen.h"
+#include "sequence/ply_sequence_player_config.gen.h"
 
 namespace pc::devices {
 

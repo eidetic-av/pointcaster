@@ -9,7 +9,7 @@
 #include "sample_filter_operator.gen.h"
 #include "range_filter_operator.gen.h"
 #include "denoise/denoise_operator.gen.h"
-#include "pcl/operators.h"
+#include "pcl/cluster_extraction_operator.gen.h"
 #include <functional>
 #include <variant>
 
@@ -47,5 +47,13 @@ struct OperatorHostConfiguration {
   bool enabled = true;
   std::vector<OperatorConfigurationVariant> operators;
 };
+
+using OperatorList = std::vector<OperatorHostConfiguration>;
+
+extern operator_in_out_t apply(operator_in_out_t begin, operator_in_out_t end,
+                               OperatorList &operator_list);
+
+extern pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
+                                   OperatorList &operator_list);
 
 } // namespace pc::operators

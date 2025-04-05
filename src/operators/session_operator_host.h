@@ -59,13 +59,4 @@ private:
   // std::atomic<std::shared_ptr<std::vector<pc::types::position>>> _pcl_data;
 };
 
-using OperatorList =
-    std::vector<std::reference_wrapper<const SessionOperatorHost>>;
-
-extern operator_in_out_t apply(operator_in_out_t begin, operator_in_out_t end,
-                               const OperatorList &operator_list);
-
-extern pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
-                                   const OperatorList &operator_list);
-
 } // namespace pc::operators

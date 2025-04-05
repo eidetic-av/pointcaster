@@ -104,11 +104,16 @@ Radio::Radio(RadioConfiguration &config,
 
             // TODO this needs to be cached instead of regenerated for radio.cc
             // when other classes are generating the same cloud this frame
+
+            // TODO this vector should defs be removed
+            // the synthesized_point_cloud api just requires a reference to a
+            // list which we dont have at the moment
+            std::vector<operators::OperatorHostConfiguration> fix_me_operator_list{_session_operator_host._config};
+
             auto live_point_cloud =
-                pc::devices::synthesized_point_cloud({_session_operator_host});
-            // TODO temporarily disable session operators on radio output
-            // auto live_point_cloud = pc::devices::synthesized_point_cloud({
-            // });
+                pc::devices::synthesized_point_cloud(fix_me_operator_list);
+
+            _session_operator_host._config = fix_me_operator_list[0];
 
             if (live_point_cloud.size() > 0) {
               auto bytes = live_point_cloud.serialize(_config.compress_frames);
