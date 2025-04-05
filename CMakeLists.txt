@@ -280,8 +280,10 @@ if (WITH_POINTCASTER)
 
   if (WIN32)
     find_package(OpenCV REQUIRED HINTS "/opt/opencv/build")
-    get_target_property(OpenCV_DLL opencv_world IMPORTED_LOCATION_RELEASE)
-    list(APPEND INSTALL_DLLS ${OpenCV_DLL})
+    get_target_property(OPENCV_DLL_RELEASE opencv_world IMPORTED_LOCATION_RELEASE)
+    get_target_property(OPENCV_DLL_DEBUG opencv_world IMPORTED_LOCATION_DEBUG)
+    list(APPEND INSTALL_DLLS_RELEASE "${OPENCV_DLL_RELEASE}")
+    list(APPEND INSTALL_DLLS_DEBUG "${OPENCV_DLL_DEBUG}")
   else()
     find_package(OpenCV CONFIG REQUIRED)
   endif()
@@ -473,15 +475,15 @@ if (WIN32 AND WITH_K4A)
 endif()
 
 if (WIN32)
-  # if we have any DLLS in our list that need to be copied into the
-  # output directory
-  foreach(dll ${INSTALL_DLLS})
-    if (NOT "${dll}" STREQUAL "")
+  # if we have any extra DLLS that need to be copied into
+  # the output directory
       add_custom_command(TARGET pointcaster POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${dll} $<TARGET_FILE_DIR:pointcaster>)
-    endif()
-  endforeach()
+      $<$<CONFIG:Release>:${INSTALL_DLLS_RELEASE}>
+      $<$<CONFIG:Debug>:${INSTALL_DLLS_DEBUG}>
+      $<TARGET_FILE_DIR:pointcaster>
+    COMMAND_EXPAND_LISTS
+  )
 endif()
 
 if (LINUX)
