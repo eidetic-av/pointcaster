@@ -31,14 +31,13 @@ void OscClient::send_messages(std::stop_token st) {
   static constexpr auto thread_wait_time = 50ms;
   lo::Address osc_client("localhost", "9000");
 
-   while (!st.stop_requested()) {
-	   OscMessage msg;
-	   while (_messages_to_publish.wait_dequeue_timed(msg, thread_wait_time)) {
-		   osc_client.send(msg.address, msg.value);
-	   }
-     }
+  while (!st.stop_requested()) {
+    OscMessage msg;
+    while (_messages_to_publish.wait_dequeue_timed(msg, thread_wait_time)) {
+      osc_client.send(msg.address, msg.value);
+    }
+  }
 }
-
 
 void OscClient::draw_imgui_window() {
 
