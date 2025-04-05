@@ -37,7 +37,8 @@
         "ARCHIVE_NAME": "pointcaster_windows-debug",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_FLAGS_DEBUG": "/analyze"
+        "CMAKE_PDB_OUTPUT_DIRECTORY": "${sourceDir}/build/${presetName}",
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "ProgramDatabase"
       }
     },
     {

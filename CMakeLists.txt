@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 3.22.0)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CUDA_STANDARD 20)
 
-set(CMAKE_BUILD_TYPE Release)
-
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX TRUE)
 endif()
@@ -445,6 +443,12 @@ if (WITH_POINTCASTER)
 
   # debugging related options
 
+  if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_CXX_FLAGS_DEBUG 
+      "${CMAKE_CXX_FLAGS_DEBUG} /analyze /Z7" 
+      CACHE STRING "Debug flags" FORCE)
+  endif()
+
   if (WITH_THREAD_SANITIZER)
     target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
     target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
@@ -477,8 +481,8 @@ endif()
 if (WIN32)
   # if we have any extra DLLS that need to be copied into
   # the output directory
-      add_custom_command(TARGET pointcaster POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+  add_custom_command(TARGET pointcaster POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
       $<$<CONFIG:Release>:${INSTALL_DLLS_RELEASE}>
       $<$<CONFIG:Debug>:${INSTALL_DLLS_DEBUG}>
       $<TARGET_FILE_DIR:pointcaster>
