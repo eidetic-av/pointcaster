@@ -8,6 +8,11 @@
 #include <string>
 #include <vector>
 
+// shouldn't really include k4a types, but this whole driver needs to disappear
+// anyway as its /only/ used for k4a types at the moment, it should be
+// consolidated into the k4a device behaviour, with alignment occuring in operators
+#include "k4a/k4a_config.gen.h"
+
 namespace pc::devices {
 
 class Driver {
@@ -26,8 +31,8 @@ public:
   virtual bool is_running() const = 0;
 
   virtual pc::types::PointCloud
-  point_cloud(const DeviceConfiguration &config,
-	      pc::operators::OperatorList operators = {}) = 0;
+  point_cloud(AzureKinectConfiguration &config,
+              pc::operators::OperatorList operators = {}) = 0;
   virtual std::string id() const = 0;
 
   virtual void set_paused(bool pause) = 0;

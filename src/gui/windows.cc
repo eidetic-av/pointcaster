@@ -1,4 +1,5 @@
 #include "windows.h"
+#include "catpuccin.h"
 #include <imgui.h>
 
 namespace pc::gui {
@@ -42,12 +43,14 @@ void draw_devices_window(PointCaster &app) {
     ImGui::BeginDisabled();
     {
       std::lock_guard lock(devices::device_configs_access);
-      std::visit(
-          [](auto &&config) {
-            using T = std::decay_t<decltype(config)>;
-            ImGui::Text(T::Name);
-          },
-          devices::device_configs[selected_device_row].get());
+      if (selected_device_row < devices::device_configs.size()) {
+        std::visit(
+            [](auto &&config) {
+              using T = std::decay_t<decltype(config)>;
+              ImGui::Text(T::Name);
+            },
+            devices::device_configs[selected_device_row].get());
+      }
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
@@ -92,8 +95,12 @@ void draw_devices_window(PointCaster &app) {
 
       for (int i = 0; i < devices::device_configs.size(); i++) {
         std::string_view device_id;
-        const auto &device = *devices::attached_devices[i].get();
-        devices::DeviceStatus device_status = device.status();
+        devices::DeviceStatus device_status{DeviceStatus::Missing};
+        if (i < devices::attached_devices.size()) {
+          if (auto *device = devices::attached_devices[i].get()) {
+            device_status = device->status();
+          }
+        }
         bool is_selected = (i == selected_device_row);
         bool is_active;
         std::visit(
@@ -133,6 +140,7 @@ void draw_devices_window(PointCaster &app) {
           case DeviceStatus::Inactive: return catpuccin::imgui::mocha_surface2;
           case DeviceStatus::Loaded: return catpuccin::imgui::mocha_blue;
           case DeviceStatus::Missing: return catpuccin::imgui::mocha_red;
+          default: return catpuccin::imgui::mocha_text;
           }
         };
         auto status_color = color_from_status(device_status);
@@ -286,18 +294,21 @@ void draw_devices_window(PointCaster &app) {
 
   if (!devices::device_configs.empty()) {
     auto &selected_device_config = devices::device_configs[selected_device_row];
-    auto selected_device = devices::attached_devices[selected_device_row];
-    std::visit(
-        [&](auto &&device_config) {
-          selected_device->draw_controls();
-          ImGui::Dummy({0, 10});
-          const auto available_space = ImGui::GetContentRegionAvail();
-          ImGui::BeginChild(std::format("##scroll_", device_config.id).c_str(),
-                            {-FLT_MIN, available_space.y});
-          pc::gui::draw_parameters(device_config.id);
-          ImGui::EndChild();
-        },
-        selected_device_config.get());
+    if (selected_device_row < devices::attached_devices.size()) {
+      auto selected_device = devices::attached_devices[selected_device_row];
+      std::visit(
+          [&](auto &&device_config) {
+            selected_device->draw_controls();
+            ImGui::Dummy({0, 10});
+            const auto available_space = ImGui::GetContentRegionAvail();
+            ImGui::BeginChild(
+                std::format("##scroll_", device_config.id).c_str(),
+                {-FLT_MIN, available_space.y});
+            pc::gui::draw_parameters(device_config.id);
+            ImGui::EndChild();
+          },
+          selected_device_config.get());
+    }
   }
 
   // the popup for adding devices if the add device button is pressed

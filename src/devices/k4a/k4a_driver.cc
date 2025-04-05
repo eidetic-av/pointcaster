@@ -1,7 +1,9 @@
 #include "k4a_driver.h"
 #include "../../logger.h"
+#include "k4a_config.gen.h"
 #include "k4a_utils.h"
 #include <future>
+#include <k4a/k4a.hpp>
 #include <numeric>
 #include <set>
 
@@ -10,15 +12,16 @@ namespace pc::devices {
 using namespace std::chrono_literals;
 using namespace pc::k4a_utils;
 
-K4ADriver::K4ADriver(DeviceConfiguration &config, std::string_view target_id)
+K4ADriver::K4ADriver(AzureKinectConfiguration &config,
+                     std::string_view target_id)
     : _capture_loop(&K4ADriver::capture_frames, this),
       _tracker_loop(&K4ADriver::track_bodies, this),
-      _imu_loop(&K4ADriver::process_imu, this)
-{
+      _imu_loop(&K4ADriver::process_imu, this) {
   static std::mutex serial_driver_construction;
   std::lock_guard<std::mutex> lock(serial_driver_construction);
 
-  pc::logger->info("Opening driver for k4a {} ({})\n", (unsigned int) active_count, target_id);
+  pc::logger->info("Opening driver for k4a {} ({})\n",
+                   (unsigned int)active_count, target_id);
 
   _k4a_config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
   _k4a_config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
@@ -37,8 +40,6 @@ K4ADriver::K4ADriver(DeviceConfiguration &config, std::string_view target_id)
   _body_tracking_enabled = config.body.enabled;
 
   _serial_number = target_id;
-
-  init_device_memory();
 
   // the k4a SDK opens devices only via their USB index...
   // since we serialize specific configurations via serial number,
@@ -61,35 +62,35 @@ K4ADriver::K4ADriver(DeviceConfiguration &config, std::string_view target_id)
     int i = 0;
     for (; i < k4a::device::get_installed_count(); i++) {
       try {
-	pc::logger->info("Opening device at index {}", i);
+        pc::logger->info("Opening device at index {}", i);
 
-	device = k4a::device::open(i);
-	auto this_serial_number = device.get_serialnum();
+        device = k4a::device::open(i);
+        auto this_serial_number = device.get_serialnum();
 
-	if (_serial_number.empty()) {
-	  // if we weren't looking for a specific serial number,
-	  // and we successfully opened a new device
-	  found_target = true;
-	  _serial_number = this_serial_number;
-	  break;
-	}
-
-        if (_serial_number == this_serial_number) {
-	  // if we were looking for this specific serial number,
-	  // and we succesfully opened that specific device
-	  found_target = true;
-	  break;
+        if (_serial_number.empty()) {
+          // if we weren't looking for a specific serial number,
+          // and we successfully opened a new device
+          found_target = true;
+          _serial_number = this_serial_number;
+          break;
         }
 
-	// if we succesfully opened the device, but didn't match the serial
-	// number we were looking for, we need to close the device and try again
+        if (_serial_number == this_serial_number) {
+          // if we were looking for this specific serial number,
+          // and we succesfully opened that specific device
+          found_target = true;
+          break;
+        }
+
+        // if we succesfully opened the device, but didn't match the serial
+        // number we were looking for, we need to close the device and try again
         pc::logger->info("Found k4a with wrong serial num... trying again...");
         device.close();
 
       } catch (const k4a::error &e) {
-	// if the device failed to open, just continue on to try the next device
-	pc::logger->error("Failed to open the k4a at {}", i);
-	pc::logger->error(e.what());
+        // if the device failed to open, just continue on to try the next device
+        pc::logger->error("Failed to open the k4a at {}", i);
+        pc::logger->error(e.what());
       }
     }
 
@@ -97,31 +98,33 @@ K4ADriver::K4ADriver(DeviceConfiguration &config, std::string_view target_id)
     // didn't find it. In this case, throw here and consider the device "lost",
     // i.e. initialise the configuration but wait for it to be plugged in
     if (!found_target) {
-      throw new k4a::error("Failed to find matching serial number");
+      throw k4a::error("Failed to open device requested k4a device");
     }
+
+    pc::logger->info("Starting k4a device with serial num: {}", _serial_number);
 
     device_index = i;
 
     _device = std::make_unique<k4a::device>(std::move(device));
-
+  
+    init_device_memory();
     start_sensors();
 
     active_count++;
 
     _open = true;
 
-    pc::logger->info("k4a {} Open", (unsigned int) device_index);
+    pc::logger->info("k4a {} Open", (unsigned int)device_index);
 
     return;
 
-  } catch (const k4a::error &e) {
-    pc::logger->debug(e.what());
-  } catch (...) {
+  } catch (const k4a::error &e) { pc::logger->debug(e.what()); } catch (...) {
     pc::logger->debug("Unknown exception");
   }
   // if we get here, we failed to initialise
-  pc::logger->warn("K4ADriver device initialisation failed");
+  pc::logger->error("K4ADriver device initialisation failed");
   pc::logger->warn("Will wait for new connections...");
+
   _device.reset();
   device_index = -1;
   lost_device = true;
@@ -137,9 +140,7 @@ K4ADriver::~K4ADriver() {
   _tracker_loop.join();
   _imu_loop.join();
   stop_sensors();
-  if (!lost_device) {
-    _device->close();
-  }
+  if (!lost_device) { _device->close(); }
   free_device_memory();
 }
 
@@ -147,7 +148,6 @@ void K4ADriver::start_sensors() {
   if (_running) return;
 
   pc::logger->info("Starting sensors for k4a: {}", id());
-
 
   // sometimes start_cameras fails but it works after a few seconds...
   static constexpr auto max_start_camera_attempts = 2;
@@ -158,9 +158,7 @@ void K4ADriver::start_sensors() {
       _device->start_cameras(&_k4a_config);
       started = true;
       break;
-    } catch (const k4a::error &e) {
-      std::this_thread::sleep_for(5s);
-    }
+    } catch (const k4a::error &e) { std::this_thread::sleep_for(5s); }
   }
 
   // if it really failed after a few attempts, throw to the outer scope
@@ -171,8 +169,8 @@ void K4ADriver::start_sensors() {
   _device->start_imu();
   pc::logger->debug("Started imu: {}", id());
 
-  _calibration = _device->get_calibration((k4a_depth_mode_t)_k4a_config.depth_mode,
-                                          _k4a_config.color_resolution);
+  _calibration = _device->get_calibration(
+      (k4a_depth_mode_t)_k4a_config.depth_mode, _k4a_config.color_resolution);
   _transformation = k4a::transformation(_calibration);
 
   pc::logger->warn("Body tracking disabled");
@@ -243,13 +241,13 @@ void K4ADriver::capture_frames() {
       if (_device == nullptr) {
         std::this_thread::sleep_for(250ms);
       } else {
-	lost_device = false;
-	start_sensors();
-	pc::logger->info("Restarted lost K4A ({})", id());
+        lost_device = false;
+        pc::logger->info("Restarting lost K4A ({})", id());
+        start_sensors();
+        pc::logger->info("Restarted K4A {}", id());
       }
       continue;
     }
-
 
     if (!_open || !_running || _pause_sensor) {
       std::this_thread::sleep_for(10ms);
@@ -261,21 +259,19 @@ void K4ADriver::capture_frames() {
       bool result = _device->get_capture(&capture, 10ms);
 
       if (!result) {
-	auto now = steady_clock::now();
-	// after two seconds, clean up the lost device resources, and wait for
-	// them to be reset in reattach()
+        auto now = steady_clock::now();
+        // after two seconds, clean up the lost device resources, and wait for
+        // them to be reset in reattach()
         if (duration_cast<seconds>(now - last_capture_time).count() >= 2) {
           pc::logger->error("Kinect ({}) connection lost!", id());
           lost_device = true;
           _open = false;
-	  active_count--;
+          active_count--;
           try {
             stop_sensors();
-	    _tracker.reset();
-	    _device.reset();
-          } catch (k4a::error e) {
-            pc::logger->error(e.what());
-          }
+            _tracker.reset();
+            _device.reset();
+          } catch (k4a::error e) { pc::logger->error(e.what()); }
         }
         continue;
       }
@@ -366,7 +362,7 @@ void K4ADriver::track_bodies() {
 
         // perform any auto-tilt
         {
-	  std::lock_guard lock(_auto_tilt_value_mutex);
+          std::lock_guard lock(_auto_tilt_value_mutex);
           pos_f = _auto_tilt_value * pos_f;
           ori_f = _auto_tilt_value * ori_f;
         }
@@ -378,7 +374,7 @@ void K4ADriver::track_bodies() {
           return deg * mult;
         };
 
-        auto& transform = config.transform;
+        auto &transform = config.transform;
 
         // create the rotation around our center
         AngleAxisf rot_x(rad(transform.rotation_deg.x), Vector3f::UnitX());
@@ -396,7 +392,8 @@ void K4ADriver::track_bodies() {
         pos_f += alignment_center + aligned_position_offset;
 
         // perform our manual translation
-        pos_f += Vector3f(transform.offset.x, transform.offset.y, transform.offset.z);
+        pos_f += Vector3f(transform.offset.x, transform.offset.y,
+                          transform.offset.z);
 
         // specified axis flips
         if (transform.flip_x) {
@@ -429,15 +426,14 @@ void K4ADriver::track_bodies() {
 
 void K4ADriver::process_imu() {
   using namespace std::chrono;
-  
+
   constexpr auto imu_sample_frequency = 15ms;
   constexpr auto imu_sample_count = 50;
 
   constexpr auto sample_accelerometer =
       [](k4a::device &device) -> std::array<float, 3> {
     k4a_imu_sample_t imu_sample;
-    if (!device.get_imu_sample(&imu_sample, 100ms))
-      return {0, 0, 0};
+    if (!device.get_imu_sample(&imu_sample, 100ms)) return {0, 0, 0};
     auto accel = imu_sample.acc_sample.v;
     return {accel[0], accel[1], accel[2]};
   };
@@ -455,7 +451,8 @@ void K4ADriver::process_imu() {
     }
 
     auto now = steady_clock::now();
-    auto time_since_last_update = duration_cast<milliseconds>(now - last_update_time);
+    auto time_since_last_update =
+        duration_cast<milliseconds>(now - last_update_time);
     if (time_since_last_update < imu_sample_frequency) {
       auto wait_time = imu_sample_frequency - time_since_last_update;
       std::this_thread::sleep_for(wait_time);
@@ -475,8 +472,8 @@ void K4ADriver::process_imu() {
         });
 
     std::array<float, 3> accel_average{sum[0] / imu_sample_count,
-				       sum[1] / imu_sample_count,
-				       sum[2] / imu_sample_count};
+                                       sum[1] / imu_sample_count,
+                                       sum[2] / imu_sample_count};
 
     // and turn it into a rotation matrix we can apply
     Eigen::Quaternionf q;
@@ -490,12 +487,13 @@ void K4ADriver::process_imu() {
         (new_tilt * last_tilt.transpose()).eulerAngles(2, 1, 0).norm();
 
     float difference_threshold =
-	M_PI / 180.0f * _last_config.auto_tilt.threshold; // degrees
+        M_PI / 180.0f * _last_config.auto_tilt.threshold; // degrees
 
     if (tilt_difference > difference_threshold) {
       std::lock_guard lock(_auto_tilt_value_mutex);
       auto lerp_factor = _last_config.auto_tilt.lerp_factor;
-      _auto_tilt_value = last_tilt * (1.0f - lerp_factor) + new_tilt * lerp_factor;
+      _auto_tilt_value =
+          last_tilt * (1.0f - lerp_factor) + new_tilt * lerp_factor;
     }
 
     last_update_time = steady_clock::now();
@@ -516,7 +514,7 @@ bool K4ADriver::is_aligned() { return _aligned; }
 
 void K4ADriver::run_aligner(const k4a::capture &frame) {
   if (!_tracker) return;
-  
+
   _tracker->enqueue_capture(frame);
   k4abt::frame body_frame = _tracker->pop_result();
   const auto body_count = body_frame.get_num_bodies();

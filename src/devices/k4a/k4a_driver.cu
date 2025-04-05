@@ -1,5 +1,6 @@
 #include "../../logger.h"
 #include "../../operators/operator.h"
+#include "k4a_config.gen.h"
 #include "k4a_driver.h"
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
@@ -8,7 +9,6 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sequence.h>
 #include <tracy/Tracy.hpp>
-
 
 // #include "../../operators/noise_operator.gen.h"
 // #include "../../operators/noise_operator.cuh"
@@ -48,18 +48,19 @@ struct K4ADriverImplDeviceMemory {
 void K4ADriver::init_device_memory() {
   pc::logger->info("Initialising K4A GPU device memory ({})", id());
   try {
-      _device_memory = new K4ADriverImplDeviceMemory(incoming_point_count);
-  }
-  catch (thrust::system::system_error e) {
-      pc::logger->error(e.what());
-      return;
+    _device_memory = new K4ADriverImplDeviceMemory(incoming_point_count);
+  } catch (thrust::system::system_error e) {
+    pc::logger->error(e.what());
+    return;
   }
   _device_memory_ready = true;
 }
 void K4ADriver::free_device_memory() {
-  _device_memory_ready = false;
-  delete _device_memory;
-  pc::logger->info("K4A GPU Device memory freed ({})", id());
+  if (_device_memory_ready) {
+    _device_memory_ready = false;
+    delete _device_memory;
+    pc::logger->info("K4A GPU Device memory freed ({})", id());
+  }
 }
 
 struct input_filter {
@@ -67,8 +68,7 @@ struct input_filter {
 
   __device__ bool check_color(color value) const {
     // remove totally black values
-    if (value.r == 0 && value.g == 0 && value.b == 0)
-      return false;
+    if (value.r == 0 && value.g == 0 && value.b == 0) return false;
     return true;
   }
 
@@ -124,9 +124,8 @@ struct point_transformer
     // transform it by other float types (e.g. matrices, quaternions)
     Vector3f pos_f(pos.x, pos.y, pos.z);
 
-    Vector3f flip(config.flip_x ? -1 : 1,
-		  config.flip_y ? -1 : 1,
-		  config.flip_z ? -1 : 1);
+    Vector3f flip(config.flip_x ? -1 : 1, config.flip_y ? -1 : 1,
+                  config.flip_z ? -1 : 1);
 
     // perform any auto-tilt
     pos_f = auto_tilt_rotation * pos_f;
@@ -138,10 +137,9 @@ struct point_transformer
     // const AngleAxisf inbuilt_rot(as_rad(-7.0f), Vector3f::UnitX());
 
     // input translation
-    pos_f = pos_f + Vector3f{ config.translate.x * flip.x(),
-			      config.translate.y * flip.y(),
-			      config.translate.z * flip.z() };
-
+    pos_f = pos_f + Vector3f{config.translate.x * flip.x(),
+                             config.translate.y * flip.y(),
+                             config.translate.z * flip.z()};
 
     // create the rotation around our center
     AngleAxisf rot_x(as_rad(config.rotation_deg.x), Vector3f::UnitX());
@@ -149,11 +147,10 @@ struct point_transformer
     AngleAxisf rot_z(as_rad(config.rotation_deg.z), Vector3f::UnitZ());
     Quaternionf q = rot_z * rot_y * rot_x;
     Affine3f rot_transform =
-      Translation3f(-alignment_center) * q * Translation3f(alignment_center);
+        Translation3f(-alignment_center) * q * Translation3f(alignment_center);
 
     // specified axis flips
-    pos_f = { pos_f.x() * flip.x(), pos_f.y() * flip.y(),
-	      pos_f.z() * flip.z() };
+    pos_f = {pos_f.x() * flip.x(), pos_f.y() * flip.y(), pos_f.z() * flip.z()};
 
     // perform alignment transformation along with manual rotation
     pos_f =
@@ -198,15 +195,14 @@ struct output_filter {
   }
 };
 
-PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
+PointCloud K4ADriver::point_cloud(AzureKinectConfiguration &config,
                                   OperatorList operator_list) {
 
   ZoneScopedN("K4ADriver::point_cloud");
-  
+
   if (!config.active) return {};
 
-  if (!_device_memory_ready || !_open || !_buffers_updated)
-    return _point_cloud;
+  if (!_device_memory_ready || !_open || !_buffers_updated) return _point_cloud;
 
   _last_config = config;
 
@@ -253,17 +249,18 @@ PointCloud K4ADriver::point_cloud(const DeviceConfiguration &config,
       thrust::copy_if(incoming_points_begin, incoming_points_end,
                       filtered_points_begin, input_filter{config.transform});
 
-  auto filtered_point_count = thrust::distance(filtered_points_begin, filtered_points_end);
+  auto filtered_point_count =
+      thrust::distance(filtered_points_begin, filtered_points_end);
 
   // transform the filtered points, placing them into transformed_points
   auto transformed_points_begin = thrust::make_zip_iterator(
       thrust::make_tuple(transformed_positions.begin(),
-			 transformed_colors.begin(), indices.begin()));
+                         transformed_colors.begin(), indices.begin()));
 
   thrust::transform(
       filtered_points_begin, filtered_points_end, transformed_points_begin,
-      point_transformer(config.transform, _alignment_center, _aligned_position_offset,
-			auto_tilt_value));
+      point_transformer(config.transform, _alignment_center,
+                        _aligned_position_offset, auto_tilt_value));
 
   auto operator_output_begin = thrust::make_zip_iterator(thrust::make_tuple(
       output_positions.begin(), output_colors.begin(), indices.begin()));

@@ -3,6 +3,7 @@
 #include "../device.h"
 #include "../driver.h"
 #include "../device_config.gen.h"
+#include "k4a_config.gen.h"
 
 #include <array>
 #include <exception>
@@ -44,7 +45,7 @@ public:
 
   static inline std::atomic<unsigned int> active_count = 0;
 
-  K4ADriver(DeviceConfiguration& config, std::string_view target_id = "");
+  K4ADriver(AzureKinectConfiguration &config, std::string_view target_id = "");
   ~K4ADriver();
 
   K4ADriver(const K4ADriver &) = delete;
@@ -64,8 +65,8 @@ public:
 
   void set_paused(bool paused) override;
 
-  PointCloud point_cloud(const DeviceConfiguration &config,
-			 OperatorList transformers = {}) override;
+  PointCloud point_cloud(AzureKinectConfiguration &config,
+                         OperatorList transformers = {}) override;
 
   void start_alignment() override;
   bool is_aligning() override;
@@ -114,7 +115,7 @@ private:
   std::atomic_bool _running{false};
 
   std::string _serial_number;
-  DeviceConfiguration _last_config;
+  AzureKinectConfiguration _last_config;
 
   std::unique_ptr<k4a::device> _device;
   std::unique_ptr<k4abt::tracker> _tracker;
@@ -156,6 +157,6 @@ private:
 
   void sync_cuda();
 
-  PointCloud _point_cloud;
+  PointCloud _point_cloud{};
 };
 } // namespace pc::devices

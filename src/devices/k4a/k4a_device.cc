@@ -1,5 +1,6 @@
 #include "k4a_device.h"
 #include "../../logger.h"
+#include "k4a_config.gen.h"
 #include <functional>
 #include <imgui.h>
 #include <unordered_map>
@@ -7,7 +8,9 @@
 
 namespace pc::devices {
 
-K4ADevice::K4ADevice(DeviceConfiguration config, std::string_view target_id) : DeviceBase<DeviceConfiguration>(config) {
+K4ADevice::K4ADevice(AzureKinectConfiguration &config,
+                     std::string_view target_id)
+    : DeviceBase<AzureKinectConfiguration>(config) {
   pc::logger->info("Initialising K4ADevice");
 
   // TODO should be an index of kinect devices
@@ -18,6 +21,7 @@ K4ADevice::K4ADevice(DeviceConfiguration config, std::string_view target_id) : D
 
   name = "Azure Kinect " + std::to_string(connection_index);
   if (connection_index == 1) _driver->primary_aligner = true;
+  
 
   // TODO set these parameters from config instead of the reverse
   // auto driver = dynamic_cast<K4ADriver *>(_driver.get());
@@ -139,12 +143,16 @@ std::string K4ADevice::get_serial_number(const std::size_t device_index) {
 
   static std::mutex serial_num_query_lock;
   std::unique_lock lock(serial_num_query_lock);
-
-  auto device = k4a::device::open(device_index);
-  auto serial_number = device.get_serialnum();
-  device.close();
-
-  return serial_number;
+  try {
+    auto device = k4a::device::open(device_index);
+    auto serial_number = device.get_serialnum();
+    device.close();
+    return serial_number;
+  } catch (k4a::error& e) {
+    pc::logger->warn("Unable to get serial number for k4a at index {}",
+                     device_index);
+    return "";
+  }
 }
 
 void K4ADevice::reattach(int index) {

@@ -1,21 +1,22 @@
 #pragma once
 
 #include "../device.h"
+#include "k4a_config.gen.h"
 #include "k4a_driver.h"
 #include <array>
+#include <atomic>
 #include <k4abt.hpp>
 #include <utility>
 #include <vector>
-#include <atomic>
 
 namespace pc::devices {
 
-class K4ADevice : public DeviceBase<DeviceConfiguration> {
+class K4ADevice : public DeviceBase<AzureKinectConfiguration> {
 public:
   inline static std::vector<std::reference_wrapper<K4ADevice>> attached_devices;
   inline static std::mutex devices_access;
 
-  K4ADevice(DeviceConfiguration config, std::string_view target_id = "");
+  explicit K4ADevice(AzureKinectConfiguration &config, std::string_view target_id = "");
   ~K4ADevice();
 
   K4ADevice(const K4ADevice &) = delete;
@@ -30,12 +31,13 @@ public:
   bool lost_device() { return _driver->lost_device; }
   bool broadcast_enabled() { return _enable_broadcast; }
 
-  pc::types::PointCloud point_cloud(pc::operators::OperatorList operators = {}) override {
+  pc::types::PointCloud
+  point_cloud(pc::operators::OperatorList operators = {}) override {
     return _driver->point_cloud(this->config(), operators);
   };
 
   void draw_imgui_controls();
-  DeviceConfiguration _config;
+  AzureKinectConfiguration _config;
   bool _enable_broadcast = true;
 
   const std::string label(std::string label_text, int index = 0) {
@@ -47,7 +49,7 @@ public:
 
   void draw_device_controls();
   void update_device_control(int *target, int value,
-			     std::function<void(int)> set_func);
+                             std::function<void(int)> set_func);
 
   void reattach(int index);
 

@@ -172,8 +172,8 @@ protected:
   void load_session(std::filesystem::path file_path);
 
   std::atomic_bool loading_device = false;
-  void load_device(const DeviceConfigurationVariant &config);
-  void load_k4a_device(const DeviceConfiguration &config,
+  void load_device(DeviceConfigurationVariant &config);
+  void load_k4a_device(AzureKinectConfiguration &config,
                        std::string_view target_id = "");
 
   void render_cameras();

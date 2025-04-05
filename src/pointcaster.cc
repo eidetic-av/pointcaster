@@ -1,10 +1,12 @@
 #include "pointcaster.h"
 
+#include "pch.h"
+
+#include "devices/k4a/k4a_config.gen.h"
 #include "devices/sequence/ply_sequence_player_config.gen.h"
 #include "gui/catpuccin.h"
 #include "gui/windows.h"
 #include "parameters.h"
-#include "pch.h"
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
@@ -617,7 +619,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   pc::logger->info("Loaded session '{}'", file_path.filename().string());
 }
 
-void PointCaster::load_device(const DeviceConfigurationVariant &config) {
+void PointCaster::load_device(DeviceConfigurationVariant &config) {
   std::visit(
       [&](auto &&device_config) {
         using T = std::decay_t<decltype(device_config)>;
@@ -632,9 +634,9 @@ void PointCaster::load_device(const DeviceConfigurationVariant &config) {
             auto ip = std::string(device_id.begin() + 3, device_id.end());
             std::replace(ip.begin(), ip.end(), '_', '.');
             open_orbbec_sensor(ip);
-          } else {
-            load_k4a_device(device_config, device_id);
           }
+        } else if constexpr (std::same_as<T, AzureKinectConfiguration>) {
+          load_k4a_device(device_config, device_id);
         } else if constexpr (std::same_as<T, PlySequencePlayerConfiguration>) {
           std::lock_guard lock(devices::devices_access);
           auto ply_config = device_config;
@@ -731,12 +733,12 @@ void PointCaster::render_cameras() {
   GL::defaultFramebuffer.bind();
 }
 
-void PointCaster::load_k4a_device(const DeviceConfiguration &config,
+void PointCaster::load_k4a_device(AzureKinectConfiguration &config,
                                   std::string_view target_id) {
   loading_device = true;
   try {
     auto device = std::make_shared<K4ADevice>(config, target_id);
-    std::lock_guard lock(K4ADevice::devices_access);
+    std::lock_guard lock(pc::devices::devices_access);
     pc::devices::attached_devices.push_back(device);
   } catch (k4a::error e) { pc::logger->error(e.what()); } catch (...) {
     pc::logger->error("Failed to open device. (Unknown exception)");
@@ -756,7 +758,8 @@ void PointCaster::open_kinect_sensors() {
     pc::logger->info("Found {} k4a devices", (int)installed_device_count);
     for (std::size_t i = attached_device_count; i < installed_device_count;
          i++) {
-      load_k4a_device({});
+      AzureKinectConfiguration config{.id = K4ADevice::get_serial_number(i)};
+      load_k4a_device(config, config.id);
     }
     loading_device = false;
   });

@@ -53,8 +53,8 @@ pc::types::PointCloud synthesized_point_cloud(OperatorList& operators) {
 
   // TODO
 
-  // can run device->point_cloud(operators) in parallel before using them to
-  // construct the result?
+  // can run device->point_cloud(operators) in parallel using a thread pool
+  // before construct the full result of combined devices?
 
   // For the += operator, return PointCloud& instead of PointCloud to avoid
   // copying the result?

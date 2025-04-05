@@ -24,16 +24,6 @@ struct AutoTiltConfiguration {
   float threshold = 1.0f; // degrees
 };
 
-struct K4AConfiguration {
-  bool unfolded = false;
-  int depth_mode = (int)K4A_DEPTH_MODE_NFOV_UNBINNED;
-  int exposure = 10000;
-  int brightness = 128;
-  int contrast = 5;
-  int saturation = 32;
-  int gain = 128;
-};
-
 struct DeviceTransformConfiguration {
   Float3 translate{0, 0, 0}; // @minmax(-10000, 10000)
   Float3 rotation_deg{0, 0, 0}; // @minmax(-360, 360)
