@@ -275,9 +275,6 @@ namespace pc::graph {
                 if (std::holds_alternative<OperatorConfigurationVariant>(node.node_data)) {
                     auto& operator_config = std::get<OperatorConfigurationVariant>(node.node_data);
                     std::visit(draw_node, operator_config);
-                } else if (std::holds_alternative<std::reference_wrapper<DeviceConfiguration>>(node.node_data)) {
-                    auto& device_config = std::get<std::reference_wrapper<DeviceConfiguration>>(node.node_data);
-                    draw_node(device_config.get());
                 } else if (std::holds_alternative<std::reference_wrapper<CameraConfiguration>>(node.node_data)) {
                     auto& camera_config = std::get<std::reference_wrapper<CameraConfiguration>>(node.node_data);
                     draw_node(camera_config.get());

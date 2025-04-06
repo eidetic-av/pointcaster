@@ -41,14 +41,4 @@ struct DeviceTransformConfiguration {
   MinMaxShort bound_z{-10000, 10000}; // @minmax(-10000, 10000)
 };
 
-struct DeviceConfiguration {
-  std::string id;
-  bool active = true;
-  int depth_mode = 0; // @minmax(0, 1)
-  int acquisition_mode = 0; // @minmax(0, 1)
-  DeviceTransformConfiguration transform; // @optional
-  BodyTrackingConfiguration body; // @optional
-  AutoTiltConfiguration auto_tilt; // @optional
-};
-
 } // namespace pc::devices

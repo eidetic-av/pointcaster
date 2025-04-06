@@ -123,7 +123,7 @@ private:
 };
 
 class Device {};
-enum class DeviceType { UnknownDevice, K4A, K4W2, Rs2 };
+enum class DeviceType { UnknownDevice, K4A, Rs2 };
 
 extern pc::types::PointCloud
 synthesized_point_cloud(pc::operators::OperatorList &operators);

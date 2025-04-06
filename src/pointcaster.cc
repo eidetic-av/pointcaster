@@ -625,11 +625,9 @@ void PointCaster::load_device(DeviceConfigurationVariant &config) {
         using T = std::decay_t<decltype(device_config)>;
         std::string device_id(device_config.id);
         pc::logger->info("Loading device '{}'", device_id);
-        // TODO the generic DeviceConfiguration should be split to OB
-        // and K4A variants
-        // we should also just use the make_shared like Ply not anything
-        // specific to the device tyeps
-        if constexpr (std::same_as<T, DeviceConfiguration>) {
+        // TODO initialisation of orbbec and k4a should be handled with raii
+        // like the ply sequence player works
+        if constexpr (std::same_as<T, devices::OrbbecDeviceConfiguration>) {
           if (device_id.find("ob_") != std::string::npos) {
             auto ip = std::string(device_id.begin() + 3, device_id.end());
             std::replace(ip.begin(), ip.end(), '_', '.');
@@ -774,9 +772,9 @@ void PointCaster::open_orbbec_sensor(std::string_view ip) {
     std::replace(id.begin(), id.end(), '.', '_');
     try {
       auto [config_it, _] = _session.devices.try_emplace(
-          id, std::in_place_type<pc::devices::DeviceConfiguration>, false, id);
+          id, std::in_place_type<pc::devices::OrbbecDeviceConfiguration>, false, id);
       DeviceConfigurationVariant &device_config_variant = config_it->second;
-      auto device_config = std::get<DeviceConfiguration>(device_config_variant);
+      auto device_config = std::get<OrbbecDeviceConfiguration>(device_config_variant);
       device_config.id = id;
       std::lock_guard lock(devices::devices_access);
       devices::attached_devices.emplace_back(

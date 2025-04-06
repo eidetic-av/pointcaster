@@ -1,10 +1,12 @@
 #pragma once
 
 #include "../device.h"
-#include <libobsensor/ObSensor.hpp>
-#include <thread>
+#include "orbbec_device_config.gen.h"
 #include <atomic>
+#include <libobsensor/ObSensor.hpp>
 #include <optional>
+#include <thread>
+
 
 namespace pc::devices {
 
@@ -19,7 +21,7 @@ struct OrbbecDeviceInfo
     std::string serial_num;
 };
 
-class OrbbecDevice : public DeviceBase<DeviceConfiguration> {
+class OrbbecDevice : public DeviceBase<OrbbecDeviceConfiguration> {
 
 public:
   inline static std::vector<std::reference_wrapper<OrbbecDevice>>
@@ -33,7 +35,7 @@ public:
 
   static void discover_devices();
 
-  OrbbecDevice(DeviceConfiguration &config);
+  explicit OrbbecDevice(OrbbecDeviceConfiguration &config);
   ~OrbbecDevice();
 
   OrbbecDevice(const OrbbecDevice &) = delete;

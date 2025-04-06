@@ -5,14 +5,12 @@
 #include "../operators/operator_host_config.gen.h"
 #include <string>
 
-
 namespace pc::graph {
 
 enum class LinkDirection { In, Out, InOut };
 
 using NodeDataVariant =
     std::variant<operators::OperatorConfigurationVariant,
-                 std::reference_wrapper<pc::devices::DeviceConfiguration>,
                  std::reference_wrapper<pc::camera::CameraConfiguration>>;
 
 struct Node {

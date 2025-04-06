@@ -36,8 +36,8 @@ void OrbbecDevice::discover_devices() {
   discovering_devices = false;
 }
 
-OrbbecDevice::OrbbecDevice(DeviceConfiguration &config)
-    : DeviceBase<DeviceConfiguration>(config) {
+OrbbecDevice::OrbbecDevice(OrbbecDeviceConfiguration &config)
+    : DeviceBase<OrbbecDeviceConfiguration>(config) {
 
   _ip = std::string(config.id.begin() + 3, config.id.end());
   std::replace(_ip.begin(), _ip.end(), '_', '.');
@@ -309,7 +309,7 @@ bool OrbbecDevice::draw_imgui_controls() {
   bool signal_detach = ImGui::Button("Detach");
   ImGui::Dummy({10, 10});
 
-  DeviceConfiguration last_config = this->config();
+  auto last_config = this->config();
   if (pc::gui::draw_parameters(last_config.id)) {
     auto &new_config = this->config();
     if (new_config.depth_mode != last_config.depth_mode ||
