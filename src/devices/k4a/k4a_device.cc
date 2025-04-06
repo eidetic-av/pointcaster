@@ -47,6 +47,13 @@ K4ADevice::~K4ADevice() {
   count--;
 }
 
+DeviceStatus K4ADevice::status() const {
+  if (lost_device()) return DeviceStatus::Missing;
+  if (!_driver->is_open() || !_driver->is_running())
+    return DeviceStatus::Inactive;
+  return DeviceStatus::Active;
+}
+
 void K4ADevice::update_device_control(int *target, int value,
                                       std::function<void(int)> set_func) {
   if (*target != value) {

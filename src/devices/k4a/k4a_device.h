@@ -28,9 +28,10 @@ public:
   std::string name = "";
   bool is_sensor = true;
   bool paused = false;
-  bool lost_device() { return _driver->lost_device; }
-  bool broadcast_enabled() { return _enable_broadcast; }
+  bool lost_device() const { return _driver->lost_device; }
+  bool broadcast_enabled() const { return _enable_broadcast; }
 
+  DeviceStatus status() const override;
   pc::types::PointCloud
   point_cloud(pc::operators::OperatorList operators = {}) override {
     return _driver->point_cloud(this->config(), operators);
