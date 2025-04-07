@@ -16,9 +16,6 @@
 #if WITH_K4A
 #include "k4a/k4a_device.h"
 #endif
-#if WITH_K4W2
-#include "k4w2/k4w2_device.h"
-#endif
 #if WITH_RS2
 #include "rs2/rs2_device.h"
 #endif

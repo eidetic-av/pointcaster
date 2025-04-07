@@ -24,7 +24,6 @@ struct UsbDevice {
 inline const std::unordered_map<std::string_view, pc::devices::DeviceType>
     usb_product_string_to_device_type = {
         {"0x045e:0x097d", pc::devices::DeviceType::K4A},
-        {"0x045e:0x02c4", pc::devices::DeviceType::K4W2},
         {"0x8086:0x0b64", pc::devices::DeviceType::Rs2}};
 
 // Given a libusb device descriptor, return the sensor type.
