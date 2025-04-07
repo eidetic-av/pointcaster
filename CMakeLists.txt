@@ -468,18 +468,7 @@ endif()
 
 # ----- Post-build actions -----
 
-if (WIN32 AND WITH_K4A)
-  # shared k4abt binaries must be moved into executable directory manually
-  # (this lib can't be static)
-  file (GLOB K4ABT_BINS "${K4ABT_ROOT}/sdk/windows-desktop/amd64/release/bin/*")
-  foreach(K4ABT_BIN ${K4ABT_BINS})
-    add_custom_command(TARGET pointcaster POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      ${K4ABT_BIN} $<TARGET_FILE_DIR:pointcaster>)
-  endforeach()
-endif()
-
-if (WIN32)
+if (WITH_POINTCATER AND WIN32)
   # if we have any extra DLLS that need to be copied into
   # the output directory
   add_custom_command(TARGET pointcaster POST_BUILD
@@ -487,8 +476,18 @@ if (WIN32)
       $<$<CONFIG:Release>:${INSTALL_DLLS_RELEASE}>
       $<$<CONFIG:Debug>:${INSTALL_DLLS_DEBUG}>
       $<TARGET_FILE_DIR:pointcaster>
-    COMMAND_EXPAND_LISTS
-  )
+    COMMAND_EXPAND_LISTS)
+
+  if (WITH_K4A)
+    # and k4a is always shared never static, need to move k4a bins
+    file (GLOB K4ABT_BINS "${K4ABT_ROOT}/sdk/windows-desktop/amd64/release/bin/*")
+    foreach(K4ABT_BIN ${K4ABT_BINS})
+      add_custom_command(TARGET pointcaster POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${K4ABT_BIN} $<TARGET_FILE_DIR:pointcaster>)
+    endforeach()
+  endif()
+
 endif()
 
 if (LINUX)
