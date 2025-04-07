@@ -364,6 +364,7 @@ if (WITH_POINTCASTER)
     src/gui/windows.cc
     src/parameters.cc
     src/path.cc
+    src/profiling.cc
     src/uuid.cc
     src/wtf/wtf.cc
     src/tween/tween_manager.cc

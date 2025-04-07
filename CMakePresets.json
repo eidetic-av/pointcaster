@@ -17,8 +17,7 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-release",
         "CMAKE_TOOLCHAIN_FILE": "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_BUILD_TYPE": "Release",
-        "WITH_POINTCASTER": true,
-        "TRACY_ENABLE": false
+        "WITH_POINTCASTER": true
       },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {
@@ -39,6 +38,16 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_PDB_OUTPUT_DIRECTORY": "${sourceDir}/build/${presetName}",
         "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "ProgramDatabase"
+      }
+    },
+    {
+      "name": "windows-release-profiling",
+      "inherits": "windows-release",
+      "displayName": "Windows x64 Release with performance profiling",
+      "description": "Release build with optimizations and tracing tools",
+      "cacheVariables": {
+        "ARCHIVE_NAME": "pointcaster_windows-release-profiling",
+        "WITH_TRACY": true
       }
     },
     {

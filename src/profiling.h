@@ -1,22 +1,22 @@
 #pragma once
-
-#include <cstdint>
-#include <cstdlib>
-#include <tracy/Tracy.hpp>
+#include <string_view>
 
 namespace pc::profiling {
 
-class MemoryTracked {
+class ProfilingZone {
 public:
-  void *operator new(std::size_t count) {
-    auto ptr = malloc(count);
-    TracyAlloc(ptr, count);
-    return ptr;
-  }
-  void operator delete(void *ptr) noexcept {
-    TracyFree(ptr);
-    free(ptr);
-  }
+  explicit ProfilingZone(std::string_view name);
+  ~ProfilingZone();
+
+  ProfilingZone(const ProfilingZone &) = delete;
+  ProfilingZone &operator=(const ProfilingZone &) = delete;
+  ProfilingZone(ProfilingZone &&) = delete;
+  ProfilingZone &operator=(ProfilingZone &&) = delete;
+
+  void text(std::string_view text);
+
+private:
+  void *zone_data;
 };
 
 } // namespace pc::profiling

@@ -11,7 +11,6 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sequence.h>
-#include <tracy/Tracy.hpp>
 
 namespace pc::devices {
 
@@ -70,7 +69,6 @@ void PlySequencePlayer::free_device_memory() {
 
 pc::types::PointCloud
 PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
-  ZoneScopedN("PlySequencePlayer::point_cloud");
   if (!config().active) return {};
 
   if (!_device_memory_ready || !_buffer_updated) {

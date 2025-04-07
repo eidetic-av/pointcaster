@@ -1,4 +1,5 @@
 #include "../logger.h"
+#include "../profiling.h"
 #include "../math.h"
 #include "denoise/denoise_operator.cuh"
 #include "denoise/kdtree.h"
@@ -32,50 +33,69 @@
 // #include <pcl/octree/octree_search.h>
 // #include <pcl/point_cloud.h>
 
-#ifdef WITH_TRACY
-#include <tracy/Tracy.hpp>
-#endif
-
 namespace pc::operators {
+
+using namespace pc::profiling;
 
 // TODO this function definintion probs shouldnt be in this file
 pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
                             OperatorList &operator_list) {
+  using namespace pc::profiling;
+  ProfilingZone zone("pc::operators::apply");
+    
   thrust::device_vector<position> positions(point_cloud.size());
-  thrust::copy(point_cloud.positions.begin(), point_cloud.positions.end(),
-               positions.begin());
-
   thrust::device_vector<color> colors(point_cloud.size());
-  thrust::copy(point_cloud.colors.begin(), point_cloud.colors.end(),
-               colors.begin());
 
   thrust::device_vector<int> indices(point_cloud.size());
   thrust::sequence(indices.begin(), indices.end());
+
+  {
+    ProfilingZone init_zone("Copy data to GPU");
+
+    thrust::copy(point_cloud.positions.begin(), point_cloud.positions.end(),
+                 positions.begin());
+    thrust::copy(point_cloud.colors.begin(), point_cloud.colors.end(),
+                 colors.begin());
+  }
 
   auto operator_output_begin = thrust::make_zip_iterator(
       thrust::make_tuple(positions.begin(), colors.begin(), indices.begin()));
   auto operator_output_end = thrust::make_zip_iterator(
       thrust::make_tuple(positions.end(), colors.end(), indices.end()));
 
-  for (auto &operator_host_config : operator_list) {
-    operator_output_end = pc::operators::SessionOperatorHost::run_operators(
-        operator_output_begin, operator_output_end, operator_host_config);
+  {
+    ProfilingZone run_operators_zone("Run operators");
+
+    for (size_t i = 0; i < operator_list.size(); i++) {
+      auto &operator_config = operator_list[i];
+      using T = std::decay_t<decltype(operator_config)>;
+      ProfilingZone operator_host_zone(std::format("{} Operators", T::Name));
+      operator_output_end = pc::operators::SessionOperatorHost::run_operators(
+          operator_output_begin, operator_output_end, operator_config);
+    }
   }
 
-  cudaDeviceSynchronize();
+  {
+    ProfilingZone sync_zone("CUDA Device Synchronize");
+    cudaDeviceSynchronize();
+  }
 
   pc::types::PointCloud result{};
 
-  auto output_point_count =
-      std::distance(operator_output_begin, operator_output_end);
+  {
+    ProfilingZone copy_zone("Copy data to CPU");
 
-  result.positions.resize(output_point_count);
-  result.colors.resize(output_point_count);
+    auto output_point_count =
+        std::distance(operator_output_begin, operator_output_end);
 
-  thrust::copy(positions.begin(), positions.begin() + output_point_count,
-               result.positions.begin());
-  thrust::copy(colors.begin(), colors.begin() + output_point_count,
-               result.colors.begin());
+    result.positions.resize(output_point_count);
+    result.colors.resize(output_point_count);
+
+    thrust::copy(positions.begin(), positions.begin() + output_point_count,
+                 result.positions.begin());
+    thrust::copy(colors.begin(), colors.begin() + output_point_count,
+                 result.colors.begin());
+  }
 
   return result;
 }
@@ -98,13 +118,12 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
   for (auto &operator_config : host_config.operators) {
     std::visit(
         [&begin, &end](auto &&config) {
+
           if (!config.enabled) { return; }
 
           using T = std::decay_t<decltype(config)>;
 
-#ifdef WITH_TRACY
-          ZoneScopedN(T::Name);
-#endif
+          ProfilingZone operator_zone(T::Name);
 
           // Transform operators
           if constexpr (std::is_same_v<T, NoiseOperatorConfiguration>) {

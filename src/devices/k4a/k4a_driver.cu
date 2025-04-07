@@ -1,4 +1,5 @@
 #include "../../logger.h"
+#include "../../profiling.h"
 #include "../../operators/operator.h"
 #include "k4a_config.gen.h"
 #include "k4a_driver.h"
@@ -8,7 +9,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sequence.h>
-#include <tracy/Tracy.hpp>
+#include <thrust/tuple.h>
 
 // #include "../../operators/noise_operator.gen.h"
 // #include "../../operators/noise_operator.cuh"
@@ -198,7 +199,8 @@ struct output_filter {
 PointCloud K4ADriver::point_cloud(AzureKinectConfiguration &config,
                                   OperatorList operator_list) {
 
-  ZoneScopedN("K4ADriver::point_cloud");
+  using namespace pc::profiling;
+  ProfilingZone zone("K4ADriver::point_cloud");
 
   if (!config.active) return {};
 
