@@ -6,11 +6,13 @@
 #include <cstring>
 #include <execution>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <mutex>
 #include <numeric>
 #include <readerwriterqueue/readerwritercircularbuffer.h>
 #include <readerwriterqueue/readerwriterqueue.h>
+#include <string>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
@@ -27,6 +29,17 @@
 #else
 #include <spdlog/spdlog.h>
 #endif
+
+// void log_file(const std::string& message) {
+//     static std::ofstream file("C:/tmp/pointreceiver/log.txt", std::ios::app);
+//     static std::mutex file_access;
+//     if (!file) {
+//       throw std::exception("Couldn't open file!");
+//         return;
+//     }
+//     std::lock_guard<std::mutex> lock(file_access);
+//     file << message << "\n";
+// }
 
 static constexpr int pointcloud_stream_port = 9992;
 static constexpr int message_stream_port = 9002;
@@ -53,7 +66,7 @@ struct pointreceiver_context {
   pointreceiver_context() : message_queue(), pointcloud_queue(1) {}
 };
 
-static pointreceiver_message_type convertMessageType(MessageType message_type) {
+static pointreceiver_message_type convert_message_type(MessageType message_type) {
   switch (message_type) {
   case MessageType::Connected: return POINTRECEIVER_MSG_TYPE_CONNECTED;
   case MessageType::ClientHeartbeat:
@@ -93,7 +106,8 @@ pointreceiver_context *pointreceiver_create_context() {
 
 void pointreceiver_destroy_context(pointreceiver_context *ctx) {
   if (ctx) {
-    pointreceiver_stop_message_receiver(ctx);
+    if (ctx->message_thread) pointreceiver_stop_message_receiver(ctx);
+    if (ctx->pointcloud_thread) pointreceiver_stop_point_receiver(ctx);
   }
   delete ctx;
 }
@@ -261,7 +275,7 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
 
   if (std::holds_alternative<MessageType>(message)) {
     auto message_type = std::get<MessageType>(message);
-    out_message->message_type = convertMessageType(message_type);
+    out_message->message_type = convert_message_type(message_type);
     out_message->id[0] = '\0';
     out_message->value_type = POINTRECEIVER_PARAM_VALUE_UNKNOWN;
   } else if (std::holds_alternative<ParameterUpdate>(message)) {
