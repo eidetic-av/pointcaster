@@ -22,12 +22,12 @@ using Scene3D = SceneGraph::Scene<SceneGraph::MatrixTransformation3D>;
 class WireframeObject {
 public:
   explicit WireframeObject(Scene3D *const scene,
-			   SceneGraph::DrawableGroup3D *const parent_group)
+                           SceneGraph::DrawableGroup3D *const parent_group)
       : _parent_group(parent_group) {
     _object.reset(new Object3D{scene});
     _shader = Shaders::FlatGL3D{};
     _drawable.reset(new FlatShadeObject{*_object, _shader, Color3{1.0f}, _mesh,
-					_parent_group});
+                                        _parent_group});
   }
 
   WireframeObject &set_color(const Color3 &color) {
