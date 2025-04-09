@@ -24,8 +24,8 @@ struct AABB {
 };
 
 struct RangeFilterOperatorTransformConfiguration {
-  Float3 position{0, 0, 0}; // @minmax(-10, 10)
-  Float3 size{1, 1, 1};     // @minmax(0.01f, 10)
+  Float3 position{0, 1, 0}; // @minmax(-10, 10)
+  Float3 size{2, 2, 2};     // @minmax(0.01f, 10)
 };
 
 struct RangeFilterOperatorFillConfiguration {

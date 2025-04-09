@@ -9,17 +9,16 @@ __device__ bool RangeFilterOperator::operator()(indexed_point_t point) const {
 
   const auto &center = _config.transform.position;
   const auto &size = _config.transform.size;
+  const Float3 half_size{size.x / 2, size.y / 2, size.z / 2};
 
   // config is in metres, point cloud is in mm
-  const Float3 min{(center.x - size.x) * 1000, (center.y - size.y) * 1000,
-                   (center.z - size.z) * 1000};
-  const Float3 max{(center.x + size.x) * 1000, (center.y + size.y) * 1000,
-                   (center.z + size.z) * 1000};
+  const Float3 min{(center.x - half_size.x) * 1000, (center.y - half_size.y) * 1000,
+                   (center.z - half_size.z) * 1000};
+  const Float3 max{(center.x + half_size.x) * 1000, (center.y + half_size.y) * 1000,
+                   (center.z + half_size.z) * 1000};
 
   return pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y &&
          pos.z >= min.z && pos.z <= max.z;
-
-  return true;
 };
 
 __device__ bool MinMaxXComparator::operator()(indexed_point_t lhs,
