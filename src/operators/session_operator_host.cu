@@ -10,6 +10,7 @@
 #include "rotate_operator.cuh"
 #include "sample_filter_operator.cuh"
 #include "session_operator_host.h"
+#include "transform_cuda/translate_operator.cuh"
 #include <algorithm>
 #include <deque>
 #include <execution>
@@ -35,6 +36,7 @@
 
 namespace pc::operators {
 
+using namespace pc::operators::cuda;
 using namespace pc::profiling;
 
 // TODO this function definintion probs shouldnt be in this file
@@ -126,12 +128,19 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
           ProfilingZone operator_zone(T::Name);
 
           // Transform operators
+
+          // TODO these could probs be done without the compile time is_same
+          // checks, maybe by embedding the configuration type inside the
+          // Operator type, similar to how DeviceBase<> extends IDevice
+
           if constexpr (std::is_same_v<T, NoiseOperatorConfiguration>) {
             thrust::transform(begin, end, begin, NoiseOperator{config});
           } else if constexpr (std::is_same_v<T, RotateOperatorConfiguration>) {
             thrust::transform(begin, end, begin, RotateOperator(config));
           } else if constexpr (std::is_same_v<T, RakeOperatorConfiguration>) {
             thrust::transform(begin, end, begin, RakeOperator(config));
+          } else if constexpr (std::is_same_v<T, TranslateOperatorConfiguration>) {
+            thrust::transform(begin, end, begin, TranslateOperator(config));
           }
 
           // PCL

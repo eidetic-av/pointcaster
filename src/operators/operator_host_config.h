@@ -2,23 +2,27 @@
 
 #include "../serialization.h"
 #include "../structs.h"
-#include "operator.h"
+#include "denoise/denoise_operator.gen.h"
 #include "noise_operator.gen.h"
+#include "operator.h"
+#include "pcl/cluster_extraction_operator.gen.h"
 #include "rake_operator.gen.h"
+#include "range_filter_operator.gen.h"
 #include "rotate_operator.gen.h"
 #include "sample_filter_operator.gen.h"
-#include "range_filter_operator.gen.h"
-#include "denoise/denoise_operator.gen.h"
-#include "pcl/cluster_extraction_operator.gen.h"
+#include "transform_cuda/translate_operator.gen.h"
 #include <functional>
 #include <variant>
+
 
 namespace pc::operators {
 
 using OperatorConfigurationVariant =
     std::variant<NoiseOperatorConfiguration, SampleFilterOperatorConfiguration,
-		 RangeFilterOperatorConfiguration, RotateOperatorConfiguration,
-		 RakeOperatorConfiguration, pcl_cpu::ClusterExtractionConfiguration>;
+                 RangeFilterOperatorConfiguration, RotateOperatorConfiguration,
+                 cuda::TranslateOperatorConfiguration,
+                 RakeOperatorConfiguration,
+                 pcl_cpu::ClusterExtractionConfiguration>;
 
 // Extract types from variant into a tuple
 template <typename Variant> struct VariantTypes;
