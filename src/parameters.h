@@ -324,8 +324,6 @@ void set_parameter_value(std::string_view parameter_id, T new_value,
   auto &parameter = parameter_bindings.at(parameter_id);
   auto old_binding = parameter;
 
-      pc::logger->info("overload a");
-
   std::visit([&](auto &ref_variant) {
     using R = std::decay_t<decltype(ref_variant)>;
     if constexpr (std::same_as<R, FloatReference>) {
@@ -348,7 +346,7 @@ void set_parameter_value(std::string_view parameter_id, T new_value,
       value = static_cast<short>(std::round(float_value));
     } else if constexpr (std::same_as<R, BoolReference>) {
       // handle bool here
-      pc::logger->info("we got ze bool");
+      pc::logger->warn("Setting bool parameters is unimplemented");
     }
   }, parameter.value);
 
@@ -369,8 +367,6 @@ inline void set_parameter_value(std::string_view parameter_id, int new_value,
 
 template <typename T>
 void set_parameter_value(std::string_view parameter_id, T new_value) {
-
-  pc::logger->info("overload b");
 
   auto &parameter = parameter_bindings.at(parameter_id);
   auto old_binding = parameter;

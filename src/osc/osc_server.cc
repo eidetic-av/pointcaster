@@ -6,11 +6,9 @@
 #include "../publisher/publisher.h"
 #include "../string_utils.h"
 #include <algorithm>
-#include <cmath>
 #include <imgui.h>
 #include <map>
 #include <memory>
-#include <vector>
 
 namespace pc::osc {
 
@@ -32,8 +30,6 @@ template <typename T> void receive_msg(std::string_view address, T value) {
   std::string topic{address.substr(1, -1)};
   std::replace(topic.begin(), topic.end(), '/', '.');
 
-  pc::logger->info("Here?");
-
   // handle if the osc message is setting an entire vector
   if constexpr (types::VectorType<T>) {
     pc::logger->info("Vector");
@@ -42,18 +38,13 @@ template <typename T> void receive_msg(std::string_view address, T value) {
     }
     return;
   } else if constexpr (types::ScalarType<T>) {
-    pc::logger->info("Scalar");
     if (parameter_bindings.contains(std::string_view{topic})) {
-      pc::logger->info("Does contain");
       set_parameter_value(topic, value);
       return;
     } else {
-      pc::logger->info("Does NOT contain");
       pc::logger->warn("Failed to find scalar param at OSC address: {}", topic);
     }
   }
-  
-  pc::logger->info("Here...");
 
   // handle if the osc message is setting individual elements of a vector
   std::optional<int> vector_element;
