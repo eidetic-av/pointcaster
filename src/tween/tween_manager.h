@@ -10,8 +10,6 @@
 
 namespace pc::tween {
 
-using moodycamel::ConcurrentQueue;
-
 using TweenVariant = std::variant<tweeny::tween<int>, tweeny::tween<float>>;
 
 class TweenManager {
@@ -53,8 +51,8 @@ private:
 
   ///
   std::unordered_map<std::string, TweenVariant> _tween_list;
-  ConcurrentQueue<std::pair<std::string, TweenVariant>> _newly_added_tweens;
-  ConcurrentQueue<std::string> _tweens_to_remove;
+  moodycamel::ConcurrentQueue<std::pair<std::string, TweenVariant>> _newly_added_tweens;
+  moodycamel::ConcurrentQueue<std::string> _tweens_to_remove;
 };
 
 } // namespace pc::tween
