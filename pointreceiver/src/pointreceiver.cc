@@ -28,18 +28,9 @@
 #include <android/log.h>
 #else
 #include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #endif
-
-// void log_file(const std::string& message) {
-//     static std::ofstream file("C:/tmp/pointreceiver/log.txt", std::ios::app);
-//     static std::mutex file_access;
-//     if (!file) {
-//       throw std::exception("Couldn't open file!");
-//         return;
-//     }
-//     std::lock_guard<std::mutex> lock(file_access);
-//     file << message << "\n";
-// }
 
 static constexpr int pointcloud_stream_port = 9992;
 static constexpr int message_stream_port = 9002;
@@ -48,8 +39,10 @@ using bob::types::PointCloud;
 using pc::client_sync::MessageType;
 using pc::client_sync::SyncMessage;
 
-static std::unique_ptr<zmq::context_t> zmq_ctx;
-static std::once_flag zmq_ctx_once;
+std::unique_ptr<zmq::context_t>& zmq_ctx() {
+  static auto ctx = std::make_unique<zmq::context_t>();
+  return ctx;
+}
 
 struct pointreceiver_context {
   std::optional<std::string> client_name;
@@ -88,19 +81,39 @@ void log(std::string_view arg) {
   /*alias(ANDROID_LOG_VERBOSE, APPNAME, text_cstr);*/
   std::cout << arg << "\n";
 }
+
+
+  static std::ofstream file("C:/tmp/pointreceiver/log.txt", std::ios::app);
+  static std::mutex file_access;
+  if (file) {
+    std::lock_guard<std::mutex> lock(file_access);
+    file << message << "\n";
+  }
+
 #else
 template <typename... Args>
 void log(fmt::format_string<Args...> fmt, Args &&...args) {
-  spdlog::info(fmt, std::forward<Args>(args)...);
+
+  static auto logger = [] {
+    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
+        "logs/pointreceiver.txt", true);
+    std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
+    auto logger = std::make_shared<spdlog::logger>("native_log", sinks.begin(),
+                                                   sinks.end());
+    logger->set_level(spdlog::level::info);
+    logger->flush_on(spdlog::level::info);
+    spdlog::register_logger(logger);
+    return logger;
+  }();
+
+  logger->info(fmt, std::forward<Args>(args)...);
 }
 #endif
 
 extern "C" {
 
 pointreceiver_context *pointreceiver_create_context() {
-  // initialise the zmq context if it hasn't already been initialised
-  std::call_once(zmq_ctx_once,
-                 [] { zmq_ctx = std::make_unique<zmq::context_t>(); });
   return new pointreceiver_context();
 }
 
@@ -109,6 +122,11 @@ void pointreceiver_destroy_context(pointreceiver_context *ctx) {
     if (ctx->message_thread) pointreceiver_stop_message_receiver(ctx);
     if (ctx->pointcloud_thread) pointreceiver_stop_point_receiver(ctx);
   }
+  if (auto& zmq_context = zmq_ctx()) {
+    zmq_context->shutdown();
+    zmq_context.reset();
+  }
+  log("Pointreceiver context is destroyed");
   delete ctx;
 }
 
@@ -127,7 +145,7 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
       std::thread>([ctx, pointcaster_address_str]() {
     log("Beginning message receive thread");
 
-    zmq::socket_t socket(*zmq_ctx, zmq::socket_type::dealer);
+    zmq::socket_t socket(*zmq_ctx(), zmq::socket_type::dealer);
     socket.set(zmq::sockopt::linger, 0);
 
     // TODO connection attempt should time out if requested
@@ -150,7 +168,7 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
       log("Failed to connect");
       return;
     }
-    /*log("Listening for messages at '{}'", endpoint);*/
+    log("Messaging socket open");
 
     // convenience map contains our message type signals pre-populated as
     // serialized buffers
@@ -242,9 +260,10 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
         time_since_heartbeat = 0s;
       }
     }
+    log("Received thread stop flag");
 
     socket.disconnect(endpoint);
-    log("Disconnected");
+    log("Disconnected from socket");
   });
 
   return 0;
@@ -252,8 +271,10 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
 
 int pointreceiver_stop_message_receiver(pointreceiver_context *ctx) {
   if (ctx->message_thread) {
+    log("Stopping message receiver");
     ctx->message_thread_stop_flag.store(true);
     ctx->message_thread->join();
+    log("Message receiver thread ended");
     ctx->message_thread.reset();
   }
   return 0;
@@ -397,10 +418,6 @@ bool pointreceiver_free_sync_message(pointreceiver_context *ctx,
 int pointreceiver_start_point_receiver(pointreceiver_context *ctx,
                                        const char *pointcaster_address) {
 
-  // initialise the zmq context if it hasn't already been initialised
-  std::call_once(zmq_ctx_once,
-                 [] { zmq_ctx = std::make_unique<zmq::context_t>(); });
-
   const std::string pointcaster_address_str(pointcaster_address);
 
   ctx->pointcloud_thread_stop_flag.store(false, std::memory_order_relaxed);
@@ -413,7 +430,7 @@ int pointreceiver_start_point_receiver(pointreceiver_context *ctx,
         log("Beginning pointcloud receive thread");
 
         // create the dish that receives point clouds
-        zmq::socket_t socket(*zmq_ctx, zmq::socket_type::dish);
+        zmq::socket_t socket(*zmq_ctx(), zmq::socket_type::dish);
 
         // TODO something in the set calls here is crashing Unity
 
