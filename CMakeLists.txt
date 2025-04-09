@@ -516,7 +516,7 @@ if (WITH_POINTCASTER)
   list(APPEND DEPLOY_EXCLUDES
       "*cmake*" "*CMake*" "*vcpkg*"
       "*ninja*" "*.lib" "*.exp"
-      "resource*.cpp" "Log/*"
+      "resource*.cpp" "Log/*" "*cache*"
       "data/*" "compile_commands.json")
 
   if(DEFINED ENV{POINTCASTER_DEPLOY_LOCATIONS})

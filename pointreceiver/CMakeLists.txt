@@ -99,7 +99,7 @@ endif()
 # ----- Upload/deploy build artefacts -----
 
 list(APPEND RECEIVER_DEPLOY_EXCLUDES
-    "*cmake*" "*CMake*" "*vcpkg*"
+    "*cmake*" "*CMake*" "*vcpkg*" "*cache*"
     "*ninja*" "*.exp" "pointreceiver-test.*"
     "compile_commands.json")
 
