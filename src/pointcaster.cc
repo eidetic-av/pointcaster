@@ -674,7 +674,16 @@ void PointCaster::render_cameras() {
       std::vector<operators::OperatorHostConfiguration> fix_me_operator_list{
           _session_operator_host->_config};
 
+      // using namespace std::chrono;
+      // using namespace std::chrono_literals;
+
+      // auto begin = high_resolution_clock::now();
+
       points = devices::synthesized_point_cloud(fix_me_operator_list);
+
+      // auto end = high_resolution_clock::now();
+      // auto duration_ms = duration_cast<milliseconds>(end - begin).count();
+      // pc::logger->warn("devices::synthesized_point_cloud: {}ms", duration_ms);
 
       _session_operator_host->_config = fix_me_operator_list[0];
 
@@ -1344,7 +1353,8 @@ void PointCaster::drawEvent() {
     if (_session.layout.show_devices_window) {
       pc::gui::draw_devices_window(*this);
     }
-    if (_session.layout.show_camera_window) { draw_camera_control_windows(); }
+    draw_camera_control_windows();
+
     if (_session.layout.show_stats) draw_stats(delta_time);
     if (_session.layout.show_radio_window) _radio->draw_imgui_window();
     if (_session.layout.show_snapshots_window)
