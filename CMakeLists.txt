@@ -362,6 +362,7 @@ if (WITH_POINTCASTER)
     src/gui/range_slider.cc
     src/gui/drag_slider.cc
     src/gui/windows.cc
+    src/objects/wireframe_objects.cc
     src/parameters.cc
     src/path.cc
     src/profiling.cc
