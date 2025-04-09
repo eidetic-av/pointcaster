@@ -11,7 +11,7 @@ struct RotateOperatorConfiguration {
   uid id;
   bool unfolded = false;
   bool enabled = true;
-  Float3 euler_angles;
+  Float3 euler_angles; // @minmax(-360, 360)
 };
 
 struct RotateOperator : public thrust::unary_function<indexed_point_t, indexed_point_t> {
