@@ -101,6 +101,7 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
     voxel_grid.setInputCloud(cloud);
     voxel_grid.setLeafSize(config.voxel_leaf_size, config.voxel_leaf_size,
                            config.voxel_leaf_size); // mm
+    voxel_grid.setMinimumPointsNumberPerVoxel(config.minimum_points_per_voxel);
     voxel_grid.filter(*voxelised_cloud);
 
     if (config.filter_outlier_voxels) {
