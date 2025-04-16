@@ -1,8 +1,10 @@
 #include "../../client_sync/updates.h"
 #include "../../logger.h"
+#include "../../profiling.h"
 #include "../../publisher/publisher.h"
 #include "cluster_extraction_operator.gen.h"
 #include <algorithm>
+#include <chrono>
 #include <limits>
 #include <memory>
 #include <oneapi/tbb.h>
@@ -65,39 +67,40 @@ ClusterExtractionPipeline::IngestTask::operator()(tbb::flow_control &fc) const {
 
 void ClusterExtractionPipeline::ExtractTask::operator()(
     ClusterExtractionPipeline::InputFrame *frame) const {
-  if (frame) {
-    using namespace std::chrono;
-    using namespace std::chrono_literals;
+  if (frame == nullptr) return;
+  using namespace std::chrono;
+  using namespace std::chrono_literals;
+  using namespace pc::profiling;
 
-    auto start_time = system_clock::now();
+  ProfilingZone function_zone("ClusterExtractionPipeline::ExtractTask::()");
 
-    auto &config = frame->extraction_config;
+  auto start_time = system_clock::now();
 
-    // TODO check timestamp against current time
-    // in order to throw away older frames
+  auto &config = frame->extraction_config;
 
-    // TODO configuration options for voxel sampling and clustering
+  // TODO check timestamp against current time
+  // in order to throw away older frames
 
-    auto &positions = frame->positions;
-    auto count = positions.size();
-    if (count == 0) return;
+  // TODO configuration options for voxel sampling and clustering
+  {}
 
-    //  convert position type into PCL structures
-    auto pcl_positions = thrust::host_vector<pcl::PointXYZ>(count);
-    thrust::transform(positions.begin(), positions.end(), pcl_positions.begin(),
+  auto &positions = frame->positions;
+  auto count = positions.size();
+  if (count == 0) return;
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+  cloud->points.resize(count);
+  {
+    ProfilingZone conversion_zone("Convert positions to PCL");
+    thrust::transform(positions.begin(), positions.end(), cloud->points.begin(),
                       PositionToPointXYZ());
+  }
 
-    // and copy the transformed result into a PCL PointCloud object
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(
-        new pcl::PointCloud<pcl::PointXYZ>);
-    cloud->points.resize(count);
-    std::copy(pcl_positions.begin(), pcl_positions.end(),
-              cloud->points.begin());
-
-    // filter the cloud into a voxel grid
-    pcl::PointCloud<pcl::PointXYZ>::Ptr voxelised_cloud(
-        new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
+  pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr voxelised_cloud(
+      new pcl::PointCloud<pcl::PointXYZ>);
+  {
+    ProfilingZone voxel_zone("Voxel grid filter");
     voxel_grid.setInputCloud(cloud);
     voxel_grid.setLeafSize(config.voxel_leaf_size, config.voxel_leaf_size,
                            config.voxel_leaf_size); // mm
@@ -105,6 +108,7 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
     voxel_grid.filter(*voxelised_cloud);
 
     if (config.filter_outlier_voxels) {
+      ProfilingZone voxel_zone("Outlier filter");
       pcl::StatisticalOutlierRemoval<pcl::PointXYZ> outlier_filter;
       outlier_filter.setInputCloud(voxelised_cloud);
       auto mean_k = config.outlier_filter_voxel_count;
@@ -117,185 +121,162 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
     }
 
     current_voxels.store(voxelised_cloud);
+  }
 
-    if (config.publish_voxels) {
-      const auto &operator_name = operator_friendly_names.at(config.id);
-      std::vector<std::array<float, 3>> voxel_positions;
-      voxel_positions.reserve(voxelised_cloud->points.size());
-      std::ranges::transform(voxelised_cloud->points,
-                             std::back_inserter(voxel_positions),
-                             [](const auto &pt) {
-                               return std::array<float, 3>{pt.x, pt.y, pt.z};
-                             });
-      publisher::publish_all(std::format("{}.voxels", operator_name),
-                             voxel_positions);
+  if (config.publish_voxels) {
+    ProfilingZone publish_voxels_zone("Publish voxels");
+    const auto &operator_name = operator_friendly_names.at(config.id);
+    std::vector<std::array<float, 3>> voxel_positions;
+    voxel_positions.reserve(voxelised_cloud->points.size());
+    std::ranges::transform(
+        voxelised_cloud->points, std::back_inserter(voxel_positions),
+        [](const auto &pt) { return std::array<float, 3>{pt.x, pt.y, pt.z}; });
+    publisher::publish_all(std::format("{}.voxels", operator_name),
+                           voxel_positions);
+  }
+
+  {
+    ProfilingZone clustering_zone("Clustering");
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree;
+    {
+      ProfilingZone create_kdtree_zone("Create KDTree");
+      tree = pcl::search::KdTree<pcl::PointXYZ>::Ptr(
+          new pcl::search::KdTree<pcl::PointXYZ>);
+      tree->setInputCloud(voxelised_cloud);
     }
 
-    auto voxelisation_time = system_clock::now();
-    auto voxelisation_us =
-        duration_cast<microseconds>(voxelisation_time - start_time);
-    auto voxelisation_ms = voxelisation_us.count() / 1000.0f;
-    // pc::logger->debug("voxelisation time: {:.2f}ms", voxelisation_ms);
-
-    // create kdtree
-    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(
-        new pcl::search::KdTree<pcl::PointXYZ>);
-    tree->setInputCloud(voxelised_cloud);
-
-    auto kdgen_time = system_clock::now();
-    auto kdgen_us = duration_cast<microseconds>(kdgen_time - voxelisation_time);
-    auto kdgen_ms = kdgen_us.count() / 1000.0f;
-    // pc::logger->debug("kdgen time: {:.2f}ms", kdgen_ms);
-
-    // perform clustering
     std::vector<pcl::PointIndices> cluster_indices;
-    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-    ec.setClusterTolerance(config.cluster_tolerance); // mm
-    ec.setMinClusterSize(config.cluster_voxel_count_min);
-    ec.setMaxClusterSize(config.cluster_voxel_count_max);
-    ec.setSearchMethod(tree);
-    ec.setInputCloud(voxelised_cloud);
-    ec.extract(cluster_indices);
+    {
+      ProfilingZone extract_clusters_zone("Extract clusters");
+      pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+      ec.setClusterTolerance(config.cluster_tolerance); // mm
+      ec.setMinClusterSize(config.cluster_voxel_count_min);
+      ec.setMaxClusterSize(config.cluster_voxel_count_max);
+      ec.setSearchMethod(tree);
+      ec.setInputCloud(voxelised_cloud);
+      ec.extract(cluster_indices);
+    }
 
-    auto cluster_time = system_clock::now();
-    auto cluster_us = duration_cast<microseconds>(cluster_time - kdgen_time);
-    auto cluster_ms = cluster_us.count() / 1000.0f;
-    // pc::logger->debug("cluster time: {:.2f}ms", cluster_ms);
-
-    // seperate out the pointclouds and calculate bounding boxes for each
-    // cluster
     tbb::concurrent_vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>
         cluster_point_clouds;
     tbb::concurrent_vector<pc::AABB> cluster_bounds;
+    {
+      ProfilingZone gen_clustered_point_clouds_zone(
+          "Generate clustered point clouds");
 
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, cluster_indices.size()),
-        [&cluster_indices, &voxelised_cloud, &cluster_point_clouds,
-         &cluster_bounds](const tbb::blocked_range<size_t> &r) {
-          for (size_t i = r.begin(); i != r.end(); ++i) {
-            const auto &indices = cluster_indices[i];
+      tbb::parallel_for(
+          tbb::blocked_range<size_t>(0, cluster_indices.size()),
+          [&cluster_indices, &voxelised_cloud, &cluster_point_clouds,
+           &cluster_bounds](const tbb::blocked_range<size_t> &r) {
+            for (size_t i = r.begin(); i != r.end(); ++i) {
+              const auto &indices = cluster_indices[i];
 
-            pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster(
-                new pcl::PointCloud<pcl::PointXYZ>);
-            for (const auto &index : indices.indices) {
-              cloud_cluster->points.push_back(voxelised_cloud->points[index]);
+              pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster(
+                  new pcl::PointCloud<pcl::PointXYZ>);
+              for (const auto &index : indices.indices) {
+                cloud_cluster->points.push_back(voxelised_cloud->points[index]);
+              }
+              cloud_cluster->width = cloud_cluster->points.size();
+              cloud_cluster->height = 1;
+              cloud_cluster->is_dense = true;
+
+              // Compute the bounding box
+              pcl::PointXYZ min_pt, max_pt;
+              pcl::getMinMax3D(*cloud_cluster, min_pt, max_pt);
+
+              pc::types::Float3 min_pt_f(min_pt.x, min_pt.y, min_pt.z);
+              pc::types::Float3 max_pt_f(max_pt.x, max_pt.y, max_pt.z);
+
+              cluster_point_clouds.push_back(cloud_cluster);
+              cluster_bounds.push_back(pc::AABB(min_pt_f, max_pt_f));
             }
-            cloud_cluster->width = cloud_cluster->points.size();
-            cloud_cluster->height = 1;
-            cloud_cluster->is_dense = true;
-
-            // Compute the bounding box
-            pcl::PointXYZ min_pt, max_pt;
-            pcl::getMinMax3D(*cloud_cluster, min_pt, max_pt);
-
-            pc::types::Float3 min_pt_f(min_pt.x, min_pt.y, min_pt.z);
-            pc::types::Float3 max_pt_f(max_pt.x, max_pt.y, max_pt.z);
-
-            cluster_point_clouds.push_back(cloud_cluster);
-            cluster_bounds.push_back(pc::AABB(min_pt_f, max_pt_f));
-          }
-        });
-
-    auto aabb_time = system_clock::now();
-    auto aabb_us = duration_cast<microseconds>(aabb_time - cluster_time);
-    auto aabb_ms = aabb_us.count() / 1000.0f;
-    // pc::logger->debug("aabb time: {:.2f}ms", aabb_ms);
-
-    // now that we have our new clusters,
-    // fetch existing and try to match...
-
-    auto existing_clusters = current_clusters.load();
-    if (!existing_clusters) {
-      existing_clusters = std::make_shared<std::vector<Cluster>>();
+          });
     }
 
     std::vector<Cluster> updated_clusters;
-    std::unordered_set<const Cluster *> matched_existing_clusters;
-    auto now = system_clock::now();
+    {
+      ProfilingZone match_zone("Matching clusters");
+      std::unordered_set<const Cluster *> matched_existing_clusters;
+      auto existing_clusters = current_clusters.load();
+      if (!existing_clusters) {
+        existing_clusters = std::make_shared<std::vector<Cluster>>();
+      }
+      auto now = system_clock::now();
 
-    for (int i = 0; i < cluster_bounds.size(); ++i) {
-      const auto &new_bound = cluster_bounds[i];
-      const auto &new_point_cloud = cluster_point_clouds[i];
+      for (int i = 0; i < cluster_bounds.size(); ++i) {
+        const auto &new_bound = cluster_bounds[i];
+        const auto &new_point_cloud = cluster_point_clouds[i];
 
-      static constexpr auto matchClusters =
-          [](const pc::AABB &a, const pc::AABB &b, float tolerance) {
-            auto centroid_a = a.center();
-            auto centroid_b = b.center();
-            auto dx = centroid_a.x - centroid_b.x;
-            auto dy = centroid_a.y - centroid_b.y;
-            auto dz = centroid_a.z - centroid_b.z;
-            auto distance = std::sqrt(dx * dx + dy * dy + dz * dz);
-            return distance <= tolerance;
-          };
+        static constexpr auto matchClusters =
+            [](const pc::AABB &a, const pc::AABB &b, float tolerance) {
+              auto centroid_a = a.center();
+              auto centroid_b = b.center();
+              auto dx = centroid_a.x - centroid_b.x;
+              auto dy = centroid_a.y - centroid_b.y;
+              auto dz = centroid_a.z - centroid_b.z;
+              auto distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+              return distance <= tolerance;
+            };
 
-      bool matched = false;
-      for (auto &existing_cluster : *existing_clusters) {
-        if (matchClusters(existing_cluster.bounding_box, new_bound,
-                          config.cluster_match_tolerance)) {
-          // found a match to an existing cluster
-          existing_cluster.bounding_box = new_bound;
-          existing_cluster.last_seen_time = now;
-          existing_cluster.point_cloud = new_point_cloud;
-          updated_clusters.push_back(existing_cluster);
-          matched_existing_clusters.insert(&existing_cluster);
-          matched = true;
-          break;
+        bool matched = false;
+        for (auto &existing_cluster : *existing_clusters) {
+          if (matchClusters(existing_cluster.bounding_box, new_bound,
+                            config.cluster_match_tolerance)) {
+            // found a match to an existing cluster
+            existing_cluster.bounding_box = new_bound;
+            existing_cluster.last_seen_time = now;
+            existing_cluster.point_cloud = new_point_cloud;
+            updated_clusters.push_back(existing_cluster);
+            matched_existing_clusters.insert(&existing_cluster);
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) {
+          // new cluster with no prior match
+          updated_clusters.push_back(Cluster{new_bound, now, new_point_cloud});
         }
       }
-      if (!matched) {
-        // new cluster with no prior match
-        updated_clusters.push_back(Cluster{new_bound, now, new_point_cloud});
+
+      // add existing clusters that were not matched but haven't expired
+      for (const auto &existing_cluster : *existing_clusters) {
+        if (matched_existing_clusters.find(&existing_cluster) ==
+            matched_existing_clusters.end()) {
+          // this existing cluster has not been matched, check its timeout
+          if (now - existing_cluster.last_seen_time <=
+              milliseconds(config.cluster_timeout_ms)) {
+            // and add it to our updated list if it should still be alive
+            updated_clusters.push_back(existing_cluster);
+          }
+        }
       }
     }
 
-    // add existing clusters that were not matched but haven't expired
-    for (const auto &existing_cluster : *existing_clusters) {
-      if (matched_existing_clusters.find(&existing_cluster) ==
-          matched_existing_clusters.end()) {
-        // this existing cluster has not been matched, check its timeout
-        if (now - existing_cluster.last_seen_time <=
-            milliseconds(config.cluster_timeout_ms)) {
-          // and add it to our updated list if it should still be alive
-          updated_clusters.push_back(existing_cluster);
-        }
-      }
-    }
-
-    // store bounds info to use on this thread for publishing & pca
-    std::vector<pc::AABB> output_bounds(updated_clusters.size());
-    std::transform(updated_clusters.begin(), updated_clusters.end(),
-                   output_bounds.begin(),
-                   [](const Cluster &c) { return c.bounding_box; });
+    auto aabbs =
+        updated_clusters |
+        std::views::transform([](const Cluster &c) -> const pc::AABB & {
+          return c.bounding_box;
+        });
 
     if (config.publish_clusters) {
+      ProfilingZone publish_zone("Publish clusters");
       // auto id_string = std::to_string(config.id);
       auto operator_name = operator_friendly_names.at(config.id);
       // TODO pc::AABB is not serializable with some publishers...
-      // we should make it serializable but for now we transform to a different
-      // data type
       using namespace pc::client_sync;
-      AABBList output_data;
-      std::ranges::transform(output_bounds, std::back_inserter(output_data),
+      std::vector<std::array<array3f, 2>> aabbs_in_std_container;
+      std::ranges::transform(aabbs, std::back_inserter(aabbs_in_std_container),
                              [](const auto &aabb) {
                                return std::array<array3f, 2>(
                                    {{aabb.min.x, aabb.min.y, aabb.min.z},
                                     {aabb.max.x, aabb.max.y, aabb.max.z}});
                              });
       publisher::publish_all(std::format("{}.clusters", operator_name),
-                             output_data);
+                             aabbs_in_std_container);
     }
 
-    constexpr auto log_duration = [](std::string_view label, auto start_time,
-                                     auto end_time) {
-      auto time_us = duration_cast<microseconds>(end_time - start_time);
-      auto time_ms = time_us.count() / 1000.0f;
-      pc::logger->info("'{}' time: {:.2f}ms", label, time_ms);
-    };
-
-    // perform any principal component analysis
     if (config.calculate_pca) {
-
-      auto pca_start_time = system_clock::now();
+      ProfilingZone publish_zone("Principal Component Analysis");
 
       // we use a parallel for to loop through each cluster and use
       // Principal Component Analysis to calculate the principal axis and the
@@ -424,6 +405,7 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
       // // current_cluster_pca.store(output_pca_results);
 
       if (config.publish_pca) {
+        ProfilingZone publish_zone("Publish PCA results");
         // publish the structure as a flat array, but also as individual
         // channels
         const auto cluster_count = output_pca_results->size();
@@ -466,14 +448,13 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
 
       current_cluster_pca.store(std::move(output_pca_results));
 
-      // log_duration("pca calc", pca_start_time, system_clock::now());
     }
 
     // and latest clusters onto main thread now we're done with them
     current_clusters.store(
         std::make_shared<std::vector<Cluster>>(std::move(updated_clusters)));
-
-    delete frame;
   }
+
+  delete frame;
 }
 } // namespace pc::operators::pcl_cpu

@@ -22,7 +22,7 @@ struct ClusterExtractionConfiguration {
   bool draw_voxels = false;
   bool draw_clusters = true;
   int voxel_leaf_size = 200; // @minmax(100, 1000)
-  int minimum_points_per_voxel = 0; // @minmax(0, 100)
+  int minimum_points_per_voxel = 0; // @minmax(0, 1000)
   bool filter_outlier_voxels = false;
   int outlier_filter_voxel_count = 30;
   float outlier_filter_deviation_threshold = 1.0f;
