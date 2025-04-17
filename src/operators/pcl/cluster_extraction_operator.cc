@@ -123,18 +123,6 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
 
   current_voxels.store(voxelised_cloud);
 
-  if (config.publish_voxels) {
-    ProfilingZone publish_voxels_zone("Publish voxels");
-    const auto &operator_name = operator_friendly_names.at(config.id);
-    std::vector<std::array<float, 3>> voxel_positions;
-    voxel_positions.reserve(voxelised_cloud->points.size());
-    std::ranges::transform(
-        voxelised_cloud->points, std::back_inserter(voxel_positions),
-        [](const auto &pt) { return std::array<float, 3>{pt.x, pt.y, pt.z}; });
-    publisher::publish_all(std::format("{}.voxels", operator_name),
-                           voxel_positions);
-  }
-
   {
     ProfilingZone clustering_zone("Clustering");
     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree;
@@ -267,6 +255,43 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
           });
       const auto operator_name = operator_friendly_names.at(config.id);
       publisher::publish_all(std::format("{}.clusters", operator_name), aabbs);
+    }
+
+    if (config.publish_voxels) {
+      ProfilingZone publish_voxels_zone("Publish voxels");
+
+      // when publishing voxels, we send the position vector x,y,z with w
+      // representing the integer index of the cluster the associated voxel
+
+      // TODO we can probably optimise this by removing the serial loops inside
+      // the first parallel_for
+
+      size_t voxel_count = voxelised_cloud->points.size();
+
+      // map each point to its cluster id (default -1 if no cluster associated)
+      // returning a flat array that we can parallel iterate over next  
+      std::vector<int> cluster_ids(voxel_count, -1);
+      tbb::parallel_for(static_cast<size_t>(0), cluster_indices.size(),
+                        [&](size_t cluster_id) {
+                          for (auto idx : cluster_indices[cluster_id].indices) {
+                            cluster_ids[idx] = static_cast<int>(cluster_id);
+                          }
+                        });
+
+      // now we can loop through each entry in parallel and
+      // create our voxel list with associated cluster ids
+      std::vector<std::array<float, 4>> voxels_with_cluster_id(voxel_count);
+      tbb::parallel_for(
+          static_cast<size_t>(0), voxel_count, [&](size_t voxel_id) {
+            const auto &position = voxelised_cloud->points[voxel_id];
+            voxels_with_cluster_id[voxel_id] = {
+                position.x, position.y, position.z,
+                static_cast<float>(cluster_ids[voxel_id])};
+          });
+
+      const auto &operator_name = operator_friendly_names.at(config.id);
+      publisher::publish_all(std::format("{}.voxels", operator_name),
+                             voxels_with_cluster_id);
     }
 
     if (config.calculate_pca) {

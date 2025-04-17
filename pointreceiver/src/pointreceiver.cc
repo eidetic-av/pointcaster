@@ -317,23 +317,26 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
           } else if constexpr (std::same_as<T, int>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_INT;
             out_message->value.int_val = val;
-          } else if constexpr (std::same_as<T, pc::types::Float3>) {
-            out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT3;
-            out_message->value.float3_val.x = val.x;
-            out_message->value.float3_val.y = val.y;
-            out_message->value.float3_val.z = val.z;
-          } else if constexpr (std::same_as<T, std::array<float, 3>>) {
+          } else if constexpr (std::same_as<T, pc::types::Float3> ||
+                               std::same_as<T, std::array<float, 3>>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT3;
             out_message->value.float3_val.x = val[0];
             out_message->value.float3_val.y = val[1];
             out_message->value.float3_val.z = val[2];
+          } else if constexpr (std::same_as<T, pc::types::Float4> ||
+                               std::same_as<T, std::array<float, 4>>) {
+            out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT4;
+            out_message->value.float4_val.x = val[0];
+            out_message->value.float4_val.y = val[1];
+            out_message->value.float4_val.z = val[2];
+            out_message->value.float4_val.w = val[3];
           } else if constexpr (std::same_as<T, Float3List>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT3LIST;
             const auto &float3List = val;
             size_t count = float3List.size();
             out_message->value.float3_list_val.count = count;
             if (count > 0) {
-              // allocate memory for count AABB elements.
+              // allocate memory for 'count' vectors
               out_message->value.float3_list_val.data =
                   static_cast<pointreceiver_float3_t *>(
                       std::malloc(count * sizeof(pointreceiver_float3_t)));
@@ -350,6 +353,32 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
             } else {
               out_message->value.float3_list_val.data = nullptr;
             }
+          } else if constexpr (std::same_as<T, Float4List>) {
+
+            out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT4LIST;
+            const auto &float4List = val;
+            size_t count = float4List.size();
+            out_message->value.float4_list_val.count = count;
+            if (count > 0) {
+              // allocate memory for 'count' vectors
+              out_message->value.float4_list_val.data =
+                  static_cast<pointreceiver_float4_t *>(
+                      std::malloc(count * sizeof(pointreceiver_float4_t)));
+              if (!out_message->value.float4_list_val.data) {
+                out_message->value.float4_list_val.count = 0;
+                set_message_success = false;
+                return;
+              }
+              for (size_t i = 0; i < count; i++) {
+                out_message->value.float4_list_val.data[i].x = float4List[i][0];
+                out_message->value.float4_list_val.data[i].y = float4List[i][1];
+                out_message->value.float4_list_val.data[i].z = float4List[i][2];
+                out_message->value.float4_list_val.data[i].w = float4List[i][3];
+              }
+            } else {
+              out_message->value.float4_list_val.data = nullptr;
+            }
+
           } else if constexpr (std::same_as<T, AABBList>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_AABBLIST;
             const auto &aabbList = val;
@@ -400,6 +429,12 @@ bool pointreceiver_free_sync_message(pointreceiver_context *ctx,
     if (out_message->value.float3_list_val.data) {
       free(out_message->value.float3_list_val.data);
       out_message->value.float3_list_val.data = nullptr;
+    }
+    out_message->value.float3_list_val.count = 0;
+  } else if (out_message->value_type == POINTRECEIVER_PARAM_VALUE_FLOAT4LIST) {
+    if (out_message->value.float4_list_val.data) {
+      free(out_message->value.float4_list_val.data);
+      out_message->value.float4_list_val.data = nullptr;
     }
     out_message->value.float3_list_val.count = 0;
   } else if (out_message->value_type == POINTRECEIVER_PARAM_VALUE_AABBLIST) {
@@ -564,41 +599,51 @@ bool pointreceiver_dequeue_point_cloud(
 }
 
 void testMessageLoop(pointreceiver_context *ctx) {
-  /*int count = 0;*/
-  /*while (count++ < 1000) {*/
-  /*  pointreceiver_sync_message msg;*/
-  /*  // dequeue with a 5-millisecond timeout.*/
-  /*  if (pointreceiver_dequeue_message(ctx, &msg, 5)) {*/
-  /*    if (msg.message_type == POINTRECEIVER_MSG_TYPE_PARAMETER_UPDATE) {*/
-  /*      log("Parameter Update received: id = {}, value_type = {}", msg.id,*/
-  /*          (int)msg.value_type);*/
-  /*      switch (msg.value_type) {*/
-  /*      case POINTRECEIVER_PARAM_VALUE_FLOAT:*/
-  /*        log("Value: {}", msg.value.float_val);*/
-  /*        break;*/
-  /*      case POINTRECEIVER_PARAM_VALUE_INT:*/
-  /*        log("Value: {}", msg.value.int_val);*/
-  /*        break;*/
-  /*      case POINTRECEIVER_PARAM_VALUE_FLOAT3:*/
-  /*        log("Value: ({}, {}, {})", msg.value.float3_val.x,*/
-  /*            msg.value.float3_val.y, msg.value.float3_val.z);*/
-  /*        break;*/
-  /*      case POINTRECEIVER_PARAM_VALUE_FLOAT3LIST:*/
-  /*        // TODO log contents or at least size?*/
-  /*        log("Got a Float3List here");*/
-  /*        break;*/
-  /*      case POINTRECEIVER_PARAM_VALUE_AABBLIST:*/
-  /*        log("Got an AABBList here");*/
-  /*        break;*/
-  /*      default: log("Unknown parameter update type"); break;*/
-  /*      }*/
-  /*    } else {*/
-  /*      log("Received message type: {}", (int)msg.message_type);*/
-  /*    }*/
-  /*  }*/
-  /*  pointreceiver_free_sync_message(ctx, &msg);*/
-  /*  std::this_thread::sleep_for(std::chrono::milliseconds(5));*/
-  /*}*/
+  int count = 0;
+  while (count++ < 1000) {
+    pointreceiver_sync_message msg;
+    // dequeue with a 5-millisecond timeout.
+    if (pointreceiver_dequeue_message(ctx, &msg, 5)) {
+      log("Dequeued incoming message");
+      if (msg.message_type == POINTRECEIVER_MSG_TYPE_PARAMETER_UPDATE) {
+        log("Parameter Update received");
+        switch (msg.value_type) {
+        case POINTRECEIVER_PARAM_VALUE_FLOAT:
+          log("Value: {}", msg.value.float_val);
+          break;
+        case POINTRECEIVER_PARAM_VALUE_INT:
+          log("Value: {}", msg.value.int_val);
+          break;
+        case POINTRECEIVER_PARAM_VALUE_FLOAT3:
+          log("Value: ({}, {}, {})", msg.value.float3_val.x,
+              msg.value.float3_val.y, msg.value.float3_val.z);
+          break;
+        case POINTRECEIVER_PARAM_VALUE_FLOAT4:
+          log("Dequeued a raw float4");
+          log("Value: ({}, {}, {}, {})", msg.value.float4_val.x,
+              msg.value.float4_val.y, msg.value.float4_val.z,
+              msg.value.float4_val.w);
+          break;
+        case POINTRECEIVER_PARAM_VALUE_FLOAT3LIST:
+          // TODO log contents or at least size?
+          log("Got a Float3List here");
+          break;
+        case POINTRECEIVER_PARAM_VALUE_FLOAT4LIST:
+          // TODO log contents or at least size?
+          log("Got a Float4List here");
+          break;
+        case POINTRECEIVER_PARAM_VALUE_AABBLIST:
+          log("Got an AABBList here");
+          break;
+        default: log("Unknown parameter update type"); break;
+        }
+      } else {
+        log("Received message type: {}", (int)msg.message_type);
+      }
+      pointreceiver_free_sync_message(ctx, &msg);
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
 }
 
 // void testPointcloudLoop() {
@@ -619,15 +664,15 @@ int main(int argc, char *argv[]) {
   auto *ctx = pointreceiver_create_context();
   pointreceiver_set_client_name(ctx, "test_application");
   if (argc < 2) {
-    pointreceiver_start_point_receiver(ctx, "127.0.0.1");
-    // pointreceiver_start_message_receiver(ctx, "127.0.0.1");
+    // pointreceiver_start_point_receiver(ctx, "127.0.0.1");
+    pointreceiver_start_message_receiver(ctx, "127.0.0.1");
   } else {
-    pointreceiver_start_point_receiver(ctx, argv[1]);
+    // pointreceiver_start_point_receiver(ctx, argv[1]);
     // pointreceiver_start_point_receiver(argv[1], 5);
-    // pointreceiver_start_message_receiver(ctx, argv[1]);
+    pointreceiver_start_message_receiver(ctx, argv[1]);
   }
   // for (int i = 0; i < 3; i++) { testPointcloudLoop(); }
-  // for (int i = 0; i < 3; i++) { testMessageLoop(ctx); }
+  for (int i = 0; i < 3; i++) { testMessageLoop(ctx); }
   // pointreceiver_stop_message_receiver(ctx);
   pointreceiver_stop_point_receiver(ctx);
   pointreceiver_destroy_context(ctx);

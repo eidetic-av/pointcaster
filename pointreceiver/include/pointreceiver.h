@@ -55,7 +55,9 @@ typedef enum {
   POINTRECEIVER_PARAM_VALUE_FLOAT = 0, /**< Float value */
   POINTRECEIVER_PARAM_VALUE_INT,       /**< Integer value */
   POINTRECEIVER_PARAM_VALUE_FLOAT3,    /**< 3D float vector */
+  POINTRECEIVER_PARAM_VALUE_FLOAT4,    /**< 4D float vector */
   POINTRECEIVER_PARAM_VALUE_FLOAT3LIST, /**< List of 3D float vectors */
+  POINTRECEIVER_PARAM_VALUE_FLOAT4LIST, /**< List of 4D float vectors */
   POINTRECEIVER_PARAM_VALUE_AABBLIST, /**< List of Axis-aligned bounding boxes */
   POINTRECEIVER_PARAM_VALUE_UNKNOWN    /**< Unknown parameter type */
 } pointreceiver_param_value_type;
@@ -70,6 +72,18 @@ typedef struct {
   float y; /**< Y component of the 3D vector */
   float z; /**< Z component of the 3D vector */
 } pointreceiver_float3_t;
+
+/**
+ * @brief Structure representing a 3D float vector.
+ *
+ * Contains the x, y, and z components.
+ */
+typedef struct {
+  float x; /**< X component of the 4D vector */
+  float y; /**< Y component of the 4D vector */
+  float z; /**< Z component of the 4D vector */
+  float w; /**< W component of the 4D vector */
+} pointreceiver_float4_t;
 
 /**
  * @brief Structure representing an Axis-Aligned Bounding Box (AABB).
@@ -104,6 +118,18 @@ typedef struct {
 } pointreceiver_float3_list_t;
 
 /**
+ * @brief Structure representing a list of 4D float vectors.
+ *
+ * This structure encapsulates a pointer to an array of 4D float vector values and
+ * the number of elements in the array.
+ */
+typedef struct {
+  pointreceiver_float4_t *data; /**< Pointer to an array of 3D float vector values */
+  size_t count;                /**< Number of 3D float vector values in the array */
+} pointreceiver_float4_list_t;
+
+
+/**
  * @brief Structure representing a synchronized message.
  *
  * This structure encapsulates the message type, an identifier, and a union
@@ -119,9 +145,12 @@ typedef struct {
     float float_val;                         /**< Float value */
     int int_val;                             /**< Integer value */
     pointreceiver_float3_t float3_val;       /**< 3D float vector value */
+    pointreceiver_float4_t float4_val;       /**< 4D float vector value */
     pointreceiver_aabb_list_t aabb_list_val; /**< List of AABB values */
     pointreceiver_float3_list_t
         float3_list_val; /**< List of 3D float vector values */
+    pointreceiver_float4_list_t
+        float4_list_val; /**< List of 4D float vector values */
   } value;               /**< Union holding the message value */
 
 } pointreceiver_sync_message;

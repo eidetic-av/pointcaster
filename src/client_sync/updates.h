@@ -8,9 +8,12 @@
 namespace pc::client_sync {
 
 using array3f = std::array<float, 3>;
+using array4f = std::array<float, 4>;
 using pc::types::Float3;
+using pc::types::Float4;
 using AABBList = std::vector<std::array<array3f, 2>>;
 using Float3List = std::vector<array3f>;
+using Float4List = std::vector<array4f>;
 
 enum class MessageType : uint8_t {
   Connected = 0x00,
@@ -20,8 +23,8 @@ enum class MessageType : uint8_t {
   ParameterRequest = 0x11
 };
 
-using ParameterVariant =
-    std::variant<float, int, Float3, array3f, AABBList, Float3List>;
+using ParameterVariant = std::variant<float, int, Float3, Float4, array3f,
+                                      AABBList, Float3List, Float4List>;
 
 struct ParameterUpdate {
   std::string id;
