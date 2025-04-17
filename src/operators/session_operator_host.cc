@@ -452,6 +452,11 @@ void SessionOperatorHost::draw_gizmos() {
             }
 
             if (config.draw_clusters) {
+
+              for (size_t i = 0; i < _last_cluster_count; i++) {
+                set_cluster(i, false);
+              }
+
               auto latest_clusters_ptr = pipeline.current_clusters.load();
               if (latest_clusters_ptr.get() != nullptr) {
                 auto &clusters = *latest_clusters_ptr;
@@ -470,6 +475,7 @@ void SessionOperatorHost::draw_gizmos() {
                   }
                   set_cluster(i, visible, position, size);
                 }
+
                 _last_cluster_count = cluster_count;
               }
             }

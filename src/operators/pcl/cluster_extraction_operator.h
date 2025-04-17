@@ -33,7 +33,7 @@ struct ClusterExtractionConfiguration {
   int cluster_size_min = 10;         // @minmax(0, 5000)
   int cluster_size_max = 1000;       // @minmax(0, 5000)
   int cluster_timeout_ms = 100;
-  int cluster_match_tolerance = 50;
+  int cluster_match_tolerance = 500; // @minmax(0, 5000)
   bool publish_clusters = false;
   bool calculate_pca = true;
   bool draw_pca = true;

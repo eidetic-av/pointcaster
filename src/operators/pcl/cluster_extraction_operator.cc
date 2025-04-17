@@ -106,22 +106,22 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
                            config.voxel_leaf_size); // mm
     voxel_grid.setMinimumPointsNumberPerVoxel(config.minimum_points_per_voxel);
     voxel_grid.filter(*voxelised_cloud);
-
-    if (config.filter_outlier_voxels) {
-      ProfilingZone voxel_zone("Outlier filter");
-      pcl::StatisticalOutlierRemoval<pcl::PointXYZ> outlier_filter;
-      outlier_filter.setInputCloud(voxelised_cloud);
-      auto mean_k = config.outlier_filter_voxel_count;
-      if (mean_k <= 0) mean_k = 1;
-      outlier_filter.setMeanK(mean_k);
-      auto std_deviation_threshold = config.outlier_filter_deviation_threshold;
-      if (std_deviation_threshold <= 0.0f) std_deviation_threshold = 0.0f;
-      outlier_filter.setStddevMulThresh(std_deviation_threshold);
-      outlier_filter.filter(*voxelised_cloud);
-    }
-
-    current_voxels.store(voxelised_cloud);
   }
+
+  if (config.filter_outlier_voxels) {
+    ProfilingZone voxel_zone("Outlier filter");
+    pcl::StatisticalOutlierRemoval<pcl::PointXYZ> outlier_filter;
+    outlier_filter.setInputCloud(voxelised_cloud);
+    auto mean_k = config.outlier_filter_voxel_count;
+    if (mean_k <= 0) mean_k = 1;
+    outlier_filter.setMeanK(mean_k);
+    auto std_deviation_threshold = config.outlier_filter_deviation_threshold;
+    if (std_deviation_threshold <= 0.0f) std_deviation_threshold = 0.0f;
+    outlier_filter.setStddevMulThresh(std_deviation_threshold);
+    outlier_filter.filter(*voxelised_cloud);
+  }
+
+  current_voxels.store(voxelised_cloud);
 
   if (config.publish_voxels) {
     ProfilingZone publish_voxels_zone("Publish voxels");
@@ -162,7 +162,7 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
     tbb::concurrent_vector<pc::AABB> cluster_bounds;
     {
       ProfilingZone gen_clustered_point_clouds_zone(
-          "Generate clustered point clouds");
+          "Seperate clustered point clouds");
 
       tbb::parallel_for(
           tbb::blocked_range<size_t>(0, cluster_indices.size()),
@@ -252,27 +252,21 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
       }
     }
 
-    auto aabbs =
-        updated_clusters |
-        std::views::transform([](const Cluster &c) -> const pc::AABB & {
-          return c.bounding_box;
-        });
 
     if (config.publish_clusters) {
       ProfilingZone publish_zone("Publish clusters");
-      // auto id_string = std::to_string(config.id);
-      auto operator_name = operator_friendly_names.at(config.id);
-      // TODO pc::AABB is not serializable with some publishers...
-      using namespace pc::client_sync;
-      std::vector<std::array<array3f, 2>> aabbs_in_std_container;
-      std::ranges::transform(aabbs, std::back_inserter(aabbs_in_std_container),
-                             [](const auto &aabb) {
-                               return std::array<array3f, 2>(
-                                   {{aabb.min.x, aabb.min.y, aabb.min.z},
-                                    {aabb.max.x, aabb.max.y, aabb.max.z}});
-                             });
-      publisher::publish_all(std::format("{}.clusters", operator_name),
-                             aabbs_in_std_container);
+      // the following transforms our clusters gives us their bounding
+      // boxes in std containers, which are easily publishable
+      using std_aabb = std::array<std::array<float, 3>, 2>;
+      std::vector<std_aabb> aabbs(updated_clusters.size());
+      std::ranges::transform(
+          updated_clusters, aabbs.begin(), [](const Cluster &cluster) {
+            const auto &aabb = cluster.bounding_box;
+            return std_aabb({{aabb.min.x, aabb.min.y, aabb.min.z},
+                             {aabb.max.x, aabb.max.y, aabb.max.z}});
+          });
+      const auto operator_name = operator_friendly_names.at(config.id);
+      publisher::publish_all(std::format("{}.clusters", operator_name), aabbs);
     }
 
     if (config.calculate_pca) {
@@ -447,7 +441,6 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
       }
 
       current_cluster_pca.store(std::move(output_pca_results));
-
     }
 
     // and latest clusters onto main thread now we're done with them
