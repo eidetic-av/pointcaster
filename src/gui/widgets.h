@@ -150,4 +150,8 @@ bool draw_parameters(unsigned long int structure_id);
 bool draw_icon_button(std::string_view icon, bool small, ImVec4 default_color,
                       ImVec4 hover_color);
 
+void push_context_menu_styles();
+
+void pop_context_menu_styles();
+
 } // namespace pc::gui

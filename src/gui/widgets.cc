@@ -692,4 +692,21 @@ bool draw_icon_button(std::string_view icon, bool small, ImVec4 default_color,
   return pressed;
 }
 
+void push_context_menu_styles() {
+  ImGui::SetNextWindowBgAlpha(0.9f);
+  ImGui::PushStyleColor(ImGuiCol_PopupBg, catpuccin::imgui::mocha_surface);
+  ImGui::PushStyleColor(ImGuiCol_HeaderHovered, catpuccin::imgui::mocha_surface1);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 10});
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10, 10});
+  ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextBorderSize, 1.0f);
+}
+
+void pop_context_menu_styles() {
+  ImGui::PopStyleVar();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleColor();
+}
+
 } // namespace pc::gui

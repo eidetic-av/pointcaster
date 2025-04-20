@@ -1,5 +1,6 @@
 #include "windows.h"
 #include "catpuccin.h"
+#include "widgets.h"
 #include <imgui.h>
 
 namespace pc::gui {
@@ -312,13 +313,8 @@ void draw_devices_window(PointCaster &app) {
   }
 
   // the popup for adding devices if the add device button is pressed
+  gui::push_context_menu_styles();
   ImGui::SetNextWindowSize({180, 0});
-  ImGui::SetNextWindowBgAlpha(0.9f);
-  ImGui::PushStyleColor(ImGuiCol_PopupBg, catpuccin::imgui::mocha_surface);
-  ImGui::PushStyleColor(ImGuiCol_HeaderHovered, catpuccin::imgui::mocha_surface1);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 10});
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10, 10});
-  ImGui::PushStyleVar(ImGuiStyleVar_SeparatorTextBorderSize, 1.0f);
   if (ImGui::BeginPopup("AddDevicePopup", ImGuiWindowFlags_AlwaysAutoResize)) {
     // USB devices
     ImGui::SeparatorText("USB Devices");
@@ -372,11 +368,7 @@ void draw_devices_window(PointCaster &app) {
 
     ImGui::EndPopup();
   }
-  ImGui::PopStyleVar();
-  ImGui::PopStyleVar();
-  ImGui::PopStyleVar();
-  ImGui::PopStyleColor();
-  ImGui::PopStyleColor();
+  gui::pop_context_menu_styles();
 
   {
     std::lock_guard lock(devices::device_configs_access);
