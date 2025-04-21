@@ -111,7 +111,6 @@ public:
   void open_orbbec_sensor(std::string_view ip);
   void open_ply_sequence();
 
-protected:
   PointCasterSession _session;
   std::mutex _session_devices_mutex;
 
@@ -200,6 +199,7 @@ protected:
   std::vector<float> frame_durations;
   void draw_stats(const float delta_time);
 
+protected:
   void drawEvent() override;
   void viewportEvent(ViewportEvent &event) override;
 

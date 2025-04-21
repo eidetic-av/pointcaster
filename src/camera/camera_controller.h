@@ -38,8 +38,8 @@ public:
 
   std::optional<Magnum::Vector2> viewport_size;
 
-  CameraController(Magnum::Platform::Application *app, Scene3D *scene);
-  CameraController(Magnum::Platform::Application *app, Scene3D *scene, CameraConfiguration config);
+  CameraController(Magnum::Platform::Application *app, Scene3D *scene,
+                   CameraConfiguration config = {});
 
   ~CameraController();
 

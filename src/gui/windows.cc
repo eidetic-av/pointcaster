@@ -378,4 +378,55 @@ void draw_devices_window(PointCaster &app) {
   ImGui::End();
   ImGui::PopStyleVar();
 }
+
+void show_app_menu() { ImGui::OpenPopup("AppMenuPopup"); }
+
+void draw_app_menu(PointCaster &app) {
+  gui::push_context_menu_styles();
+  ImGui::SetNextWindowSize({125, -FLT_MIN});
+  if (ImGui::BeginPopup("AppMenuPopup")) {
+    if (ImGui::BeginMenu("File")) {
+      if (ImGui::MenuItem("New Workspace")) {
+        ImGui::CloseCurrentPopup();
+        pc::logger->info("New workspace...");
+      }
+      if (ImGui::MenuItem("New Session")) {
+        ImGui::CloseCurrentPopup();
+        pc::logger->info("New session...");
+      }
+      ImGui::Separator();
+      if (ImGui::MenuItem("Load Workspace")) {
+        ImGui::CloseCurrentPopup();
+        pc::logger->info("Load project...");
+      }
+      if (ImGui::MenuItem("Load Session into Workspace")) {
+        ImGui::CloseCurrentPopup();
+        pc::logger->info("Load session...");
+      }
+      ImGui::Separator();
+      if (ImGui::MenuItem("Save", "s")) {
+        ImGui::CloseCurrentPopup();
+        app.run_async([&] { app.save_session(); });
+      }
+      if (ImGui::MenuItem("Save As...")) { pc::logger->info("Save as..."); }
+      ImGui::Separator();
+      if (ImGui::MenuItem("Exit", "q")) {
+        ImGui::CloseCurrentPopup();
+        app.run_async([&] { app.quit(); });
+      }
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Window")) { ImGui::EndMenu(); }
+    if (ImGui::BeginMenu("Help")) {
+      if (ImGui::MenuItem("About")) { ImGui::CloseCurrentPopup(); }
+      if (ImGui::MenuItem("View third-party licenses")) {
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndMenu();
+    }
+    ImGui::EndPopup();
+  }
+  gui::pop_context_menu_styles();
+}
+
 } // namespace pc::gui

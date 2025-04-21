@@ -692,6 +692,37 @@ bool draw_icon_button(std::string_view icon, bool small, ImVec4 default_color,
   return pressed;
 }
 
+bool draw_icon_tab_button(std::string_view icon_string, ImGuiTabItemFlags flags,
+                          ImVec2 pos_offset) {
+  auto &style = ImGui::GetStyle();
+
+  ImGui::PushStyleColor(ImGuiCol_Tab, style.Colors[ImGuiCol_WindowBg]);
+  ImGui::PushStyleColor(ImGuiCol_TabHovered, style.Colors[ImGuiCol_WindowBg]);
+
+  ImGui::SetNextItemWidth(25.0f);
+
+  bool clicked = ImGui::TabItemButton(
+      std::format("##{}", gui::_parameter_index++).c_str(), flags);
+  ImGui::PopStyleColor(2);
+
+  bool hovered = ImGui::IsItemHovered();
+  ImRect bb = ImGui::GetCurrentContext()->LastItemData.Rect;
+
+  ImGui::PushFont(icon_font.get());
+  auto icon_size = ImGui::CalcTextSize(icon_string.data());
+  ImVec2 button_size{icon_size.x * 0.5f, icon_size.y * 0.5f};
+  ImVec2 pos{bb.Min.x + (bb.GetWidth() - button_size.x) * 0.5f,
+             bb.Min.y + (bb.GetHeight() - button_size.y) * 0.5f - 3.0f};
+  ImU32 col = hovered ? ImGui::GetColorU32(ImGuiCol_Text)
+                      : ImGui::GetColorU32(ImGuiCol_TextDisabled);
+  ImGui::GetWindowDrawList()->AddText(icon_font.get(), ImGui::GetFontSize(),
+                                      pos + pos_offset, col,
+                                      icon_string.data());
+  ImGui::PopFont();
+
+  return clicked;
+};
+
 void push_context_menu_styles() {
   ImGui::SetNextWindowBgAlpha(0.9f);
   ImGui::PushStyleColor(ImGuiCol_PopupBg, catpuccin::imgui::mocha_surface);

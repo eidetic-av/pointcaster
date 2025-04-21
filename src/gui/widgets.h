@@ -150,6 +150,10 @@ bool draw_parameters(unsigned long int structure_id);
 bool draw_icon_button(std::string_view icon, bool small, ImVec4 default_color,
                       ImVec4 hover_color);
 
+bool draw_icon_tab_button(std::string_view icon_string,
+                          ImGuiTabItemFlags flags = ImGuiTabItemFlags_None,
+                          ImVec2 pos_offset = {0, 0});
+
 void push_context_menu_styles();
 
 void pop_context_menu_styles();

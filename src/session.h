@@ -42,10 +42,10 @@ using PublishedParameterList = std::vector<std::string>;
 
 struct PointCasterSession {
   std::string id;
+  std::string label;
 
   DeviceMap devices; // @optional
-  CameraMap cameras; // @optional
-
+  std::optional<camera::CameraConfiguration> camera;
   std::optional<radio::RadioConfiguration> radio;
   std::optional<devices::UsbConfiguration> usb;
   std::optional<mqtt::MqttClientConfiguration> mqtt;

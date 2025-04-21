@@ -37,11 +37,7 @@ using namespace pc::parameters;
 std::atomic<std::size_t> CameraController::count = 0;
 
 CameraController::CameraController(Magnum::Platform::Application *app,
-                                   Scene3D *scene)
-    : CameraController(app, scene, CameraConfiguration{}){};
-
-CameraController::CameraController(Magnum::Platform::Application *app,
-				   Scene3D *scene, CameraConfiguration config)
+                                   Scene3D *scene, CameraConfiguration config)
     : _app(app), _config(config), _frame_analyser(this) {
 
   _anchor = std::make_unique<Object3D>(scene);

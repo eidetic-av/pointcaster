@@ -1,5 +1,6 @@
 #include "pointcaster.h"
 
+#include "camera/camera_config.gen.h"
 #include "pch.h"
 
 #include "devices/k4a/k4a_config.gen.h"
@@ -185,8 +186,8 @@ PointCaster::PointCaster(const Arguments &args)
 
   // enable window docking
   ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-  // ImGui::GetIO().ConfigFlags |= ImGuiDockNodeFlags_PassthruCentralNode;
-  // ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+  ImGui::GetIO().ConfigFlags |= ImGuiDockNodeFlags_PassthruCentralNode;
+  ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
   // enable keyboard tab & arrows navigation
   ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -422,17 +423,10 @@ void PointCaster::save_session(std::filesystem::path file_path) {
     }
   }
 
-  // parse cameras
-  output_session.cameras.clear();
-  for (auto &camera : _camera_controllers) {
-    auto config = camera->config();
-    config.name = {};
-    config.id = {};
-    config.show_window = true;
-    if (!config.empty()) {
-      output_session.cameras.emplace(camera->name(), camera->config());
-    }
-  }
+  // save a camera config if it exists
+  output_session.camera = !_camera_controllers.empty()
+                              ? _camera_controllers.at(0)->config()
+                              : CameraConfiguration{};
 
   // parse optional config members
 
@@ -536,15 +530,11 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   }
 
   // get saved camera configurations and populate the cams list
-  for (auto &[camera_id, camera_config] : _session.cameras) {
-    auto saved_camera =
-        std::make_unique<CameraController>(this, _scene.get(), camera_config);
-    saved_camera->camera().setViewport(
-        GL::defaultFramebuffer.viewport().size());
-    _camera_controllers.push_back(std::move(saved_camera));
-    _session_operator_graph->add_output_node(
-        _camera_controllers.back()->config());
-  }
+  auto saved_camera = std::make_unique<CameraController>(
+      this, _scene.get(),
+      _session.camera ? *_session.camera : CameraConfiguration{});
+  saved_camera->camera().setViewport(GL::defaultFramebuffer.viewport().size());
+  _camera_controllers.push_back(std::move(saved_camera));
 
   if (!_session.usb.has_value()) { _session.usb = UsbConfiguration{}; }
 
@@ -1014,424 +1004,340 @@ void PointCaster::find_mode_keypress(KeyEvent &event) {
 
 void PointCaster::draw_main_viewport() {
 
-  ImGuiWindowClass docking_viewport_class = {};
+  static std::vector<PointCasterSession> sessions;
+  static int selected_session_index = 0;
+  static std::optional<int> remove_session_index;
+  static std::optional<int> rename_session_index;
+  static std::optional<int> new_session_index;
+  static ImVec2 rename_tab_pos;
+  static std::string rename_edit_buffer;
 
-  ImGuiID id =
-      ImGui::DockSpaceOverViewport(0, nullptr,
-                                   ImGuiDockNodeFlags_NoDockingInCentralNode |
-                                       ImGuiDockNodeFlags_PassthruCentralNode,
-                                   nullptr);
-  ImGuiDockNode *node = ImGui::DockBuilderGetCentralNode(id);
+  if (sessions.empty()) {
+    for (int i = 0; i < 3; i++) {
+      sessions.push_back(
+          {.id = uuid::word(), .label = std::format("session_{}", i)});
+    }
+  }
 
-  ImGuiWindowClass central_always = {};
-  central_always.DockNodeFlagsOverrideSet |=
-      ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_NoDockingOverMe;
-  ImGui::SetNextWindowClass(&central_always);
-  ImGui::SetNextWindowDockID(node->ID, ImGuiCond_Always);
+  constexpr float tab_bar_height = 20;
+  ImGuiViewport *vp = ImGui::GetMainViewport();
 
+  // draw the tab bar at the top which can't be docked into and isn't part of
+  // the workspace
+  ImGui::SetNextWindowPos({vp->Pos.x, vp->Pos.y});
+  ImGui::SetNextWindowSize({vp->Size.x, tab_bar_height});
+  ImGui::SetNextWindowViewport(vp->ID);
+  ImGuiWindowFlags tabbar_flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoDocking;
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 5});
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {10, 5});
+  ImGui::Begin("##TabBar", nullptr, tabbar_flags);
+  if (ImGui::BeginTabBar("Sessions", ImGuiTabBarFlags_Reorderable)) {
 
-  if (ImGui::Begin("ViewportRoot")) {
+    auto &style = ImGui::GetStyle();
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+
+    // app/file menu button at the start of the tab bar
+    if (gui::draw_icon_tab_button(ICON_FA_BARS)) { gui::show_app_menu(); }
+
+    // add new session button at the end of the tab bar
+    if (gui::draw_icon_tab_button(ICON_FA_CIRCLE_PLUS,
+                                  ImGuiTabItemFlags_Trailing, {-7, 0})) {
+      ImGui::OpenPopup("AddSessionPopup");
+    }
+
+    gui::draw_app_menu(*this);
+
+    gui::push_context_menu_styles();
+    if (ImGui::BeginPopup("AddSessionPopup",
+                          ImGuiWindowFlags_AlwaysAutoResize)) {
+      if (ImGui::MenuItem("Add new session to workspace")) {
+        new_session_index = sessions.size();
+        auto new_label_num = *new_session_index;
+        auto new_label = std::format("session_{}", new_label_num);
+        while (std::ranges::any_of(sessions, [&](auto &session) {
+          return session.label == new_label;
+        })) {
+          new_label = std::format("session_{}", ++new_label_num);
+        }
+        sessions.push_back({.id = uuid::word(), .label = new_label});
+      }
+      if (ImGui::MenuItem("Load session from disk")) {
+        pc::logger->info("Load?");
+      }
+      ImGui::EndPopup();
+    }
+    gui::pop_context_menu_styles();
+
+    // tab items for each open session
+    constexpr auto tab_width = 125;
+    for (int i = 0; i < sessions.size(); i++) {
+      auto &session = sessions[i];
+      ImGuiTabItemFlags item_flags = ImGuiTabItemFlags_None;
+      if (new_session_index && i == *new_session_index) {
+        item_flags |= ImGuiTabItemFlags_SetSelected;
+        new_session_index.reset();
+      }
+      bool open = true;
+      ImGui::SetNextItemWidth(tab_width);
+      auto tab_name = std::format("{}###{}", session.label, session.id);
+      if (ImGui::BeginTabItem(tab_name.c_str(), &open, item_flags)) {
+        selected_session_index = i;
+        ImGui::EndTabItem();
+      }
+      // open is false on the frame the close button is clicked
+      if (!open) {
+        remove_session_index = i;
+        ImGui::OpenPopup("Delete Session?");
+      }
+      // rename a session on a double click of its tab
+      else if (ImGui::IsItemHovered() &&
+               ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        rename_session_index = i;
+        rename_tab_pos = ImGui::GetItemRectMin();
+        rename_edit_buffer = session.label;
+        ImGui::OpenPopup("RenameSession");
+      }
+    }
+
+    // handle reordering of sessions by dragging tabs around
+    auto *session_tab_bar = ImGui::GetCurrentTabBar();
+    if (session_tab_bar->ReorderRequestTabId) {
+      int source_index = -1;
+      for (int i = 0; i < sessions.size(); i++) {
+        if (ImGui::GetID(sessions[i].id.c_str()) ==
+            session_tab_bar->ReorderRequestTabId) {
+          source_index = i;
+          break;
+        }
+      }
+      int destination_index =
+          source_index + session_tab_bar->ReorderRequestOffset;
+      if (source_index >= 0 && destination_index >= 0 &&
+          destination_index < sessions.size()) {
+        std::swap(sessions[source_index], sessions[destination_index]);
+      }
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 5});
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10, 5});
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {10, 5});
+    if (ImGui::BeginPopupModal("Delete Session?", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize) &&
+        remove_session_index) {
+      auto &target_session = sessions[*remove_session_index];
+      ImGui::Dummy({0, 5});
+      ImGui::Text("%s",
+                  std::format("Really delete '{}' from the current workspace?",
+                              target_session.label)
+                      .c_str());
+      ImGui::Dummy({0, 10});
+
+      if (ImGui::Button("Delete", ImVec2(80, 0))) {
+        int removed_index = *remove_session_index;
+        if (removed_index >= 0 && removed_index < sessions.size()) {
+          sessions.erase(sessions.begin() + removed_index);
+          if (sessions.empty()) {
+            selected_session_index = 0;
+          } else if (removed_index == selected_session_index) {
+            if (selected_session_index >= (int)sessions.size())
+              selected_session_index = (int)sessions.size() - 1;
+          } else if (removed_index < selected_session_index) {
+            selected_session_index--;
+          }
+        }
+        remove_session_index.reset();
+        rename_session_index.reset();
+        new_session_index.reset();
+        ImGui::CloseCurrentPopup();
+      }
+
+      ImGui::SameLine();
+
+      if (ImGui::Button("Cancel", ImVec2(80, 0))) {
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::Dummy({0, 5});
+
+      ImGui::EndPopup();
+    }
+
+    ImGui::PopStyleVar();
+    ImGui::PopStyleVar();
     ImGui::PopStyleVar();
 
-    static std::vector<PointCasterSession> sessions;
-    static int selected_session_index = 0;
-    static std::optional<int> remove_session_index;
-    static std::optional<int> rename_session_index;
-    static std::optional<int> new_session_index;
-    static ImVec2 rename_tab_pos;
-    static std::string rename_edit_buffer;
-
-    if (sessions.empty()) {
-      for (int i = 0; i < 3; i++) {
-        sessions.push_back({.id = std::format("session_{}", i)});
+    ImGui::SetNextWindowPos(rename_tab_pos, ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize({tab_width, -FLT_MIN});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+    if (ImGui::BeginPopup("RenameSession", ImGuiWindowFlags_NoDecoration) &&
+        rename_session_index) {
+      auto &target_session = sessions[*rename_session_index];
+      auto rename_input_label =
+          fmt::format("##rename_session_{}", *rename_session_index);
+      if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+      ImGui::PushItemWidth(tab_width);
+      if (ImGui::InputText(rename_input_label.c_str(), &rename_edit_buffer,
+                           ImGuiInputTextFlags_AutoSelectAll |
+                               ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (std::ranges::any_of(sessions, [&](auto &session) {
+              return session.label == rename_edit_buffer;
+            })) {
+          // can't name two sessions the same name
+          rename_edit_buffer.clear();
+        }
+        target_session.label = rename_edit_buffer.empty() ? target_session.label
+                                                          : rename_edit_buffer;
+        ImGui::CloseCurrentPopup();
+        new_session_index = *rename_session_index;
+        rename_session_index.reset();
       }
+      ImGui::EndPopup();
     }
-    
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {10, 5});
+    ImGui::PopStyleVar();
 
-    if (ImGui::BeginTabBar("Sessions", ImGuiTabBarFlags_Reorderable)) {
-
-      auto &style = ImGui::GetStyle();
-      ImDrawList *dl = ImGui::GetWindowDrawList();
-
-      constexpr auto tab_button =
-          [](std::shared_ptr<ImFont> font, std::string_view text,
-             ImGuiTabItemFlags flags = ImGuiTabItemFlags_None,
-             ImVec2 pos_offset = {0, 0}) -> bool {
-        auto &style = ImGui::GetStyle();
-        ImGui::PushStyleColor(ImGuiCol_Tab, style.Colors[ImGuiCol_WindowBg]);
-        ImGui::PushStyleColor(ImGuiCol_TabHovered,
-                              style.Colors[ImGuiCol_WindowBg]);
-        ImGui::SetNextItemWidth(25.0f);
-        bool clicked = ImGui::TabItemButton(
-            std::format("##{}", gui::_parameter_index++).c_str(), flags);
-        ImGui::PopStyleColor(2);
-
-        bool hovered = ImGui::IsItemHovered();
-        ImRect bb = ImGui::GetCurrentContext()->LastItemData.Rect;
-        auto dl = ImGui::GetWindowDrawList();
-
-        ImGui::PushFont(font.get());
-        auto text_size = ImGui::CalcTextSize(text.data());
-        ImVec2 button_size{text_size.x * 0.5f, text_size.y * 0.5f};
-        ImVec2 pos{bb.Min.x + (bb.GetWidth() - button_size.x) * 0.5f,
-                   bb.Min.y + (bb.GetHeight() - button_size.y) * 0.5f - 3.0f};
-        ImU32 col = hovered ? ImGui::GetColorU32(ImGuiCol_Text)
-                            : ImGui::GetColorU32(ImGuiCol_TextDisabled);
-        dl->AddText(font.get(), ImGui::GetFontSize(), pos + pos_offset, col,
-                    text.data());
-        ImGui::PopFont();
-
-        return clicked;
-      };
-
-      // app/file menu button at the start of the tab bar
-      if (tab_button(_icon_font, ICON_FA_BARS)) {
-        ImGui::OpenPopup("AppMenuPopup");
-      }
-
-      // add new session button at the end of the tab bar
-      if (tab_button(_icon_font, ICON_FA_CIRCLE_PLUS,
-                     ImGuiTabItemFlags_Trailing, {-7, 0})) {
-        ImGui::OpenPopup("AddSessionPopup");
-      }
-
-      gui::push_context_menu_styles();
-      ImGui::SetNextWindowSize({125, -FLT_MIN});
-      if (ImGui::BeginPopup("AppMenuPopup")) {
-        if (ImGui::BeginMenu("File")) {
-          if (ImGui::MenuItem("New Workspace")) {
-            ImGui::CloseCurrentPopup();
-            pc::logger->info("New workspace...");
-          }
-          if (ImGui::MenuItem("New Session")) {
-            ImGui::CloseCurrentPopup();
-            pc::logger->info("New session...");
-          }
-          ImGui::Separator();
-          if (ImGui::MenuItem("Load Workspace")) {
-            ImGui::CloseCurrentPopup();
-            pc::logger->info("Load project...");
-          }
-          if (ImGui::MenuItem("Load Session into Workspace")) {
-            ImGui::CloseCurrentPopup();
-            pc::logger->info("Load session...");
-          }
-          ImGui::Separator();
-          if (ImGui::MenuItem("Save")) {
-            ImGui::CloseCurrentPopup();
-            save_session();
-          }
-          if (ImGui::MenuItem("Save As...")) { pc::logger->info("Save as..."); }
-          ImGui::Separator();
-          if (ImGui::MenuItem("Exit")) {
-            ImGui::CloseCurrentPopup();
-            quit();
-          }
-          ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("Window")) { ImGui::EndMenu(); }
-        if (ImGui::BeginMenu("Help")) {
-          if (ImGui::MenuItem("About")) { ImGui::CloseCurrentPopup(); }
-          if (ImGui::MenuItem("View third-party licenses")) {
-            ImGui::CloseCurrentPopup();
-          }
-          ImGui::EndMenu();
-        }
-        ImGui::EndPopup();
-      }
-      gui::pop_context_menu_styles();
-
-      gui::push_context_menu_styles();
-      if (ImGui::BeginPopup("AddSessionPopup",
-                            ImGuiWindowFlags_AlwaysAutoResize)) {
-        if (ImGui::MenuItem("Add new session to workspace")) {
-          new_session_index = sessions.size();
-          auto new_id_num = *new_session_index;
-          auto new_id = std::format("session_{}", new_id_num);
-          while (std::ranges::any_of(
-              sessions, [&](auto &session) { return session.id == new_id; })) {
-            new_id = std::format("session_{}", ++new_id_num);
-          }
-          sessions.push_back({.id = new_id});
-        }
-        if (ImGui::MenuItem("Load session from disk")) {
-          pc::logger->info("Load?");
-        }
-        ImGui::EndPopup();
-      }
-      gui::pop_context_menu_styles();
-
-      // tab items for each open session
-      constexpr auto tab_width = 125;
-      for (int i = 0; i < sessions.size(); i++) {
-        auto& session = sessions[i];
-        ImGuiTabItemFlags item_flags = ImGuiTabItemFlags_None;
-        if (new_session_index && i == *new_session_index) {
-          item_flags |= ImGuiTabItemFlags_SetSelected;
-          new_session_index.reset();
-        }
-        bool open = true;
-        ImGui::SetNextItemWidth(tab_width);
-        if (ImGui::BeginTabItem(session.id.c_str(), &open, item_flags)) {
-          selected_session_index = i;
-          ImGui::EndTabItem();
-        }
-        // open is false on the frame the close button is clicked
-        if (!open) {
-          remove_session_index = i;
-          ImGui::OpenPopup("Delete Session?");
-        }
-        // rename a session on a double click of its tab
-        else if (ImGui::IsItemHovered() &&
-                 ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-          rename_session_index = i;
-          rename_tab_pos = ImGui::GetItemRectMin();
-          rename_edit_buffer = session.id;
-          ImGui::OpenPopup("RenameSession");
-        }
-      }
-
-      // handle reordering of sessions by dragging tabs around
-      auto *session_tab_bar = ImGui::GetCurrentTabBar();
-      if (session_tab_bar->ReorderRequestTabId) {
-        int source_index = -1;
-        for (int i = 0; i < sessions.size(); i++) {
-          if (ImGui::GetID(sessions[i].id.c_str()) ==
-              session_tab_bar->ReorderRequestTabId) {
-            source_index = i;
-            break;
-          }
-        }
-        int destination_index =
-            source_index + session_tab_bar->ReorderRequestOffset;
-        if (source_index >= 0 && destination_index >= 0 &&
-            destination_index < sessions.size()) {
-          std::swap(sessions[source_index], sessions[destination_index]);
-        }
-      }
-
-      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 5});
-      ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10, 5});
-      ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {10, 5});
-      if (ImGui::BeginPopupModal("Delete Session?", nullptr,
-                                 ImGuiWindowFlags_AlwaysAutoResize) &&
-          remove_session_index) {
-        auto &target_session = sessions[*remove_session_index];
-        ImGui::Dummy({0, 5});
-        ImGui::Text(
-            "%s", std::format("Really delete '{}' from the current workspace?",
-                              target_session.id)
-                      .c_str());
-        ImGui::Dummy({0, 10});
-
-        if (ImGui::Button("Delete", ImVec2(80, 0))) {
-          int removed_index = *remove_session_index;
-          if (removed_index >= 0 && removed_index < sessions.size()) {
-            sessions.erase(sessions.begin() + removed_index);
-            if (sessions.empty()) {
-              selected_session_index = 0;
-            } else if (removed_index == selected_session_index) {
-              if (selected_session_index >= (int)sessions.size())
-                selected_session_index = (int)sessions.size() - 1;
-            } else if (removed_index < selected_session_index) {
-              selected_session_index--;
-            }
-          }
-          remove_session_index.reset();
-          rename_session_index.reset();
-          new_session_index.reset();
-          ImGui::CloseCurrentPopup();
-        }
-
-        ImGui::SameLine();
-
-        if (ImGui::Button("Cancel", ImVec2(80, 0))) {
-          ImGui::CloseCurrentPopup();
-        }
-        ImGui::Dummy({0, 5});
-
-        ImGui::EndPopup();
-      }
-
-      ImGui::PopStyleVar();
-      ImGui::PopStyleVar();
-      ImGui::PopStyleVar();
-
-      ImGui::SetNextWindowPos(rename_tab_pos, ImGuiCond_Appearing);
-      ImGui::SetNextWindowSize({tab_width, 25});
-      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-      if (ImGui::BeginPopup("RenameSession", ImGuiWindowFlags_NoDecoration) &&
-          rename_session_index) {
-        auto &target_session = sessions[*rename_session_index];
-        auto rename_input_label =
-            fmt::format("##rename_session_{}", *rename_session_index);
-        if (ImGui::InputText(rename_input_label.c_str(), &rename_edit_buffer,
-                             ImGuiInputTextFlags_AutoSelectAll |
-                                 ImGuiInputTextFlags_EnterReturnsTrue)) {
-          target_session.id = rename_edit_buffer.empty() ? target_session.id
-                                                         : rename_edit_buffer;
-          ImGui::CloseCurrentPopup();
-          new_session_index = *rename_session_index;
-          rename_session_index.reset();
-        }
-        ImGui::EndPopup();
-      }
-      ImGui::PopStyleVar(); // ImGuiStyleVar_WindowPadding
-
-      ImGui::PopStyleVar(); // ImGuiStyleVar_FramePadding
-
-      constexpr auto camera_tab_bar_flags =
-          ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_NoTooltip;
-
-      if (ImGui::BeginTabBar("Cameras"), camera_tab_bar_flags) {
-
-        // button for creating a new camera
-        auto new_camera_index = -1;
-        if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing)) {
-          auto new_camera =
-              std::make_unique<CameraController>(this, _scene.get());
-          _camera_controllers.push_back(std::move(new_camera));
-          _session_operator_graph->add_output_node(
-              _camera_controllers.back()->config());
-          new_camera_index = _camera_controllers.size() - 1;
-          pc::logger->debug("new camera: {}", new_camera_index);
-        }
-
-        _interacting_camera_controller = std::nullopt;
-
-        for (int i = 0; i < _camera_controllers.size(); i++) {
-          auto &camera_controller = _camera_controllers.at(i);
-          const auto camera_config = camera_controller->config();
-
-          ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
-          if (new_camera_index == i)
-            tab_item_flags |= ImGuiTabItemFlags_SetSelected;
-
-          if (ImGui::BeginTabItem(camera_controller->name().data(), nullptr,
-                                  tab_item_flags)) {
-
-            const auto window_size = ImGui::GetWindowSize();
-
-            auto *tab_bar = ImGui::GetCurrentTabBar();
-            float tab_bar_height =
-                (tab_bar->BarRect.Max.y - tab_bar->BarRect.Min.y) + 5;
-            // TODO 5 pixels above? where's it come from
-
-            if (_session.layout.hide_ui) {
-              tab_bar_height = 0;
-              ImGui::SetCursorPosY(0);
-            }
-
-            const auto draw_frame_labels = [&camera_controller](
-                                               ImVec2 viewport_offset) {
-              ImGui::PushStyleColor(ImGuiCol_Text, {1.0f, 1.0f, 0.0f, 1.0f});
-              for (auto label : camera_controller->labels()) {
-                auto &pos = label.position;
-                auto x = static_cast<float>(viewport_offset.x + pos.x);
-                auto y = static_cast<float>(viewport_offset.y + pos.y);
-                ImGui::SetCursorPos({x, y});
-                ImGui::Text("%s", label.text.data());
-              }
-              ImGui::PopStyleColor();
-            };
-
-            auto rendering = camera_config.rendering;
-            auto scale_mode = rendering.scale_mode;
-            const Vector2 frame_space{window_size.x,
-                                      window_size.y - tab_bar_height};
-            camera_controller->viewport_size = frame_space;
-
-            if (scale_mode == (int)ScaleMode::Span) {
-
-              auto image_pos = ImGui::GetCursorPos();
-              ImGuiIntegration::image(camera_controller->color_frame(),
-                                      {frame_space.x(), frame_space.y()});
-
-              auto analysis = camera_config.analysis;
-
-              if (analysis.enabled && (analysis.contours.draw)) {
-                ImGui::SetCursorPos(image_pos);
-                ImGuiIntegration::image(camera_controller->analysis_frame(),
-                                        {frame_space.x(), frame_space.y()});
-                draw_frame_labels(image_pos);
-              }
-            } else if (scale_mode == (int)ScaleMode::Letterbox) {
-
-              float width, height, horizontal_offset, vertical_offset;
-
-              auto frame_aspect_ratio =
-                  rendering.resolution[0] /
-                  static_cast<float>(rendering.resolution[1]);
-              auto space_aspect_ratio = frame_space.x() / frame_space.y();
-
-              constexpr auto frame_spacing = 5.0f;
-
-              if (frame_aspect_ratio > space_aspect_ratio) {
-                width = frame_space.x();
-                height = std::round(width / frame_aspect_ratio);
-                horizontal_offset = 0.0f;
-                vertical_offset = std::max(
-                    0.0f, (frame_space.y() - height) / 2.0f - frame_spacing);
-              } else {
-                height = frame_space.y() - 2 * frame_spacing;
-                width = std::round(height * frame_aspect_ratio);
-                vertical_offset = 0.0f;
-                horizontal_offset =
-                    std::max(0.0f, (frame_space.x() - width) / 2.0f);
-              }
-
-              ImGui::Dummy({horizontal_offset, vertical_offset});
-              if (horizontal_offset != 0.0f) ImGui::SameLine();
-
-              constexpr auto border_size = 1.0f;
-              ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, border_size);
-              ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0, 0});
-
-              ImGui::BeginChildFrame(ImGui::GetID("letterboxed"),
-                                     {width, height});
-
-              auto image_pos = ImGui::GetCursorPos();
-              ImGuiIntegration::image(camera_controller->color_frame(),
-                                      {width, height});
-
-              auto &analysis = camera_controller->config().analysis;
-
-              if (analysis.enabled && (analysis.contours.draw)) {
-                ImGui::SetCursorPos(image_pos);
-                ImGuiIntegration::image(camera_controller->analysis_frame(),
-                                        {width, height});
-                draw_frame_labels(image_pos);
-              }
-
-              ImGui::EndChildFrame();
-
-              ImGui::PopStyleVar();
-              ImGui::PopStyleVar();
-
-              if (horizontal_offset != 0.0f) ImGui::SameLine();
-              ImGui::Dummy({horizontal_offset, vertical_offset});
-            }
-
-            if (!_session.layout.hide_ui) {
-              // draw_viewport_controls(*camera_controller);
-              if (_session.layout.show_log) { draw_onscreen_log(); }
-            }
-
-            if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows)) {
-              _interacting_camera_controller = *camera_controller;
-            }
-
-            ImGui::EndTabItem();
-          }
-        }
-        ImGui::EndTabBar(); // cameras tab bar
-      }
-      ImGui::EndTabBar(); // session tab bar
-    }
-    ImGui::End(); // "ViewportRoot"
+    ImGui::EndTabBar(); // session tab bar
   }
+  ImGui::End();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleVar();
+
+  // main docking workspace below the tab bar
+  ImGui::SetNextWindowPos({vp->Pos.x, vp->Pos.y + tab_bar_height});
+  ImGui::SetNextWindowSize({vp->Size.x, vp->Size.y - tab_bar_height});
+  ImGui::SetNextWindowViewport(vp->ID);
+  ImGuiWindowFlags host_flags =
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+      ImGuiWindowFlags_NoBringToFrontOnFocus;
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+  ImGui::Begin("##DockSpaceHost", nullptr, host_flags);
+  ImGuiID dockspace_id = ImGui::GetID("MainDockSpace");
+  ImGui::DockSpace(dockspace_id, {0, 0},
+                   ImGuiDockNodeFlags_PassthruCentralNode |
+                       ImGuiDockNodeFlags_NoDockingInCentralNode);
+  ImGui::End();
+  ImGui::PopStyleVar();
+
+  // the central content inside the workspace is our camera render
+  ImGui::SetNextWindowDockID(dockspace_id, ImGuiCond_Always);
+  ImGuiWindowClass wc = {};
+  wc.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoTabBar;
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+  ImGui::SetNextWindowClass(&wc);
+  ImGui::Begin("CentralContent", nullptr,
+               ImGuiWindowFlags_NoCollapse |
+                   ImGuiWindowFlags_NoBringToFrontOnFocus);
+  {
+    auto &camera_controller = _camera_controllers.at(0);
+    const auto camera_config = camera_controller->config();
+
+    const auto window_size = ImGui::GetContentRegionAvail();
+
+    if (_session.layout.hide_ui) { ImGui::SetCursorPosY(0); }
+
+    const auto draw_frame_labels =
+        [&camera_controller](ImVec2 viewport_offset) {
+          ImGui::PushStyleColor(ImGuiCol_Text, {1.0f, 1.0f, 0.0f, 1.0f});
+          for (auto label : camera_controller->labels()) {
+            auto &pos = label.position;
+            auto x = static_cast<float>(viewport_offset.x + pos.x);
+            auto y = static_cast<float>(viewport_offset.y + pos.y);
+            ImGui::SetCursorPos({x, y});
+            ImGui::Text("%s", label.text.data());
+          }
+          ImGui::PopStyleColor();
+        };
+
+    auto rendering = camera_config.rendering;
+    auto scale_mode = rendering.scale_mode;
+    const Vector2 frame_space{window_size.x, window_size.y};
+    camera_controller->viewport_size = frame_space;
+
+    if (scale_mode == (int)ScaleMode::Span) {
+
+      auto image_pos = ImGui::GetCursorPos();
+      ImGuiIntegration::image(camera_controller->color_frame(),
+                              {frame_space.x(), frame_space.y()});
+
+      auto analysis = camera_config.analysis;
+
+      if (analysis.enabled && (analysis.contours.draw)) {
+        ImGui::SetCursorPos(image_pos);
+        ImGuiIntegration::image(camera_controller->analysis_frame(),
+                                {frame_space.x(), frame_space.y()});
+        draw_frame_labels(image_pos);
+      }
+    } else if (scale_mode == (int)ScaleMode::Letterbox) {
+
+      float width, height, horizontal_offset, vertical_offset;
+
+      auto frame_aspect_ratio =
+          rendering.resolution[0] /
+          static_cast<float>(rendering.resolution[1]);
+      auto space_aspect_ratio = frame_space.x() / frame_space.y();
+
+      constexpr auto frame_spacing = 5.0f;
+
+      if (frame_aspect_ratio > space_aspect_ratio) {
+        width = frame_space.x();
+        height = std::round(width / frame_aspect_ratio);
+        horizontal_offset = 0.0f;
+        vertical_offset =
+            std::max(0.0f, (frame_space.y() - height) / 2.0f -
+            frame_spacing);
+      } else {
+        height = frame_space.y() - 2 * frame_spacing;
+        width = std::round(height * frame_aspect_ratio);
+        vertical_offset = 0.0f;
+        horizontal_offset = std::max(0.0f, (frame_space.x() - width) / 2.0f);
+      }
+
+      ImGui::Dummy({horizontal_offset, vertical_offset});
+      if (horizontal_offset != 0.0f) ImGui::SameLine();
+
+      constexpr auto border_size = 1.0f;
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, border_size);
+      ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0, 0});
+
+      ImGui::BeginChildFrame(ImGui::GetID("letterboxed"), {width, height});
+
+      auto image_pos = ImGui::GetCursorPos();
+      ImGuiIntegration::image(camera_controller->color_frame(),
+                              {width, height});
+
+      auto &analysis = camera_controller->config().analysis;
+
+      if (analysis.enabled && (analysis.contours.draw)) {
+        ImGui::SetCursorPos(image_pos);
+        ImGuiIntegration::image(camera_controller->analysis_frame(),
+                                {width, height});
+        draw_frame_labels(image_pos);
+      }
+
+      ImGui::EndChildFrame();
+
+      ImGui::PopStyleVar();
+      ImGui::PopStyleVar();
+
+      if (horizontal_offset != 0.0f) ImGui::SameLine();
+      ImGui::Dummy({horizontal_offset, vertical_offset});
+    }
+
+    if (!_session.layout.hide_ui) {
+      // draw_viewport_controls(*camera_controller);
+      if (_session.layout.show_log) { draw_onscreen_log(); }
+    }
+
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootWindow)) {
+      _interacting_camera_controller = *camera_controller;
+    } else {
+      _interacting_camera_controller.reset();
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar();
 }
 
 void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
@@ -1448,7 +1354,7 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
       ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground;
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-  ImGui::SetNextWindowSize({0, 0}); // auto size
+  ImGui::SetNextWindowSize({0, 0});
   ImGui::Begin("ViewportControls", nullptr, viewport_controls_flags);
 
   constexpr auto draw_button = [button_size](auto content,
@@ -1641,7 +1547,7 @@ void PointCaster::drawEvent() {
       _osc_server->draw_imgui_window();
 #endif
 
-    draw_modeline();
+    // draw_modeline();
   }
 
   _imgui_context.updateApplicationCursor(*this);
