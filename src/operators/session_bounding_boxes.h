@@ -37,7 +37,7 @@ inline Vector3 next_bounding_box_color() {
 
 inline void set_or_create_bounding_box(
     uid id, pc::types::Float3 size, pc::types::Float3 position, Scene3D &scene,
-    SceneGraph::DrawableGroup3D &parent_group, bool visible = true,
+    SceneGraph::DrawableGroup3D &parent_group, bool visible = false,
     std::optional<Color4> color = {}) {
   // get or create the bounding box in the scene
   auto [itr, created_new] = operator_bounding_boxes.emplace(
@@ -61,11 +61,13 @@ template <typename T>
 inline void
 set_or_create_bounding_box(const T &operator_config, Scene3D &scene,
                            SceneGraph::DrawableGroup3D &parent_group,
+                           std::optional<bool> visible = {},
                            std::optional<Color4> color = {}) {
   const auto &id = operator_config.id;
   const auto &size = operator_config.transform.size;
   const auto &position = operator_config.transform.position;
-  const auto draw = has_draw_v<T> ? operator_config.draw : true;
+  auto draw = has_draw_v<T> ? operator_config.draw : false;
+  if (visible.has_value()) draw = *visible;
   set_or_create_bounding_box(id, size, position, scene, parent_group, draw,
                              color);
 }

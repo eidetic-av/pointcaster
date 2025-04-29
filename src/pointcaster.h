@@ -2,6 +2,7 @@
 
 #include "pch.h"
 
+#include "workspace.gen.h"
 #include "devices/sequence/ply_sequence_player_config.gen.h"
 #include "gui/catpuccin.h"
 #include "parameters.h"
@@ -105,13 +106,18 @@ public:
     _async_tasks.emplace_back(f, args...);
   }
 
+  PointcasterWorkspace workspace;
+  std::vector<SessionOperatorHost> session_operator_hosts;
+
+  std::filesystem::path last_modified_workspace_file;
+  std::filesystem::file_time_type last_write_time;
+
   // TODO these shouldn't be part of the PointCaster app class,
   // they should exist inside their own device namespace
   void open_kinect_sensors();
   void open_orbbec_sensor(std::string_view ip);
   void open_ply_sequence();
 
-  PointCasterSession _session;
   std::mutex _session_devices_mutex;
 
   Mode _current_mode{Mode::Normal};
@@ -133,8 +139,6 @@ public:
   std::unique_ptr<SphereRenderer> _sphere_renderer;
 
   std::unique_ptr<WireframeGrid> _ground_grid;
-
-  std::unique_ptr<SessionOperatorHost> _session_operator_host;
   std::unique_ptr<OperatorGraph> _session_operator_graph;
 
   std::unique_ptr<Snapshots> _snapshots_context;
@@ -166,9 +170,11 @@ public:
   Shaders::PhongGL _sphere_shader{NoCreate};
   Containers::Array<SphereInstanceData> _sphere_instance_data;
 
-  void save_session();
-  void save_session(std::filesystem::path file_path);
-  void load_session(std::filesystem::path file_path);
+  void save_workspace();
+  void save_workspace(std::filesystem::path file_path);
+  void load_workspace(std::filesystem::path file_path);
+
+  void sync_session_instances();
 
   std::atomic_bool loading_device = false;
   void load_device(DeviceConfigurationVariant &config);
@@ -182,7 +188,7 @@ public:
   void draw_control_bar();
   void draw_main_viewport();
   void draw_viewport_controls(CameraController &selected_camera);
-  void draw_camera_control_windows();
+  void draw_camera_control_window();
   void draw_devices_window();
   void draw_onscreen_log();
   void draw_modeline();

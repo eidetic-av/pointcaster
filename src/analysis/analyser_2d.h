@@ -13,9 +13,8 @@
 
 namespace pc::analysis {
 
-struct Analyser2DHost {
-  virtual std::string_view name() const = 0;
-};
+// TODO this previously used abstract class is now totally unecessary
+struct Analyser2DHost {};
 
 class Analyser2D {
 

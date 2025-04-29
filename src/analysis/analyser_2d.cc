@@ -363,7 +363,8 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     if (stop_token.stop_requested())
       break;
 
-    std::initializer_list<std::string_view> address_nodes = {_host->name(),
+      // TODO the first address node needs to be per-camera somehow
+    std::initializer_list<std::string_view> address_nodes = {"camera",
                                                              "analyser_2d"};
 
     if (contours.publish) {

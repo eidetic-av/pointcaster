@@ -78,6 +78,8 @@ public:
   auto end() { return _inner_map.end(); }
   auto end() const { return _inner_map.cend(); }
 
+  auto clear() { return _inner_map.clear(); }
+
   std::pair<typename MapType::iterator, bool> emplace(const std::string &key,
                                                       const ValueType &value) {
     return _inner_map.emplace(key, value);

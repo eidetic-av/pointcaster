@@ -1,6 +1,9 @@
 #include "pointcaster.h"
 
 #include "camera/camera_config.gen.h"
+#include "camera/camera_controller.h"
+#include "devices/device.h"
+#include "operators/session_operator_host.h"
 #include "pch.h"
 
 #include "devices/k4a/k4a_config.gen.h"
@@ -12,6 +15,8 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 #include "imgui_internal.h"
+#include "point_cloud_renderer_config.gen.h"
+#include "session.gen.h"
 
 #ifdef WIN32
 #include <SDL2/SDL_Clipboard.h>
@@ -23,42 +28,6 @@
 #include "osc/osc_client.h"
 #include "osc/osc_server.h"
 #endif
-
-#include "camera/camera_controller.h"
-#include "client_sync/sync_server.h"
-#include "devices/device.h"
-#include "devices/k4a/k4a_device.h"
-#include "devices/orbbec/orbbec_device.h"
-#include "devices/sequence/ply_sequence_player.h"
-#include "devices/sequence/ply_sequence_player_config.gen.h"
-#include "devices/usb.h"
-#include "fonts/IconsFontAwesome6.h"
-#include "graph/operator_graph.h"
-#include "gui/widgets.h"
-#include "logger.h"
-#include "main_thread_dispatcher.h"
-#include "midi/midi_device.h"
-#include "modes.h"
-#include "mqtt/mqtt_client.h"
-#include "mqtt/mqtt_client_config.gen.h"
-#include "objects/wireframe_objects.h"
-#include "operators/session_bounding_boxes.h"
-#include "operators/session_operator_host.h"
-#include "path.h"
-#include "point_cloud_renderer.h"
-#include "pointclouds.h"
-#include "pointer.h"
-#include "profiling.h"
-#include "publisher/publisher.h"
-#include "radio/radio.h"
-#include "session.gen.h"
-#include "shaders/texture_display.h"
-#include "snapshots.h"
-#include "sphere_renderer.h"
-#include "structs.h"
-#include "tween/tween_manager.h"
-#include "type_utils.h"
-#include "uuid.h"
 
 // Temporary headers to be removed
 #include <k4a/k4a.h>
@@ -228,18 +197,18 @@ PointCaster::PointCaster(const Arguments &args)
   _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
                           Matrix4::translation(Vector3(0, 0, 0)));
 
-  const auto fetch_session_devices = [this] {
+  const auto fetch_devices = [this] {
     std::lock_guard lock(this->_session_devices_mutex);
-    return this->_session.devices;
+    return this->workspace.devices;
   };
 
 #ifndef WIN32
   const auto fetch_usb_config = [this] {
     std::lock_guard lock(this->_usb_config_mutex);
-    return this->_session.usb.value();
+    return this->workspace.usb.value();
   };
   _usb_monitor =
-      std::make_unique<UsbMonitor>(fetch_usb_config, fetch_session_devices);
+      std::make_unique<UsbMonitor>(fetch_usb_config, fetch_devices);
 #endif
 
   OrbbecDevice::init_context();
@@ -247,48 +216,36 @@ PointCaster::PointCaster(const Arguments &args)
 
   // load last session
   auto data_dir = path::get_or_create_data_directory();
-  std::filesystem::path last_modified_session_file;
-  std::filesystem::file_time_type last_write_time;
 
   for (const auto &entry : std::filesystem::directory_iterator(data_dir)) {
     if (!entry.is_regular_file() || entry.path().extension() != ".toml")
       continue;
 
     auto write_time = std::filesystem::last_write_time(entry);
-    if (last_modified_session_file.empty() || write_time > last_write_time) {
-      last_modified_session_file = entry.path();
+    if (last_modified_workspace_file.empty() || write_time > last_write_time) {
+      last_modified_workspace_file = entry.path();
       last_write_time = write_time;
     }
   }
 
-  if (last_modified_session_file.empty()) {
-    pc::logger->info("No previous session file found. Creating new session.");
-    _session = {.id = pc::uuid::word()};
-    auto file_path = data_dir / (_session.id + ".toml");
-    save_session(file_path);
+  if (last_modified_workspace_file.empty()) {
+    pc::logger->info("No previous workspace found. Creating new workspace.");
+    workspace = {.sessions = {{.id = uuid::word(), .label = "session_0"}}};
+    auto file_path = data_dir / (std::format("{}.toml", uuid::word()));
+    save_workspace(file_path);
   } else {
     pc::logger->info("Found previous session file");
-    load_session(last_modified_session_file);
+    load_workspace(last_modified_workspace_file);
   }
-
-  // If there are no cameras in the scene, initialise at least one
-  if (_camera_controllers.empty()) {
-    auto default_camera_controller =
-        std::make_unique<CameraController>(this, _scene.get());
-    // TODO viewport size needs to be dynamic
-    default_camera_controller->camera().setViewport(
-        GL::defaultFramebuffer.viewport().size());
-    auto &config = default_camera_controller->config();
-    _camera_controllers.push_back(std::move(default_camera_controller));
-    _session_operator_graph->add_output_node(
-        _camera_controllers.back()->config());
-  }
+  sync_session_instances();
 
   // if there is no usb configuration, initialise a default
-  if (!_session.usb.has_value()) {
-    _session.usb = pc::devices::UsbConfiguration{};
+  if (!workspace.usb.has_value()) {
+    workspace.usb = pc::devices::UsbConfiguration{};
   }
-  parameters::declare_parameters("usb", _session.usb.value());
+  // TODO, should this parameter declaration be done inside UsbConfiguration
+  // constructor?
+  parameters::declare_parameters("usb", workspace.usb.value());
 
   const auto viewport_size = GL::defaultFramebuffer.viewport().size();
 
@@ -336,39 +293,41 @@ PointCaster::PointCaster(const Arguments &args)
     _sphere_mesh.setInstanceCount(_sphere_instance_data.size());
   }
 
-  // initialise point cloud operator hosts
-  _session_operator_host = std::make_unique<SessionOperatorHost>(
-      _session.session_operator_host, *_scene.get(), *_scene_root.get());
-
   // Start the timer, loop at 144 Hz max
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  if (!_session.radio.has_value()) { _session.radio = RadioConfiguration{}; }
-  _radio = std::make_unique<Radio>(*_session.radio, *_session_operator_host);
+  if (!workspace.radio.has_value()) { workspace.radio = RadioConfiguration{}; }
 
-  if (!_session.mqtt.has_value()) { _session.mqtt = MqttClientConfiguration{}; }
-  _mqtt = std::make_unique<MqttClient>(*_session.mqtt);
+  // TODO these constructors need to be redone for workspace integration, not
+  // sessions
 
-  if (!_session.midi.has_value()) { _session.midi = MidiDeviceConfiguration{}; }
-  _midi = std::make_unique<MidiDevice>(*_session.midi);
+  _radio = std::make_unique<Radio>(
+      *workspace.radio,
+      session_operator_hosts[workspace.selected_session_index]);
+
+  if (!workspace.mqtt.has_value()) { workspace.mqtt = MqttClientConfiguration{}; }
+  _mqtt = std::make_unique<MqttClient>(*workspace.mqtt);
+
+  if (!workspace.midi.has_value()) { workspace.midi = MidiDeviceConfiguration{}; }
+  _midi = std::make_unique<MidiDevice>(*workspace.midi);
 
 #ifdef WITH_OSC
-  if (!_session.osc_client.has_value()) {
-    _session.osc_client = OscClientConfiguration{};
+  if (!workspace.osc_client.has_value()) {
+    workspace.osc_client = OscClientConfiguration{};
   }
-  _osc_client = std::make_unique<OscClient>(*_session.osc_client);
+  _osc_client = std::make_unique<OscClient>(*workspace.osc_client);
 
-  if (!_session.osc_server.has_value()) {
-    _session.osc_server = OscServerConfiguration{};
+  if (!workspace.osc_server.has_value()) {
+    workspace.osc_server = OscServerConfiguration{};
   }
-  _osc_server = std::make_unique<OscServer>(*_session.osc_server);
+  _osc_server = std::make_unique<OscServer>(*workspace.osc_server);
 #endif
 
-  if (!_session.sync_server.has_value()) {
-    _session.sync_server = SyncServerConfiguration{};
+  if (!workspace.sync_server.has_value()) {
+    workspace.sync_server = SyncServerConfiguration{};
   }
-  _sync_server = std::make_unique<SyncServer>(*_session.sync_server);
+  _sync_server = std::make_unique<SyncServer>(*workspace.sync_server);
 
   _snapshots_context = std::make_unique<Snapshots>();
 
@@ -384,17 +343,21 @@ void PointCaster::quit() {
 }
 
 void PointCaster::save_and_quit() {
-  save_session();
+  save_workspace();
   quit();
 }
 
-void PointCaster::save_session() {
-  auto data_dir = path::get_or_create_data_directory();
-  auto file_path = data_dir / (_session.id + ".toml");
-  save_session(file_path);
+void PointCaster::save_workspace() {
+  if (last_modified_workspace_file.empty()) {
+    auto data_dir = path::get_or_create_data_directory();
+    auto file_path = data_dir / (uuid::word() + ".toml");
+    save_workspace(file_path);
+  } else {
+    save_workspace(last_modified_workspace_file);
+  }
 }
 
-void PointCaster::save_session(std::filesystem::path file_path) {
+void PointCaster::save_workspace(std::filesystem::path file_path) {
   pc::logger->info("Saving session to {}", file_path.string());
 
   // save imgui layout to an adjacent file
@@ -408,89 +371,63 @@ void PointCaster::save_session(std::filesystem::path file_path) {
   layout_file.write(layout_data.data(), layout_data.size());
 
   // create output copy
-  PointCasterSession output_session = _session;
+  PointcasterWorkspace output_workspace = workspace;
 
   // parse devices
-  output_session.devices.clear();
+  output_workspace.devices.clear();
   {
     std::lock_guard lock(pc::devices::device_configs_access);
     for (const auto &device_config_variant_ref : pc::devices::device_configs) {
       std::visit(
           [&](auto &&config) {
-            output_session.devices.emplace(config.id, config);
+            output_workspace.devices.emplace(config.id, config);
           },
           device_config_variant_ref.get());
     }
   }
 
-  // save a camera config if it exists
-  output_session.camera = !_camera_controllers.empty()
-                              ? _camera_controllers.at(0)->config()
-                              : CameraConfiguration{};
-
-  // parse optional config members
-
-  const auto session_type_info = serde::type_info<PointCasterSession>;
-  const auto session_member_sequence =
-      std::make_index_sequence<PointCasterSession::MemberCount>{};
-
-  const auto process_optional_member = [&](auto index) {
-    auto session_member = session_type_info.member_info<index>(_session);
-    auto &session_member_ref = session_member.value();
-    using SessionMemberT = std::decay_t<decltype(session_member_ref)>;
-    if constexpr (pc::types::is_optional_v<SessionMemberT>) {
-      using MemberValueT = std::decay_t<decltype(session_member_ref.value())>;
-
-      // TODO
-
-      // if it does have a value, and its a custom serializable struct, don't
-      // save it if its empty / default
-
-      //     if constexpr (pc::reflect::IsSerializable<MemberValueT>) {
-      // auto output_member =
-      // session_type_info.member_info<index>(output_session); auto&
-      // output_member_ref = output_member.value();
-      //         if (session_member_ref == std::nullopt ||
-      //         session_member_ref->empty()) {
-      //             output_member_ref = std::nullopt;
-      //         }
-      //     }
+  // serialize configs from camera controllers & operator hosts, since they own
+  // the config for the app's lifetime
+  for (size_t i = 0; i < _camera_controllers.size(); i++) {
+    if (output_workspace.sessions.size() <= i) {
+      pc::logger->warn("Mismatched camera controllers & workspace sessions count during workspace save");
+      break;
     }
-  };
-
-  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-    (..., process_optional_member(std::integral_constant<std::size_t, Is>{}));
-  }(session_member_sequence);
+    output_workspace.sessions[i].camera = _camera_controllers[i]->config();
+    output_workspace.sessions[i].session_operator_host =
+        session_operator_hosts[i]._config;
+  }
 
   // parse parameter topic lists
-  output_session.published_params = parameters::published_parameter_topics();
+  output_workspace.published_params = parameters::published_parameter_topics();
 
   // save any friendly names assigned to operators
-  output_session.operator_names.clear();
+  output_workspace.operator_names.clear();
   const auto &op_names = pc::operators::operator_friendly_names;
   std::for_each(op_names.begin(), op_names.end(), [&](auto &&kvp) {
     const auto &[id, name] = kvp;
-    output_session.operator_names[name] = id;
+    output_workspace.operator_names[name] = id;
   });
 
   // similarly save any colors assigned to operators' bounding boxes
-  output_session.operator_colors.clear();
-  const auto &op_colors = pc::operators::operator_bounding_boxes;
-  std::for_each(op_colors.begin(), op_colors.end(), [&](auto &&kvp) {
+  output_workspace.operator_colors.clear();
+  const auto &boxes = pc::operators::operator_bounding_boxes;
+  std::for_each(boxes.begin(), boxes.end(), [&](auto &&kvp) {
     const auto &[id, box] = kvp;
     const auto &name = pc::operators::operator_friendly_names[id];
     auto color = box->getColor();
-    output_session.operator_colors[name] = {color.r(), color.g(), color.b(),
-                                            color.a()};
+    output_workspace.operator_colors[name] = {color.r(), color.g(), color.b(),
+                                              color.a()};
   });
 
-  // output_session.operator_names = pc::operators::operator_friendly_names;
-  auto session_toml = serde::serialize<serde::toml_v>(output_session);
+  auto workspace_toml = serde::serialize<serde::toml_v>(output_workspace);
+  std::ofstream(file_path, std::ios::binary) << toml::format(workspace_toml);
 
-  std::ofstream(file_path, std::ios::binary) << toml::format(session_toml);
+  last_modified_workspace_file = file_path;
+  // last_write_time = std::filesystem::last_write_time(file_path);
 }
 
-void PointCaster::load_session(std::filesystem::path file_path) {
+void PointCaster::load_workspace(std::filesystem::path file_path) {
   pc::logger->info("Loading state from {}", file_path.string());
 
   std::ifstream file(file_path, std::ios::binary);
@@ -502,7 +439,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
 
   try {
     auto file_toml = toml::parse(file);
-    _session = serde::deserialize<PointCasterSession>(file_toml);
+    workspace = serde::deserialize<PointcasterWorkspace>(file_toml);
   } catch (const toml::syntax_error &e) {
     pc::logger->warn("Failed to parse config file toml");
     pc::logger->warn(e.what());
@@ -529,14 +466,7 @@ void PointCaster::load_session(std::filesystem::path file_path) {
     pc::logger->warn("Failed to open adjacent .layout file");
   }
 
-  // get saved camera configurations and populate the cams list
-  auto saved_camera = std::make_unique<CameraController>(
-      this, _scene.get(),
-      _session.camera ? *_session.camera : CameraConfiguration{});
-  saved_camera->camera().setViewport(GL::defaultFramebuffer.viewport().size());
-  _camera_controllers.push_back(std::move(saved_camera));
-
-  if (!_session.usb.has_value()) { _session.usb = UsbConfiguration{}; }
+  if (!workspace.usb.has_value()) { workspace.usb = UsbConfiguration{}; }
 
   // if ((*_session.usb).open_on_launch) {
   //   if (_session.devices.empty()) {
@@ -552,63 +482,53 @@ void PointCaster::load_session(std::filesystem::path file_path) {
   // }
 
   run_async([this] {
-    for (auto &[device_id, device_config] : _session.devices) {
+    for (auto &[device_id, device_config] : workspace.devices) {
       load_device(device_config);
     }
   });
 
   // unpack published parameters, initialising parameter state
-  if (_session.published_params.has_value()) {
-    for (auto &parameter_id : *_session.published_params) {
+  if (workspace.published_params.has_value()) {
+    for (auto &parameter_id : *workspace.published_params) {
       parameters::parameter_states.emplace(parameter_id,
                                            parameters::ParameterState::Publish);
     }
   }
 
-  auto &loaded_operators = _session.session_operator_host.operators;
-  // unpack any operator parameters saved outside its configuration struct
+  // unpack any serialized friendly operator names
+  for (const auto &[name, operator_id] : workspace.operator_names) {
+    set_operator_friendly_name(operator_id, name);
+  }
 
-  // check if we stored friendly names for the operator
-  std::ranges::for_each(loaded_operators, [&](auto &op_variant) {
+  // unpack any serialized operator colors as bounding boxes that are
+  // hidden - this reserves the color for use by the operator that owns the
+  // bounding box
+
+  auto all_workspace_operators =
+      workspace.sessions | std::views::transform([](auto &session) {
+        return std::views::all(session.session_operator_host.operators);
+      }) |
+      std::views::join;
+
+  for (auto &operator_variant : all_workspace_operators) {
     std::visit(
-        [&](auto &&op) {
-          if (auto it = std::ranges::find_if(
-                  _session.operator_names,
-                  [&](const auto &kvp) { return kvp.second == op.id; });
-              it != _session.operator_names.end()) {
-            // found a friendly name entry with an id equal to one of our
-            // loaded operators - so load it in
-            set_operator_friendly_name(op.id, it->first);
+        [&](auto &&operator_config) {
+          // search through our serialized operator colors to find if this
+          // operator_config is present
+          for (const auto &[friendly_name, color] : workspace.operator_colors) {
+            if (!operator_friendly_name_exists(friendly_name)) continue;
+            // if we have an existing operator, grab its ID
+            const auto operator_id =
+                operator_ids_from_friendly_names.at(friendly_name);
+            // and create its bounding box
+            set_or_create_bounding_box(
+                operator_id, {}, {}, *_scene.get(), *_scene_root.get(), false,
+                Magnum::Color4{color[0], color[1], color[2], color[3]});
           }
         },
-        op_variant);
-  });
-  _session.operator_names.clear();
-
-  std::ranges::for_each(loaded_operators, [&](auto &op_variant) {
-    std::visit(
-        [&](auto &&op) {
-          // bounding box colors
-          auto &colors = _session.operator_colors;
-          // search from the saved list and match them to any loaded operators
-          for (const auto &[friendly_name, color] : colors) {
-            if (operator_friendly_name_exists(friendly_name)) {
-              const auto operator_id =
-                  operator_ids_from_friendly_names.at(friendly_name);
-              // if we stored a color, create the bounding box it should be
-              // associated with, but set it to be invisible
-              set_or_create_bounding_box(
-                  operator_id, Float3{}, Float3{}, *_scene.get(),
-                  *_scene_root.get(), false,
-                  Magnum::Color4{color[0], color[1], color[2], color[3]});
-            }
-          }
-        },
-        op_variant);
-  });
-  _session.operator_colors.clear();
-
-  pc::logger->info("Loaded session '{}'", file_path.filename().string());
+        operator_variant);
+  }
+  pc::logger->info("Loaded workspace '{}'", file_path.filename().string());
 }
 
 void PointCaster::load_device(DeviceConfigurationVariant &config) {
@@ -633,18 +553,26 @@ void PointCaster::load_device(DeviceConfigurationVariant &config) {
           devices::attached_devices.emplace_back(
               std::make_shared<PlySequencePlayer>(ply_config));
         }
+
+        // if the device is not already present in each session's
+        // active_device_map, make sure it's in there as active
+        for (auto &session : workspace.sessions) {
+          if (!session.active_devices.contains(device_config.id)) {
+            session.active_devices.emplace(device_config.id, true);
+          }
+        }
       },
       config);
 }
 
 void PointCaster::render_cameras() {
-
-  PointCloud points;
-
   auto skeletons = devices::scene_skeletons();
 
-  for (auto &camera_controller : _camera_controllers) {
-
+  for (size_t i = 0; i < workspace.sessions.size(); i++) {
+    auto &session = workspace.sessions[i];
+    auto &session_operator_host = session_operator_hosts[i];
+    auto &camera_controller = _camera_controllers[i];
+    auto& camera = (*camera_controller).camera();
     auto &rendering_config = camera_controller->config().rendering;
 
     const auto frame_size =
@@ -655,50 +583,18 @@ void PointCaster::render_cameras() {
 
     camera_controller->setup_frame(frame_size);
 
-    // TODO: pass selected physical cameras into the
-    // synthesise_point_cloud function
-    // - make sure to cache already synthesised configurations
-    if (points.empty()) {
+    PointCloud &points = devices::compute_or_get_point_cloud(
+        session.id, session.active_devices,
+        session_operator_host._config.operators);
 
-      // TODO this vector should defs be removed
-      // the synthesized_point_cloud api just requires a reference to a
-      // list which we dont have at the moment
-      std::vector<operators::OperatorHostConfiguration> fix_me_operator_list{
-          _session_operator_host->_config};
-
-      // using namespace std::chrono;
-      // using namespace std::chrono_literals;
-
-      // auto begin = high_resolution_clock::now();
-
-      points = devices::synthesized_point_cloud(fix_me_operator_list);
-
-      // auto end = high_resolution_clock::now();
-      // auto duration_ms = duration_cast<milliseconds>(end - begin).count();
-      // pc::logger->warn("devices::synthesized_point_cloud: {}ms",
-      // duration_ms);
-
-      _session_operator_host->_config = fix_me_operator_list[0];
-
-      // TODO
-      // get the points from THIS camera
-      // auto& config = camera_controller->config();
-      // int node_id = _session_operator_graph->node_id_from_reference(config);
-      // auto path = _session_operator_graph->path_to(node_id);
-      // if (path.size() > 1) pc::logger->info(path.size());
-
-      if (rendering_config.snapshots) points += snapshots::point_cloud();
-
-      _point_cloud_renderer->points = points;
-      _point_cloud_renderer->setDirty();
-    }
+    _point_cloud_renderer->points = points;
+    _point_cloud_renderer->setDirty();
 
     // enable or disable wireframe ground depending on camera settings
     _ground_grid->set_visible(rendering_config.ground_grid);
 
     // draw shaders
-
-    _point_cloud_renderer->draw(camera_controller->camera(), rendering_config);
+    _point_cloud_renderer->draw(camera, rendering_config);
 
     if (rendering_config.skeletons) {
       if (!skeletons.empty()) {
@@ -714,23 +610,111 @@ void PointCaster::render_cameras() {
         _sphere_instance_buffer.setData(_sphere_instance_data,
                                         GL::BufferUsage::DynamicDraw);
         GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
-        _sphere_shader
-            .setProjectionMatrix(camera_controller->camera().projectionMatrix())
-            .setTransformationMatrix(camera_controller->camera().cameraMatrix())
-            .setNormalMatrix(
-                camera_controller->camera().cameraMatrix().normalMatrix())
+        _sphere_shader.setProjectionMatrix(camera.projectionMatrix())
+            .setTransformationMatrix(camera.cameraMatrix())
+            .setNormalMatrix(camera.cameraMatrix().normalMatrix())
             .draw(_sphere_mesh);
         GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
       }
     }
 
     // render camera
-    camera_controller->camera().draw(*_scene_root);
-
+    camera.draw(*_scene_root);
+    // TODO analysis needs to happen every session not just the selected onee
     camera_controller->dispatch_analysis();
+
+    // if (i == workspace.selected_session_index) {
+    //   selected_session_points = points;
+    //   selected_camera_controller = *camera_controller;
+    //   selected_renderer_config = rendering_config;
+    // }
+
+    // if (points.empty()) {
+
+      // TODO
+
+
+      // // TODO this vector should defs be removed
+      // // the synthesized_point_cloud api just requires a reference to a
+      // // list which we dont have at the moment
+      // std::vector<operators::OperatorHostConfiguration> fix_me_operator_list{
+      //     _session_operator_host->_config};
+
+      // // using namespace std::chrono;
+      // // using namespace std::chrono_literals;
+
+      // // auto begin = high_resolution_clock::now();
+
+      // points = devices::synthesized_point_cloud(fix_me_operator_list);
+
+      // // auto end = high_resolution_clock::now();
+      // // auto duration_ms = duration_cast<milliseconds>(end - begin).count();
+      // // pc::logger->warn("devices::synthesized_point_cloud: {}ms",
+      // // duration_ms);
+
+      // _session_operator_host->_config = fix_me_operator_list[0];
+
+      // // TODO
+      // // get the points from THIS camera
+      // // auto& config = camera_controller->config();
+      // // int node_id = _session_operator_graph->node_id_from_reference(config);
+      // // auto path = _session_operator_graph->path_to(node_id);
+      // // if (path.size() > 1) pc::logger->info(path.size());
+
+      // if (rendering_config.snapshots) points += snapshots::point_cloud();
+
+    // }
   }
 
   GL::defaultFramebuffer.bind();
+}
+
+void PointCaster::sync_session_instances() {
+  // build a lookup of existing controllers by session-id
+  std::unordered_map<std::string, std::unique_ptr<CameraController>>
+      controller_map;
+  controller_map.reserve(_camera_controllers.size());
+  for (auto &camera_controller : _camera_controllers) {
+    controller_map.emplace(camera_controller->session_id,
+                           std::move(camera_controller));
+  }
+
+  // rebuild in workspace order, reusing existing camera controllers, or
+  // creating any new ones
+  std::vector<std::unique_ptr<CameraController>> new_controllers;
+  new_controllers.reserve(workspace.sessions.size());
+  for (auto &session : workspace.sessions) {
+    auto it = controller_map.find(session.id);
+    if (it != controller_map.end()) {
+      new_controllers.push_back(std::move(it->second));
+    } else {
+      new_controllers.push_back(std::make_unique<CameraController>(
+          this, _scene.get(), session.id, session.camera));
+    }
+  }
+  _camera_controllers.swap(new_controllers);
+
+  // same idea for session_operator_hosts
+  std::unordered_map<std::string, SessionOperatorHost> operator_host_map;
+  operator_host_map.reserve(session_operator_hosts.size());
+  for (auto &operator_host : session_operator_hosts) {
+    operator_host_map.emplace(operator_host.session_id,
+                              std::move(operator_host));
+  }
+
+  std::vector<SessionOperatorHost> new_operator_hosts;
+  new_operator_hosts.reserve(workspace.sessions.size());
+  for (auto &session : workspace.sessions) {
+    auto it = operator_host_map.find(session.id);
+    if (it != operator_host_map.end()) {
+      new_operator_hosts.push_back(std::move(it->second));
+    } else {
+      new_operator_hosts.emplace_back(*this, *_scene.get(), *_scene_root.get(),
+                                      session.id,
+                                      session.session_operator_host);
+    }
+  }
+  session_operator_hosts.swap(new_operator_hosts);
 }
 
 void PointCaster::load_k4a_device(AzureKinectConfiguration &config,
@@ -740,6 +724,11 @@ void PointCaster::load_k4a_device(AzureKinectConfiguration &config,
     auto device = std::make_shared<K4ADevice>(config, target_id);
     std::lock_guard lock(pc::devices::devices_access);
     pc::devices::attached_devices.push_back(device);
+    for (auto &session : workspace.sessions) {
+      if (!session.active_devices.contains(config.id)) {
+        session.active_devices[config.id] = true;
+      }
+    }
   } catch (k4a::error e) { pc::logger->error(e.what()); } catch (...) {
     pc::logger->error("Failed to open device. (Unknown exception)");
   }
@@ -773,7 +762,7 @@ void PointCaster::open_orbbec_sensor(std::string_view ip) {
     std::string id{fmt::format("ob_{}", ip)};
     std::replace(id.begin(), id.end(), '.', '_');
     try {
-      auto [config_it, _] = _session.devices.try_emplace(
+      auto [config_it, _] = workspace.devices.try_emplace(
           id, std::in_place_type<pc::devices::OrbbecDeviceConfiguration>, false,
           id);
       DeviceConfigurationVariant &device_config_variant = config_it->second;
@@ -783,6 +772,11 @@ void PointCaster::open_orbbec_sensor(std::string_view ip) {
       std::lock_guard lock(devices::devices_access);
       devices::attached_devices.emplace_back(
           std::make_shared<OrbbecDevice>(device_config));
+      for(auto& session : workspace.sessions) {
+        if (!session.active_devices.contains(device_config.id)) {
+          session.active_devices[device_config.id] = true;
+        }
+      }
       // _session_operator_graph->add_input_node(device_config);
     } catch (ob::Error &e) { pc::logger->error(e.getMessage()); } catch (...) {
       pc::logger->error("Failed to create device. (Unknown exception)");
@@ -797,82 +791,14 @@ void PointCaster::open_ply_sequence() {
     std::lock_guard lock(devices::devices_access);
     devices::attached_devices.emplace_back(
         std::make_shared<PlySequencePlayer>(ply_sequence_config));
+    for (auto &session : workspace.sessions) {
+      if (!session.active_devices.contains(ply_sequence_config.id)) {
+        session.active_devices[ply_sequence_config.id] = true;
+      }
+    }
   } else {
     pc::logger->error("No directory");
   }
-}
-
-void PointCaster::draw_menu_bar() {
-  if (ImGui::BeginMainMenuBar()) {
-    if (ImGui::BeginMenu("File")) {
-      if (ImGui::MenuItem("Quit", "q")) save_and_quit();
-      ImGui::EndMenu();
-    }
-    if (ImGui::BeginMenu("Window")) {
-
-      constexpr auto window_item = [](const char *item_name,
-                                      const char *shortcut_key,
-                                      bool &window_toggle) {
-        ImGui::BeginDisabled();
-        ImGui::Checkbox((std::string("##Toggle_Window_") + item_name).data(),
-                        &window_toggle);
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-        if (ImGui::MenuItem(item_name, shortcut_key))
-          window_toggle = !window_toggle;
-      };
-
-      window_item("Global Transform", "g",
-                  _session.layout.show_global_transform_window);
-      window_item("Devices", "d", _session.layout.show_devices_window);
-      window_item("RenderStats", "f", _session.layout.show_stats);
-      // if (_session.mqtt.has_value()) {
-      // 	window_item("MQTT", "m", (*_session.mqtt).show_window : false);
-      // }
-
-      ImGui::EndMenu();
-    }
-    ImGui::EndMainMenuBar();
-  }
-}
-
-void PointCaster::draw_control_bar() {
-
-  constexpr auto control_bar_flags = ImGuiWindowFlags_NoScrollbar |
-                                     ImGuiWindowFlags_NoSavedSettings |
-                                     ImGuiWindowFlags_MenuBar;
-
-  if (ImGui::BeginViewportSideBar("##ControlBar", ImGui::GetMainViewport(),
-                                  ImGuiDir_Up, ImGui::GetFrameHeight(),
-                                  control_bar_flags)) {
-    if (ImGui::BeginMenuBar()) {
-      if (ImGui::Button(ICON_FA_FLOPPY_DISK)) { save_session(); }
-
-      if (ImGui::Button(ICON_FA_FOLDER_OPEN)) {}
-      ImGui::EndMenuBar();
-    }
-
-    ImGui::End();
-  }
-
-  // ImGui::SetNextWindowPos({0, 20});
-
-  // // Extend width to viewport width
-  // ImGui::SetNextWindowSize({100, 100});
-
-  // constexpr ImGuiWindowFlags control_bar_flags =
-  //     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
-  //     ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoScrollbar |
-  //     ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoDecoration;
-
-  // if (ImGui::Begin("ControlBar", nullptr, control_bar_flags)) {
-  //   ImGui::Text("eyo");
-  //   ImGui::SameLine();
-  //   ImGui::Button("oh");
-  //   ImGui::SameLine();
-  //   ImGui::Button("woh");
-  //   ImGui::End();
-  // }
 }
 
 void PointCaster::draw_onscreen_log() {
@@ -931,6 +857,7 @@ void PointCaster::draw_onscreen_log() {
         ImGui::Text(" [crit]");
         ImGui::SameLine();
         break;
+      default: break;
       }
       ImGui::TextUnformatted(message.c_str());
       ImGui::PopStyleColor();
@@ -1004,20 +931,11 @@ void PointCaster::find_mode_keypress(KeyEvent &event) {
 
 void PointCaster::draw_main_viewport() {
 
-  static std::vector<PointCasterSession> sessions;
-  static int selected_session_index = 0;
   static std::optional<int> remove_session_index;
   static std::optional<int> rename_session_index;
   static std::optional<int> new_session_index;
   static ImVec2 rename_tab_pos;
   static std::string rename_edit_buffer;
-
-  if (sessions.empty()) {
-    for (int i = 0; i < 3; i++) {
-      sessions.push_back(
-          {.id = uuid::word(), .label = std::format("session_{}", i)});
-    }
-  }
 
   constexpr float tab_bar_height = 20;
   ImGuiViewport *vp = ImGui::GetMainViewport();
@@ -1054,15 +972,17 @@ void PointCaster::draw_main_viewport() {
     if (ImGui::BeginPopup("AddSessionPopup",
                           ImGuiWindowFlags_AlwaysAutoResize)) {
       if (ImGui::MenuItem("Add new session to workspace")) {
-        new_session_index = sessions.size();
+        new_session_index = workspace.sessions.size();
         auto new_label_num = *new_session_index;
         auto new_label = std::format("session_{}", new_label_num);
-        while (std::ranges::any_of(sessions, [&](auto &session) {
+        while (std::ranges::any_of(workspace.sessions, [&](auto &session) {
           return session.label == new_label;
         })) {
           new_label = std::format("session_{}", ++new_label_num);
         }
-        sessions.push_back({.id = uuid::word(), .label = new_label});
+        workspace.sessions.push_back({.id = uuid::word(), .label = new_label});
+        sync_session_instances();
+        workspace.selected_session_index = workspace.sessions.size() - 1;
       }
       if (ImGui::MenuItem("Load session from disk")) {
         pc::logger->info("Load?");
@@ -1073,8 +993,8 @@ void PointCaster::draw_main_viewport() {
 
     // tab items for each open session
     constexpr auto tab_width = 125;
-    for (int i = 0; i < sessions.size(); i++) {
-      auto &session = sessions[i];
+    for (int i = 0; i < workspace.sessions.size(); i++) {
+      auto &session = workspace.sessions[i];
       ImGuiTabItemFlags item_flags = ImGuiTabItemFlags_None;
       if (new_session_index && i == *new_session_index) {
         item_flags |= ImGuiTabItemFlags_SetSelected;
@@ -1084,7 +1004,7 @@ void PointCaster::draw_main_viewport() {
       ImGui::SetNextItemWidth(tab_width);
       auto tab_name = std::format("{}###{}", session.label, session.id);
       if (ImGui::BeginTabItem(tab_name.c_str(), &open, item_flags)) {
-        selected_session_index = i;
+        workspace.selected_session_index = i;
         ImGui::EndTabItem();
       }
       // open is false on the frame the close button is clicked
@@ -1106,8 +1026,8 @@ void PointCaster::draw_main_viewport() {
     auto *session_tab_bar = ImGui::GetCurrentTabBar();
     if (session_tab_bar->ReorderRequestTabId) {
       int source_index = -1;
-      for (int i = 0; i < sessions.size(); i++) {
-        if (ImGui::GetID(sessions[i].id.c_str()) ==
+      for (int i = 0; i < workspace.sessions.size(); i++) {
+        if (ImGui::GetID(workspace.sessions[i].id.c_str()) ==
             session_tab_bar->ReorderRequestTabId) {
           source_index = i;
           break;
@@ -1116,8 +1036,9 @@ void PointCaster::draw_main_viewport() {
       int destination_index =
           source_index + session_tab_bar->ReorderRequestOffset;
       if (source_index >= 0 && destination_index >= 0 &&
-          destination_index < sessions.size()) {
-        std::swap(sessions[source_index], sessions[destination_index]);
+          destination_index < workspace.sessions.size()) {
+        std::swap(workspace.sessions[source_index],
+                  workspace.sessions[destination_index]);
       }
     }
 
@@ -1127,7 +1048,7 @@ void PointCaster::draw_main_viewport() {
     if (ImGui::BeginPopupModal("Delete Session?", nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize) &&
         remove_session_index) {
-      auto &target_session = sessions[*remove_session_index];
+      auto &target_session = workspace.sessions[*remove_session_index];
       ImGui::Dummy({0, 5});
       ImGui::Text("%s",
                   std::format("Really delete '{}' from the current workspace?",
@@ -1137,15 +1058,17 @@ void PointCaster::draw_main_viewport() {
 
       if (ImGui::Button("Delete", ImVec2(80, 0))) {
         int removed_index = *remove_session_index;
-        if (removed_index >= 0 && removed_index < sessions.size()) {
-          sessions.erase(sessions.begin() + removed_index);
-          if (sessions.empty()) {
-            selected_session_index = 0;
-          } else if (removed_index == selected_session_index) {
-            if (selected_session_index >= (int)sessions.size())
-              selected_session_index = (int)sessions.size() - 1;
-          } else if (removed_index < selected_session_index) {
-            selected_session_index--;
+        if (removed_index >= 0 && removed_index < workspace.sessions.size()) {
+          workspace.sessions.erase(workspace.sessions.begin() + removed_index);
+          if (workspace.sessions.empty()) {
+            workspace.selected_session_index = 0;
+          } else if (removed_index == workspace.selected_session_index) {
+            if (workspace.selected_session_index >=
+                (int)workspace.sessions.size())
+              workspace.selected_session_index =
+                  (int)workspace.sessions.size() - 1;
+          } else if (removed_index < workspace.selected_session_index) {
+            workspace.selected_session_index--;
           }
         }
         remove_session_index.reset();
@@ -1173,7 +1096,7 @@ void PointCaster::draw_main_viewport() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
     if (ImGui::BeginPopup("RenameSession", ImGuiWindowFlags_NoDecoration) &&
         rename_session_index) {
-      auto &target_session = sessions[*rename_session_index];
+      auto &target_session = workspace.sessions.at(*rename_session_index);
       auto rename_input_label =
           fmt::format("##rename_session_{}", *rename_session_index);
       if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
@@ -1181,7 +1104,7 @@ void PointCaster::draw_main_viewport() {
       if (ImGui::InputText(rename_input_label.c_str(), &rename_edit_buffer,
                            ImGuiInputTextFlags_AutoSelectAll |
                                ImGuiInputTextFlags_EnterReturnsTrue)) {
-        if (std::ranges::any_of(sessions, [&](auto &session) {
+        if (std::ranges::any_of(workspace.sessions, [&](auto &session) {
               return session.label == rename_edit_buffer;
             })) {
           // can't name two sessions the same name
@@ -1230,12 +1153,15 @@ void PointCaster::draw_main_viewport() {
                ImGuiWindowFlags_NoCollapse |
                    ImGuiWindowFlags_NoBringToFrontOnFocus);
   {
-    auto &camera_controller = _camera_controllers.at(0);
+    auto &selected_session =
+        workspace.sessions.at(workspace.selected_session_index);
+    auto &camera_controller =
+        _camera_controllers.at(workspace.selected_session_index);
     const auto camera_config = camera_controller->config();
 
     const auto window_size = ImGui::GetContentRegionAvail();
 
-    if (_session.layout.hide_ui) { ImGui::SetCursorPosY(0); }
+    if (workspace.layout.hide_ui) { ImGui::SetCursorPosY(0); }
 
     const auto draw_frame_labels =
         [&camera_controller](ImVec2 viewport_offset) {
@@ -1269,6 +1195,7 @@ void PointCaster::draw_main_viewport() {
                                 {frame_space.x(), frame_space.y()});
         draw_frame_labels(image_pos);
       }
+
     } else if (scale_mode == (int)ScaleMode::Letterbox) {
 
       float width, height, horizontal_offset, vertical_offset;
@@ -1325,9 +1252,9 @@ void PointCaster::draw_main_viewport() {
       ImGui::Dummy({horizontal_offset, vertical_offset});
     }
 
-    if (!_session.layout.hide_ui) {
+    if (!workspace.layout.hide_ui) {
       // draw_viewport_controls(*camera_controller);
-      if (_session.layout.show_log) { draw_onscreen_log(); }
+      if (workspace.layout.show_log) { draw_onscreen_log(); }
     }
 
     if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootWindow)) {
@@ -1404,14 +1331,7 @@ void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
   ImGui::PopStyleVar();
 }
 
-void PointCaster::draw_camera_control_windows() {
-  for (const auto &camera_controller : _camera_controllers) {
-    if (!camera_controller->config().show_window) continue;
-    ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
-    ImGui::Begin(camera_controller->name().data());
-    camera_controller->draw_imgui_controls();
-    ImGui::End();
-  }
+void PointCaster::draw_camera_control_window() {
 }
 
 void PointCaster::draw_stats(const float delta_time) {
@@ -1455,8 +1375,11 @@ void PointCaster::draw_stats(const float delta_time) {
       ImGui::Text("%.0f FPS", 1000.0f / (avg_duration * 1000));
     }
 
-    for (auto &camera_controller : _camera_controllers) {
-      if (ImGui::CollapsingHeader(camera_controller->name().data())) {
+    for (size_t i = 0; i < workspace.sessions.size(); i++) {
+      auto& session = workspace.sessions[i];
+      auto &camera_controller = _camera_controllers[i];
+      ImGui::PushID(session.id.c_str());
+      if (ImGui::CollapsingHeader(session.label.c_str())) {
         if (camera_controller->config().analysis.enabled) {
           ImGui::Text("Analysis Duration");
           ImGui::BeginTable("analysis_duration", 2);
@@ -1469,6 +1392,7 @@ void PointCaster::draw_stats(const float delta_time) {
           ImGui::Text("%.0f FPS", 1000.0f / duration);
         }
       }
+      ImGui::PopID();
     }
   }
 
@@ -1480,6 +1404,8 @@ void PointCaster::draw_stats(const float delta_time) {
 auto output_count = 0;
 
 void PointCaster::drawEvent() {
+
+  pc::devices::reset_pointcloud_frames();
 
   const auto delta_time = _timeline.previousFrameDuration();
   const auto delta_ms = static_cast<int>(delta_time * 1000);
@@ -1505,34 +1431,42 @@ void PointCaster::drawEvent() {
 
   // Draw gui windows
 
-  // draw_menu_bar();
-  // draw_control_bar();
-
   draw_main_viewport();
 
-  if (!_session.layout.hide_ui) {
-    if (_session.layout.show_devices_window) {
+  if (!workspace.layout.hide_ui) {
+    if (workspace.layout.show_devices_window) {
       pc::gui::draw_devices_window(*this);
     }
-    draw_camera_control_windows();
 
-    if (_session.layout.show_stats) draw_stats(delta_time);
-    if (_session.layout.show_radio_window) _radio->draw_imgui_window();
-    if (_session.layout.show_snapshots_window)
+    if (workspace.layout.show_camera_window) {
+      _camera_controllers.at(workspace.selected_session_index)
+          ->draw_imgui_controls();
+    }
+
+    if (workspace.layout.show_stats) draw_stats(delta_time);
+    if (workspace.layout.show_radio_window) _radio->draw_imgui_window();
+    if (workspace.layout.show_snapshots_window)
       _snapshots_context->draw_imgui_window();
 
-    // operator_bounding_boxes.clear();
-    if (_session.layout.show_global_transform_window) {
-      _session_operator_host->draw_imgui_window();
+    // clear gizmos e.g. bounding boxes, voxels
+    for (auto &session_operator_host : session_operator_hosts) {
+      session_operator_host.clear_gizmos();
     }
-    _session_operator_host->draw_gizmos();
-    if (_session.layout.show_session_operator_graph_window)
+    // render the selected session's gizmos
+    auto &selected_session_operator_host =
+        session_operator_hosts.at(workspace.selected_session_index);
+    if (workspace.layout.show_global_transform_window) {
+      selected_session_operator_host.draw_imgui_window();
+    }
+    selected_session_operator_host.draw_gizmos();
+
+    if (workspace.layout.show_session_operator_graph_window)
       _session_operator_graph->draw();
 
-    if (_session.mqtt.has_value() && (*_session.mqtt).show_window)
+    if (workspace.mqtt.has_value() && (*workspace.mqtt).show_window)
       _mqtt->draw_imgui_window();
 
-    if (_session.midi.has_value() && (*_session.midi).show_window) {
+    if (workspace.midi.has_value() && (*workspace.midi).show_window) {
       ImGui::SetNextWindowSize({600, 400}, ImGuiCond_FirstUseEver);
       ImGui::Begin("MIDI");
       _midi->draw_imgui_window();
@@ -1540,10 +1474,10 @@ void PointCaster::drawEvent() {
     }
 
 #ifdef WITH_OSC
-    if (_session.osc_client.has_value() && (*_session.osc_client).show_window)
+    if (workspace.osc_client.has_value() && (*workspace.osc_client).show_window)
       _osc_client->draw_imgui_window();
 
-    if (_session.osc_server.has_value() && (*_session.osc_server).show_window)
+    if (workspace.osc_server.has_value() && (*workspace.osc_server).show_window)
       _osc_server->draw_imgui_window();
 #endif
 
@@ -1592,6 +1526,8 @@ void PointCaster::drawEvent() {
   auto delta_secs = static_cast<float>(_timeline.previousFrameDuration());
   {
     // TODO make this some thing inside the PlyPlayer namespace maybe
+    // or some more abstract class or function that handles all things that need
+    // a tick each frame
     std::lock_guard lock(PlySequencePlayer::devices_access);
     for (auto &player : PlySequencePlayer::attached_devices) {
       player.get().tick(delta_secs);
@@ -1657,15 +1593,11 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
 
   switch (event.key()) {
   case KeyEvent::Key::C: {
-    CameraController &active_camera_controller =
-        _interacting_camera_controller ? _interacting_camera_controller->get()
-                                       : *_camera_controllers[0];
-    bool showing_window = active_camera_controller.config().show_window;
-    active_camera_controller.config().show_window = !showing_window;
+    workspace.layout.show_camera_window = !workspace.layout.show_camera_window;
     break;
   }
   case KeyEvent::Key::D: {
-    _session.layout.show_devices_window = !_session.layout.show_devices_window;
+    workspace.layout.show_devices_window = !workspace.layout.show_devices_window;
     break;
   }
   case KeyEvent::Key::F: {
@@ -1674,24 +1606,24 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   }
   case KeyEvent::Key::G: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
-      //_session.layout.hide_ui = !_session.layout.hide_ui;
-      _session.layout.show_session_operator_graph_window =
-          !_session.layout.show_session_operator_graph_window;
+      //workspace.layout.hide_ui = !workspace.layout.hide_ui;
+      workspace.layout.show_session_operator_graph_window =
+          !workspace.layout.show_session_operator_graph_window;
     } else {
-      _session.layout.show_global_transform_window =
-          !_session.layout.show_global_transform_window;
+      workspace.layout.show_global_transform_window =
+          !workspace.layout.show_global_transform_window;
     }
     break;
   }
   case KeyEvent::Key::M: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
-      if (_session.mqtt.has_value()) {
-        auto &mqtt_conf = _session.mqtt.value();
+      if (workspace.mqtt.has_value()) {
+        auto &mqtt_conf = workspace.mqtt.value();
         mqtt_conf.show_window = !mqtt_conf.show_window;
       }
     } else {
-      if (_session.midi.has_value()) {
-        auto &midi_conf = _session.midi.value();
+      if (workspace.midi.has_value()) {
+        auto &midi_conf = workspace.midi.value();
         midi_conf.show_window = !midi_conf.show_window;
       }
     }
@@ -1700,13 +1632,13 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
 #ifdef WITH_OSC
   case KeyEvent::Key::O: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
-      if (_session.osc_client.has_value()) {
-        auto &osc_client_conf = _session.osc_client.value();
+      if (workspace.osc_client.has_value()) {
+        auto &osc_client_conf = workspace.osc_client.value();
         osc_client_conf.show_window = !osc_client_conf.show_window;
       }
     } else {
-      if (_session.osc_server.has_value()) {
-        auto &osc_server_conf = _session.osc_server.value();
+      if (workspace.osc_server.has_value()) {
+        auto &osc_server_conf = workspace.osc_server.value();
         osc_server_conf.show_window = !osc_server_conf.show_window;
       }
     }
@@ -1718,20 +1650,20 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     break;
   }
   case KeyEvent::Key::R: {
-    _session.layout.show_radio_window = !_session.layout.show_radio_window;
+    workspace.layout.show_radio_window = !workspace.layout.show_radio_window;
     break;
   }
   case KeyEvent::Key::S: {
     if (event.modifiers() == InputEvent::Modifier::Shift) {
-      _session.layout.show_snapshots_window =
-          !_session.layout.show_snapshots_window;
+      workspace.layout.show_snapshots_window =
+          !workspace.layout.show_snapshots_window;
     } else {
-      save_session();
+      save_workspace();
     }
     break;
   }
   case KeyEvent::Key::T: {
-    _session.layout.show_stats = !_session.layout.show_stats;
+    workspace.layout.show_stats = !workspace.layout.show_stats;
     break;
   }
   default: {

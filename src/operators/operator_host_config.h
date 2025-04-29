@@ -60,4 +60,8 @@ extern operator_in_out_t apply(operator_in_out_t begin, operator_in_out_t end,
 extern pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
                                    OperatorList &operator_list);
 
+extern pc::types::PointCloud
+apply(const pc::types::PointCloud &point_cloud,
+      std::vector<OperatorConfigurationVariant> &operator_variant_list);
+
 } // namespace pc::operators

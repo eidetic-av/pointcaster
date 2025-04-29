@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../operators/operator_host_config.gen.h"
 #include "../operators/session_operator_host.h"
 #include "../pointer.h"
 #include "../uuid.h"
@@ -11,7 +12,11 @@
 #include <memory>
 #include <mutex>
 #include <pointclouds.h>
+#include <unordered_map>
 #include <vector>
+#include <string_view>
+#include <map>
+
 
 namespace pc::devices {
 
@@ -125,7 +130,14 @@ private:
 class Device {};
 enum class DeviceType { UnknownDevice, K4A, Rs2 };
 
-extern pc::types::PointCloud
+/// Removes cached pointcloud data, must be run at the beginning of each frame
+void reset_pointcloud_frames();
+
+pc::types::PointCloud &compute_or_get_point_cloud(
+    std::string_view session_id, std::map<std::string, bool> active_devices_map,
+    std::vector<operators::OperatorConfigurationVariant> &session_operators);
+
+pc::types::PointCloud
 synthesized_point_cloud(pc::operators::OperatorList &operators);
 
 // TODO make all the k4a stuff more generic

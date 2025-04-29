@@ -24,8 +24,7 @@ using namespace pc::parameters;
 
 static std::unordered_map<std::string, std::string> _port_keys;
 
-MidiDevice::MidiDevice(MidiDeviceConfiguration &config)
-    : _config(config), _sender_thread([this](auto st) { send_messages(st); }) {
+MidiDevice::MidiDevice(MidiDeviceConfiguration &config) : _config(config) {
 
   for (auto api : libremidi::available_apis()) {
     std::string api_name(libremidi::get_api_display_name(api));
@@ -99,6 +98,8 @@ MidiDevice::MidiDevice(MidiDeviceConfiguration &config)
 
   declare_parameters("midi", _config);
   publisher::add(this);
+
+  _sender_thread = std::jthread([this](auto st) { send_messages(st); });
 }
 
 MidiDevice::~MidiDevice() {

@@ -4,6 +4,7 @@
 #include "denoise/denoise_operator.cuh"
 #include "denoise/kdtree.h"
 #include "noise_operator.cuh"
+#include "operator_host_config.gen.h"
 #include "pcl/cluster_extraction_operator.gen.h"
 #include "rake_operator.cuh"
 #include "range_filter_operator.cuh"
@@ -112,15 +113,79 @@ operator_in_out_t apply(operator_in_out_t begin, operator_in_out_t end,
   return end;
 }
 
-operator_in_out_t
-SessionOperatorHost::run_operators(operator_in_out_t begin,
-                                   operator_in_out_t end,
-                                   OperatorHostConfiguration &host_config) {
+// TODO this function definintion probs shouldnt be in this file
+pc::types::PointCloud
+apply(const pc::types::PointCloud &point_cloud,
+      std::vector<OperatorConfigurationVariant> &operator_variant_list) {
+  using namespace pc::profiling;
+  ProfilingZone zone("pc::operators::apply");
+    
+  thrust::device_vector<position> positions(point_cloud.size());
+  thrust::device_vector<color> colors(point_cloud.size());
 
-  for (auto &operator_config : host_config.operators) {
+  thrust::device_vector<int> indices(point_cloud.size());
+  thrust::sequence(indices.begin(), indices.end());
+
+  {
+    ProfilingZone init_zone("Copy data to GPU");
+
+    thrust::copy(point_cloud.positions.begin(), point_cloud.positions.end(),
+                 positions.begin());
+    thrust::copy(point_cloud.colors.begin(), point_cloud.colors.end(),
+                 colors.begin());
+  }
+
+  auto operator_output_begin = thrust::make_zip_iterator(
+      thrust::make_tuple(positions.begin(), colors.begin(), indices.begin()));
+  auto operator_output_end = thrust::make_zip_iterator(
+      thrust::make_tuple(positions.end(), colors.end(), indices.end()));
+
+  {
+    ProfilingZone run_operators_zone("Run operators");
+    operator_output_end = pc::operators::SessionOperatorHost::run_operators(
+        operator_output_begin, operator_output_end, operator_variant_list);
+  }
+
+  {
+    ProfilingZone sync_zone("CUDA Device Synchronize");
+    cudaDeviceSynchronize();
+  }
+
+  pc::types::PointCloud result{};
+
+  {
+    ProfilingZone copy_zone("Copy data to CPU");
+
+    auto output_point_count =
+        std::distance(operator_output_begin, operator_output_end);
+
+    result.positions.resize(output_point_count);
+    result.colors.resize(output_point_count);
+
+    thrust::copy(positions.begin(), positions.begin() + output_point_count,
+                 result.positions.begin());
+    thrust::copy(colors.begin(), colors.begin() + output_point_count,
+                 result.colors.begin());
+  }
+
+  return result;
+}
+
+// TODO this function definintion probs shouldnt be in this file
+operator_in_out_t
+apply(operator_in_out_t begin, operator_in_out_t end,
+      std::vector<OperatorConfigurationVariant> &operator_variant_list) {
+  end = pc::operators::SessionOperatorHost::run_operators(
+      begin, end, operator_variant_list);
+  return end;
+}
+
+operator_in_out_t SessionOperatorHost::run_operators(
+    operator_in_out_t begin, operator_in_out_t end,
+    std::vector<OperatorConfigurationVariant> &operator_variant_list) {
+  for (auto &operator_config : operator_variant_list) {
     std::visit(
         [&begin, &end](auto &&config) {
-
           if (!config.enabled) { return; }
 
           using T = std::decay_t<decltype(config)>;
@@ -139,7 +204,8 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
             thrust::transform(begin, end, begin, RotateOperator(config));
           } else if constexpr (std::is_same_v<T, RakeOperatorConfiguration>) {
             thrust::transform(begin, end, begin, RakeOperator(config));
-          } else if constexpr (std::is_same_v<T, TranslateOperatorConfiguration>) {
+          } else if constexpr (std::is_same_v<T,
+                                              TranslateOperatorConfiguration>) {
             thrust::transform(begin, end, begin, TranslateOperator(config));
           }
 
@@ -181,8 +247,10 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
                                  T, SampleFilterOperatorConfiguration>) {
             end = thrust::copy_if(begin, end, begin,
                                   SampleFilterOperator(config));
-          } else if constexpr (std::is_same_v<
-                                   T, RangeFilterOperatorConfiguration>) {
+          }
+
+          else if constexpr (std::is_same_v<T,
+                                            RangeFilterOperatorConfiguration>) {
 
             // TODO: this is RangeFilter Operator behaviour,
             // probs needs to be inside that class somehow
@@ -375,7 +443,14 @@ SessionOperatorHost::run_operators(operator_in_out_t begin,
         },
         operator_config);
   }
+  return end;
+}
 
+operator_in_out_t
+SessionOperatorHost::run_operators(operator_in_out_t begin,
+                                   operator_in_out_t end,
+                                   OperatorHostConfiguration &host_config) {
+  end = SessionOperatorHost::run_operators(begin, end, host_config.operators);
   return end;
 };
 

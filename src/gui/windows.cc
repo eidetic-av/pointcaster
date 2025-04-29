@@ -5,6 +5,8 @@
 
 namespace pc::gui {
 
+constexpr ImVec2 tooltip_padding{10, 10};
+
 void draw_devices_window(PointCaster &app) {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
@@ -66,7 +68,11 @@ void draw_devices_window(PointCaster &app) {
           catpuccin::imgui::mocha_green)) {
     ImGui::OpenPopup("AddDevicePopup");
   }
-  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add Device");
+  if (ImGui::IsItemHovered()) {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, tooltip_padding);
+    ImGui::SetTooltip("Add Device");
+    ImGui::PopStyleVar();
+  }
 
   ImGui::Dummy({0, 5});
 
@@ -75,16 +81,19 @@ void draw_devices_window(PointCaster &app) {
   static constexpr size_t visible_device_rows = 6;
   std::optional<int> device_to_delete;
   std::optional<int> device_to_toggle_active;
+  std::optional<int> device_to_toggle_session_active;
   std::optional<std::string> edited_device_id;
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
   ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 8.0f);
   if (ImGui::BeginChild("DevicesScrollable",
                         ImVec2(0, visible_device_rows * row_height), true)) {
-    if (ImGui::BeginTable("DevicesTable", 3, ImGuiTableFlags_RowBg,
+    if (ImGui::BeginTable("DevicesTable", 4, ImGuiTableFlags_RowBg,
                           ImVec2(-FLT_MIN, visible_device_rows * row_height))) {
       ImGui::TableSetupColumn("active_button", ImGuiTableColumnFlags_WidthFixed,
                               icon_width + 5);
+      ImGui::TableSetupColumn("session_active_button",
+                              ImGuiTableColumnFlags_WidthFixed, icon_width + 2);
       ImGui::TableSetupColumn("device", ImGuiTableColumnFlags_WidthStretch);
       ImGui::TableSetupColumn("delete_button", ImGuiTableColumnFlags_WidthFixed,
                               icon_width + 5);
@@ -104,27 +113,33 @@ void draw_devices_window(PointCaster &app) {
         }
         bool is_selected = (i == selected_device_row);
         bool is_active;
+        bool is_session_active;
         std::visit(
             [&](auto &&device_config) {
               device_id = device_config.id;
               is_active = device_config.active;
+              is_session_active =
+                  app.workspace.sessions[app.workspace.selected_session_index]
+                      .active_devices[device_config.id];
             },
             devices::device_configs[i].get());
 
         ImGui::TableNextRow();
 
-        // column 1: view button
-        ImGui::TableSetColumnIndex(0);
-        ImVec2 cell0_content_min = ImGui::GetCursorPos();
+        size_t column_count = 0;
+
+        // column 1: active button
+        ImGui::TableSetColumnIndex(column_count++);
+        ImVec2 active_button_content_min = ImGui::GetCursorPos();
         ImGui::SameLine();
         std::string_view active_icon;
         if (is_active) {
           ImGui::SetCursorPos(
-              {cell0_content_min.x + 5, cell0_content_min.y + 1.0f});
+              {active_button_content_min.x + 5, active_button_content_min.y + 1.0f});
           active_icon = ICON_FA_TOGGLE_ON;
         } else {
           ImGui::SetCursorPos(
-              {cell0_content_min.x + 5, cell0_content_min.y + 1.0f});
+              {active_button_content_min.x + 5, active_button_content_min.y + 1.0f});
           active_icon = ICON_FA_TOGGLE_OFF;
         }
         if (gui::draw_icon_button(active_icon.data(), false,
@@ -132,8 +147,38 @@ void draw_devices_window(PointCaster &app) {
                                   catpuccin::imgui::mocha_overlay2)) {
           device_to_toggle_active = i;
         }
+        if (ImGui::IsItemHovered()) {
+          ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, tooltip_padding);
+          ImGui::SetTooltip("Toggle device active");
+          ImGui::PopStyleVar();
+        }
 
-        if (!is_active) ImGui::BeginDisabled();
+        // column 2: session active button
+        ImGui::TableSetColumnIndex(column_count++);
+        ImVec2 session_active_button_content_min = ImGui::GetCursorPos();
+        ImGui::SameLine();
+        std::string_view session_active_icon;
+        if (is_session_active) {
+          ImGui::SetCursorPos({session_active_button_content_min.x - 1,
+                               session_active_button_content_min.y + 1.0f});
+          session_active_icon = ICON_FA_EYE;
+        } else {
+          ImGui::SetCursorPos({session_active_button_content_min.x - 2,
+                               session_active_button_content_min.y + 1.0f});
+          session_active_icon = ICON_FA_EYE_SLASH;
+        }
+        if (gui::draw_icon_button(session_active_icon.data(), false,
+                                  catpuccin::imgui::mocha_overlay,
+                                  catpuccin::imgui::mocha_overlay2)) {
+          device_to_toggle_session_active = i;
+        }
+        if (ImGui::IsItemHovered()) {
+          ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, tooltip_padding);
+          ImGui::SetTooltip("Toggle device session visibility");
+          ImGui::PopStyleVar();
+        }
+
+        if (!is_active || !is_session_active) ImGui::BeginDisabled();
 
         constexpr auto color_from_status = [](DeviceStatus status) -> ImVec4 {
           switch (status) {
@@ -146,8 +191,8 @@ void draw_devices_window(PointCaster &app) {
         };
         auto status_color = color_from_status(device_status);
 
-        // column 2: device id with status icon
-        ImGui::TableSetColumnIndex(1);
+        // column 3: device id with status icon
+        ImGui::TableSetColumnIndex(column_count++);
         ImVec2 device_id_cell_min = ImGui::GetCursorScreenPos();
         {
           // status icon, grouped for positioning
@@ -166,7 +211,8 @@ void draw_devices_window(PointCaster &app) {
 
         // compute the width for the device cell: table width minus active,
         // extra and delete columns and spacing
-        float device_id_cell_width = table_width - ((icon_width + 5) * 2) -
+        float device_id_cell_width = table_width -
+                                     ((icon_width + 5) * (column_count - 1)) -
                                      ImGui::GetStyle().ItemSpacing.x;
         ImVec2 device_id_cell_max =
             ImVec2(device_id_cell_min.x + device_id_cell_width,
@@ -231,10 +277,10 @@ void draw_devices_window(PointCaster &app) {
           editing_device_row_id = i;
         }
 
-        if (!is_active) ImGui::EndDisabled();
+        if (!is_active || !is_session_active) ImGui::EndDisabled();
 
         // column 3: delete icon button
-        ImGui::TableSetColumnIndex(2);
+        ImGui::TableSetColumnIndex(column_count++);
         ImVec2 delete_cell_content_min = ImGui::GetCursorPos();
         ImGui::SameLine();
         ImGui::SetCursorPos(
@@ -249,8 +295,8 @@ void draw_devices_window(PointCaster &app) {
       }
       ImGui::EndTable();
     }
-    ImGui::EndChild();
   }
+  ImGui::EndChild();
   ImGui::PopStyleVar();
   ImGui::PopStyleVar();
 
@@ -261,6 +307,23 @@ void draw_devices_window(PointCaster &app) {
         devices::device_configs[device_to_toggle_active.value()];
     std::visit([](auto &&config) { config.active = !config.active; },
                device_config.get());
+  }
+  if (device_to_toggle_session_active.has_value()) {
+    std::lock_guard lock(devices::device_configs_access);
+    auto &device_config =
+        devices::device_configs[device_to_toggle_session_active.value()];
+    auto &selected_session =
+        app.workspace.sessions[app.workspace.selected_session_index];
+    auto &session_active_device_map = selected_session.active_devices;
+    std::visit(
+        [&](auto &&config) {
+          auto &id = config.id;
+          auto old_session_active_val = session_active_device_map.contains(id)
+                                            ? session_active_device_map[id]
+                                            : true;
+          selected_session.active_devices[id] = !old_session_active_val;
+        },
+        device_config.get());
   }
   if (device_to_delete.has_value()) {
     std::lock_guard lock(devices::devices_access);
@@ -302,11 +365,12 @@ void draw_devices_window(PointCaster &app) {
             selected_device->draw_controls();
             ImGui::Dummy({0, 10});
             const auto available_space = ImGui::GetContentRegionAvail();
-            ImGui::BeginChild(
-                std::format("##scroll_", device_config.id).c_str(),
-                {-FLT_MIN, available_space.y});
+            ImGui::PushID("device_config");
+            ImGui::BeginChild(device_config.id.c_str(),
+                              {-FLT_MIN, available_space.y});
             pc::gui::draw_parameters(device_config.id);
             ImGui::EndChild();
+            ImGui::PopID();
           },
           selected_device_config.get());
     }
@@ -406,7 +470,7 @@ void draw_app_menu(PointCaster &app) {
       ImGui::Separator();
       if (ImGui::MenuItem("Save", "s")) {
         ImGui::CloseCurrentPopup();
-        app.run_async([&] { app.save_session(); });
+        app.run_async([&] { app.save_workspace(); });
       }
       if (ImGui::MenuItem("Save As...")) { pc::logger->info("Save as..."); }
       ImGui::Separator();

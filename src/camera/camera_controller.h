@@ -15,8 +15,6 @@
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
 #include <atomic>
-#include <chrono>
-#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <opencv2/opencv.hpp>
@@ -35,22 +33,23 @@ using Magnum::SceneGraph::Camera3D;
 class CameraController : public analysis::Analyser2DHost {
 public:
   static std::atomic<std::size_t> count;
+  const std::string session_id;
 
   std::optional<Magnum::Vector2> viewport_size;
 
-  CameraController(Magnum::Platform::Application *app, Scene3D *scene,
-                   CameraConfiguration config = {});
+  explicit CameraController(Magnum::Platform::Application *app, Scene3D *scene,
+                            std::string_view host_session_id,
+                            CameraConfiguration config = {});
 
   ~CameraController();
 
   CameraConfiguration &config() { return _config; };
-  std::string_view name() const { return _config.name; };
   Camera3D &camera() const { return *_camera; }
 
   void setup_frame(Magnum::Vector2i frame_size);
 
-  Magnum::GL::Texture2D& color_frame();
-  Magnum::GL::Texture2D& analysis_frame();
+  Magnum::GL::Texture2D &color_frame();
+  Magnum::GL::Texture2D &analysis_frame();
 
   void dispatch_analysis();
   int analysis_time();
@@ -67,19 +66,20 @@ public:
   void set_translation(const Float3 metres);
   void add_translation(const Float3 metres);
 
-  void dolly(Magnum::Platform::Sdl2Application::MouseScrollEvent& event);
+  void dolly(Magnum::Platform::Sdl2Application::MouseScrollEvent &event);
   void mouse_orbit(Magnum::Platform::Sdl2Application::MouseMoveEvent &event);
   void mouse_translate(Magnum::Platform::Sdl2Application::MouseMoveEvent &event,
-		       bool lock_y_axis = false);
+                       bool lock_y_axis = false);
 
   void draw_imgui_controls();
 
   std::vector<gui::OverlayText> labels();
 
 private:
-  Magnum::Platform::Application* _app;
   CameraConfiguration _config;
+  std::string _temp_camera_name_tofix;
 
+  Magnum::Platform::Application *_app;
   pc::analysis::Analyser2D _frame_analyser;
 
   std::unique_ptr<Object3D> _anchor;

@@ -91,4 +91,14 @@ struct MinMaxZComparator {
   __device__ bool operator()(indexed_point_t lhs, indexed_point_t rhs) const;
 };
 
+// this function gets a copy of the config with a size that's half the
+// specified size. this allows us to serialize the AABB's 'size' but render it
+// using its half_size, which is appropriate for an AABB
+inline auto half_extents(auto &&config) {
+  auto c = config;
+  c.transform.size = {c.transform.size.x / 2, c.transform.size.y / 2,
+                      c.transform.size.z / 2};
+  return c;
+};
+
 } // namespace pc::operators

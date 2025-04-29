@@ -71,6 +71,15 @@ public:
     }
   }
 
+  // template <typename T>
+  //   requires(!pc::types::ScalarType<T> && !is_publishable_container_v<T>)
+  // void publish(const std::string_view topic, const T &data,
+  //              std::initializer_list<std::string_view> topic_nodes = {}) {
+  //   pc::logger->warn("Attempt to publish to '{}' over MIDI is being ignored",
+  //                    topic);
+  //   pc::logger->warn("MIDI publishing is not yet implemented for this type");
+  // };
+
   void draw_imgui_window();
 
   MidiOutputRoute &get_or_create_output_route(std::string_view topic) {

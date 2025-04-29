@@ -4,6 +4,7 @@
 #include "../gui/widgets.h"
 #include "../logger.h"
 #include "../parameters.h"
+#include "../pointcaster.h"
 #include "../string_utils.h"
 #include "../uuid.h"
 #include "noise_operator.gen.h"
@@ -19,6 +20,8 @@
 #include <execution>
 #include <functional>
 #include <optional>
+#include <random>
+
 
 #include <tbb/tbb.h>
 
@@ -29,9 +32,11 @@ using namespace pc::parameters;
 using namespace oneapi;
 
 SessionOperatorHost::SessionOperatorHost(
-    OperatorHostConfiguration &config, Scene3D &scene,
-    Magnum::SceneGraph::DrawableGroup3D &parent_group)
-    : _config(config), _scene(scene), _parent_group(parent_group) {
+    PointCaster &app, Scene3D &scene,
+    Magnum::SceneGraph::DrawableGroup3D &parent_group,
+    std::string_view host_session_id, OperatorHostConfiguration config)
+    : session_id(host_session_id), session_seed(std::random_device{}()),
+      _app(app), _config(config), _scene(scene), _parent_group(parent_group) {
 
   // for loading an existing list of operators
   for (auto &operator_config_variant : _config.operators) {
@@ -453,10 +458,6 @@ void SessionOperatorHost::draw_gizmos() {
 
             if (config.draw_clusters) {
 
-              for (size_t i = 0; i < _last_cluster_count; i++) {
-                set_cluster(i, false);
-              }
-
               auto latest_clusters_ptr = pipeline.current_clusters.load();
               if (latest_clusters_ptr.get() != nullptr) {
                 auto &clusters = *latest_clusters_ptr;
@@ -479,6 +480,32 @@ void SessionOperatorHost::draw_gizmos() {
                 _last_cluster_count = cluster_count;
               }
             }
+          } else if constexpr (std::same_as<T,
+                                            RangeFilterOperatorConfiguration>) {
+            constexpr bool visible = true;
+            set_or_create_bounding_box(half_extents(config), _scene,
+                                       _parent_group, visible);
+          }
+        },
+        operator_config);
+  }
+}
+
+void SessionOperatorHost::clear_gizmos() {
+  for (size_t i = 0; i < _last_cluster_count.value_or(0); i++) {
+    set_cluster(i, false);
+  }
+  for (size_t i = 0; i < _last_voxel_count.value_or(0); i++) {
+    set_voxel(i, false, {});
+  }
+  for (const auto &operator_config : _config.operators) {
+    std::visit(
+        [this](auto &&config) {
+          using T = std::decay_t<decltype(config)>;
+          if constexpr (std::same_as<T, RangeFilterOperatorConfiguration>) {
+            constexpr bool visible = false;
+            set_or_create_bounding_box(half_extents(config), _scene,
+                                       _parent_group, visible);
           }
         },
         operator_config);
@@ -487,23 +514,25 @@ void SessionOperatorHost::draw_gizmos() {
 
 void SessionOperatorHost::set_voxel(pc::types::Float3 position,
                                     pc::types::Float3 size) {
-  set_or_create_bounding_box(pc::uuid::digit(), size, position, _scene,
-                             _parent_group, true,
+  set_or_create_bounding_box(session_seed + pc::uuid::digit(), size, position,
+                             _scene, _parent_group, true,
                              catpuccin::magnum::mocha_blue);
 }
 
 void SessionOperatorHost::set_voxel(uid id, bool visible,
                                     pc::types::Float3 position,
                                     pc::types::Float3 size) {
-  set_or_create_bounding_box(id, size, position, _scene, _parent_group, visible,
+  set_or_create_bounding_box(session_seed + id, size, position, _scene,
+                             _parent_group, visible,
                              catpuccin::magnum::mocha_blue);
 }
 
 void SessionOperatorHost::set_cluster(uid id, bool visible,
                                       pc::types::Float3 position,
                                       pc::types::Float3 size) {
-  set_or_create_bounding_box(10000 + id, size, position, _scene, _parent_group,
-                             visible, catpuccin::magnum::mocha_red);
+  set_or_create_bounding_box(10000 + session_seed + id, size, position, _scene,
+                             _parent_group, visible,
+                             catpuccin::magnum::mocha_red);
 }
 
 } // namespace pc::operators

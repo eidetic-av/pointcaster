@@ -536,6 +536,11 @@ bool draw_parameter(std::string_view structure_name,
     return false;
   }
 
+  if (!parameter_bindings.contains(parameter_id)) {
+    pc::logger->warn("Attempt to draw unbound parameter: {}", parameter_id);
+    return false;
+  }
+
   auto param = parameter_bindings.at(parameter_id);
   auto original_param = param;
 

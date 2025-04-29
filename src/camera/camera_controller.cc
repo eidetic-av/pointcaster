@@ -37,25 +37,25 @@ using namespace pc::parameters;
 std::atomic<std::size_t> CameraController::count = 0;
 
 CameraController::CameraController(Magnum::Platform::Application *app,
-                                   Scene3D *scene, CameraConfiguration config)
-    : _app(app), _config(config), _frame_analyser(this) {
+                                   Scene3D *scene,
+                                   std::string_view host_session_id,
+                                   CameraConfiguration config)
+    : session_id(host_session_id), _app(app), _config(config),
+      _frame_analyser(this) {
 
   _anchor = std::make_unique<Object3D>(scene);
   _orbit_parent_left_right = std::make_unique<Object3D>(_anchor.get());
   _orbit_parent_up_down = std::make_unique<Object3D>(_orbit_parent_left_right.get());
   _camera_parent = std::make_unique<Object3D>(_orbit_parent_up_down.get());
+
   _camera = std::make_unique<Camera3D>(*_camera_parent);
+  _camera->setViewport(GL::defaultFramebuffer.viewport().size());
 
   // apply any loaded configuration
   set_distance(_config.transform.distance);
   set_orbit(_config.transform.orbit);
   set_roll(_config.transform.roll);
   set_translation(_config.transform.translation);
-
-  if (_config.id.empty()) {
-    _config.id = pc::uuid::word();
-  }
-  _config.name = "camera_" + std::to_string(++CameraController::count);
 
   reset_projection_matrix();
 
@@ -67,10 +67,12 @@ CameraController::CameraController(Magnum::Platform::Application *app,
 
   setup_frame({resolution[0], resolution[1]});
 
-  pc::logger->info("Initialised Camera Controller {} with id {}", _config.name,
-                   _config.id);
+  pc::logger->info("Initialised new camera controller");
 
-  declare_parameters(name(), _config);
+  // TODO need to declare params based on session name now that cameras are 1x
+  // per-session
+  _temp_camera_name_tofix = std::format("camera_{}", CameraController::count++);
+  declare_parameters(_temp_camera_name_tofix, _config);
 }
 
 CameraController::~CameraController() { CameraController::count--; }
@@ -85,6 +87,7 @@ void CameraController::setup_frame(Vector2i frame_size) {
   if (_config.rendering.scale_mode == (int)ScaleMode::Span &&
       viewport_size.has_value()) {
     // automatically set frame height based on size of viewport
+    // TODO this is only working when aspect ratio > 1.0
     aspect_ratio = viewport_size->x() / viewport_size->y();
     scaled_size.y() = scaled_size.x() / aspect_ratio;
     _config.rendering.resolution[1] =
@@ -306,10 +309,11 @@ Magnum::Float CameraController::depth_at(const Vector2i &window_position) {
 }
 
 void CameraController::draw_imgui_controls() {
-
-  if (pc::gui::draw_parameters(name())) {
+  ImGui::Begin("Camera");
+  if (pc::gui::draw_parameters(_temp_camera_name_tofix)) {
     reset_projection_matrix();
   }
+  ImGui::End();
 
   // auto draw_current_group = true;
   // std::string latest_group_id{name()};
