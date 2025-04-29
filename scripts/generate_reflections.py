@@ -41,7 +41,7 @@ def process_cpp_header(input_text, file_path):
 
     # TODO: replace this explicit string search with a search for a meta comment
     # which instructs to serialize the struct
-    structs = re.findall(r"struct (\w+(?:Configuration|Session|SessionLayout|BindingTarget|putRoute|putMapping|putChangeDetection|ABB)) {([\s\S]*?^\};)",
+    structs = re.findall(r"struct (\w+(?:Configuration|Workspace|Session|SessionLayout|BindingTarget|putRoute|putMapping|putChangeDetection|ABB)) {([\s\S]*?^\};)",
     # structs = re.findall(r"struct (\w+Configuration) {([\s\S]*?^\};)",
                          input_text, re.MULTILINE)
 
