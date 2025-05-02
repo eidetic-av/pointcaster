@@ -16,7 +16,7 @@ public:
   inline static std::vector<std::reference_wrapper<K4ADevice>> attached_devices;
   inline static std::mutex devices_access;
 
-  explicit K4ADevice(AzureKinectConfiguration &config, std::string_view target_id = "");
+  explicit K4ADevice(AzureKinectConfiguration &config);
   ~K4ADevice();
 
   K4ADevice(const K4ADevice &) = delete;
@@ -32,9 +32,8 @@ public:
   bool broadcast_enabled() const { return _enable_broadcast; }
 
   DeviceStatus status() const override;
-  pc::types::PointCloud
-  point_cloud(pc::operators::OperatorList operators = {}) override {
-    return _driver->point_cloud(this->config(), operators);
+  pc::types::PointCloud point_cloud() override {
+    return _driver->point_cloud(this->config());
   };
 
   void draw_imgui_controls();

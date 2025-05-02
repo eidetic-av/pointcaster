@@ -35,8 +35,7 @@ public:
   size_t current_frame() const;
 
   DeviceStatus status() const override;
-  pc::types::PointCloud
-  point_cloud(pc::operators::OperatorList operators = {}) override;
+  pc::types::PointCloud point_cloud() override;
 
   bool draw_controls() override;
 

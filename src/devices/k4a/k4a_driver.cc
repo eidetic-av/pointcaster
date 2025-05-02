@@ -12,8 +12,7 @@ namespace pc::devices {
 using namespace std::chrono_literals;
 using namespace pc::k4a_utils;
 
-K4ADriver::K4ADriver(AzureKinectConfiguration &config,
-                     std::string_view target_id)
+K4ADriver::K4ADriver(AzureKinectConfiguration &config)
     : _capture_loop(&K4ADriver::capture_frames, this),
       _tracker_loop(&K4ADriver::track_bodies, this),
       _imu_loop(&K4ADriver::process_imu, this) {
@@ -21,7 +20,7 @@ K4ADriver::K4ADriver(AzureKinectConfiguration &config,
   std::lock_guard<std::mutex> lock(serial_driver_construction);
 
   pc::logger->info("Opening driver for k4a {} ({})\n",
-                   (unsigned int)active_count, target_id);
+                   (unsigned int)active_count, config.id);
 
   _k4a_config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
   _k4a_config.color_format = K4A_IMAGE_FORMAT_COLOR_BGRA32;
@@ -39,15 +38,15 @@ K4ADriver::K4ADriver(AzureKinectConfiguration &config,
 
   _body_tracking_enabled = config.body.enabled;
 
-  _serial_number = target_id;
+  _serial_number = config.serial_number;
 
   // the k4a SDK opens devices only via their USB index...
   // since we serialize specific configurations via serial number,
   // the following logic makes sure we open the right device
 
-  // if the device with the target serial number is not found,
-  // we put the driver into a "lost_device" state waiting for it
-  // to be plugged in
+  // if the config's serial number is specified at launch, and if the device
+  // with the target serial number is not found, we put the driver into a
+  // "lost_device" state waiting for it to be plugged in
 
   try {
 

@@ -110,8 +110,8 @@ Radio::Radio(RadioConfiguration &config,
             // list which we dont have at the moment
             std::vector<operators::OperatorHostConfiguration> fix_me_operator_list{_session_operator_host._config};
 
-            auto live_point_cloud =
-                pc::devices::synthesized_point_cloud(fix_me_operator_list);
+            auto live_point_cloud = pc::devices::synthesized_point_cloud(
+                fix_me_operator_list, _session_operator_host.session_id);
 
             _session_operator_host._config = fix_me_operator_list[0];
 
@@ -120,7 +120,7 @@ Radio::Radio(RadioConfiguration &config,
               zmq::message_t point_cloud_msg(bytes);
               point_cloud_msg.set_group("live");
               {
-                ZoneScopedN("Send");
+                // ZoneScopedN("Send");
                 radio.send(point_cloud_msg, zmq::send_flags::none);
                 packet_bytes += point_cloud_msg.size();
               }
@@ -144,7 +144,7 @@ Radio::Radio(RadioConfiguration &config,
 
         pc::logger->info("Ended radio thread");
       })) {
-  declare_parameters("radio", _config);
+  declare_parameters("workspace", "radio", _config);
 }
 
 void Radio::draw_imgui_window() {
@@ -152,7 +152,7 @@ void Radio::draw_imgui_window() {
   ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
 
   ImGui::Begin("Radio", nullptr);
-  pc::gui::draw_parameters("radio", struct_parameters.at("radio"));
+  pc::gui::draw_parameters("radio");
   ImGui::End();
 
   return;

@@ -53,7 +53,8 @@ public:
   void publish(const std::string_view topic, const T &data,
                std::initializer_list<std::string_view> topic_nodes = {}) {
     if constexpr (IsConvertableToParameterUpdate<T>) {
-      const auto id = publisher::construct_topic_string(topic, topic_nodes);
+      const auto id =
+          publisher::construct_topic_string(topic, topic_nodes, '/');
       enqueue_parameter_update(ParameterUpdate{id, {data}});
     } else if constexpr (is_publishable_container_v<T>) {
       pc::logger->warn("Sync server publishing unimplemented container type");

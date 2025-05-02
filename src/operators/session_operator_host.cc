@@ -43,7 +43,7 @@ SessionOperatorHost::SessionOperatorHost(
     std::visit(
         [&](auto &&operator_config) {
           // declare the serialised operator ID with its config parameters
-          declare_parameters(std::to_string(operator_config.id),
+          declare_parameters(session_id, std::to_string(operator_config.id),
                              operator_config);
 
           using T = std::decay_t<decltype(operator_config)>;
@@ -147,6 +147,7 @@ bool operator_collapsing_header(
       }
       CloseCurrentPopup();
       edit_popup_opened = false;
+      gui::refresh_tooltips = true;
     }
     EndPopup();
   } else {
@@ -195,7 +196,7 @@ void SessionOperatorHost::draw_imgui_window() {
         set_operator_friendly_name(operator_config.id, friendly_name);
 
         // declare the instance as parameters to bind to this new operator's id
-        declare_parameters(std::to_string(operator_config.id),
+        declare_parameters(session_id, std::to_string(operator_config.id),
                            std::get<T>(variant_ref));
 
         if constexpr (std::is_same_v<T, RangeFilterOperatorConfiguration>) {
@@ -393,9 +394,10 @@ void SessionOperatorHost::draw_imgui_window() {
         // for new operator order
         for (auto &operator_config_variant : operators) {
           std::visit(
-              [](auto &&operator_config) {
+              [this](auto &&operator_config) {
                 using T = std::decay_t<decltype(operator_config)>;
-                declare_parameters(std::to_string(operator_config.id),
+                declare_parameters(session_id,
+                                   std::to_string(operator_config.id),
                                    operator_config);
               },
               operator_config_variant);
@@ -417,7 +419,8 @@ void SessionOperatorHost::draw_gizmos() {
 
           if constexpr (std::is_same_v<
                             T, pcl_cpu::ClusterExtractionConfiguration>) {
-            auto &pipeline = pcl_cpu::ClusterExtractionPipeline::instance();
+            auto &pipeline =
+                pcl_cpu::ClusterExtractionPipeline::instance(session_id);
 
             if (config.draw_voxels) {
               auto current_voxels = pipeline.current_voxels.load();

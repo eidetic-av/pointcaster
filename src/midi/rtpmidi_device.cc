@@ -358,7 +358,7 @@ RtpMidiDevice::RtpMidiDevice(RtpMidiDeviceConfiguration &config)
     mdns.executeQuery("_apple-midi._udp.local");
   });
 
-  parameters::declare_parameters("rtpmidi", _config);
+  parameters::declare_parameters("workspace", "rtpmidi", _config);
 }
 
 RtpMidiDevice::~RtpMidiDevice() {

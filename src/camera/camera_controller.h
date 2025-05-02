@@ -77,7 +77,6 @@ public:
 
 private:
   CameraConfiguration _config;
-  std::string _temp_camera_name_tofix;
 
   Magnum::Platform::Application *_app;
   pc::analysis::Analyser2D _frame_analyser;

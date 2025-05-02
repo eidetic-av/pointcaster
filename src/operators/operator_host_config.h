@@ -55,13 +55,16 @@ struct OperatorHostConfiguration {
 using OperatorList = std::vector<OperatorHostConfiguration>;
 
 extern operator_in_out_t apply(operator_in_out_t begin, operator_in_out_t end,
-                               OperatorList &operator_list);
+                               OperatorList &operator_list,
+                               const std::string_view session_id);
 
 extern pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
-                                   OperatorList &operator_list);
+                                   OperatorList &operator_list,
+                                   const std::string_view session_id);
 
 extern pc::types::PointCloud
 apply(const pc::types::PointCloud &point_cloud,
-      std::vector<OperatorConfigurationVariant> &operator_variant_list);
+      std::vector<OperatorConfigurationVariant> &operator_variant_list,
+      const std::string_view session_id);
 
 } // namespace pc::operators

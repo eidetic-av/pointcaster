@@ -88,8 +88,16 @@ inline std::string sentence_case(std::string_view input) noexcept {
   return result;
 }
 
+inline constexpr std::string_view first_element(std::string_view str,
+                                                char delimiter = '/') noexcept {
+  if (auto pos = str.find(delimiter); pos != std::string_view::npos) {
+    return str.substr(0, pos);
+  }
+  return str;
+}
+
 inline constexpr std::string_view last_element(std::string_view str,
-					       char delimiter = '.') noexcept {
+					       char delimiter = '/') noexcept {
   if (auto pos = str.rfind(delimiter); pos != std::string_view::npos) {
     return str.substr(pos + 1);
   }
@@ -97,7 +105,7 @@ inline constexpr std::string_view last_element(std::string_view str,
 }
 
 inline constexpr std::string_view
-remove_last_element(std::string_view str, char delimiter = '.') noexcept {
+remove_last_element(std::string_view str, char delimiter = '/') noexcept {
   if (auto pos = str.rfind(delimiter); pos != std::string_view::npos) {
     return str.substr(0, pos);
   }

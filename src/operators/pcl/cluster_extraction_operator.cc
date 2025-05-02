@@ -2,6 +2,8 @@
 #include "../../logger.h"
 #include "../../profiling.h"
 #include "../../publisher/publisher.h"
+#include "../../session.gen.h"
+#include "../../string_map.h"
 #include "cluster_extraction_operator.gen.h"
 #include <algorithm>
 #include <chrono>
@@ -17,12 +19,18 @@
 
 namespace pc::operators::pcl_cpu {
 
-ClusterExtractionPipeline &ClusterExtractionPipeline::instance() {
-  static ClusterExtractionPipeline instance;
-  return instance;
+ClusterExtractionPipeline &
+ClusterExtractionPipeline::instance(const std::string_view session_id) {
+  static pc::string_map<ClusterExtractionPipeline> instances;
+  auto [it, inserted] = instances.try_emplace(session_id, session_id);
+  if (inserted)
+    pc::logger->info("Created new cluster extraction pipeline instance");
+  return it->second;
 }
 
-ClusterExtractionPipeline::ClusterExtractionPipeline() {
+ClusterExtractionPipeline::ClusterExtractionPipeline(
+    const std::string_view host_session_id)
+    : session_id(host_session_id) {
   auto max_concurrency = tbb::info::default_concurrency();
   input_queue.set_capacity(max_concurrency);
 
@@ -38,7 +46,7 @@ ClusterExtractionPipeline::ClusterExtractionPipeline() {
                                              IngestTask{input_queue, st}) &
             tbb::make_filter<InputFrame *, void>(
                 tbb::filter_mode::parallel,
-                ExtractTask{current_voxels, current_clusters,
+                ExtractTask{session_id, current_voxels, current_clusters,
                             current_cluster_pca}));
   });
 }
@@ -77,6 +85,8 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
   auto start_time = system_clock::now();
 
   auto &config = frame->extraction_config;
+  const auto operator_name = operator_friendly_names.at(config.id);
+  const auto session_label = session_label_from_id[session_id];
 
   // TODO check timestamp against current time
   // in order to throw away older frames
@@ -253,8 +263,7 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
             return std_aabb({{aabb.min.x, aabb.min.y, aabb.min.z},
                              {aabb.max.x, aabb.max.y, aabb.max.z}});
           });
-      const auto operator_name = operator_friendly_names.at(config.id);
-      publisher::publish_all(std::format("{}.clusters", operator_name), aabbs);
+      publisher::publish_all(operator_name, aabbs, {session_label, "clusters"});
     }
 
     if (config.publish_voxels) {
@@ -290,8 +299,8 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
           });
 
       const auto &operator_name = operator_friendly_names.at(config.id);
-      publisher::publish_all(std::format("{}.voxels", operator_name),
-                             voxels_with_cluster_id);
+      publisher::publish_all(operator_name, voxels_with_cluster_id,
+                             {session_label, "voxels"});
     }
 
     if (config.calculate_pca) {

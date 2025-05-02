@@ -67,8 +67,7 @@ void PlySequencePlayer::free_device_memory() {
   pc::logger->debug("PlySequencePlayer GPU memory freed");
 }
 
-pc::types::PointCloud
-PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
+pc::types::PointCloud PlySequencePlayer::point_cloud() {
   if (!config().active) return {};
 
   if (!_device_memory_ready || !_buffer_updated) {
@@ -128,12 +127,6 @@ PlySequencePlayer::point_cloud(pc::operators::OperatorList operators) {
   auto operator_output_end = thrust::copy_if(
       transformed_points_begin, transformed_points_begin + filtered_point_count,
       operator_output_begin, output_transform_filter{config().transform});
-
-  // run additional session operators.
-  for (auto &operator_host_config : operators) {
-    operator_output_end = pc::operators::SessionOperatorHost::run_operators(
-        operator_output_begin, operator_output_end, operator_host_config);
-  }
 
   cudaDeviceSynchronize();
 

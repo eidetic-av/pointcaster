@@ -275,11 +275,6 @@ PointCloud K4ADriver::point_cloud(AzureKinectConfiguration &config,
   // operator_output_end = pc::operators::apply(
   //     operator_output_begin, operator_output_end, operator_list);
 
-  for (auto &operator_host_config : operator_list) {
-    operator_output_end = pc::operators::SessionOperatorHost::run_operators(
-        operator_output_begin, operator_output_end, operator_host_config);
-  }
-
   // wait for the kernels to complete
   cudaDeviceSynchronize();
 

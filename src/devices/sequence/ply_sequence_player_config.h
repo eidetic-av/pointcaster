@@ -4,16 +4,16 @@
 
 namespace pc::devices {
 
-using uid = pc::types::uid;
-using pc::types::Float3;
 using pc::devices::DeviceTransformConfiguration;
-using pc::operators::OperatorList;
+
+struct PlySequencePlayer;
 
 struct PlySequencePlayerConfiguration {
+  using DeviceType = PlySequencePlayer;
   std::string id;
   bool active = true;
-  std::string directory;
-  bool playing = true;
+  std::string directory; // @disabled
+  bool playing = true; // @hidden
   int frame_rate = 30;
   int current_frame = 0;
 

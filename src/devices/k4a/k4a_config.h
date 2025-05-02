@@ -4,6 +4,8 @@
 
 namespace pc::devices {
 
+struct K4ADevice;
+
 struct AzureKinectDriverConfiguration {
   int exposure = 10000;
   int brightness = 128;
@@ -13,9 +15,10 @@ struct AzureKinectDriverConfiguration {
 };
 
 struct AzureKinectConfiguration {
-  bool unfolded = true;
-  std::string id;
-  bool active = true;
+  using DeviceType = K4ADevice;
+  std::string id; // @hidden
+  std::string serial_number; // @disabled
+  bool active = true; // @hidden
   DeviceTransformConfiguration transform; // @optional
   AzureKinectDriverConfiguration driver;  // @optional
   BodyTrackingConfiguration body; // @optional

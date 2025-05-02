@@ -5,8 +5,6 @@
 
 namespace pc::gui {
 
-constexpr ImVec2 tooltip_padding{10, 10};
-
 void draw_devices_window(PointCaster &app) {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
@@ -219,7 +217,7 @@ void draw_devices_window(PointCaster &app) {
                    device_id_cell_min.y + row_height);
 
         if (editing_device_row_id == i) {
-          auto popup_label = fmt::format("##device_edit_popup.{}", device_id);
+          auto popup_label = fmt::format("##device_edit_popup/{}", device_id);
           static std::string edit_buf_device;
           static bool device_edit_popup_opened = false;
           if (!device_edit_popup_opened) {
@@ -343,7 +341,7 @@ void draw_devices_window(PointCaster &app) {
           [&](auto &&config) {
             parameters::unbind_parameters(config.id);
             config.id = edited_device_id.value();
-            parameters::declare_parameters(config.id, config);
+            parameters::declare_parameters("devices", config.id, config);
           },
           device_config.get());
     }
@@ -402,7 +400,6 @@ void draw_devices_window(PointCaster &app) {
     } else {
       size_t orbbec_list_size = 0;
       {
-        std::lock_guard lock(OrbbecDevice::devices_access);
         for (auto &dev : OrbbecDevice::discovered_devices) {
           const bool already_connected = std::ranges::any_of(
               OrbbecDevice::attached_devices, [&](const auto &attached) {
@@ -454,33 +451,50 @@ void draw_app_menu(PointCaster &app) {
         ImGui::CloseCurrentPopup();
         pc::logger->info("New workspace...");
       }
-      if (ImGui::MenuItem("New Session")) {
+      ImGui::Separator();
+      if (ImGui::MenuItem("Open Workspace")) {
         ImGui::CloseCurrentPopup();
-        pc::logger->info("New session...");
+        pc::logger->info("Open workspace...");
       }
       ImGui::Separator();
-      if (ImGui::MenuItem("Load Workspace")) {
-        ImGui::CloseCurrentPopup();
-        pc::logger->info("Load project...");
-      }
-      if (ImGui::MenuItem("Load Session into Workspace")) {
-        ImGui::CloseCurrentPopup();
-        pc::logger->info("Load session...");
-      }
-      ImGui::Separator();
-      if (ImGui::MenuItem("Save", "s")) {
+      if (ImGui::MenuItem("Save", "S")) {
         ImGui::CloseCurrentPopup();
         app.run_async([&] { app.save_workspace(); });
       }
       if (ImGui::MenuItem("Save As...")) { pc::logger->info("Save as..."); }
       ImGui::Separator();
-      if (ImGui::MenuItem("Exit", "q")) {
+      if (ImGui::MenuItem("Exit", "Q")) {
         ImGui::CloseCurrentPopup();
+        // TODO ask to save & quit modal
         app.run_async([&] { app.quit(); });
       }
       ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Window")) { ImGui::EndMenu(); }
+    if (ImGui::BeginMenu("Window")) { 
+      auto& w = app.workspace;
+      auto& l = app.workspace.layout;
+      constexpr auto window_item = [&](auto label, auto shortcut, bool &open) {
+        if (ImGui::MenuItem(label, shortcut, open)) open = !open;
+      };
+      window_item("Camera", "C", l.show_camera_window);
+      window_item("Devices", "D", l.show_devices_window);
+      window_item("Session Operators", "G", l.show_global_transform_window);
+      window_item("Pointcloud Radio", "R", l.show_radio_window);
+      window_item("Frame Statistics", "T", l.show_stats);
+      ImGui::Separator();
+      bool inactive = false;
+      window_item("MIDI", "M", w.midi ? w.midi->show_window : inactive);
+      window_item("MQTT", "Shift+M", w.mqtt ? w.mqtt->show_window : inactive);
+      window_item("OSC Client", "O",
+                  w.osc_client ? w.osc_client->show_window : inactive);
+      window_item("OSC Server", "Shift+O",
+                  w.osc_server ? w.osc_server->show_window : inactive);
+      ImGui::Separator();
+      auto fs = app._full_screen;
+      window_item("Fullscreen", "F", fs);
+      if (fs != app._full_screen) app.set_full_screen(fs);
+      ImGui::EndMenu();
+    }
     if (ImGui::BeginMenu("Help")) {
       if (ImGui::MenuItem("About")) { ImGui::CloseCurrentPopup(); }
       if (ImGui::MenuItem("View third-party licenses")) {

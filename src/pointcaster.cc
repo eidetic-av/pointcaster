@@ -3,6 +3,9 @@
 #include "camera/camera_config.gen.h"
 #include "camera/camera_controller.h"
 #include "devices/device.h"
+#include "devices/k4a/k4a_device.h"
+#include "devices/orbbec/orbbec_device_config.gen.h"
+#include "fonts/IconsFontAwesome6.h"
 #include "operators/session_operator_host.h"
 #include "pch.h"
 
@@ -14,9 +17,12 @@
 #include <algorithm>
 #include <imgui.h>
 #include <imgui_stdlib.h>
+#include <serdepp/serializer.hpp>
+#include <variant>
 #include "imgui_internal.h"
 #include "point_cloud_renderer_config.gen.h"
 #include "session.gen.h"
+#include "workspace.gen.h"
 
 #ifdef WIN32
 #include <SDL2/SDL_Clipboard.h>
@@ -197,19 +203,19 @@ PointCaster::PointCaster(const Arguments &args)
   _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
                           Matrix4::translation(Vector3(0, 0, 0)));
 
-  const auto fetch_devices = [this] {
-    std::lock_guard lock(this->_session_devices_mutex);
-    return this->workspace.devices;
-  };
+//   const auto fetch_devices = [this] {
+//     std::lock_guard lock(this->_session_devices_mutex);
+//     return this->workspace.devices;
+//   };
 
-#ifndef WIN32
-  const auto fetch_usb_config = [this] {
-    std::lock_guard lock(this->_usb_config_mutex);
-    return this->workspace.usb.value();
-  };
-  _usb_monitor =
-      std::make_unique<UsbMonitor>(fetch_usb_config, fetch_devices);
-#endif
+// #ifndef WIN32
+//   const auto fetch_usb_config = [this] {
+//     std::lock_guard lock(this->_usb_config_mutex);
+//     return this->workspace.usb.value();
+//   };
+//   _usb_monitor =
+//       std::make_unique<UsbMonitor>(fetch_usb_config, fetch_devices);
+// #endif
 
   OrbbecDevice::init_context();
   _session_operator_graph = std::make_unique<OperatorGraph>("Session");
@@ -245,7 +251,7 @@ PointCaster::PointCaster(const Arguments &args)
   }
   // TODO, should this parameter declaration be done inside UsbConfiguration
   // constructor?
-  parameters::declare_parameters("usb", workspace.usb.value());
+  // parameters::declare_parameters("usb", workspace.usb.value());
 
   const auto viewport_size = GL::defaultFramebuffer.viewport().size();
 
@@ -373,19 +379,6 @@ void PointCaster::save_workspace(std::filesystem::path file_path) {
   // create output copy
   PointcasterWorkspace output_workspace = workspace;
 
-  // parse devices
-  output_workspace.devices.clear();
-  {
-    std::lock_guard lock(pc::devices::device_configs_access);
-    for (const auto &device_config_variant_ref : pc::devices::device_configs) {
-      std::visit(
-          [&](auto &&config) {
-            output_workspace.devices.emplace(config.id, config);
-          },
-          device_config_variant_ref.get());
-    }
-  }
-
   // serialize configs from camera controllers & operator hosts, since they own
   // the config for the app's lifetime
   for (size_t i = 0; i < _camera_controllers.size(); i++) {
@@ -421,10 +414,83 @@ void PointCaster::save_workspace(std::filesystem::path file_path) {
   });
 
   auto workspace_toml = serde::serialize<serde::toml_v>(output_workspace);
+
+  // add anything that isn't serlializable using serdepp (like variant types)
+  // directly to the toml
+  workspace_toml["devices"] = toml::array{};
+  auto &devices = workspace_toml["devices"].as_array();
+  {
+    std::lock_guard lock(devices::device_configs_access);
+    for (const auto &device_config_ref : devices::device_configs) {
+      toml::table device_table{};
+      std::visit(
+          [&](auto &&config) {
+            using T = std::decay_t<decltype(config)>;
+            const auto type_info = serde::type_info<T>;
+            const auto member_names = type_info.member_names().members();
+
+            // insert the variant type name to the device table
+            device_table.insert_or_assign("device_variant", toml::value(T::Name));
+            // iterate each struct member to add to the device table
+            auto handle_member = [&](std::string_view member_name,
+                                                auto index) {
+              using MemberType = pc::reflect::type_at_t<typename T::MemberTypes,
+                                                        decltype(index)::value>;
+              // retrieve the actual member reference at runtime
+              auto &member =
+                  type_info.template member<decltype(index)::value>(config);
+              toml::value member_value =
+                  serde::serialize<serde::toml_v>(member);
+              device_table.insert_or_assign(std::string{member_name},
+                                            member_value);
+            };
+            // using an immediately invoked lambda to provide member names and
+            // the associated index as a compile-time constant to the handler
+            // above
+            [&handle_member,
+             &member_names]<std::size_t... Is>(std::index_sequence<Is...>) {
+              ((handle_member(member_names[Is],
+                              std::integral_constant<std::size_t, Is>{})),
+               ...);
+            }(std::make_index_sequence<T::MemberCount>{});
+          },
+          device_config_ref.get());
+      devices.emplace_back(std::move(device_table));
+    }
+  }
+
+  // write the finished toml
   std::ofstream(file_path, std::ios::binary) << toml::format(workspace_toml);
 
   last_modified_workspace_file = file_path;
   // last_write_time = std::filesystem::last_write_time(file_path);
+}
+
+template <typename T>
+void deserialize_device_toml(toml::table &device_table,
+                             DeviceConfigurationVariant &variant) {
+  variant = T{};
+  auto &config = std::get<T>(variant);
+
+  constexpr auto info = serde::type_info<T>;
+  const auto member_names = info.member_names().members();
+
+  // read each field from toml and write into struct
+  auto assign_field = [&](std::string_view name, auto idx) {
+    using I = decltype(idx);
+    using MemberType =
+        pc::reflect::type_at_t<typename T::MemberTypes, I::value>;
+
+    auto &member = device_table.at(std::string{name}); // toml node
+    MemberType val = serde::deserialize<MemberType>(member);
+    info.template member<I::value>(config) = std::move(val);
+  };
+
+  // expand for each member index
+  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    (assign_field(member_names[Is], std::integral_constant<std::size_t, Is>{}),
+     ...);
+  }(std::make_index_sequence<T::MemberCount>{});
 }
 
 void PointCaster::load_workspace(std::filesystem::path file_path) {
@@ -437,12 +503,52 @@ void PointCaster::load_workspace(std::filesystem::path file_path) {
     return;
   }
 
+  toml::value file_toml;
   try {
-    auto file_toml = toml::parse(file);
-    workspace = serde::deserialize<PointcasterWorkspace>(file_toml);
+    file_toml = toml::parse(file);
   } catch (const toml::syntax_error &e) {
-    pc::logger->warn("Failed to parse config file toml");
-    pc::logger->warn(e.what());
+    pc::logger->error("Failed to parse config file toml");
+    pc::logger->error(e.what());
+    return;
+  }
+
+  // deserialize anything that was serialized manually and doesnt just exist in
+  // the PointcasterWorkspace struct
+
+  // deserialize devices
+  if (file_toml.contains("devices")) {
+    for (auto &device_entry : file_toml["devices"].as_array()) {
+      auto &device_table = device_entry.as_table();
+      auto type_name = device_table.at("device_variant").as_string();
+      device_table.erase("device_variant");
+
+      DeviceConfigurationVariant device_config;
+
+      if (type_name == OrbbecDeviceConfiguration::Name) {
+        deserialize_device_toml<OrbbecDeviceConfiguration>(device_table,
+                                                           device_config);
+      } else if (type_name == AzureKinectConfiguration::Name) {
+        deserialize_device_toml<AzureKinectConfiguration>(device_table,
+                                                           device_config);
+      } else if (type_name == PlySequencePlayerConfiguration::Name) {
+        deserialize_device_toml<PlySequencePlayerConfiguration>(device_table,
+                                                                device_config);
+      }
+
+      // TODO
+      // mutable required because load_device can't take a const ref to
+      // config... pretty hacky
+      run_async(
+          [this, config = device_config]() mutable { load_device(config); });
+    }
+  }
+
+  // deserialize everything else automatically
+  try {
+    workspace = serde::deserialize<PointcasterWorkspace>(file_toml);
+  } catch (const std::exception &e) {
+    pc::logger->error("Failed to deserialize config file toml");
+    pc::logger->error(e.what());
     return;
   }
 
@@ -481,11 +587,12 @@ void PointCaster::load_workspace(std::filesystem::path file_path) {
   //   }
   // }
 
-  run_async([this] {
-    for (auto &[device_id, device_config] : workspace.devices) {
-      load_device(device_config);
-    }
-  });
+  // run_async([this] {
+  //   for (auto &[device_id, device_entry] : workspace.devices) {
+  //     auto& [device_variant, variant] = device_entry;
+  //     load_device(device_variant, variant);
+  //   }
+  // });
 
   // unpack published parameters, initialising parameter state
   if (workspace.published_params.has_value()) {
@@ -537,23 +644,9 @@ void PointCaster::load_device(DeviceConfigurationVariant &config) {
         using T = std::decay_t<decltype(device_config)>;
         std::string device_id(device_config.id);
         pc::logger->info("Loading device '{}'", device_id);
-        // TODO initialisation of orbbec and k4a should be handled with raii
-        // like the ply sequence player works
-        if constexpr (std::same_as<T, devices::OrbbecDeviceConfiguration>) {
-          if (device_id.find("ob_") != std::string::npos) {
-            auto ip = std::string(device_id.begin() + 3, device_id.end());
-            std::replace(ip.begin(), ip.end(), '_', '.');
-            open_orbbec_sensor(ip);
-          }
-        } else if constexpr (std::same_as<T, AzureKinectConfiguration>) {
-          load_k4a_device(device_config, device_id);
-        } else if constexpr (std::same_as<T, PlySequencePlayerConfiguration>) {
-          std::lock_guard lock(devices::devices_access);
-          auto ply_config = device_config;
-          devices::attached_devices.emplace_back(
-              std::make_shared<PlySequencePlayer>(ply_config));
-        }
-
+        std::lock_guard lock(devices::devices_access);
+        devices::attached_devices.emplace_back(
+            std::make_shared<typename T::DeviceType>(device_config));
         // if the device is not already present in each session's
         // active_device_map, make sure it's in there as active
         for (auto &session : workspace.sessions) {
@@ -670,6 +763,12 @@ void PointCaster::render_cameras() {
 }
 
 void PointCaster::sync_session_instances() {
+  // build a map of session labels per id
+  session_label_from_id.clear();
+  for (auto &session : workspace.sessions) {
+    session_label_from_id[session.id] = session.label;
+  }
+
   // build a lookup of existing controllers by session-id
   std::unordered_map<std::string, std::unique_ptr<CameraController>>
       controller_map;
@@ -717,23 +816,23 @@ void PointCaster::sync_session_instances() {
   session_operator_hosts.swap(new_operator_hosts);
 }
 
-void PointCaster::load_k4a_device(AzureKinectConfiguration &config,
-                                  std::string_view target_id) {
-  loading_device = true;
-  try {
-    auto device = std::make_shared<K4ADevice>(config, target_id);
-    std::lock_guard lock(pc::devices::devices_access);
-    pc::devices::attached_devices.push_back(device);
-    for (auto &session : workspace.sessions) {
-      if (!session.active_devices.contains(config.id)) {
-        session.active_devices[config.id] = true;
-      }
-    }
-  } catch (k4a::error e) { pc::logger->error(e.what()); } catch (...) {
-    pc::logger->error("Failed to open device. (Unknown exception)");
-  }
-  loading_device = false;
-}
+// void PointCaster::load_k4a_device(AzureKinectConfiguration &config,
+//                                   std::string_view target_id) {
+//   loading_device = true;
+//   try {
+//     auto device = std::make_shared<K4ADevice>(config, target_id);
+//     std::lock_guard lock(pc::devices::devices_access);
+//     pc::devices::attached_devices.push_back(device);
+//     for (auto &session : workspace.sessions) {
+//       if (!session.active_devices.contains(config.id)) {
+//         session.active_devices[config.id] = true;
+//       }
+//     }
+//   } catch (k4a::error e) { pc::logger->error(e.what()); } catch (...) {
+//     pc::logger->error("Failed to open device. (Unknown exception)");
+//   }
+//   loading_device = false;
+// }
 
 void PointCaster::open_kinect_sensors() {
   run_async([this] {
@@ -747,8 +846,9 @@ void PointCaster::open_kinect_sensors() {
     pc::logger->info("Found {} k4a devices", (int)installed_device_count);
     for (std::size_t i = attached_device_count; i < installed_device_count;
          i++) {
-      AzureKinectConfiguration config{.id = K4ADevice::get_serial_number(i)};
-      load_k4a_device(config, config.id);
+      DeviceConfigurationVariant config = AzureKinectConfiguration{
+          .id = uuid::word(), .serial_number = K4ADevice::get_serial_number(i)};
+      load_device(config);
     }
     loading_device = false;
   });
@@ -756,33 +856,9 @@ void PointCaster::open_kinect_sensors() {
 
 void PointCaster::open_orbbec_sensor(std::string_view ip) {
   pc::logger->info("Opening Orbbec sensor at {}", ip);
-  std::string ip_str{ip.begin(), ip.end()};
-  run_async([this, ip = ip_str] {
-    loading_device = true;
-    std::string id{fmt::format("ob_{}", ip)};
-    std::replace(id.begin(), id.end(), '.', '_');
-    try {
-      auto [config_it, _] = workspace.devices.try_emplace(
-          id, std::in_place_type<pc::devices::OrbbecDeviceConfiguration>, false,
-          id);
-      DeviceConfigurationVariant &device_config_variant = config_it->second;
-      auto device_config =
-          std::get<OrbbecDeviceConfiguration>(device_config_variant);
-      device_config.id = id;
-      std::lock_guard lock(devices::devices_access);
-      devices::attached_devices.emplace_back(
-          std::make_shared<OrbbecDevice>(device_config));
-      for(auto& session : workspace.sessions) {
-        if (!session.active_devices.contains(device_config.id)) {
-          session.active_devices[device_config.id] = true;
-        }
-      }
-      // _session_operator_graph->add_input_node(device_config);
-    } catch (ob::Error &e) { pc::logger->error(e.getMessage()); } catch (...) {
-      pc::logger->error("Failed to create device. (Unknown exception)");
-    }
-    loading_device = false;
-  });
+  DeviceConfigurationVariant config =
+      OrbbecDeviceConfiguration{.id = uuid::word(), .ip = std::string(ip)};
+  load_device(config);
 }
 
 void PointCaster::open_ply_sequence() {
@@ -931,13 +1007,16 @@ void PointCaster::find_mode_keypress(KeyEvent &event) {
 
 void PointCaster::draw_main_viewport() {
 
-  static std::optional<int> remove_session_index;
+  static std::optional<std::string> remove_session_id;
+  static ImVec2 remove_session_pos;
+  static std::string remove_session_window_id;
   static std::optional<int> rename_session_index;
   static std::optional<int> new_session_index;
   static ImVec2 rename_tab_pos;
   static std::string rename_edit_buffer;
 
   constexpr float tab_bar_height = 20;
+  static ImVec2 tab_bar_padding = { 10.0f, 5.0f };
   ImGuiViewport *vp = ImGui::GetMainViewport();
 
   // draw the tab bar at the top which can't be docked into and isn't part of
@@ -950,7 +1029,7 @@ void PointCaster::draw_main_viewport() {
       ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
       ImGuiWindowFlags_NoDocking;
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 5});
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {10, 5});
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tab_bar_padding);
   ImGui::Begin("##TabBar", nullptr, tabbar_flags);
   if (ImGui::BeginTabBar("Sessions", ImGuiTabBarFlags_Reorderable)) {
 
@@ -992,7 +1071,10 @@ void PointCaster::draw_main_viewport() {
     gui::pop_context_menu_styles();
 
     // tab items for each open session
+
     constexpr auto tab_width = 125;
+
+
     for (int i = 0; i < workspace.sessions.size(); i++) {
       auto &session = workspace.sessions[i];
       ImGuiTabItemFlags item_flags = ImGuiTabItemFlags_None;
@@ -1000,34 +1082,76 @@ void PointCaster::draw_main_viewport() {
         item_flags |= ImGuiTabItemFlags_SetSelected;
         new_session_index.reset();
       }
-      bool open = true;
+
       ImGui::SetNextItemWidth(tab_width);
       auto tab_name = std::format("{}###{}", session.label, session.id);
-      if (ImGui::BeginTabItem(tab_name.c_str(), &open, item_flags)) {
+      if (ImGui::BeginTabItem(tab_name.c_str(), nullptr, item_flags)) {
         workspace.selected_session_index = i;
         ImGui::EndTabItem();
       }
-      // open is false on the frame the close button is clicked
-      if (!open) {
-        remove_session_index = i;
-        ImGui::OpenPopup("Delete Session?");
-      }
+
       // rename a session on a double click of its tab
-      else if (ImGui::IsItemHovered() &&
+      if (ImGui::IsItemHovered() &&
                ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
         rename_session_index = i;
         rename_tab_pos = ImGui::GetItemRectMin();
         rename_edit_buffer = session.label;
         ImGui::OpenPopup("RenameSession");
       }
+
+    }
+    
+    auto *session_tab_bar = ImGui::GetCurrentTabBar();
+
+    // calculate close button positions and ids for each tab
+    struct CloseButton { ImVec2 pos; ImGuiID tab_id; };
+    std::vector<CloseButton> close_buttons;
+    close_buttons.resize(session_tab_bar->Tabs.size());
+    // iterate the tab count minus a few due to the
+    // buttons that are also "tabs" in the bar
+    for (int i = 0; i < session_tab_bar->Tabs.size() - 2; i++) {
+      auto tab_index = i + 1;
+      float close_button_x = tab_index * (tab_width + tab_bar_padding.x / 2) - 3;
+      float close_button_y = tab_bar_padding.y + 1;
+      const auto &tab = session_tab_bar->Tabs[tab_index];
+      close_buttons[i] = {{close_button_x, close_button_y}, tab.ID};
+    }
+
+    // draw close buttons over top of our tab bar
+    // and handle setting up removal of session when clicked
+    for (const auto& button : close_buttons) {
+      // draw a close session button on the right hand side of each tab
+      if (button.pos.x == 0) continue;
+      ImGui::SetCursorScreenPos(button.pos);
+      if (gui::draw_icon_button(
+              ICON_FA_XMARK, false,
+              catpuccin::with_alpha(catpuccin::imgui::mocha_text, 0.25f),
+              catpuccin::with_alpha(catpuccin::imgui::mocha_text, 0.5f))) {
+
+        for (int i = 0; i < workspace.sessions.size(); ++i) {
+          const auto& session = workspace.sessions[i];
+          auto tab_name = std::format("{}###{}", session.label, session.id);
+          if (ImGui::GetID(tab_name.c_str()) == button.tab_id) {
+            pc::logger->info("Should remove: {}", session.label);
+            remove_session_id = session.id;
+            remove_session_pos = {button.pos.x - 30, button.pos.y + 30};
+            remove_session_window_id =
+                std::format("Delete Session?###{}", uuid::digit());
+            ImGui::OpenPopup(remove_session_window_id.c_str());
+            break;
+          }
+        }
+      }
     }
 
     // handle reordering of sessions by dragging tabs around
-    auto *session_tab_bar = ImGui::GetCurrentTabBar();
+
     if (session_tab_bar->ReorderRequestTabId) {
       int source_index = -1;
       for (int i = 0; i < workspace.sessions.size(); i++) {
-        if (ImGui::GetID(workspace.sessions[i].id.c_str()) ==
+        const auto& session = workspace.sessions[i];
+        auto tab_name = std::format("{}###{}", session.label, session.id);
+        if (ImGui::GetID(tab_name.c_str()) ==
             session_tab_bar->ReorderRequestTabId) {
           source_index = i;
           break;
@@ -1042,13 +1166,18 @@ void PointCaster::draw_main_viewport() {
       }
     }
 
+    // draw popup windows & modals 
+
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 5});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10, 5});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {10, 5});
-    if (ImGui::BeginPopupModal("Delete Session?", nullptr,
+    ImGui::SetNextWindowPos(remove_session_pos);
+    if (ImGui::BeginPopupModal(remove_session_window_id.c_str(), nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize) &&
-        remove_session_index) {
-      auto &target_session = workspace.sessions[*remove_session_index];
+        remove_session_id) {
+      auto target_session_it = std::ranges::find(
+          workspace.sessions, remove_session_id, &PointcasterSession::id);
+      auto& target_session = *target_session_it;
       ImGui::Dummy({0, 5});
       ImGui::Text("%s",
                   std::format("Really delete '{}' from the current workspace?",
@@ -1057,21 +1186,21 @@ void PointCaster::draw_main_viewport() {
       ImGui::Dummy({0, 10});
 
       if (ImGui::Button("Delete", ImVec2(80, 0))) {
-        int removed_index = *remove_session_index;
-        if (removed_index >= 0 && removed_index < workspace.sessions.size()) {
-          workspace.sessions.erase(workspace.sessions.begin() + removed_index);
-          if (workspace.sessions.empty()) {
-            workspace.selected_session_index = 0;
-          } else if (removed_index == workspace.selected_session_index) {
-            if (workspace.selected_session_index >=
-                (int)workspace.sessions.size())
-              workspace.selected_session_index =
-                  (int)workspace.sessions.size() - 1;
-          } else if (removed_index < workspace.selected_session_index) {
-            workspace.selected_session_index--;
-          }
+        int removed_index =
+            std::distance(workspace.sessions.begin(), target_session_it);
+        workspace.sessions.erase(target_session_it);
+
+        if (workspace.sessions.empty()) {
+          workspace.selected_session_index = 0;
+        } else if (removed_index == workspace.selected_session_index) {
+          if (workspace.selected_session_index >=
+              int(workspace.sessions.size()))
+            workspace.selected_session_index =
+                int(workspace.sessions.size()) - 1;
+        } else if (removed_index < workspace.selected_session_index) {
+          workspace.selected_session_index--;
         }
-        remove_session_index.reset();
+        remove_session_id.reset();
         rename_session_index.reset();
         new_session_index.reset();
         ImGui::CloseCurrentPopup();
@@ -1112,9 +1241,11 @@ void PointCaster::draw_main_viewport() {
         }
         target_session.label = rename_edit_buffer.empty() ? target_session.label
                                                           : rename_edit_buffer;
+        session_label_from_id[target_session.id] = target_session.label;
         ImGui::CloseCurrentPopup();
         new_session_index = *rename_session_index;
         rename_session_index.reset();
+        gui::refresh_tooltips = true;
       }
       ImGui::EndPopup();
     }
@@ -1265,73 +1396,6 @@ void PointCaster::draw_main_viewport() {
   }
   ImGui::End();
   ImGui::PopStyleVar();
-}
-
-void PointCaster::draw_viewport_controls(CameraController &selected_camera) {
-  auto &camera_config = selected_camera.config();
-  const auto viewport_window_size = ImGui::GetWindowSize();
-  const auto viewport_window_pos = ImGui::GetWindowPos();
-
-  constexpr auto button_size = ImVec2{28, 28};
-  constexpr auto control_inset = ImVec2{5, 35};
-
-  constexpr auto viewport_controls_flags =
-      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-      ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
-      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground;
-
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-  ImGui::SetNextWindowSize({0, 0});
-  ImGui::Begin("ViewportControls", nullptr, viewport_controls_flags);
-
-  constexpr auto draw_button = [button_size](auto content,
-                                             std::function<void()> action,
-                                             bool toggled = false) {
-    ImGui::Spacing();
-    ImGui::SameLine();
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0, 9});
-
-    if (toggled) {
-      const auto toggled_color =
-          ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
-      ImGui::PushStyleColor(ImGuiCol_Button, toggled_color);
-    }
-
-    if (ImGui::Button(content, button_size)) action();
-
-    if (toggled) ImGui::PopStyleColor();
-
-    ImGui::PopStyleVar();
-  };
-
-  ImGui::PushFont(_icon_font.get());
-
-  draw_button(
-      ICON_FA_SLIDERS,
-      [&] { camera_config.show_window = !camera_config.show_window; },
-      camera_config.show_window);
-
-  ImGui::Dummy({0, 7});
-
-  draw_button(
-      ICON_FA_ENVELOPE,
-      [&] {
-        if (camera_config.rendering.scale_mode == (int)ScaleMode::Span)
-          camera_config.rendering.scale_mode = (int)ScaleMode::Letterbox;
-        else camera_config.rendering.scale_mode = (int)ScaleMode::Span;
-      },
-      camera_config.rendering.scale_mode == (int)ScaleMode::Letterbox);
-
-  ImGui::PopFont();
-
-  ImGui::SetWindowPos({viewport_window_pos.x + control_inset.x,
-                       viewport_window_pos.y + control_inset.y});
-
-  ImGui::End();
-  ImGui::PopStyleVar();
-}
-
-void PointCaster::draw_camera_control_window() {
 }
 
 void PointCaster::draw_stats(const float delta_time) {

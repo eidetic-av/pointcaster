@@ -2,6 +2,17 @@
 import os
 import re
 import sys
+from dataclasses import dataclass
+
+@dataclass
+class Member:
+    type: str
+    name: str
+    default: str
+    min_max: str
+    optional: bool
+    disabled: bool
+    hidden: bool
 
 file_cache = {}
 
@@ -41,7 +52,7 @@ def process_cpp_header(input_text, file_path):
 
     # TODO: replace this explicit string search with a search for a meta comment
     # which instructs to serialize the struct
-    structs = re.findall(r"struct (\w+(?:Configuration|Workspace|Session|SessionLayout|BindingTarget|putRoute|putMapping|putChangeDetection|ABB)) {([\s\S]*?^\};)",
+    structs = re.findall(r"struct (\w+(?:Configuration|Workspace|Entry|Session|SessionLayout|BindingTarget|putRoute|putMapping|putChangeDetection|ABB)) {([\s\S]*?^\};)",
     # structs = re.findall(r"struct (\w+Configuration) {([\s\S]*?^\};)",
                          input_text, re.MULTILINE)
 
@@ -54,6 +65,8 @@ def process_cpp_header(input_text, file_path):
     comment_pattern = r"(?:\s*//\s*(.*))?"
     minmax_pattern = re.compile(r"@minmax\(([^)]+)\)")
     optional_pattern = re.compile(r"@optional")
+    disabled_pattern = re.compile(r"@disabled")
+    hidden_pattern = re.compile(r"@hidden")
 
     # combine regex into a full matcher for struct members
     member_pattern = re.compile(
@@ -64,40 +77,46 @@ def process_cpp_header(input_text, file_path):
 
         # find member variables
         unparsed_members = member_pattern.findall(struct_body)
-        members = []
+        members: list[Member] = []
+        usings: list[tuple[str,str]] = []
         for member in unparsed_members:
+            # treat using declarations seperately
+            if (member[0] == "using"): 
+                usings.append((member[1], member[2]))
+                continue
+
             # Combine initialization values if present
             init_value = member[2].strip() or member[3].strip() or ""
             init_value = init_value.replace("{", "").replace("}", "")
 
             comment = member[4].strip() if member[4] else "" 
-
-            min_max = ""
             minmax_match = minmax_pattern.search(comment)
-            if minmax_match:
-                min_max = minmax_match.group(1)
 
-            optional = False
-            optional_match = optional_pattern.search(comment)
-            if optional_match:
-                optional = True
-
-            members.append((member[0], member[1],
-                            f"{{{init_value}}}", min_max, optional))
+            members.append(Member(
+                type = member[0],
+                name = member[1],
+                default = f"{{{init_value}}}",
+                min_max = minmax_match.group(1) if minmax_match else "",
+                optional = bool(optional_pattern.search(comment)),
+                disabled = bool(disabled_pattern.search(comment)),
+                hidden = bool(hidden_pattern.search(comment)),
+            ))
 
          # ensure there is an 'unfolded' bool member for the gui system
         if "Configuration" in struct_name:
-            if not any(member[1] == "unfolded" for member in members):
-                members.insert(0, ("bool", "unfolded", "{false}", "", False))
+            if not any(m.name == "unfolded" for m in members):
+                members.insert(0, Member(type = "bool", name = "unfolded", 
+                                         default = "{false}", min_max = "",
+                                         optional = False, disabled = False, 
+                                         hidden = False))
 
         generated_struct = f"struct {struct_name} {{\n"
 
-        def add_member_to_body(member_type, member_name, default_value):
-            nonlocal generated_struct
-            generated_struct += f"\t{member_type} {member_name}{default_value};\n"
-
         for member in members:
-            add_member_to_body(member[0], member[1], member[2])
+            generated_struct += f"\t{member.type} {member.name}{member.default};\n"
+
+        for alias, target in usings:
+            generated_struct += f"\n\tusing {alias} = {target};\n"
 
         # generate the reflection metadata to add to the struct
 
@@ -112,8 +131,8 @@ def process_cpp_header(input_text, file_path):
         generated_struct += "\tusing MemberTypes = pc::reflect::type_list<"
         all_types_string = ""
         for i, member in enumerate(members):
-            generated_struct += member[0]
-            all_types_string += member[0]
+            generated_struct += member.type
+            all_types_string += member.type
             if i != len(members) - 1:
                 generated_struct += ", "
                 all_types_string += ", "
@@ -122,7 +141,7 @@ def process_cpp_header(input_text, file_path):
         # the default values of each member
         generated_struct += f"\tinline static const std::tuple<{all_types_string}> Defaults {{ "
         for i, member in enumerate(members):
-            default_value = member[2]
+            default_value = member.default
             generated_struct += f"{default_value}"
             if i != len(members) - 1:
                 generated_struct += ", "
@@ -131,7 +150,7 @@ def process_cpp_header(input_text, file_path):
         # the min and max values of each member
         generated_struct += f"\tstatic constexpr std::array<std::optional<pc::types::MinMax<float>>, {len(members)}> MinMaxValues {{\n"
         for i, member in enumerate(members):
-            min_max = member[3]
+            min_max = member.min_max
             if min_max == "":
                 generated_struct += f"\t\tstd::optional<pc::types::MinMax<float>>{{}}"
             else:
@@ -140,15 +159,32 @@ def process_cpp_header(input_text, file_path):
                 generated_struct += ", \n"
         generated_struct += "};\n"
 
+        # the disabled value of each member
+        generated_struct += f"\tstatic constexpr std::array<bool, {len(members)}> DisabledMembers {{\n"
+        for i, member in enumerate(members):
+            if i == 0: generated_struct += "\t\t"
+            generated_struct += f"{'true' if member.disabled else 'false'}"
+            if i != len(members) - 1:
+                generated_struct += ", "
+        generated_struct += "};\n"
+
+        # the hidden value of each member
+        generated_struct += f"\tstatic constexpr std::array<bool, {len(members)}> HiddenMembers {{\n"
+        for i, member in enumerate(members):
+            if i == 0: generated_struct += "\t\t"
+            generated_struct += f"{'true' if member.hidden else 'false'}"
+            if i != len(members) - 1:
+                generated_struct += ", "
+        generated_struct += "};\n"
+
         # add an "empty()" member function that returns true if the configuration struct
         # contains no changed values (i.e. each member of the struct is currently equal to its default value)
         if len(members) > 1:
             generated_struct += "\n\tbool empty() const { return \n"
             for i, member in enumerate(members):
-                name = member[1]
-                if name == "unfolded":
+                if member.name == "unfolded":
                     continue
-                generated_struct += f"\t\t{name} == std::get<{i}>(Defaults)"
+                generated_struct += f"\t\t{member.name} == std::get<{i}>(Defaults)"
                 if i != len(members) - 1:
                     generated_struct += " && \n"
                 else:
@@ -160,12 +196,10 @@ def process_cpp_header(input_text, file_path):
         # add the serdepp macro
         generated_struct += f"\n\tDERIVE_SERDE({struct_name},"
         for i, member in enumerate(members):
-            member_name = member[1]
             serde_attributes = ""
-            is_optional = member[4]
-            if (is_optional):
+            if (member.optional):
                 serde_attributes += ", make_optional"
-            generated_struct += f"\n\t\t(&Self::{member_name}, \"{member_name}\"{serde_attributes})"
+            generated_struct += f"\n\t\t(&Self::{member.name}, \"{member.name}\"{serde_attributes})"
         generated_struct += ")\n"
 
         generated_struct += "};\n"

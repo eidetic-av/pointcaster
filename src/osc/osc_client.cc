@@ -16,7 +16,7 @@ namespace pc::osc {
 OscClient::OscClient(OscClientConfiguration &config)
     : _config(config), _sender_thread([this](auto st) { send_messages(st); }) {
   publisher::add(this);
-  parameters::declare_parameters("oscclient", _config);
+  parameters::declare_parameters("workspace", "oscclient", _config);
 }
 
 OscClient::~OscClient() {

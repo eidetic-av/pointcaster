@@ -33,7 +33,7 @@ MqttClient::MqttClient(MqttClientConfiguration &config)
   set_uri(config.broker_uri);
   if (_config.auto_connect) connect();
   publisher::add(this);
-  declare_parameters("mqtt", _config);
+  declare_parameters("workspace", "mqtt", _config);
 }
 
 MqttClient::~MqttClient() {
@@ -123,13 +123,7 @@ void MqttClient::publish(const std::string_view topic, const void *payload,
     return;
   }
 
-  auto topic_string = publisher::construct_topic_string(topic, topic_nodes);
-
-  // for mqtt we use a forward-slash delimeted uri for the topic,
-  // and elsewhere throughout the application the parameter id's and topics are
-  // all period delimited
-  std::string topic_uri{topic_string.data(), topic_string.size()};
-  std::replace(topic_uri.begin(), topic_uri.end(), '.', '/');
+  std::string topic_uri = publisher::construct_topic_string(topic, topic_nodes);
 
   if (_config.publish_empty_once) {
     static std::unordered_map<std::string, bool> published_empty_once;

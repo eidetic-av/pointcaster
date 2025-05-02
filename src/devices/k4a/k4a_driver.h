@@ -45,7 +45,7 @@ public:
 
   static inline std::atomic<unsigned int> active_count = 0;
 
-  K4ADriver(AzureKinectConfiguration &config, std::string_view target_id = "");
+  K4ADriver(AzureKinectConfiguration &config);
   ~K4ADriver();
 
   K4ADriver(const K4ADriver &) = delete;

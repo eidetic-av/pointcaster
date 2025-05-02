@@ -13,7 +13,7 @@ namespace pc::operators {
       config.unfolded = true;
       ImGui::Checkbox("Enabled", &config.enabled);
 
-      vector_param(std::to_string(gui::_parameter_index), "global_transformers.rotate", config.euler_angles, 0.0f, 360.f, 0.0f);
+      vector_param(std::to_string(gui::_parameter_index), "global_transformers/rotate", config.euler_angles, 0.0f, 360.f, 0.0f);
 
     } else {
       config.unfolded = false;

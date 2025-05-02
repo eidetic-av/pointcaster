@@ -10,21 +10,24 @@
 #include "osc/osc_server_config.gen.h"
 #include "radio/radio_config.gen.h"
 #include "session.gen.h"
+#include "serialization.h"
+#include <serdepp/adaptor/toml11.hpp>
 
 namespace pc {
 
-using DeviceMap = std::map<std::string, devices::DeviceConfigurationVariant>;
 using PublishedParameterList = std::vector<std::string>;
 
 using OperatorNameMap = std::map<std::string, operators::uid>;
 using OperatorColorMap = std::map<std::string, SerializedColor>;
 
+struct DeviceEntry {
+  std::string variant_type;
+  devices::DeviceConfigurationVariant variant;
+};
 
 struct PointcasterWorkspace {
   std::vector<PointcasterSession> sessions;
   int selected_session_index;
-
-  DeviceMap devices; // @optional
 
   std::optional<devices::UsbConfiguration> usb;
   std::optional<radio::RadioConfiguration> radio;

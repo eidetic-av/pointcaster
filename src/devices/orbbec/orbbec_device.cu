@@ -63,11 +63,10 @@ bool OrbbecDevice::init_device_memory(std::size_t incoming_point_count) {
 void OrbbecDevice::free_device_memory() {
   _device_memory_ready = false;
   if (_device_memory != nullptr) delete _device_memory;
-  pc::logger->debug("OrbbecDevice GPU memory freed ({})", _ip);
+  pc::logger->debug("OrbbecDevice GPU memory freed ({})", config().ip);
 }
 
-pc::types::PointCloud
-OrbbecDevice::point_cloud(pc::operators::OperatorList operators) {
+pc::types::PointCloud OrbbecDevice::point_cloud() {
 
   using namespace pc::profiling;
   ProfilingZone zone("OrbbecDevice::point_cloud");
@@ -100,6 +99,7 @@ OrbbecDevice::point_cloud(pc::operators::OperatorList operators) {
     copy_zone.text(std::format("PointCount: {}", incoming_point_count));
   }
 
+  size_t filtered_point_count;
   {
     ProfilingZone input_transform_zone("Transform & Filter Input Points");
 
@@ -113,56 +113,44 @@ OrbbecDevice::point_cloud(pc::operators::OperatorList operators) {
     auto filtered_points_end = thrust::copy_if(
         incoming_point_data.begin(), incoming_points_end, filtered_data.begin(),
         input_transform_filter{transform_config});
-    auto filtered_point_count =
+    filtered_point_count =
         thrust::distance(filtered_data.begin(), filtered_points_end);
 
     input_transform_zone.text(
         std::format("FilteredCount: {}", filtered_point_count));
   }
 
+  auto filtered_begin = filtered_data.begin();
+  auto filtered_end = filtered_begin + filtered_point_count;
+
   {
     ProfilingZone device_transform_zone("Device Transform Filter");
-
-    auto transformed_points_begin = thrust::make_zip_iterator(
+    auto out_zip = thrust::make_zip_iterator(
         thrust::make_tuple(transformed_positions.begin(),
                            transformed_colors.begin(), indices.begin()));
-    thrust::transform(filtered_data.begin(), filtered_data.end(),
-                      transformed_points_begin,
-                      device_transform_filter(transform_config));
+    thrust::transform(filtered_begin, filtered_end, out_zip,
+                      device_transform_filter{transform_config});
   }
 
+  size_t output_point_count;
   {
     ProfilingZone output_filter_zone("Apply Output Filter & Operators");
-
-    auto operator_output_begin = thrust::make_zip_iterator(thrust::make_tuple(
+    auto in_zip = thrust::make_zip_iterator(
+        thrust::make_tuple(transformed_positions.begin(),
+                           transformed_colors.begin(), indices.begin()));
+    auto in_end = in_zip + filtered_point_count;
+    auto out_zip = thrust::make_zip_iterator(thrust::make_tuple(
         output_positions.begin(), output_colors.begin(), indices.begin()));
-    auto operator_output_end = thrust::copy_if(
-        thrust::make_zip_iterator(
-            thrust::make_tuple(transformed_positions.begin(),
-                               transformed_colors.begin(), indices.begin())),
-        thrust::make_zip_iterator(
-            thrust::make_tuple(transformed_positions.begin(),
-                               transformed_colors.begin(), indices.begin())) +
-            thrust::distance(filtered_data.begin(), filtered_data.end()),
-        operator_output_begin, output_transform_filter{transform_config});
 
-    for (auto &operator_host_config : operators) {
-      operator_output_end = pc::operators::SessionOperatorHost::run_operators(
-          operator_output_begin, operator_output_end, operator_host_config);
-    }
+    auto transform_output_end = thrust::copy_if(
+        in_zip, in_end, out_zip, output_transform_filter{transform_config});
+
+    output_point_count = thrust::distance(out_zip, transform_output_end);
   }
 
   {
     ProfilingZone host_copy_zone("GPU to CPU copy");
-
     cudaDeviceSynchronize();
-    auto operator_output_begin = thrust::make_zip_iterator(thrust::make_tuple(
-        output_positions.begin(), output_colors.begin(), indices.begin()));
-    auto output_point_count = std::distance(
-        operator_output_begin,
-        operator_output_begin +
-            thrust::distance(output_positions.begin(), output_positions.end()));
-
     _current_point_cloud.positions.resize(output_point_count);
     _current_point_cloud.colors.resize(output_point_count);
 
@@ -172,7 +160,6 @@ OrbbecDevice::point_cloud(pc::operators::OperatorList operators) {
     thrust::copy(output_colors.begin(),
                  output_colors.begin() + output_point_count,
                  _current_point_cloud.colors.begin());
-
     host_copy_zone.text(std::format("OutputCount: {}", output_point_count));
   }
 

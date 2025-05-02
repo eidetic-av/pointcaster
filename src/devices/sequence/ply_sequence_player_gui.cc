@@ -16,7 +16,7 @@ bool PlySequencePlayer::draw_controls() {
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {5, 5});
   if (ImGui::BeginChild(
-          std::format("##controls.{}", pc::gui::_parameter_index++).c_str(),
+          std::format("##controls/{}", pc::gui::_parameter_index++).c_str(),
           controls_size,
           ImGuiChildFlags_Border | ImGuiWindowFlags_NoScrollbar)) {}
 

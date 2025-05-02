@@ -29,6 +29,10 @@ void begin_gui_helpers(
         std::distance(modeline_input.begin(), modeline_input_end);
     _modeline_input = std::string_view(modeline_input.data(), input_length);
   }
+  if (gui::refresh_tooltips) {
+    gui::parameter_tooltips.clear();
+    gui::refresh_tooltips = false;
+  }
 }
 
 void init_parameter_styles() {
@@ -86,6 +90,40 @@ void init_parameter_styles() {
 std::string format_label(std::string_view label) {
   return strings::sentence_case(strings::last_element(label));
 };
+
+std::string compute_tooltip(const std::string_view parameter_id) {
+  auto &session_id = session_id_from_parameter_id[std::string(parameter_id)];
+  auto &session_label = session_label_from_id[session_id];
+  auto parameter_name = std::string(parameter_id);
+  auto root_parameter_id =
+      std::string(pc::strings::first_element(parameter_id));
+  try {
+    unsigned long operator_id = std::stoul(root_parameter_id);
+    if (operators::operator_friendly_names.contains(operator_id)) {
+      const auto &operator_name =
+          operators::operator_friendly_names[operator_id];
+      auto operator_id_str = std::to_string(operator_id);
+      if (auto pos = parameter_name.find(operator_id_str);
+          pos != std::string::npos) {
+        parameter_name.replace(pos, operator_id_str.size(), operator_name);
+      }
+    }
+  } catch (...) { /* nothing needed if parsing fails */
+  }
+  return std::format("{}/{}", session_label, parameter_name);
+}
+
+const char *get_tooltip_cstr(const std::string_view parameter_id) {
+  auto [it, _] = gui::parameter_tooltips.try_emplace(
+      std::string(parameter_id), compute_tooltip(parameter_id));
+  return it->second.c_str();
+}
+
+void show_parameter_tooltip(const std::string_view parameter_id) {
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, tooltip_padding);
+  ImGui::SetTooltip("%s", get_tooltip_cstr(parameter_id));
+  ImGui::PopStyleVar();
+}
 
 template <typename T>
 bool slider(std::string_view parameter_id, T &value, T min, T max,
@@ -203,9 +241,9 @@ bool bool_param(std::string_view group_id, std::string_view parameter_id,
 
   const auto original_value = value;
 
-  const auto parameter_label = fmt::format("{}.{}", group_id, parameter_id);
+  const auto parameter_label = fmt::format("{}/{}", group_id, parameter_id);
   const auto imgui_parameter_id =
-      parameter_label + "." + std::to_string(_parameter_index++);
+      parameter_label + "/" + std::to_string(_parameter_index++);
   const auto formatted_label =
       strings::sentence_case(strings::last_element(parameter_label));
 
@@ -225,12 +263,8 @@ bool bool_param(std::string_view group_id, std::string_view parameter_id,
                        frame_end - g.Style.ItemInnerSpacing * 0.5f);
 
   ImGui::ItemAdd(text_bb,
-                 GetID(fmt::format("{}.{}", parameter_id, "label").c_str()));
-  if (ImGui::IsItemHovered()) {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{11, 6});
-    ImGui::SetTooltip("%s", parameter_id.data());
-    ImGui::PopStyleVar();
-  }
+                 GetID(fmt::format("{}/{}", parameter_id, "label").c_str()));
+  if (ImGui::IsItemHovered()) { show_parameter_tooltip(parameter_id); }
 
   Dummy({text_width + g.Style.ItemInnerSpacing.x, 0});
   RenderFrame(frame_bb.Min, frame_bb.Max, GetColorU32(ImGuiCol_TableHeaderBg));
@@ -260,9 +294,9 @@ bool string_param(std::string_view group_id, std::string_view parameter_id,
 
   const auto original_value = value;
 
-  const auto parameter_label = fmt::format("{}.{}", group_id, parameter_id);
+  const auto parameter_label = fmt::format("{}/{}", group_id, parameter_id);
   const auto imgui_parameter_id =
-      parameter_label + "." + std::to_string(_parameter_index++);
+      parameter_label + "/" + std::to_string(_parameter_index++);
   const auto formatted_label =
       strings::sentence_case(strings::last_element(parameter_label));
 
@@ -282,12 +316,8 @@ bool string_param(std::string_view group_id, std::string_view parameter_id,
                        frame_end - g.Style.ItemInnerSpacing * 0.5f);
 
   ImGui::ItemAdd(text_bb,
-                 GetID(fmt::format("{}.{}", parameter_id, "label").c_str()));
-  if (ImGui::IsItemHovered()) {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{11, 6});
-    ImGui::SetTooltip("%s", parameter_id.data());
-    ImGui::PopStyleVar();
-  }
+                 GetID(fmt::format("{}/{}", parameter_id, "label").c_str()));
+  if (ImGui::IsItemHovered()) { show_parameter_tooltip(parameter_id); }
 
   Dummy({text_width + g.Style.ItemInnerSpacing.x, 0});
   RenderFrame(frame_bb.Min, frame_bb.Max, GetColorU32(ImGuiCol_TableHeaderBg));
@@ -316,7 +346,7 @@ bool scalar_param(std::string_view group_id, std::string_view parameter_id,
   auto original_value = value;
 
   auto imgui_parameter_id =
-      fmt::format("{}.{}", parameter_id, _parameter_index++);
+      fmt::format("{}/{}", parameter_id, _parameter_index++);
   ImGui::PushID(imgui_parameter_id.c_str());
 
   if constexpr (std::floating_point<T>) {
@@ -354,7 +384,7 @@ bool vector_param(std::string_view group_id, std::string_view parameter_id,
   auto original_vec = vec;
 
   auto imgui_parameter_id =
-      fmt::format("{}.{}", parameter_id, _parameter_index++);
+      fmt::format("{}/{}", parameter_id, _parameter_index++);
   ImGui::PushID(imgui_parameter_id.c_str());
 
   const float drag_range = max - min;
@@ -530,7 +560,7 @@ void tween_config(std::string_view group_id, std::string_view parameter_id,
 bool draw_parameter(std::string_view structure_name,
                     std::string_view parameter_id) {
 
-  static const std::array<std::string, 2> ignored_suffixes = { "unfolded", ".show_window"};
+  static const std::array<std::string, 2> ignored_suffixes = { "unfolded", "/show_window"};
   if (pc::strings::ends_with_any(parameter_id, ignored_suffixes.begin(),
                                  ignored_suffixes.end())) {
     return false;
@@ -542,8 +572,12 @@ bool draw_parameter(std::string_view structure_name,
   }
 
   auto param = parameter_bindings.at(parameter_id);
-  auto original_param = param;
 
+  if (param.hidden) return false;
+  
+  if (param.disabled) ImGui::BeginDisabled();
+
+  auto original_param = param;
   bool updated = std::visit(
       [parameter_id, structure_name, &param](auto &&ref) {
         using T = std::decay_t<decltype(ref.get())>;
@@ -576,6 +610,8 @@ bool draw_parameter(std::string_view structure_name,
       },
       param.value);
 
+  if (param.disabled) ImGui::EndDisabled();
+
   if (updated) {
     for (const auto &cb : param.update_callbacks) { cb(original_param, param); }
   }
@@ -590,8 +626,8 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
     if (std::holds_alternative<std::string>(entry)) {
       auto entry_str = std::get<std::string>(entry);
       // don't allow editable string ids through automated parameter drawing
-      if (std::string_view(entry_str).contains(".id")) { continue; }
-      if (std::string_view(entry_str).contains(".active")) { continue; }
+      if (std::string_view(entry_str).contains("/id")) { continue; }
+      if (std::string_view(entry_str).contains("/active")) { continue; }
       ImGui::PushID(std::to_string(_parameter_index++).c_str());
       changed |= draw_parameter(structure_name, entry_str);
       ImGui::Dummy({0, 1});
@@ -609,8 +645,8 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
 
       std::optional<BoolReference> unfolded;
 
-      const auto unfolded_entry_id = std::string(structure_name) + "." +
-                                     map_prefix + entry_name + ".unfolded";
+      const auto unfolded_entry_id = std::string(structure_name) + "/" +
+                                     map_prefix + entry_name + "/unfolded";
       auto unfolded_it = parameter_bindings.find(unfolded_entry_id);
 
       if (unfolded_it != parameter_bindings.end()) {
@@ -628,7 +664,7 @@ bool draw_parameters(std::string_view structure_name, const ParameterMap &map,
         ImGui::Dummy({0, 4});
         // call draw recursively inside the header this time
         changed |= draw_parameters(structure_name, nested_map,
-                                   map_prefix + entry_name + ".");
+                                   map_prefix + entry_name + "/");
         ImGui::Dummy({0, 1});
         if (unfolded.has_value()) {
           unfolded.value().get() = true;

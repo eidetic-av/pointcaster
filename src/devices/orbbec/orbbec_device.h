@@ -44,8 +44,7 @@ public:
   OrbbecDevice &operator=(OrbbecDevice &&) = delete;
 
   DeviceStatus status() const override;
-  pc::types::PointCloud
-  point_cloud(pc::operators::OperatorList operators = {}) override;
+  pc::types::PointCloud point_cloud() override;
 
   void start();
   void stop();
@@ -58,13 +57,11 @@ public:
   /// returns signal_detach bool, a request for if the device should be detached
   bool draw_imgui_controls();
 
-  const std::string& ip() { return _ip; }
+  const std::string &ip() { return config().ip; }
 
 private:
   inline static std::unique_ptr<ob::Context> _ob_ctx;
   inline static std::shared_ptr<ob::DeviceList> _ob_device_list;
-
-  std::string _ip;
 
   std::shared_ptr<ob::Config> _ob_config;
   std::shared_ptr<ob::Device> _ob_device;

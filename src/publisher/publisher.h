@@ -47,7 +47,7 @@ void publish_all(const std::string_view topic, const T &data,
   // must refactor later... after benching...
 
   std::string publish_label;
-  auto first_node_end = topic.find('.');
+  auto first_node_end = topic.find('/');
   auto first_node = topic.substr(0, first_node_end);
   auto friendly_name = pc::operators::get_operator_friendly_name(first_node);
   if (!friendly_name.empty()) {

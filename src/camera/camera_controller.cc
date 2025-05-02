@@ -51,6 +51,8 @@ CameraController::CameraController(Magnum::Platform::Application *app,
   _camera = std::make_unique<Camera3D>(*_camera_parent);
   _camera->setViewport(GL::defaultFramebuffer.viewport().size());
 
+  if (_config.id.empty()) _config.id = pc::uuid::word();
+
   // apply any loaded configuration
   set_distance(_config.transform.distance);
   set_orbit(_config.transform.orbit);
@@ -67,12 +69,9 @@ CameraController::CameraController(Magnum::Platform::Application *app,
 
   setup_frame({resolution[0], resolution[1]});
 
-  pc::logger->info("Initialised new camera controller");
+  declare_parameters(session_id, _config.id, _config);
 
-  // TODO need to declare params based on session name now that cameras are 1x
-  // per-session
-  _temp_camera_name_tofix = std::format("camera_{}", CameraController::count++);
-  declare_parameters(_temp_camera_name_tofix, _config);
+  pc::logger->info("Initialised new camera controller ({})", _config.id);
 }
 
 CameraController::~CameraController() { CameraController::count--; }
@@ -309,10 +308,11 @@ Magnum::Float CameraController::depth_at(const Vector2i &window_position) {
 }
 
 void CameraController::draw_imgui_controls() {
+  ImGui::SetNextWindowPos({200.0f, 200.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
   ImGui::Begin("Camera");
-  if (pc::gui::draw_parameters(_temp_camera_name_tofix)) {
-    reset_projection_matrix();
-  }
+  // static std::string parameter_key = std::format("{}/camera", session_id);
+  if (pc::gui::draw_parameters(_config.id)) { reset_projection_matrix(); }
   ImGui::End();
 
   // auto draw_current_group = true;

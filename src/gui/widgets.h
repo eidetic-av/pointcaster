@@ -45,6 +45,15 @@ extern unsigned int _parameter_index;
 extern Mode _current_mode;
 extern std::string_view _modeline_input;
 
+// a cache for our tooltips, so that parameter tooltips show friendly names
+inline std::map<std::string, std::string> parameter_tooltips;
+inline std::atomic_bool refresh_tooltips;
+extern std::string compute_tooltip(const std::string_view parameter_id);
+extern const char *get_tooltip_cstr(const std::string_view parameter_id);
+extern void show_parameter_tooltip(const std::string_view parameter_id);
+
+constexpr ImVec2 tooltip_padding{10, 10};
+
 inline std::atomic_bool learning_parameter;
 inline std::atomic<ParameterState> recording_result;
 inline std::string learning_parameter_id;
@@ -76,7 +85,7 @@ bool slider(std::string_view parameter_id, T &value, T min, T max,
 template <typename T>
 bool slider(std::string_view group_id, std::string_view parameter_id, T &value,
 	    T min, T max, T reset_value, bool is_disabled = false) {
-  auto nested_id = fmt::format("{}.{}", group_id, parameter_id);
+  auto nested_id = fmt::format("{}/{}", group_id, parameter_id);
   return slider(std::string_view(nested_id), value, min, max, reset_value,
 		is_disabled);
 }

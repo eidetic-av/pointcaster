@@ -39,17 +39,14 @@ void OrbbecDevice::discover_devices() {
 OrbbecDevice::OrbbecDevice(OrbbecDeviceConfiguration &config)
     : DeviceBase<OrbbecDeviceConfiguration>(config) {
 
-  _ip = std::string(config.id.begin() + 3, config.id.end());
-  std::replace(_ip.begin(), _ip.end(), '_', '.');
-
   // if the depth_mode or acquisition_mode changes, the device must be restarted
   // TODO would be better if these callbacks are async but need to figure out
   // thread safety for that
   pc::parameters::add_parameter_update_callback(
-      std::format("{}.depth_mode", config.id),
+      std::format("{}/depth_mode", config.id),
       [this](auto &, auto &) { restart_sync(); });
   pc::parameters::add_parameter_update_callback(
-      std::format("{}.acquisition_mode", config.id),
+      std::format("{}/acquisition_mode", config.id),
       [this](auto &, auto &) { restart_sync(); });
 
   {
@@ -109,7 +106,8 @@ void OrbbecDevice::restart_sync() {
 }
 
 void OrbbecDevice::start_sync() {
-  pc::logger->info("Initialising OrbbecDevice at {}", _ip);
+  const auto& c = config();
+  pc::logger->info("Initialising OrbbecDevice at {}", c.ip);
 
   constexpr uint16_t net_device_port = 8090; // femto mega default
 
@@ -120,7 +118,7 @@ void OrbbecDevice::start_sync() {
   for (int i = 0; i < count; i++) {
     auto device = _ob_device_list->getDevice(i);
     auto info = device->getDeviceInfo();
-    if (strcmp(info->ipAddress(), _ip.c_str()) == 0) {
+    if (strcmp(info->ipAddress(), c.ip.c_str()) == 0) {
       _ob_device = device;
       existing_device = true;
     }
@@ -128,9 +126,9 @@ void OrbbecDevice::start_sync() {
 
   if (!existing_device) {
     try {
-      _ob_device = _ob_ctx->createNetDevice(_ip.data(), net_device_port);
+      _ob_device = _ob_ctx->createNetDevice(c.ip.data(), net_device_port);
     } catch (const ob::Error &e) {
-      pc::logger->error("Failed to create OrbbecDevice at {}:{}", _ip,
+      pc::logger->error("Failed to create OrbbecDevice at {}:{}", c.ip,
                         net_device_port);
       return;
     } catch (...) {
@@ -282,7 +280,7 @@ void OrbbecDevice::start_sync() {
 }
 
 void OrbbecDevice::stop_sync() {
-  pc::logger->info("Closing OrbbecDevice {}", _ip);
+  pc::logger->info("Closing OrbbecDevice {}", config().ip);
   _running_pipeline = false;
   if (_ob_pipeline) _ob_pipeline->stop();
   if (_device_memory_ready.load()) free_device_memory();

@@ -216,7 +216,7 @@ namespace pc::graph {
         //                 using MemberType = pc::reflect::type_at_t<typename T::MemberTypes, decltype(index)::value>;
 
         //                 if constexpr (std::is_arithmetic_v<MemberType>) {
-        //                     auto parameter_id = fmt::format("{}.{}", node_data.id, member_name);
+        //                     auto parameter_id = fmt::format("{}/{}", node_data.id, member_name);
         //                     if (!parameter_bindings.contains(parameter_id)) return;
 
         //                     auto& parameter = parameter_bindings.at(parameter_id);

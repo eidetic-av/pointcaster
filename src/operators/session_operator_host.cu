@@ -42,7 +42,8 @@ using namespace pc::profiling;
 
 // TODO this function definintion probs shouldnt be in this file
 pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
-                            OperatorList &operator_list) {
+                            OperatorList &operator_list,
+                            const std::string_view session_id) {
   using namespace pc::profiling;
   ProfilingZone zone("pc::operators::apply");
     
@@ -74,7 +75,8 @@ pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
       using T = std::decay_t<decltype(operator_config)>;
       ProfilingZone operator_host_zone(std::format("{} Operators", T::Name));
       operator_output_end = pc::operators::SessionOperatorHost::run_operators(
-          operator_output_begin, operator_output_end, operator_config);
+          operator_output_begin, operator_output_end, operator_config,
+          session_id);
     }
   }
 
@@ -105,10 +107,11 @@ pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
 
 // TODO this function definintion probs shouldnt be in this file
 operator_in_out_t apply(operator_in_out_t begin, operator_in_out_t end,
-                        OperatorList &operator_list) {
+                        OperatorList &operator_list,
+                        const std::string_view session_id) {
   for (auto &operator_host_config : operator_list) {
     end = pc::operators::SessionOperatorHost::run_operators(
-        begin, end, operator_host_config);
+        begin, end, operator_host_config, session_id);
   }
   return end;
 }
@@ -116,7 +119,8 @@ operator_in_out_t apply(operator_in_out_t begin, operator_in_out_t end,
 // TODO this function definintion probs shouldnt be in this file
 pc::types::PointCloud
 apply(const pc::types::PointCloud &point_cloud,
-      std::vector<OperatorConfigurationVariant> &operator_variant_list) {
+      std::vector<OperatorConfigurationVariant> &operator_variant_list,
+      const std::string_view session_id) {
   using namespace pc::profiling;
   ProfilingZone zone("pc::operators::apply");
     
@@ -143,7 +147,8 @@ apply(const pc::types::PointCloud &point_cloud,
   {
     ProfilingZone run_operators_zone("Run operators");
     operator_output_end = pc::operators::SessionOperatorHost::run_operators(
-        operator_output_begin, operator_output_end, operator_variant_list);
+        operator_output_begin, operator_output_end, operator_variant_list,
+        session_id);
   }
 
   {
@@ -174,18 +179,21 @@ apply(const pc::types::PointCloud &point_cloud,
 // TODO this function definintion probs shouldnt be in this file
 operator_in_out_t
 apply(operator_in_out_t begin, operator_in_out_t end,
-      std::vector<OperatorConfigurationVariant> &operator_variant_list) {
+      std::vector<OperatorConfigurationVariant> &operator_variant_list,
+      const std::string_view session_id) {
   end = pc::operators::SessionOperatorHost::run_operators(
-      begin, end, operator_variant_list);
+      begin, end, operator_variant_list, session_id);
   return end;
 }
 
 operator_in_out_t SessionOperatorHost::run_operators(
     operator_in_out_t begin, operator_in_out_t end,
-    std::vector<OperatorConfigurationVariant> &operator_variant_list) {
+    std::vector<OperatorConfigurationVariant> &operator_variant_list,
+    const std::string_view session_id) {
+
   for (auto &operator_config : operator_variant_list) {
     std::visit(
-        [&begin, &end](auto &&config) {
+        [&begin, &end, session_id](auto &&config) {
           if (!config.enabled) { return; }
 
           using T = std::decay_t<decltype(config)>;
@@ -221,7 +229,8 @@ operator_in_out_t SessionOperatorHost::run_operators(
             // std::thread([positions =
             // thrust::host_vector<pc::types::position>(
 
-            auto &pipeline = pcl_cpu::ClusterExtractionPipeline::instance();
+            auto &pipeline =
+                pcl_cpu::ClusterExtractionPipeline::instance(session_id);
             pipeline.input_queue.emplace(
                 pcl_cpu::ClusterExtractionPipeline::InputFrame{
                     .timestamp = 0,
@@ -446,11 +455,11 @@ operator_in_out_t SessionOperatorHost::run_operators(
   return end;
 }
 
-operator_in_out_t
-SessionOperatorHost::run_operators(operator_in_out_t begin,
-                                   operator_in_out_t end,
-                                   OperatorHostConfiguration &host_config) {
-  end = SessionOperatorHost::run_operators(begin, end, host_config.operators);
+operator_in_out_t SessionOperatorHost::run_operators(
+    operator_in_out_t begin, operator_in_out_t end,
+    OperatorHostConfiguration &host_config, const std::string_view session_id) {
+  end = SessionOperatorHost::run_operators(begin, end, host_config.operators,
+                                           session_id);
   return end;
 };
 

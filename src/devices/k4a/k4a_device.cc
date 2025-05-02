@@ -8,8 +8,7 @@
 
 namespace pc::devices {
 
-K4ADevice::K4ADevice(AzureKinectConfiguration &config,
-                     std::string_view target_id)
+K4ADevice::K4ADevice(AzureKinectConfiguration &config)
     : DeviceBase<AzureKinectConfiguration>(config) {
   pc::logger->info("Initialising K4ADevice");
 
@@ -17,7 +16,7 @@ K4ADevice::K4ADevice(AzureKinectConfiguration &config,
   auto connection_index = pc::devices::attached_devices.size() + 1;
 
   // TODO just get rid of this 'Driver' concept entirely
-  _driver = std::make_unique<K4ADriver>(this->config(), target_id);
+  _driver = std::make_unique<K4ADriver>(this->config());
 
   name = "Azure Kinect " + std::to_string(connection_index);
   if (connection_index == 1) _driver->primary_aligner = true;

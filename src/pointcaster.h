@@ -187,8 +187,6 @@ public:
   void draw_menu_bar();
   void draw_control_bar();
   void draw_main_viewport();
-  void draw_viewport_controls(CameraController &selected_camera);
-  void draw_camera_control_window();
   void draw_devices_window();
   void draw_onscreen_log();
   void draw_modeline();

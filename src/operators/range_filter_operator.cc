@@ -13,8 +13,8 @@ void RangeFilterOperator::init(const RangeFilterOperatorConfiguration &config,
   // bounding box updates
 
   const auto &id = config.id;
-  const auto position_parameter = fmt::format("{}.transform.position", id);
-  const auto size_parameter = fmt::format("{}.transform.size", id);
+  const auto position_parameter = fmt::format("{}/transform/position", id);
+  const auto size_parameter = fmt::format("{}/transform/size", id);
 
   parameters::add_parameter_update_callback(
       position_parameter, [&](const auto &, auto &) {

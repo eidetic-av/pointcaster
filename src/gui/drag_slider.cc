@@ -1,11 +1,14 @@
 #include "drag_slider.h"
-#include "catpuccin.h"
+#include "../operators/operator_friendly_names.h"
 #include "../parameters.h"
 #include "../string_utils.h"
+#include "catpuccin.h"
+#include "widgets.h"
 #include <array>
 #include <cstring>
 #include <imgui_internal.h>
 #include <string>
+
 
 namespace pc::gui {
 
@@ -180,12 +183,9 @@ bool DragScalarN(std::string_view parameter_id, ImGuiDataType data_type, void *p
 			   ImVec2{text_width, 0} + g.Style.ItemInnerSpacing,
 		       frame_end - g.Style.ItemInnerSpacing * 0.5f);
 
-  ItemAdd(text_bb, GetID(fmt::format("{}.{}", parameter_id, "l").c_str()));
-  if (IsItemHovered()) {
-    PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{11, 6});
-    SetTooltip("%s", parameter_id.data());
-    PopStyleVar();
-  }
+  const std::string parameter_key = std::format("{}/l", parameter_id);
+  ItemAdd(text_bb, GetID(parameter_key.c_str()));
+  if (IsItemHovered()) { show_parameter_tooltip(parameter_id); }
 
   if (IsItemHovered()) {
     if (IsMouseDoubleClicked(ImGuiMouseButton_Left)) {

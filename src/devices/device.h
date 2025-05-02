@@ -28,8 +28,7 @@ class IDevice {
 public:
   virtual ~IDevice() = default;
 
-  virtual pc::types::PointCloud
-  point_cloud(pc::operators::OperatorList operators = {}) = 0;
+  virtual pc::types::PointCloud point_cloud() = 0;
 
   virtual DeviceStatus status() const { return DeviceStatus::Loaded; };
   virtual bool draw_controls() { return false; }
@@ -138,7 +137,8 @@ pc::types::PointCloud &compute_or_get_point_cloud(
     std::vector<operators::OperatorConfigurationVariant> &session_operators);
 
 pc::types::PointCloud
-synthesized_point_cloud(pc::operators::OperatorList &operators);
+synthesized_point_cloud(pc::operators::OperatorList &operators,
+                        const std::string_view session_id);
 
 // TODO make all the k4a stuff more generic
 using pc::types::Float4;

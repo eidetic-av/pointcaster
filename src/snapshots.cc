@@ -57,10 +57,9 @@ void Snapshots::draw_imgui_window() {
 }
 
 void Snapshots::capture() {
-  pc::logger->info("Capturing frame");
+  pc::logger->info("Capturing frame unimplemented");
   // TODO
-  static std::vector<operators::OperatorHostConfiguration> empty_list{};
-  frames.push_back({pc::devices::synthesized_point_cloud(empty_list)});
+  // frames.push_back({pc::devices::synthesized_point_cloud(empty_list)});
 }
 
 } // namespace pc::snapshots

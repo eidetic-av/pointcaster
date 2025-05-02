@@ -38,13 +38,15 @@ public:
   const uid session_seed;
   OperatorHostConfiguration _config;
 
-  static operator_in_out_t
-  run_operators(operator_in_out_t begin, operator_in_out_t end,
-                OperatorHostConfiguration &host_config);
+  static operator_in_out_t run_operators(operator_in_out_t begin,
+                                         operator_in_out_t end,
+                                         OperatorHostConfiguration &host_config,
+                                         const std::string_view session_id);
 
   static operator_in_out_t run_operators(
       operator_in_out_t begin, operator_in_out_t end,
-      std::vector<OperatorConfigurationVariant> &operator_variant_list);
+      std::vector<OperatorConfigurationVariant> &operator_variant_list,
+      const std::string_view session_id);
 
   explicit SessionOperatorHost(
       pc::PointCaster &app, Scene3D &scene,

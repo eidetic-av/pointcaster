@@ -14,7 +14,7 @@ using namespace pc::parameters;
 
 SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
   _config.port = std::clamp(_config.port, 1024, 49151);
-  declare_parameters("sync", _config);
+  declare_parameters("workspace", "sync", _config);
   publisher::add(this);
 
   _sync_thread =

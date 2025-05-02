@@ -19,7 +19,7 @@ OscServer::OscServer(OscServerConfiguration &config) : _config(config) {
   if (_config.enable) {
     create_server(_config.port);
   }
-  declare_parameters("oscserver", _config);
+  declare_parameters("workspace", "oscserver", _config);
 }
 
 template <typename T> void receive_msg(std::string_view address, T value) {
@@ -28,7 +28,6 @@ template <typename T> void receive_msg(std::string_view address, T value) {
     return;
   }
   std::string topic{address.substr(1, -1)};
-  std::replace(topic.begin(), topic.end(), '/', '.');
 
   // handle if the osc message is setting an entire vector
   if constexpr (types::VectorType<T>) {
@@ -48,16 +47,16 @@ template <typename T> void receive_msg(std::string_view address, T value) {
 
   // handle if the osc message is setting individual elements of a vector
   std::optional<int> vector_element;
-  if (strings::ends_with(topic, ".0") || strings::ends_with(topic, ".x")) {
+  if (strings::ends_with(topic, "/0") || strings::ends_with(topic, "/x")) {
     vector_element = 0;
-  } else if (strings::ends_with(topic, ".1") ||
-             strings::ends_with(topic, ".y")) {
+  } else if (strings::ends_with(topic, "/1") ||
+             strings::ends_with(topic, "/y")) {
     vector_element = 1;
-  } else if (strings::ends_with(topic, ".2") ||
-             strings::ends_with(topic, ".z")) {
+  } else if (strings::ends_with(topic, "/2") ||
+             strings::ends_with(topic, "/z")) {
     vector_element = 2;
-  } else if (strings::ends_with(topic, ".3") ||
-             strings::ends_with(topic, ".w")) {
+  } else if (strings::ends_with(topic, "/3") ||
+             strings::ends_with(topic, "/w")) {
     vector_element = 3;
   }
 
@@ -134,8 +133,7 @@ void OscServer::draw_imgui_window() {
 
   auto enabled = _config.enable;
 
-  if (pc::gui::draw_parameters(
-	  "oscserver", struct_parameters.at(std::string{"oscserver"}))) {
+  if (pc::gui::draw_parameters("oscserver")) {
 
     _config.port = std::clamp(_config.port, 1024, 49151);
 

@@ -48,7 +48,7 @@ struct TransformConfiguration {
 };
 
 struct CameraConfiguration {
-  bool show_window{false};
+  std::string id;
   float fov = defaults::fov;
   int scroll_precision{1};
   TransformConfiguration transform; // @optional

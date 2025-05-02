@@ -5,6 +5,7 @@
 #include "math.h"
 #include "publisher/publisher.h"
 #include "serialization.h"
+#include "session.gen.h"
 #include "string_map.h"
 #include "structs.h"
 #include <any>
@@ -88,7 +89,10 @@ struct Parameter {
   ParameterValue min;
   ParameterValue max;
   ParameterValue default_value;
+  bool disabled;
+  bool hidden;
 
+  std::string host_session_id = "";
   std::string parent_struct_name = "";
 
   std::vector<ParameterUpdateCallback> update_callbacks;
@@ -190,14 +194,17 @@ void declare_parameter(std::string_view parameter_id,
                        const Parameter &parameter_binding);
 
 template <typename T>
-void declare_parameters(std::string_view parameter_id, T &basic_value,
+void declare_parameters(std::string_view session_id,
+                        std::string_view parameter_id, T &basic_value,
                         T default_value, std::optional<MinMax<float>> min_max,
-                        std::string_view parent_struct_name) {
-
+                        std::string_view parent_struct_name, bool disabled,
+                        bool hidden) {
+  session_id_from_parameter_id[std::string(parameter_id)] = session_id;
   // numeric values
   if constexpr (std::same_as<T, float> || std::same_as<T, int> ||
                 std::same_as<T, short>) {
     Parameter p(basic_value);
+    p.host_session_id = session_id;
     p.parent_struct_name = parent_struct_name;
     p.default_value = default_value;
     if (min_max.has_value()) {
@@ -207,14 +214,18 @@ void declare_parameters(std::string_view parameter_id, T &basic_value,
       p.min = T(-10);
       p.max = T(10);
     }
+    p.disabled = disabled;
+    p.hidden = hidden;
     declare_parameter(parameter_id, std::move(p));
   }
   // bools and strings
-  else if constexpr (std::same_as<T, bool> ||
-                     std::same_as<T, std::string>) {
+  else if constexpr (std::same_as<T, bool> || std::same_as<T, std::string>) {
     Parameter p(basic_value);
+    p.host_session_id = session_id;
     p.parent_struct_name = parent_struct_name;
     p.default_value = default_value;
+    p.disabled = disabled;
+    p.hidden = hidden;
     declare_parameter(parameter_id, std::move(p));
   }
   // ignore enums for now
@@ -224,16 +235,19 @@ void declare_parameters(std::string_view parameter_id, T &basic_value,
 
 template <typename T>
   requires pc::types::VectorType<T>
-void declare_parameters(std::string_view parameter_id, T &vector_value,
+void declare_parameters(std::string_view session_id,
+                        std::string_view parameter_id, T &vector_value,
                         T default_value, std::optional<MinMax<float>> min_max,
-                        std::string_view parent_struct_name) {
-
+                        std::string_view parent_struct_name, bool disabled,
+                        bool hidden) {
+  session_id_from_parameter_id[std::string(parameter_id)] = session_id;
   constexpr auto vector_size = types::VectorSize<T>::value;
   constexpr std::array<const char *, 4> element = {"x", "y", "z", "w"};
 
   // we declare the vector itself as a parameter, as it is
   // considered one parameter when rendering the gui
   Parameter p(vector_value);
+  p.host_session_id = session_id;
   p.parent_struct_name = parent_struct_name;
   p.default_value = default_value;
   if (min_max.has_value()) {
@@ -243,26 +257,31 @@ void declare_parameters(std::string_view parameter_id, T &vector_value,
     p.min = (typename T::vector_type)(-10);
     p.max = (typename T::vector_type)(10);
   }
+  p.disabled = disabled;
+  p.hidden = hidden;
   declare_parameter(parameter_id, std::move(p));
 
   // we also declare the vector elements as individual parameters,
   // which can be targetted individually by inputs like MIDI, etc.
   for (int i = 0; i < vector_size; i++) {
-    auto element_id = fmt::format("{}.{}", parameter_id, element[i]);
+    auto element_id = fmt::format("{}/{}", parameter_id, element[i]);
     // pc::logger->debug("declare vector: {}", element_id);
-    declare_parameters(element_id, vector_value[i], default_value[i], min_max,
-                       parent_struct_name);
+    declare_parameters(session_id, element_id, vector_value[i],
+                       default_value[i], min_max, parent_struct_name,
+                       p.disabled, p.hidden);
   }
 }
 
 template <typename T>
   requires pc::reflect::IsSerializable<T>
-void declare_parameters(std::string_view parameter_id, T &complex_value,
+void declare_parameters(std::string_view session_id,
+                        std::string_view parameter_id, T &complex_value,
                         T default_value = {},
                         std::optional<MinMax<float>> min_max = {},
-                        std::string_view parent_struct_name = "") {
-  pc::logger->debug("Declaring parameter: {}", parameter_id);
-
+                        std::string_view parent_struct_name = "",
+                        bool disabled = false, bool hidden = false) {
+  pc::logger->debug("Declaring parameter: {}/{}", session_id, parameter_id);
+  session_id_from_parameter_id[std::string(parameter_id)] = session_id;
   // retrieve type info at compile-time
   constexpr auto type_info = serde::type_info<T>;
   constexpr auto struct_name = T::Name;
@@ -270,6 +289,8 @@ void declare_parameters(std::string_view parameter_id, T &complex_value,
   const auto member_names = type_info.member_names().members();
   const auto member_defaults = T::Defaults;
   const auto member_min_max_values = T::MinMaxValues;
+  const auto disabled_members = T::DisabledMembers;
+  const auto hidden_members = T::HiddenMembers;
 
   // create an integer sequence to iterate through the type's members at
   // compile-time... this is required because the index to the member is used
@@ -277,9 +298,8 @@ void declare_parameters(std::string_view parameter_id, T &complex_value,
   constexpr auto index_sequence = std::make_index_sequence<T::MemberCount>{};
 
   // Function to apply on each type member.
-  auto handle_member = [parameter_id, struct_name, &complex_value, &type_info,
-                        &member_defaults, &member_min_max_values](
-                           std::string_view member_name, auto index) {
+  auto handle_member = [&, session_id, parameter_id,
+                        struct_name](std::string_view member_name, auto index) {
     using MemberType =
         pc::reflect::type_at_t<typename T::MemberTypes, decltype(index)::value>;
 
@@ -290,11 +310,14 @@ void declare_parameters(std::string_view parameter_id, T &complex_value,
     // and any more metadata (default value, min+max values)
     auto member_default = std::get<index>(member_defaults);
     auto member_min_max = member_min_max_values.at(index);
+    auto member_disabled = disabled_members.at(index);
+    auto member_hidden = hidden_members.at(index);
 
     // recursively call declare_parameters for each member
-    auto member_parameter_id = fmt::format("{}.{}", parameter_id, member_name);
-    declare_parameters(member_parameter_id, member_ref, member_default,
-                       member_min_max, struct_name);
+    auto member_parameter_id = fmt::format("{}/{}", parameter_id, member_name);
+    declare_parameters(session_id, member_parameter_id, member_ref,
+                       member_default, member_min_max, struct_name,
+                       member_disabled, member_hidden);
   };
 
   // using an immediately invoked lambda to provide member names and

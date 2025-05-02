@@ -1,5 +1,6 @@
 #include "parameters.h"
 #include "logger.h"
+#include "session.gen.h"
 #include "string_utils.h"
 #include "utils/lru_cache.h"
 #include <algorithm>
@@ -25,15 +26,15 @@ void declare_parameter(std::string_view parameter_id,
   // declare nested parameter structs
 
   // Ignored suffixes check
-  static const std::array<std::string, 4> ignored_suffixes = {".x", ".y", ".z",
-                                                              ".w"};
+  static const std::array<std::string, 4> ignored_suffixes = {"/x", "/y", "/z",
+                                                              "/w"};
   if (pc::strings::ends_with_any(parameter_id, ignored_suffixes.begin(),
                                  ignored_suffixes.end())) {
     return;
   }
 
   std::size_t start = 0;
-  std::size_t end = parameter_id.find('.');
+  std::size_t end = parameter_id.find('/');
   std::string struct_name{parameter_id.substr(start, end - start)};
 
   if (!struct_parameters.contains(struct_name)) {
@@ -44,7 +45,7 @@ void declare_parameter(std::string_view parameter_id,
   map_stack.push(struct_parameters[struct_name]);
   start = end + 1;
 
-  while ((end = parameter_id.find('.', start)) != std::string_view::npos) {
+  while ((end = parameter_id.find('/', start)) != std::string_view::npos) {
     std::string level_name =
         std::string(parameter_id.substr(start, end - start));
     bool level_exists = false;
@@ -118,11 +119,12 @@ template <typename T> cache::lru_cache<std::string, T> &get_cache() {
 void publish() {
   for (const auto &kvp : parameter_states) {
     const auto &[parameter_id, state] = kvp;
-    if (!parameter_bindings.contains(parameter_id))
-      continue;
+    if (!parameter_bindings.contains(parameter_id)) continue;
     if (state == ParameterState::Publish) {
+      auto &binding = parameter_bindings.at(parameter_id);
+      auto& session_label = session_label_from_id[binding.host_session_id];
       std::visit(
-          [parameter_id](auto &&parameter_ref) {
+          [parameter_id, session_label](auto &&parameter_ref) {
             const auto &p = parameter_ref.get();
             using T = std::decay_t<decltype(p)>;
 
@@ -136,19 +138,19 @@ void publish() {
 
             if (value_updated) {
               if constexpr (is_publishable_container_v<T>) {
-                publisher::publish_all(parameter_id, p);
+                publisher::publish_all(parameter_id, p, {session_label});
               } else if constexpr (pc::types::VectorType<T>) {
                 constexpr auto vector_size = types::VectorSize<T>::value;
                 std::array<typename T::vector_type, vector_size> array;
                 std::copy_n(p.data(), vector_size, array.begin());
-                publisher::publish_all(parameter_id, array);
+                publisher::publish_all(parameter_id, array, {session_label});
               } else if constexpr (pc::types::ScalarType<T>) {
-                publisher::publish_all(parameter_id, p);
+                publisher::publish_all(parameter_id, p, {session_label});
               }
               param_cache.put(parameter_id, p);
             }
           },
-          parameter_bindings.at(parameter_id).value);
+          binding.value);
     }
   }
 }

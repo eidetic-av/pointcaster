@@ -97,14 +97,15 @@ public:
     pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud;
   };
 
-  static ClusterExtractionPipeline &instance();
+  static ClusterExtractionPipeline &instance(const std::string_view session_id);
+  const std::string session_id;
 
   oneapi::tbb::concurrent_bounded_queue<InputFrame> input_queue;
   std::atomic<pcl::PointCloud<pcl::PointXYZ>::Ptr> current_voxels;
   std::atomic<std::shared_ptr<std::vector<Cluster>>> current_clusters;
   std::atomic<std::shared_ptr<std::vector<PCAResult>>> current_cluster_pca;
 
-  ClusterExtractionPipeline();
+  ClusterExtractionPipeline(const std::string_view session_id);
   ~ClusterExtractionPipeline();
 
   ClusterExtractionPipeline(const ClusterExtractionPipeline &) = delete;
@@ -121,6 +122,7 @@ private:
   };
 
   struct ExtractTask {
+    const std::string session_id;
     std::atomic<pcl::PointCloud<pcl::PointXYZ>::Ptr> &current_voxels;
     std::atomic<std::shared_ptr<std::vector<Cluster>>> &current_clusters;
     std::atomic<std::shared_ptr<std::vector<PCAResult>>> &current_cluster_pca;

@@ -96,7 +96,7 @@ MidiDevice::MidiDevice(MidiDeviceConfiguration &config) : _config(config) {
     }
   }
 
-  declare_parameters("midi", _config);
+  declare_parameters("workspace", "midi", _config);
   publisher::add(this);
 
   _sender_thread = std::jthread([this](auto st) { send_messages(st); });
@@ -240,16 +240,16 @@ void MidiDevice::on_receive(MidiDevice &device,
 
       // if the osc message is setting individual elements of a vector
     std::optional<int> vector_element;
-    if (strings::ends_with(topic, ".0") || strings::ends_with(topic, ".x")) {
+    if (strings::ends_with(topic, "/0") || strings::ends_with(topic, "/x")) {
       vector_element = 0;
-    } else if (strings::ends_with(topic, ".1") ||
-	       strings::ends_with(topic, ".y")) {
+    } else if (strings::ends_with(topic, "/1") ||
+	       strings::ends_with(topic, "/y")) {
       vector_element = 1;
-    } else if (strings::ends_with(topic, ".2") ||
-	       strings::ends_with(topic, ".z")) {
+    } else if (strings::ends_with(topic, "/2") ||
+	       strings::ends_with(topic, "/z")) {
       vector_element = 2;
-    } else if (strings::ends_with(topic, ".3") ||
-	       strings::ends_with(topic, ".w")) {
+    } else if (strings::ends_with(topic, "/3") ||
+	       strings::ends_with(topic, "/w")) {
       vector_element = 3;
     }
     if (vector_element.has_value()) {
@@ -341,7 +341,7 @@ void MidiDevice::handle_input_message(const std::string &port_name,
     auto control_num = msg[1];
     auto value = msg[2];
     auto cc = cc_string(channel, control_num);
-    // pc::logger->debug("received CC: {}.{}.{}", channel, control_num, value);
+    // pc::logger->debug("received CC: {}/{}/{}", channel, control_num, value);
 
     if (gui::learning_parameter) {
       gui::learning_parameter = false;
@@ -489,7 +489,7 @@ void MidiDevice::handle_input_message(const std::string &port_name,
   }
   if (msg_type == message_type::PITCH_BEND) {
     unsigned int value = (msg[2] << 7) | msg[1];
-    // pc::logger->debug("received PB: {}.{}", channel, value);
+    // pc::logger->debug("received PB: {}/{}", channel, value);
     if (gui::learning_parameter) {
       gui::learning_parameter = false;
       gui::recording_result = ParameterState::Unbound;
@@ -541,7 +541,7 @@ void MidiDevice::draw_network_options() {
 
 void MidiDevice::draw_imgui_window() {
 
-  pc::gui::draw_parameters("midi", struct_parameters.at(std::string{"midi"}));
+  pc::gui::draw_parameters("midi");
 
   draw_network_options();
 

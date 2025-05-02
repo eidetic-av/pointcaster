@@ -8,7 +8,8 @@ namespace pc::publisher {
 
 std::string
 construct_topic_string(const std::string_view topic_name,
-                       std::initializer_list<std::string_view> topic_nodes) {
+                       std::initializer_list<std::string_view> topic_nodes,
+                       const char delimiter) {
 
   // a map to cache pre-constructed topic strings avoiding reconstruction
   static std::unordered_map<std::size_t, std::string> cache;
@@ -39,12 +40,12 @@ construct_topic_string(const std::string_view topic_name,
     result_string_length += node.size() + 1; // (+1 for the delimiter character)
   }
 
-  // concatenate the string with a '/' as delimiter
+  // concatenate the string with a single char as delimiter
   std::string result;
   result.reserve(result_string_length);
   for (const auto &node : topic_nodes) {
     result.append(node);
-    result.push_back('/');
+    result.push_back(delimiter);
   }
   result.append(topic_name);
 
