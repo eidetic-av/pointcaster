@@ -131,9 +131,9 @@ public:
 
   std::optional<Vector2i> _display_resolution;
 
-  std::vector<std::unique_ptr<CameraController>> _camera_controllers;
+  std::vector<std::unique_ptr<CameraController>> camera_controllers;
   std::optional<std::reference_wrapper<CameraController>>
-      _interacting_camera_controller;
+      interacting_camera_controller;
 
   std::unique_ptr<PointCloudRenderer> _point_cloud_renderer;
   std::unique_ptr<SphereRenderer> _sphere_renderer;
@@ -186,7 +186,6 @@ public:
 
   void draw_menu_bar();
   void draw_control_bar();
-  void draw_main_viewport();
   void draw_devices_window();
   void draw_onscreen_log();
   void draw_modeline();

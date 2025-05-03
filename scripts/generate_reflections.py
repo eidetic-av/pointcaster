@@ -67,6 +67,10 @@ def process_cpp_header(input_text, file_path):
     optional_pattern = re.compile(r"@optional")
     disabled_pattern = re.compile(r"@disabled")
     hidden_pattern = re.compile(r"@hidden")
+    verbatim_pattern = re.compile(
+        r'^\s*((?:static|constexpr|inline|virtual|extern|using)\b.*)$',
+        re.MULTILINE)
+
 
     # combine regex into a full matcher for struct members
     member_pattern = re.compile(
@@ -75,15 +79,16 @@ def process_cpp_header(input_text, file_path):
 
     for struct_name, struct_body in structs:
 
-        # find member variables
-        unparsed_members = member_pattern.findall(struct_body)
+        # members qualified with any of the tokens specified in the qualified_pattern
+        # are extracted early and placed into the struct output verbatim later
+        verbatim_members = verbatim_pattern.findall(struct_body)
+        # # and remove these from the struct body that's processed seperately
+        members_body = verbatim_pattern.sub('', struct_body)
+
+        # now find simple member variables
+        unparsed_members = member_pattern.findall(members_body)
         members: list[Member] = []
-        usings: list[tuple[str,str]] = []
         for member in unparsed_members:
-            # treat using declarations seperately
-            if (member[0] == "using"): 
-                usings.append((member[1], member[2]))
-                continue
 
             # Combine initialization values if present
             init_value = member[2].strip() or member[3].strip() or ""
@@ -115,8 +120,9 @@ def process_cpp_header(input_text, file_path):
         for member in members:
             generated_struct += f"\t{member.type} {member.name}{member.default};\n"
 
-        for alias, target in usings:
-            generated_struct += f"\n\tusing {alias} = {target};\n"
+        generated_struct += "\n"
+        for verbatim_member in verbatim_members:
+            generated_struct += f"\t{verbatim_member}\n"
 
         # generate the reflection metadata to add to the struct
 

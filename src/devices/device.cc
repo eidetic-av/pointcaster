@@ -11,6 +11,7 @@
 #include "k4a/k4a_device.h"
 #include "k4a/k4a_driver.h"
 #include "orbbec/orbbec_device.h"
+#include "orbbec/orbbec_device_config.gen.h"
 #include "sequence/ply_sequence_player.h"
 #include "sequence/ply_sequence_player_config.gen.h"
 #include <chrono>
@@ -42,16 +43,8 @@ void declare_device_parameters(DeviceConfigurationVariant &config_variant) {
   std::visit(
       [](auto &device_config) {
         using T = std::decay_t<decltype(device_config)>;
-        // if constexpr (std::same_as<T, OrbbecDeviceConfiguration>) {
-        std::string root_id = "ob";
-        // } else
-         if constexpr (std::same_as<T, AzureKinectConfiguration>) {
-          root_id = "k4a";
-        } else if constexpr (std::same_as<T, PlySequencePlayerConfiguration>) {
-          root_id = "ply";
-        }
-        session_id_from_parameter_id[device_config.id] = root_id;
-        pc::parameters::declare_parameters(root_id, device_config.id,
+        session_label_from_id[T::PublishPath] = T::PublishPath;
+        pc::parameters::declare_parameters(T::PublishPath, device_config.id,
                                            device_config);
       },
       config_variant);

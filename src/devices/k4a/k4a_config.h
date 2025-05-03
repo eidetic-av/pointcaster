@@ -15,7 +15,6 @@ struct AzureKinectDriverConfiguration {
 };
 
 struct AzureKinectConfiguration {
-  using DeviceType = K4ADevice;
   std::string id; // @hidden
   std::string serial_number; // @disabled
   bool active = true; // @hidden
@@ -23,6 +22,9 @@ struct AzureKinectConfiguration {
   AzureKinectDriverConfiguration driver;  // @optional
   BodyTrackingConfiguration body; // @optional
   AutoTiltConfiguration auto_tilt; // @optional
+
+  using DeviceType = K4ADevice;
+  static constexpr auto PublishPath = "k4a";
 };
 
 } // namespace pc::devices

@@ -25,6 +25,7 @@ struct AutoTiltConfiguration {
 };
 
 struct DeviceTransformConfiguration {
+  bool unfolded = true;
   Float3 translate{0, 0, 0}; // @minmax(-10000, 10000)
   Float3 rotation_deg{0, 0, 0}; // @minmax(-360, 360)
   Float3 offset{0, 0, 0}; // @minmax(-10000, 10000)

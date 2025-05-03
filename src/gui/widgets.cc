@@ -93,7 +93,9 @@ std::string format_label(std::string_view label) {
 
 std::string compute_tooltip(const std::string_view parameter_id) {
   auto &session_id = session_id_from_parameter_id[std::string(parameter_id)];
-  auto &session_label = session_label_from_id[session_id];
+  const auto &session_label = session_label_from_id[session_id].empty()
+                                  ? session_id
+                                  : session_label_from_id[session_id];
   auto parameter_name = std::string(parameter_id);
   auto root_parameter_id =
       std::string(pc::strings::first_element(parameter_id));

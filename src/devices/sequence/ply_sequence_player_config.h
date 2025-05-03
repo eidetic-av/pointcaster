@@ -9,7 +9,6 @@ using pc::devices::DeviceTransformConfiguration;
 struct PlySequencePlayer;
 
 struct PlySequencePlayerConfiguration {
-  using DeviceType = PlySequencePlayer;
   std::string id;
   bool active = true;
   std::string directory; // @disabled
@@ -18,6 +17,9 @@ struct PlySequencePlayerConfiguration {
   int current_frame = 0;
 
   DeviceTransformConfiguration transform; // @optional
+
+  using DeviceType = PlySequencePlayer;
+  static constexpr auto PublishPath = "ply";
 };
 
 } // namespace pc::devices

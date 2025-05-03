@@ -7,7 +7,7 @@ namespace pc::gui {
 
 void draw_devices_window(PointCaster &app) {
   ImGui::SetNextWindowPos({50.0f, 50.0f}, ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize({250.0f, 400.0f}, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize({300.0f, 600.0f}, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.8f);
   const ImVec2 window_padding{10, 10};
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, window_padding);

@@ -122,7 +122,10 @@ void publish() {
     if (!parameter_bindings.contains(parameter_id)) continue;
     if (state == ParameterState::Publish) {
       auto &binding = parameter_bindings.at(parameter_id);
-      auto& session_label = session_label_from_id[binding.host_session_id];
+      const auto &session_label =
+          session_label_from_id[binding.host_session_id].empty()
+              ? binding.host_session_id
+              : session_label_from_id[binding.host_session_id];
       std::visit(
           [parameter_id, session_label](auto &&parameter_ref) {
             const auto &p = parameter_ref.get();
