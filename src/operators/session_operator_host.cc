@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <execution>
 #include <functional>
+#include <imgui.h>
 #include <optional>
 #include <random>
 
@@ -42,23 +43,17 @@ SessionOperatorHost::SessionOperatorHost(
   for (auto &operator_config_variant : _config.operators) {
     std::visit(
         [&](auto &&operator_config) {
+          using T = std::decay_t<decltype(operator_config)>;
           // declare the serialised operator ID with its config parameters
           declare_parameters(session_id, std::to_string(operator_config.id),
                              operator_config);
-
-          using T = std::decay_t<decltype(operator_config)>;
-
           // call initialisation if its required
           if constexpr (std::is_same_v<T, RangeFilterOperatorConfiguration>) {
             RangeFilterOperator::init(operator_config, _scene, _parent_group);
           }
-
         },
         operator_config_variant);
   }
-
-  using namespace std::chrono_literals;
-
   instance = this;
 };
 
@@ -96,6 +91,8 @@ bool operator_collapsing_header(
 
   auto label_text = fmt::format("{}##button_{}", label, operator_id);
   bool label_clicked = Button(label_text.c_str(), label_size);
+  bool label_double_clicked =
+      IsMouseDoubleClicked(ImGuiMouseButton_Left) && IsItemClicked();
   bool label_right_clicked = IsItemClicked(ImGuiMouseButton_Right);
   ImVec2 label_btn_min = ImGui::GetItemRectMin();
   ImVec2 label_btn_max = ImGui::GetItemRectMax();
@@ -121,7 +118,7 @@ bool operator_collapsing_header(
   auto popup_label = fmt::format("{}##editpopup_{}", label, operator_id);
 
   if (label_clicked) open = !open;
-  else if (label_right_clicked) {
+  else if (label_double_clicked || label_right_clicked) {
     original_title = label;
     OpenPopup(popup_label.c_str());
   }
