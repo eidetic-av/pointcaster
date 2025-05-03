@@ -61,7 +61,7 @@ Radio::Radio(RadioConfiguration &config,
         auto next_send_time = steady_clock::now() + broadcast_rate;
 
         while (!st.stop_requested()) {
-          ZoneScopedN("Radio Tick");
+          // ZoneScopedN("Radio Tick");
 
           if (!_config.enabled) {
             std::this_thread::sleep_until(next_send_time);
@@ -76,7 +76,7 @@ Radio::Radio(RadioConfiguration &config,
 
           std::size_t packet_bytes = 0;
           {
-            ZoneScopedN("Serialization and send");
+            // ZoneScopedN("Serialization and send");
             auto start_send_time = steady_clock::now();
 
             // if (snapshots::frames.size() != broadcast_snapshot_frame_count) {
