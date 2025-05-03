@@ -31,6 +31,7 @@ void draw_main_viewport(PointCaster &app) {
       ImGuiWindowFlags_NoDocking;
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 5});
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, tab_bar_padding);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
   ImGui::Begin("##TabBar", nullptr, tabbar_flags);
   if (ImGui::BeginTabBar("Sessions", ImGuiTabBarFlags_Reorderable)) {
 
@@ -257,6 +258,7 @@ void draw_main_viewport(PointCaster &app) {
     ImGui::EndTabBar(); // session tab bar
   }
   ImGui::End();
+  ImGui::PopStyleVar();
   ImGui::PopStyleVar();
   ImGui::PopStyleVar();
 
