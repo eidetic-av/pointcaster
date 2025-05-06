@@ -49,6 +49,15 @@ struct RangeFilterOperatorMinMaxConfiguration {
   bool publish = false;
 };
 
+struct RangeFilterOperatorMinMaxVectorConfiguration {
+  Float3 min_x;
+  Float3 max_x;
+  Float3 min_y;
+  Float3 max_y;
+  Float3 min_z;
+  Float3 max_z;
+};
+
 using uid = unsigned long int;
 
 struct RangeFilterOperatorConfiguration {
@@ -59,6 +68,7 @@ struct RangeFilterOperatorConfiguration {
   RangeFilterOperatorTransformConfiguration transform;
   RangeFilterOperatorFillConfiguration fill;
   RangeFilterOperatorMinMaxConfiguration minmax;
+  RangeFilterOperatorMinMaxVectorConfiguration minmax_positions; // @optional
 };
 
 struct RangeFilterOperator : Operator {

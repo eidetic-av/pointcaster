@@ -301,35 +301,6 @@ operator_in_out_t SessionOperatorHost::run_operators(
               config.fill.fill_value = fill_value;
               config.fill.proportion = fill_proportion;
 
-              auto minmax_x_points = thrust::minmax_element(
-                  filtered_begin, filtered_end, MinMaxXComparator{});
-              auto minmax_y_points = thrust::minmax_element(
-                  filtered_begin, filtered_end, MinMaxYComparator{});
-              auto minmax_z_points = thrust::minmax_element(
-                  filtered_begin, filtered_end, MinMaxZComparator{});
-
-              const auto &min_x =
-                  thrust::get<0>(*minmax_x_points.first).operator position().x /
-                  1000.0f;
-              const auto &max_x = thrust::get<0>(*minmax_x_points.second)
-                                      .operator position()
-                                      .x /
-                                  1000.0f;
-              const auto &min_y =
-                  thrust::get<0>(*minmax_y_points.first).operator position().y /
-                  1000.0f;
-              const auto &max_y = thrust::get<0>(*minmax_y_points.second)
-                                      .operator position()
-                                      .y /
-                                  1000.0f;
-              const auto &min_z =
-                  thrust::get<0>(*minmax_z_points.first).operator position().z /
-                  1000.0f;
-              const auto &max_z = thrust::get<0>(*minmax_z_points.second)
-                                      .operator position()
-                                      .z /
-                                  1000.0f;
-
               const float box_min_x =
                   config.transform.position.x - config.transform.size.x;
               const float box_max_x =
@@ -343,25 +314,40 @@ operator_in_out_t SessionOperatorHost::run_operators(
               const float box_max_z =
                   config.transform.position.z + config.transform.size.z;
 
-              const float min_x_value = pc::math::remap(
-                  box_min_x, box_max_x, 0.0f, 1.0f, min_x, true);
-              const float max_x_value = pc::math::remap(
-                  box_min_x, box_max_x, 0.0f, 1.0f, max_x, true);
-              const float min_y_value = pc::math::remap(
-                  box_min_y, box_max_y, 0.0f, 1.0f, min_y, true);
-              const float max_y_value = pc::math::remap(
-                  box_min_y, box_max_y, 0.0f, 1.0f, max_y, true);
-              const float min_z_value = pc::math::remap(
-                  box_min_z, box_max_z, 0.0f, 1.0f, min_z, true);
-              const float max_z_value = pc::math::remap(
-                  box_min_z, box_max_z, 0.0f, 1.0f, max_z, true);
+              auto minmax_x_points = thrust::minmax_element(
+                  filtered_begin, filtered_end, MinMaxXComparator{});
+              auto minmax_y_points = thrust::minmax_element(
+                  filtered_begin, filtered_end, MinMaxYComparator{});
+              auto minmax_z_points = thrust::minmax_element(
+                  filtered_begin, filtered_end, MinMaxZComparator{});
 
-              config.minmax.min_x = min_x_value;
-              config.minmax.max_x = max_x_value;
-              config.minmax.min_y = min_y_value;
-              config.minmax.max_y = max_y_value;
-              config.minmax.min_z = min_z_value;
-              config.minmax.max_z = max_z_value;
+              const auto get_scaled_vector = [&](auto vector_it) {
+                auto pos = thrust::get<0>(*vector_it).operator position();
+                const auto x = pos.x / 1000.0f;
+                const auto y = pos.y / 1000.0f;
+                const auto z = pos.z / 1000.0f;
+                const auto mapped_x =
+                    pc::math::remap(box_min_x, box_max_x, 0.0f, 1.0f, x, true);
+                const auto mapped_y =
+                    pc::math::remap(box_min_y, box_max_y, 0.0f, 1.0f, y, true);
+                const auto mapped_z =
+                    pc::math::remap(box_min_z, box_max_z, 0.0f, 1.0f, z, true);
+                return pc::types::Float3{mapped_x, mapped_y, mapped_z};
+              };
+
+              config.minmax_positions.min_x = get_scaled_vector(minmax_x_points.first);
+              config.minmax_positions.max_x = get_scaled_vector(minmax_x_points.second);
+              config.minmax_positions.min_y = get_scaled_vector(minmax_y_points.first);
+              config.minmax_positions.max_y = get_scaled_vector(minmax_y_points.second);
+              config.minmax_positions.min_z = get_scaled_vector(minmax_z_points.first);
+              config.minmax_positions.max_z = get_scaled_vector(minmax_z_points.second);
+
+              config.minmax.min_x = config.minmax_positions.min_x.x;
+              config.minmax.max_x = config.minmax_positions.max_x.x;
+              config.minmax.min_y = config.minmax_positions.min_y.y;
+              config.minmax.max_y = config.minmax_positions.max_y.y;
+              config.minmax.min_z = config.minmax_positions.min_z.z;
+              config.minmax.max_z = config.minmax_positions.max_z.z;
 
               // for a very basic 'energy' parameter, we can calculate the
               // volume and then track changes in the volume over time
