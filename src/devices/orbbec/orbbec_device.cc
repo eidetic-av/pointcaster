@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/hpp/Utils.hpp>
+#include <mutex>
 #include <oneapi/tbb/blocked_range.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
@@ -106,6 +107,8 @@ void OrbbecDevice::restart_sync() {
 }
 
 void OrbbecDevice::start_sync() {
+  std::lock_guard lock(_start_stop_access);
+
   const auto& c = config();
   pc::logger->info("Initialising OrbbecDevice at {}", c.ip);
 
@@ -280,6 +283,7 @@ void OrbbecDevice::start_sync() {
 }
 
 void OrbbecDevice::stop_sync() {
+  std::lock_guard lock(_start_stop_access);
   pc::logger->info("Closing OrbbecDevice {}", config().ip);
   _running_pipeline = false;
   if (_ob_pipeline) _ob_pipeline->stop();

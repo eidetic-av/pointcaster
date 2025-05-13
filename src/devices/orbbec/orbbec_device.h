@@ -62,6 +62,7 @@ public:
 private:
   inline static std::unique_ptr<ob::Context> _ob_ctx;
   inline static std::shared_ptr<ob::DeviceList> _ob_device_list;
+  inline static std::mutex _start_stop_access;
 
   std::shared_ptr<ob::Config> _ob_config;
   std::shared_ptr<ob::Device> _ob_device;
