@@ -6,6 +6,7 @@
 #include <libobsensor/ObSensor.hpp>
 #include <optional>
 #include <thread>
+#include <chrono>
 
 
 namespace pc::devices {
@@ -75,6 +76,7 @@ private:
   std::optional<std::vector<OBColorPoint>> _depth_frame_buffer;
 
   std::jthread _initialisation_thread;
+  std::jthread _timeout_thread;
 
   bool _running_pipeline = false;
   bool _initialised_point_cloud_scale = false;
@@ -82,6 +84,9 @@ private:
   std::vector<OBColorPoint> _point_buffer;
   std::mutex _point_buffer_access;
   std::atomic_bool _buffer_updated;
+
+  std::atomic<std::chrono::steady_clock::time_point> _last_updated_time{};
+  std::atomic_bool _in_error_state = false;
 
   pc::types::PointCloud _current_point_cloud;
 

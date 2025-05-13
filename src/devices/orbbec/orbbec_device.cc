@@ -2,6 +2,7 @@
 #include "../../gui/widgets.h"
 #include "../../logger.h"
 #include "../../parameters.h"
+#include <atomic>
 #include <fmt/format.h>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/hpp/Utils.hpp>
@@ -9,6 +10,7 @@
 #include <oneapi/tbb/blocked_range.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
+#include <thread>
 
 namespace pc::devices {
 
@@ -55,6 +57,32 @@ OrbbecDevice::OrbbecDevice(OrbbecDeviceConfiguration &config)
     OrbbecDevice::attached_devices.push_back(std::ref(*this));
   }
 
+  _timeout_thread = std::jthread([this] (std::stop_token stop_token){
+    while (!stop_token.stop_requested()) {
+      using namespace std::chrono_literals;
+
+      const auto now = std::chrono::steady_clock::now();
+      const auto last_frame_time =
+          _last_updated_time.load(std::memory_order_relaxed);
+
+      if (!_in_error_state && _running_pipeline) {
+        constexpr auto error_timeout = 10s;
+        if (now - last_frame_time >= error_timeout) {
+          _in_error_state = true;
+          pc::logger->error(
+              "Orbbec device '{}' entered error state. Attempting restart...",
+              this->config().id);
+          restart();
+        }
+      } else if (_in_error_state) {
+        if (now - last_frame_time <= 500ms) _in_error_state = false;
+      }
+
+      constexpr auto check_interval = 1s;
+      std::this_thread::sleep_for(check_interval);
+    }
+  });
+
   start();
 }
 
@@ -66,12 +94,20 @@ OrbbecDevice::~OrbbecDevice() {
     std::erase_if(OrbbecDevice::attached_devices,
                   [this](auto &device) { return &(device.get()) == this; });
   }
+  _timeout_thread.request_stop();
   pc::logger->info("Destroyed OrbbecDevice");
 }
 
 DeviceStatus OrbbecDevice::status() const {
   if (_ob_device) {
-    return _running_pipeline ? DeviceStatus::Active : DeviceStatus::Inactive;
+    if (_in_error_state) return DeviceStatus::Missing;
+    if (!_running_pipeline) return DeviceStatus::Inactive;
+    // if the _last_updated_time has never been set
+    if (_last_updated_time.load(std::memory_order_relaxed) ==
+        std::chrono::steady_clock::time_point{}) {
+      return DeviceStatus::Inactive;
+    }
+    return DeviceStatus::Active;
   }
   return DeviceStatus::Missing;
 };
@@ -200,6 +236,7 @@ void OrbbecDevice::start_sync() {
                         point_count * sizeof(OBColorPoint));
           }
           _buffer_updated = true;
+          _last_updated_time = std::chrono::steady_clock::now();
         });
 
     _ob_point_cloud->setCameraParam(_ob_pipeline->getCameraParam());
@@ -275,6 +312,7 @@ void OrbbecDevice::start_sync() {
             std::lock_guard lock(_point_buffer_access);
             std::swap(_point_buffer, depth_frame_buffer);
             _buffer_updated = true;
+            _last_updated_time = std::chrono::steady_clock::now();
           }
         });
 
