@@ -56,6 +56,7 @@ struct Parameter;
 using FloatReference = std::reference_wrapper<float>;
 using Float2Reference = std::reference_wrapper<Float2>;
 using Float3Reference = std::reference_wrapper<Float3>;
+using Float4Reference = std::reference_wrapper<Float4>;
 using IntReference = std::reference_wrapper<int>;
 using Int2Reference = std::reference_wrapper<Int2>;
 using Int3Reference = std::reference_wrapper<Int3>;
@@ -71,10 +72,11 @@ using BoolReference = std::reference_wrapper<bool>;
 using StringReference = std::reference_wrapper<std::string>;
 
 using ParameterReference =
-    std::variant<FloatReference, Float2Reference, Float3Reference, IntReference,
-                 Int2Reference, Int3Reference, ShortReference, Short2Reference,
-                 Short3Reference, MinMaxFloatReference, MinMaxIntReference,
-                 MinMaxShortReference, BoolReference, StringReference>;
+    std::variant<FloatReference, Float2Reference, Float3Reference,
+                 Float4Reference, IntReference, Int2Reference, Int3Reference,
+                 ShortReference, Short2Reference, Short3Reference,
+                 MinMaxFloatReference, MinMaxIntReference, MinMaxShortReference,
+                 BoolReference, StringReference>;
 
 using ParameterValue =
     std::variant<float, Float2, Float3, Float4, int, Int2, Int3, short, Short2,
@@ -112,6 +114,11 @@ struct Parameter {
   Parameter(Float3 &_value, float _min = -10, float _max = 10,
             float _default_value = 0)
       : value(Float3Reference(_value)), min(_min), max(_max),
+        default_value(_default_value) {}
+
+  Parameter(Float4 &_value, float _min = -10, float _max = 10,
+            float _default_value = 0)
+      : value(Float4Reference(_value)), min(_min), max(_max),
         default_value(_default_value) {}
 
   Parameter(int &_value, int _min = -10, int _max = 10, int _default_value = 0)
@@ -430,7 +437,15 @@ void set_parameter_value(std::string_view parameter_id, T new_value) {
           } else {
             pc::logger->error("Setting float3 ref with non-float3 val");
           }
-        } else if constexpr (std::same_as<ref_type, BoolReference>) {
+        } else if constexpr (std::same_as<ref_type, Float4Reference>) {
+          if constexpr (std::same_as<T, Float4>) {
+            Float4 &value = std::get<Float4Reference>(parameter.value).get();
+            value = new_value;
+          } else {
+            pc::logger->error("Setting float4 ref with non-float4 val");
+          }
+        }
+         else if constexpr (std::same_as<ref_type, BoolReference>) {
           // for bools, we say that any scalar value > 0 is 'true' and
           // any value <= 0 is 'false'
           if constexpr (std::is_convertible_v<T, float>) {

@@ -7,10 +7,12 @@
 #include "device_config.gen.h"
 #include "device_variants.h"
 #include <Corrade/Containers/Pointer.h>
+#include <functional>
 #include <imgui.h>
 #include <k4abttypes.h>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <pointclouds.h>
 #include <unordered_map>
 #include <vector>
@@ -43,6 +45,8 @@ inline std::mutex devices_access;
 // configuration live here
 inline std::vector<std::reference_wrapper<DeviceConfigurationVariant>>
     device_configs;
+inline std::optional<std::reference_wrapper<DeviceConfigurationVariant>>
+    selected_device_config;
 inline std::mutex device_configs_access;
 
 // we forward declare these wrapper functions because we can't include

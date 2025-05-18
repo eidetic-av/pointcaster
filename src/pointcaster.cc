@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <imgui.h>
 #include <imgui_stdlib.h>
+#include <ImGuizmo.h>
 #include <serdepp/serializer.hpp>
 #include <variant>
 
@@ -304,14 +305,11 @@ PointCaster::PointCaster(const Arguments &args)
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  if (!workspace.radio.has_value()) { workspace.radio = RadioConfiguration{}; }
-
   // TODO these constructors need to be redone for workspace integration, not
   // sessions
 
-  _radio = std::make_unique<Radio>(
-      *workspace.radio,
-      session_operator_hosts[workspace.selected_session_index]);
+  if (!workspace.radio.has_value()) { workspace.radio = RadioConfiguration{}; }
+  _radio = std::make_unique<Radio>(*workspace.radio, session_operator_hosts[0]);
 
   if (!workspace.mqtt.has_value()) { workspace.mqtt = MqttClientConfiguration{}; }
   _mqtt = std::make_unique<MqttClient>(*workspace.mqtt);
@@ -1094,6 +1092,8 @@ void PointCaster::drawEvent() {
   render_cameras();
 
   _imgui_context.newFrame();
+  ImGuizmo::SetOrthographic(false);
+  ImGuizmo::BeginFrame();
   pc::gui::begin_gui_helpers(_current_mode, _modeline_input);
 
   // Enable text input, if needed/
@@ -1338,6 +1338,18 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     workspace.layout.show_stats = !workspace.layout.show_stats;
     break;
   }
+  case KeyEvent::Key::LeftCtrl: {
+    holding_ctrl = true;
+    break;
+  }
+  case KeyEvent::Key::LeftAlt: {
+    holding_alt = true;
+    break;
+  }
+  case KeyEvent::Key::LeftShift: {
+    holding_shift = true;
+    break;
+  }
   default: {
     if (_imgui_context.handleKeyPressEvent(event)) event.setAccepted(true);
   }
@@ -1345,7 +1357,28 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
 }
 
 void PointCaster::keyReleaseEvent(KeyEvent &event) {
-  if (_imgui_context.handleKeyReleaseEvent(event)) event.setAccepted(true);
+  if (ImGui::GetIO().WantTextInput) {
+    if (_imgui_context.handleKeyReleaseEvent(event)) {
+      event.setAccepted(true);
+      return;
+    }
+  }
+
+  switch (event.key()) {
+  case KeyEvent::Key::LeftCtrl: {
+    holding_ctrl = false;
+    break;
+  }
+  case KeyEvent::Key::LeftAlt: {
+    holding_alt = false;
+    break;
+  }
+  case KeyEvent::Key::LeftShift: {
+    holding_shift = false;
+    break;
+  }
+  default: break;
+  }
 }
 
 void PointCaster::textInputEvent(TextInputEvent &event) {
@@ -1377,6 +1410,11 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
   }
 
   if (!interacting_camera_controller) {
+    event.setAccepted(true);
+    return;
+  }
+
+  if (ImGuizmo::IsUsing()) {
     event.setAccepted(true);
     return;
   }

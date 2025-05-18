@@ -402,7 +402,8 @@ bool vector_param(std::string_view group_id, std::string_view parameter_id,
       pc::gui::DragFloat3(parameter_id, vec.data(), drag_speed, min, max,
                           reset_values);
     } else if constexpr (vector_size == 4) {
-      pc::logger->warn("implement Float4 parameters");
+      // TODO
+      pc::logger->debug("implement Float4 parameters");
       // pc::gui::DragFloat4(parameter_label, vec.data(), drag_speed, min, max);
     }
   } else if constexpr (std::same_as<ElementT, int>) {
@@ -411,7 +412,8 @@ bool vector_param(std::string_view group_id, std::string_view parameter_id,
     } else if constexpr (vector_size == 3) {
       pc::gui::DragInt3(parameter_id, vec.data(), 1, min, max, reset_values);
     } else if constexpr (vector_size == 4) {
-      pc::logger->warn("implement Int4 parameters");
+      // TODO
+      pc::logger->debug("implement Int4 parameters");
       // pc::gui::DragInt4(parameter_label, vec.data(), drag_speed, min, max,
       // reset_values);
     }

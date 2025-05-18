@@ -83,48 +83,43 @@ struct device_transform_filter
       : config(transform_config) {}
 
   __device__ indexed_point_t operator()(indexed_point_t point) const {
-
-    // we reinterpret our point in Eigen containers so we have easy maths
     using namespace Eigen;
 
-    position p = thrust::get<0>(point);
+    // unpack input point
+    position in_p = thrust::get<0>(point);
+    Vector3f pos_vec{static_cast<float>(in_p.x), static_cast<float>(in_p.y),
+                     static_cast<float>(in_p.z)};
 
-    Vector3f pos_f(p.x, p.y, p.z);
+    // world-space axis flips
+    Vector3f axis_flip{config.flip_x ? -1.0f : 1.0f,
+                       config.flip_y ? -1.0f : 1.0f,
+                       config.flip_z ? -1.0f : 1.0f};
+    pos_vec = {pos_vec.x(), -pos_vec.y(), -pos_vec.z()};
 
-    Vector3f flip(config.flip_x ? -1 : 1, config.flip_y ? -1 : 1,
-                  config.flip_z ? -1 : 1);
+    // pre-rotation translate
+    pos_vec += Vector3f{config.translate.x * axis_flip.x(),
+                        config.translate.y * axis_flip.y(),
+                        config.translate.z * axis_flip.z()};
 
-    // flip y and z axes for our world space
-    pos_f = Vector3f(pos_f[0], -pos_f[1], -pos_f[2]);
+    // flip axes before rotation
+    pos_vec = {pos_vec.x() * axis_flip.x(), pos_vec.y() * axis_flip.y(),
+               pos_vec.z() * axis_flip.z()};
 
-    // input translation
-    pos_f = pos_f + Vector3f{config.translate.x * flip.x(),
-                             config.translate.y * flip.y(),
-                             config.translate.z * flip.z()};
+    // apply quaternion rotation (config.rotation = {x,y,z,w})
+    Quaternionf rot_quat{config.rotation.w, config.rotation.x,
+                         config.rotation.y, config.rotation.z};
+    pos_vec = rot_quat * pos_vec;
 
-    // create the rotation around our center
-    AngleAxisf rot_x(as_rad(config.rotation_deg.x), Vector3f::UnitX());
-    AngleAxisf rot_y(as_rad(-config.rotation_deg.y), Vector3f::UnitY());
-    AngleAxisf rot_z(as_rad(config.rotation_deg.z), Vector3f::UnitZ());
-    Quaternionf rot_q = rot_z * rot_y * rot_x;
+    // alignment offset and uniform scale
+    pos_vec += Vector3f{config.offset.x, config.offset.y, config.offset.z};
+    pos_vec *= config.scale;
 
-    // specified axis flips
-    pos_f = {pos_f.x() * flip.x(), pos_f.y() * flip.y(), pos_f.z() * flip.z()};
+    // pack back into 16-bit output
+    position out_p = {(short)__float2int_rd(pos_vec.x()),
+                      (short)__float2int_rd(pos_vec.y()),
+                      (short)__float2int_rd(pos_vec.z()), 0};
 
-    // apply rotation
-    pos_f = rot_q * pos_f;
-
-    // perform our alignment offset translation
-    pos_f += Vector3f(config.offset.x, config.offset.y, config.offset.z);
-
-    // and scaling
-    pos_f *= config.scale;
-
-    position pos_out = {(short)__float2int_rd(pos_f.x()),
-                        (short)__float2int_rd(pos_f.y()),
-                        (short)__float2int_rd(pos_f.z()), 0};
-
-    return thrust::make_tuple(pos_out, thrust::get<1>(point),
+    return thrust::make_tuple(out_p, thrust::get<1>(point),
                               thrust::get<2>(point));
   }
 };

@@ -9,6 +9,7 @@
 namespace pc::devices {
 
 using pc::types::Float3;
+using pc::types::Float4;
 using pc::types::MinMax;
 using pc::types::Short3;
 using MinMaxShort = pc::types::MinMax<short>;
@@ -27,6 +28,7 @@ struct AutoTiltConfiguration {
 struct DeviceTransformConfiguration {
   bool unfolded = true;
   Float3 translate{0, 0, 0}; // @minmax(-10000, 10000)
+  Float4 rotation{0, 0, 0, 1}; // @hidden
   Float3 rotation_deg{0, 0, 0}; // @minmax(-360, 360)
   Float3 offset{0, 0, 0}; // @minmax(-10000, 10000)
   float scale = 1; // @minmax(0, 10)

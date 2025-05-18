@@ -215,6 +215,9 @@ if (WITH_POINTCASTER)
   list(APPEND LINK_LIBS imgui::imgui)
   add_definitions(-DIMGUI_DEFINE_MATH_OPERATORS)
 
+  find_package(unofficial-imguizmo CONFIG REQUIRED)
+  list(APPEND LINK_LIBS unofficial::imguizmo::imguizmo)
+
   list(APPEND THIRDPARTY_SRC thirdparty/imnodes/imnodes.cpp)
   list(APPEND INCLUDE_DIRS thirdparty/imnodes)
 
@@ -406,6 +409,7 @@ if (WITH_POINTCASTER)
     CUDA_RESOLVE_DEVICE_SYMBOLS ON
     CUDA_PROPAGATE_HOST_FLAGS OFF
     CUDA_ARCHITECTURES "61;75;86;89"
+    # CUDA_ARCHITECTURES "86"
   )
 
   if (POINTCASTER_DEPENDENCIES)
