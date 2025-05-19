@@ -1,4 +1,7 @@
+#pragma once
+
 #include "../pointcaster.h"
+#include <atomic>
 
 namespace pc::gui {
 

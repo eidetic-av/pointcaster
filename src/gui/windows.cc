@@ -389,10 +389,13 @@ void draw_devices_window(PointCaster &app) {
     ImGui::SeparatorText("Network Devices");
 
     // Start discovery once if needed
-    static bool requested_orbbec_discovery = false;
+    static std::atomic_bool requested_orbbec_discovery = false;
+    if (ImGui::IsWindowAppearing()) requested_orbbec_discovery = false;
     if (!requested_orbbec_discovery) {
       requested_orbbec_discovery = true;
-      app.run_async([] { OrbbecDevice::discover_devices(); });
+      app.run_async([] {
+        OrbbecDevice::discover_devices();
+      });
     }
 
     if (OrbbecDevice::discovering_devices) {
@@ -434,6 +437,12 @@ void draw_devices_window(PointCaster &app) {
   {
     std::lock_guard lock(devices::device_configs_access);
     last_device_count = devices::device_configs.size();
+    if (last_device_count > 0) {
+      devices::selected_device_config =
+          devices::device_configs[selected_device_row];
+    } else {
+      devices::selected_device_config.reset();
+    }
   }
 
   ImGui::End();
