@@ -1,6 +1,12 @@
 #include "main_viewport.h"
+#include "../pch.h"
 #include "widgets.h"
 #include "windows.h"
+#include <ImGuizmo.h>
+#include <Magnum/Math/Quaternion.h>
+#include <Magnum/Math/Vector.h>
+#include <imgui.h>
+
 
 namespace pc::gui {
 
@@ -263,8 +269,12 @@ void draw_main_viewport(PointCaster &app) {
   ImGui::PopStyleVar();
 
   // main docking workspace below the tab bar
-  ImGui::SetNextWindowPos({vp->Pos.x, vp->Pos.y + tab_bar_height});
-  ImGui::SetNextWindowSize({vp->Size.x, vp->Size.y - tab_bar_height});
+  ImVec2 session_viewport_pos{vp->Pos.x, vp->Pos.y + tab_bar_height};
+  ImGui::SetNextWindowPos(session_viewport_pos);
+
+  ImVec2 session_viewport_size{vp->Size.x, vp->Size.y - tab_bar_height};
+  ImGui::SetNextWindowSize(session_viewport_size);
+
   ImGui::SetNextWindowViewport(vp->ID);
   ImGuiWindowFlags host_flags =
       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
@@ -292,18 +302,18 @@ void draw_main_viewport(PointCaster &app) {
   {
     auto &selected_session =
         workspace.sessions.at(workspace.selected_session_index);
-    auto &camera_controller =
+    auto &selected_camera_controller =
         app.camera_controllers.at(workspace.selected_session_index);
-    const auto camera_config = camera_controller->config();
+    const auto camera_config = selected_camera_controller->config();
 
     const auto window_size = ImGui::GetContentRegionAvail();
 
     if (workspace.layout.hide_ui) { ImGui::SetCursorPosY(0); }
 
     const auto draw_frame_labels =
-        [&camera_controller](ImVec2 viewport_offset) {
+        [&selected_camera_controller](ImVec2 viewport_offset) {
           ImGui::PushStyleColor(ImGuiCol_Text, {1.0f, 1.0f, 0.0f, 1.0f});
-          for (auto label : camera_controller->labels()) {
+          for (auto label : selected_camera_controller->labels()) {
             auto &pos = label.position;
             auto x = static_cast<float>(viewport_offset.x + pos.x);
             auto y = static_cast<float>(viewport_offset.y + pos.y);
@@ -313,22 +323,119 @@ void draw_main_viewport(PointCaster &app) {
           ImGui::PopStyleColor();
         };
 
+    const auto draw_imguizmo_layer = [&](auto layer_pos_x, auto layer_pos_y,
+                                         auto layer_size_x, auto layer_size_y) {
+      ImGuizmo::SetDrawlist();
+      ImGuizmo::SetRect(layer_pos_x, layer_pos_y, layer_size_x, layer_size_y);
+
+      auto &camera = selected_camera_controller->camera();
+      std::array<float, 16> camera_view_matrix;
+      std::memcpy(camera_view_matrix.data(), camera.cameraMatrix().data(),
+                  sizeof(camera_view_matrix));
+      std::array<float, 16> camera_projection_matrix;
+      std::memcpy(camera_projection_matrix.data(),
+                  camera.projectionMatrix().data(),
+                  sizeof(camera_projection_matrix));
+
+      if (!devices::selected_device_config) return;
+
+      using namespace Magnum::Math::Literals;
+      using Magnum::Matrix4;
+      using Magnum::Vector3;
+      using Magnum::Math::Quaternion;
+
+      Matrix4 object_model_matrix;
+      std::visit(
+          [&](auto &&config_variant) {
+            auto &t = config_variant.transform;
+            Quaternion orientation_quaternion{
+                {t.rotation[0], t.rotation[1], t.rotation[2]}, t.rotation[3]};
+            auto rotation_matrix_3x3 = orientation_quaternion.toMatrix();
+            object_model_matrix =
+                Matrix4::translation(
+                    Vector3{t.offset.x, t.offset.y, t.offset.z} / 1000.0f) *
+                Matrix4::from(rotation_matrix_3x3, {}) *
+                Matrix4::scaling(Vector3{t.scale});
+          },
+          devices::selected_device_config->get());
+
+      std::array<float, 16> object_model_matrix_flat;
+      std::memcpy(object_model_matrix_flat.data(), object_model_matrix.data(),
+                  sizeof(object_model_matrix_flat));
+
+      ImGuizmo::Enable(true);
+
+      std::array<float, 16> delta_rotation_matrix_array;
+      std::array<float, 16> delta_translation_matrix_array;
+
+      ImGuizmo::Manipulate(
+          camera_view_matrix.data(), camera_projection_matrix.data(),
+          ImGuizmo::ROTATE, ImGuizmo::MODE::WORLD,
+          object_model_matrix_flat.data(), delta_rotation_matrix_array.data());
+
+      ImGuizmo::Manipulate(camera_view_matrix.data(),
+                           camera_projection_matrix.data(), ImGuizmo::TRANSLATE,
+                           ImGuizmo::MODE::WORLD,
+                           object_model_matrix_flat.data(),
+                           delta_translation_matrix_array.data());
+
+      if (ImGuizmo::IsUsing()) {
+        Magnum::Matrix4 rotation_delta_matrix =
+            Magnum::Matrix4::from(delta_rotation_matrix_array.data());
+        Magnum::Matrix4 translation_delta_matrix =
+            Magnum::Matrix4::from(delta_translation_matrix_array.data());
+
+        auto rotation_delta_3x3 = rotation_delta_matrix.rotationNormalized();
+        auto rotation_delta_quaternion =
+            Quaternion<float>::fromMatrix(rotation_delta_3x3).normalized();
+
+        auto translation_delta_vector = translation_delta_matrix.translation();
+        float uniform_scale_delta = rotation_delta_matrix.uniformScaling();
+
+        std::lock_guard lock(devices::device_configs_access);
+        std::visit(
+            [&](auto &&config_variant) {
+              auto &transform = config_variant.transform;
+              Quaternion<float> current_quaternion{{transform.rotation[0],
+                                                    transform.rotation[1],
+                                                    transform.rotation[2]},
+                                                   transform.rotation[3]};
+              auto updated_quaternion =
+                  (rotation_delta_quaternion * current_quaternion).normalized();
+              transform.rotation[0] = updated_quaternion.vector().x();
+              transform.rotation[1] = updated_quaternion.vector().y();
+              transform.rotation[2] = updated_quaternion.vector().z();
+              transform.rotation[3] = updated_quaternion.scalar();
+              transform.offset =
+                  transform.offset + (Float3{translation_delta_vector[0],
+                                             translation_delta_vector[1],
+                                             translation_delta_vector[2]} *
+                                      1000.0f);
+              transform.scale *= uniform_scale_delta;
+              },
+            devices::selected_device_config->get());
+      }
+    };
+
     auto rendering = camera_config.rendering;
     auto scale_mode = rendering.scale_mode;
     const Vector2 frame_space{window_size.x, window_size.y};
-    camera_controller->viewport_size = frame_space;
+    selected_camera_controller->viewport_size = frame_space;
 
     if (scale_mode == (int)ScaleMode::Span) {
 
       auto image_pos = ImGui::GetCursorPos();
-      ImGuiIntegration::image(camera_controller->color_frame(),
+      ImGuiIntegration::image(selected_camera_controller->color_frame(),
                               {frame_space.x(), frame_space.y()});
+
+      draw_imguizmo_layer(image_pos.x, image_pos.y, frame_space.x(),
+                          frame_space.y());
 
       auto analysis = camera_config.analysis;
 
       if (analysis.enabled && (analysis.contours.draw)) {
         ImGui::SetCursorPos(image_pos);
-        ImGuiIntegration::image(camera_controller->analysis_frame(),
+        ImGuiIntegration::image(selected_camera_controller->analysis_frame(),
                                 {frame_space.x(), frame_space.y()});
         draw_frame_labels(image_pos);
       }
@@ -366,14 +473,17 @@ void draw_main_viewport(PointCaster &app) {
       ImGui::BeginChildFrame(ImGui::GetID("letterboxed"), {width, height});
 
       auto image_pos = ImGui::GetCursorPos();
-      ImGuiIntegration::image(camera_controller->color_frame(),
+      ImGuiIntegration::image(selected_camera_controller->color_frame(),
                               {width, height});
 
-      auto &analysis = camera_controller->config().analysis;
+      draw_imguizmo_layer(image_pos.x, image_pos.y, frame_space.x(),
+                          frame_space.y());
+
+      auto &analysis = selected_camera_controller->config().analysis;
 
       if (analysis.enabled && (analysis.contours.draw)) {
         ImGui::SetCursorPos(image_pos);
-        ImGuiIntegration::image(camera_controller->analysis_frame(),
+        ImGuiIntegration::image(selected_camera_controller->analysis_frame(),
                                 {width, height});
         draw_frame_labels(image_pos);
       }
@@ -393,7 +503,7 @@ void draw_main_viewport(PointCaster &app) {
     }
 
     if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootWindow)) {
-      app.interacting_camera_controller = *camera_controller;
+      app.interacting_camera_controller = *selected_camera_controller;
     } else {
       app.interacting_camera_controller.reset();
     }

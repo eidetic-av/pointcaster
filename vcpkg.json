@@ -21,6 +21,7 @@
         "docking-experimental"
       ]
     },
+    "imguizmo",
     "liblo",
     "libremidi",
     "libusb",
