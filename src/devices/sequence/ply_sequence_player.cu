@@ -5,6 +5,7 @@
 #include "../../structs.h"
 #include "../transform_filters.cuh"
 
+#include <atomic>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
@@ -17,6 +18,8 @@ namespace pc::devices {
 using pc::types::PointCloud;
 
 struct PlySequencePlayerImplDeviceMemory {
+  size_t capacity;
+
   thrust::device_vector<position> incoming_positions;
   thrust::device_vector<color> incoming_colors;
   thrust::device_vector<indexed_point_t> incoming_point_data;
@@ -28,13 +31,27 @@ struct PlySequencePlayerImplDeviceMemory {
   thrust::device_vector<int> indices;
 
   PlySequencePlayerImplDeviceMemory(std::size_t point_count)
-      : incoming_positions(point_count), incoming_colors(point_count),
-        incoming_point_data(point_count), filtered_data(point_count),
-        transformed_positions(point_count), transformed_colors(point_count),
-        output_positions(point_count), output_colors(point_count),
-        indices(point_count)
-  {
+      : capacity(point_count), incoming_positions(point_count),
+        incoming_colors(point_count), incoming_point_data(point_count),
+        filtered_data(point_count), transformed_positions(point_count),
+        transformed_colors(point_count), output_positions(point_count),
+        output_colors(point_count), indices(point_count) {
     thrust::sequence(indices.begin(), indices.end());
+  }
+
+  void ensure_capacity(size_t point_count) {
+    if (point_count <= capacity) return;
+    incoming_positions.resize(point_count);
+    incoming_colors.resize(point_count);
+    incoming_point_data.resize(point_count);
+    filtered_data.resize(point_count);
+    transformed_positions.resize(point_count);
+    transformed_colors.resize(point_count);
+    output_positions.resize(point_count);
+    output_colors.resize(point_count);
+    indices.resize(point_count);
+    thrust::sequence(indices.begin(), indices.end());
+    capacity = point_count;
   }
 };
 
@@ -46,9 +63,18 @@ struct ply_to_input_points
 };
 
 bool PlySequencePlayer::init_device_memory(size_t point_count) {
+  std::lock_guard lock(_device_memory_access);
   _device_memory_ready = false;
+  if (point_count == 0) {
+    pc::logger->warn("Can't initialise device memory with 0 sized point cloud");
+    return false;
+  }
   try {
     pc::logger->info("Max point count: {}", point_count);
+    if (_device_memory != nullptr) {
+      delete static_cast<PlySequencePlayerImplDeviceMemory *>(_device_memory);
+      _device_memory = nullptr;
+    }
     _device_memory = new PlySequencePlayerImplDeviceMemory(point_count);
     _device_memory_ready = true;
   } catch (std::exception &e) {
@@ -59,6 +85,7 @@ bool PlySequencePlayer::init_device_memory(size_t point_count) {
 }
 
 void PlySequencePlayer::free_device_memory() {
+  std::lock_guard lock(_device_memory_access);
   _device_memory_ready = false;
   if (_device_memory != nullptr) {
     delete static_cast<PlySequencePlayerImplDeviceMemory *>(_device_memory);
@@ -67,19 +94,36 @@ void PlySequencePlayer::free_device_memory() {
   pc::logger->debug("PlySequencePlayer GPU memory freed");
 }
 
+void PlySequencePlayer::ensure_device_memory_capacity(size_t point_count) {
+  if (!_device_memory_ready || point_count == 0) return;
+  std::lock_guard lock(_device_memory_access);
+  _device_memory->ensure_capacity(point_count);
+}
+
 pc::types::PointCloud PlySequencePlayer::point_cloud() {
   if (!config().active) return {};
 
-  if (!_device_memory_ready || !_buffer_updated) {
-    return _current_point_cloud;
+  const auto default_result = [&] {
+    return _frame_buffer.size() > _last_index
+               ? _frame_buffer[_last_index].value_or(PointCloud{})
+               : PointCloud{};
+  };
+
+  if (!_device_memory_ready) { return default_result(); }
+
+  const size_t current_frame = _current_frame.load();
+
+  if (current_frame < _loaded_frame_offset) return default_result();
+  const size_t idx = current_frame - _loaded_frame_offset;
+  if (idx >= _cpu_buffer_capacity) return default_result();
+  
+  pc::types::PointCloud cloud{};
+  if (_buffer_index_ready[idx].load(std::memory_order_acquire)) {
+    cloud = _frame_buffer[idx].value();
+  } else {
+    cloud = default_result();
   }
 
-  const auto frame_index =
-      std::min(current_frame(), _pointcloud_buffer.size() - 1);
-  pc::types::PointCloud cloud = _pointcloud_buffer.at(frame_index);
-
-  if (cloud.positions.empty()) return cloud;
-  
   auto &incoming_positions = _device_memory->incoming_positions;
   auto &incoming_colors = _device_memory->incoming_colors;
   auto &incoming_point_data = _device_memory->incoming_point_data;
@@ -128,23 +172,24 @@ pc::types::PointCloud PlySequencePlayer::point_cloud() {
       transformed_points_begin, transformed_points_begin + filtered_point_count,
       operator_output_begin, output_transform_filter{config().transform});
 
+  // TODO: maybe we can make this cudaDeviceSynchronize call just set a flag or
+  // something and then we only call a single cudaDeviceSynchronize() at the
+  // very end of all Device point_cloud() calls ?
   cudaDeviceSynchronize();
 
   const auto output_point_count =
       std::distance(operator_output_begin, operator_output_end);
-  _current_point_cloud.positions.resize(output_point_count);
-  _current_point_cloud.colors.resize(output_point_count);
+  cloud.positions.resize(output_point_count);
+  cloud.colors.resize(output_point_count);
 
   thrust::copy(output_positions.begin(),
                output_positions.begin() + output_point_count,
-               _current_point_cloud.positions.begin());
+               cloud.positions.begin());
   thrust::copy(output_colors.begin(),
                output_colors.begin() + output_point_count,
-               _current_point_cloud.colors.begin());
+               cloud.colors.begin());
 
-  _buffer_updated = false;
-
-  return _current_point_cloud;
+  return cloud;
 }
 
 } // namespace pc::devices

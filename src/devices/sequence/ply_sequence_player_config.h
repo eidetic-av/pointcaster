@@ -15,6 +15,7 @@ struct PlySequencePlayerConfiguration {
   bool playing = true; // @hidden
   int frame_rate = 30;
   int current_frame = 0;
+  int buffer_capacity = 30;
 
   DeviceTransformConfiguration transform; // @optional
 
