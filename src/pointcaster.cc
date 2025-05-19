@@ -305,34 +305,17 @@ PointCaster::PointCaster(const Arguments &args)
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  // TODO these constructors need to be redone for workspace integration, not
-  // sessions
+  try_init_unique_member<Radio>(workspace.radio, _radio,
+                                session_operator_hosts[0]);
 
-  if (!workspace.radio.has_value()) { workspace.radio = RadioConfiguration{}; }
-  _radio = std::make_unique<Radio>(*workspace.radio, session_operator_hosts[0]);
-
-  if (!workspace.mqtt.has_value()) { workspace.mqtt = MqttClientConfiguration{}; }
-  _mqtt = std::make_unique<MqttClient>(*workspace.mqtt);
-
-  if (!workspace.midi.has_value()) { workspace.midi = MidiDeviceConfiguration{}; }
-  _midi = std::make_unique<MidiDevice>(*workspace.midi);
+  try_init_unique_member<MqttClient>(workspace.mqtt, _mqtt);
+  try_init_unique_member<MidiDevice>(workspace.midi, _midi);
+  try_init_unique_member<SyncServer>(workspace.sync_server, _sync_server);
 
 #ifdef WITH_OSC
-  if (!workspace.osc_client.has_value()) {
-    workspace.osc_client = OscClientConfiguration{};
-  }
-  _osc_client = std::make_unique<OscClient>(*workspace.osc_client);
-
-  if (!workspace.osc_server.has_value()) {
-    workspace.osc_server = OscServerConfiguration{};
-  }
-  _osc_server = std::make_unique<OscServer>(*workspace.osc_server);
+  try_init_unique_member<OscClient>(workspace.osc_client, _osc_client);
+  try_init_unique_member<OscServer>(workspace.osc_server, _osc_server);
 #endif
-
-  if (!workspace.sync_server.has_value()) {
-    workspace.sync_server = SyncServerConfiguration{};
-  }
-  _sync_server = std::make_unique<SyncServer>(*workspace.sync_server);
 
   _snapshots_context = std::make_unique<Snapshots>();
 
@@ -493,12 +476,13 @@ void deserialize_device_toml(toml::table &device_table,
 }
 
 void PointCaster::load_workspace(std::filesystem::path file_path) {
-  pc::logger->info("Loading state from {}", file_path.string());
+  pc::logger->info("Loading workspace from {}", file_path.string());
 
   std::ifstream file(file_path, std::ios::binary);
 
   if (!file) {
     pc::logger->warn("Failed to open file");
+    workspace = {};
     return;
   }
 
@@ -508,6 +492,7 @@ void PointCaster::load_workspace(std::filesystem::path file_path) {
   } catch (const toml::syntax_error &e) {
     pc::logger->error("Failed to parse config file toml");
     pc::logger->error(e.what());
+    workspace = {};
     return;
   }
 
@@ -523,15 +508,24 @@ void PointCaster::load_workspace(std::filesystem::path file_path) {
 
       DeviceConfigurationVariant device_config;
 
-      if (type_name == OrbbecDeviceConfiguration::Name) {
-        deserialize_device_toml<OrbbecDeviceConfiguration>(device_table,
-                                                           device_config);
-      } else if (type_name == AzureKinectConfiguration::Name) {
-        deserialize_device_toml<AzureKinectConfiguration>(device_table,
-                                                           device_config);
-      } else if (type_name == PlySequencePlayerConfiguration::Name) {
-        deserialize_device_toml<PlySequencePlayerConfiguration>(device_table,
-                                                                device_config);
+      try {
+
+        if (type_name == OrbbecDeviceConfiguration::Name) {
+          deserialize_device_toml<OrbbecDeviceConfiguration>(device_table,
+                                                             device_config);
+        } else if (type_name == AzureKinectConfiguration::Name) {
+          deserialize_device_toml<AzureKinectConfiguration>(device_table,
+                                                            device_config);
+        } else if (type_name == PlySequencePlayerConfiguration::Name) {
+          deserialize_device_toml<PlySequencePlayerConfiguration>(
+              device_table, device_config);
+        }
+
+      } catch (std::exception &e) {
+        pc::logger->error("Unable to deserialize Device configuration: {}",
+                          e.what());
+        workspace = {};
+        return;
       }
 
       // TODO
@@ -543,11 +537,14 @@ void PointCaster::load_workspace(std::filesystem::path file_path) {
   }
 
   // deserialize everything else automatically
+  PointcasterWorkspace result;
+
   try {
-    workspace = serde::deserialize<PointcasterWorkspace>(file_toml);
+    result = serde::deserialize<PointcasterWorkspace>(file_toml);
   } catch (const std::exception &e) {
     pc::logger->error("Failed to deserialize config file toml");
     pc::logger->error(e.what());
+    workspace = {};
     return;
   }
 
@@ -571,70 +568,79 @@ void PointCaster::load_workspace(std::filesystem::path file_path) {
     pc::logger->warn("Failed to open adjacent .layout file");
   }
 
-  if (!workspace.usb.has_value()) { workspace.usb = UsbConfiguration{}; }
+  try {
 
-  // if ((*_session.usb).open_on_launch) {
-  //   if (_session.devices.empty()) {
-  //     open_kinect_sensors();
-  //   } else {
-  //     // get saved device configurations and populate the device list
-  //     run_async([this] {
-  //       for (auto &[device_id, device_config] : _session.devices) {
-  //         load_device(device_config);
-  //       }
-  //     });
-  //   }
-  // }
+    if (!result.usb.has_value()) { result.usb = UsbConfiguration{}; }
 
-  // run_async([this] {
-  //   for (auto &[device_id, device_entry] : workspace.devices) {
-  //     auto& [device_variant, variant] = device_entry;
-  //     load_device(device_variant, variant);
-  //   }
-  // });
+    // if ((*_session.usb).open_on_launch) {
+    //   if (_session.devices.empty()) {
+    //     open_kinect_sensors();
+    //   } else {
+    //     // get saved device configurations and populate the device list
+    //     run_async([this] {
+    //       for (auto &[device_id, device_config] : _session.devices) {
+    //         load_device(device_config);
+    //       }
+    //     });
+    //   }
+    // }
 
-  // unpack published parameters, initialising parameter state
-  if (workspace.published_params.has_value()) {
-    for (auto &parameter_id : *workspace.published_params) {
-      parameters::parameter_states.emplace(parameter_id,
-                                           parameters::ParameterState::Publish);
+    // run_async([this] {
+    //   for (auto &[device_id, device_entry] : workspace.devices) {
+    //     auto& [device_variant, variant] = device_entry;
+    //     load_device(device_variant, variant);
+    //   }
+    // });
+
+    // unpack published parameters, initialising parameter state
+    if (result.published_params.has_value()) {
+      for (auto &parameter_id : *result.published_params) {
+        parameters::parameter_states.emplace(
+            parameter_id, parameters::ParameterState::Publish);
+      }
     }
+
+    // unpack any serialized friendly operator names
+    for (const auto &[name, operator_id] : result.operator_names) {
+      set_operator_friendly_name(operator_id, name);
+    }
+
+    // unpack any serialized operator colors as bounding boxes that are
+    // hidden - this reserves the color for use by the operator that owns the
+    // bounding box
+
+    auto all_workspace_operators =
+        result.sessions | std::views::transform([](auto &session) {
+          return std::views::all(session.session_operator_host.operators);
+        }) |
+        std::views::join;
+
+    for (auto &operator_variant : all_workspace_operators) {
+      std::visit(
+          [&](auto &&operator_config) {
+            // search through our serialized operator colors to find if this
+            // operator_config is present
+            for (const auto &[friendly_name, color] : result.operator_colors) {
+              if (!operator_friendly_name_exists(friendly_name)) continue;
+              // if we have an existing operator, grab its ID
+              const auto operator_id =
+                  operator_ids_from_friendly_names.at(friendly_name);
+              // and create its bounding box
+              set_or_create_bounding_box(
+                  operator_id, {}, {}, *_scene.get(), *_scene_root.get(), false,
+                  Magnum::Color4{color[0], color[1], color[2], color[3]});
+            }
+          },
+          operator_variant);
+    }
+
+    workspace = result;
+    pc::logger->info("Loaded workspace '{}'", file_path.filename().string());
+
+  } catch (...) {
+    workspace = {};
+    pc::logger->error("Failed to load workspace (Unknown exception)");
   }
-
-  // unpack any serialized friendly operator names
-  for (const auto &[name, operator_id] : workspace.operator_names) {
-    set_operator_friendly_name(operator_id, name);
-  }
-
-  // unpack any serialized operator colors as bounding boxes that are
-  // hidden - this reserves the color for use by the operator that owns the
-  // bounding box
-
-  auto all_workspace_operators =
-      workspace.sessions | std::views::transform([](auto &session) {
-        return std::views::all(session.session_operator_host.operators);
-      }) |
-      std::views::join;
-
-  for (auto &operator_variant : all_workspace_operators) {
-    std::visit(
-        [&](auto &&operator_config) {
-          // search through our serialized operator colors to find if this
-          // operator_config is present
-          for (const auto &[friendly_name, color] : workspace.operator_colors) {
-            if (!operator_friendly_name_exists(friendly_name)) continue;
-            // if we have an existing operator, grab its ID
-            const auto operator_id =
-                operator_ids_from_friendly_names.at(friendly_name);
-            // and create its bounding box
-            set_or_create_bounding_box(
-                operator_id, {}, {}, *_scene.get(), *_scene_root.get(), false,
-                Magnum::Color4{color[0], color[1], color[2], color[3]});
-          }
-        },
-        operator_variant);
-  }
-  pc::logger->info("Loaded workspace '{}'", file_path.filename().string());
 }
 
 void PointCaster::load_device(DeviceConfigurationVariant &config) {

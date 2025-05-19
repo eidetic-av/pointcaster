@@ -216,6 +216,29 @@ protected:
   void mouseReleaseEvent(MouseEvent &event) override;
   void mouseMoveEvent(MouseMoveEvent &event) override;
   void mouseScrollEvent(MouseScrollEvent &event) override;
+
+  template <class MemberType, class ConfigType, class... Args>
+  void try_init_unique_member(std::optional<ConfigType> &config,
+                              std::unique_ptr<MemberType> &member_ptr,
+                              Args &&...ctor_args) {
+    bool failed = false;
+    if (config) {
+      try {
+        member_ptr = std::make_unique<MemberType>(
+            *config, std::forward<Args>(ctor_args)...);
+      } catch (...) {
+        pc::logger->error(
+            "Failed to load '{}' type. Possibly invalid configuration file.",
+            ConfigType::Name);
+        failed = true;
+      }
+    }
+    if (!config || failed) {
+      config = ConfigType{};
+      member_ptr = std::make_unique<MemberType>(
+          *config, std::forward<Args>(ctor_args)...);
+    }
+  }
 };
 
 } // namespace pc
