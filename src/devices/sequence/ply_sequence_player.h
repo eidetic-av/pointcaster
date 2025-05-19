@@ -42,7 +42,6 @@ public:
   bool draw_controls() override;
 
 private:
-
   std::vector<std::string> _file_paths;
   float _frame_accumulator{0};
   std::atomic_size_t _max_point_count{0};
@@ -60,6 +59,10 @@ private:
   PlySequencePlayerImplDeviceMemory *_device_memory{nullptr};
   std::mutex _device_memory_access;
   std::atomic_bool _device_memory_ready{false};
+
+  size_t _last_selected_frame{0};
+  bool _playing{true};
+  bool _advance_once{false};
 
   bool init_device_memory(size_t point_count);
   void free_device_memory();

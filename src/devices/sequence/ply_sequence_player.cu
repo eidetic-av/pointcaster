@@ -120,6 +120,7 @@ pc::types::PointCloud PlySequencePlayer::point_cloud() {
   pc::types::PointCloud cloud{};
   if (_buffer_index_ready[idx].load(std::memory_order_acquire)) {
     cloud = _frame_buffer[idx].value();
+    _last_index = idx;
   } else {
     cloud = default_result();
   }

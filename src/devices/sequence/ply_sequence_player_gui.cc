@@ -53,6 +53,10 @@ bool PlySequencePlayer::draw_controls() {
     if (config.playing) {
       config.playing = false;
       updated = true;
+    } else if (config.current_frame != 0) {
+      config.current_frame = 0;
+      _advance_once = true;
+      updated = true;
     }
     if (config.current_frame != 0) {
       config.current_frame = 0;
@@ -68,6 +72,7 @@ bool PlySequencePlayer::draw_controls() {
                             with_alpha(mocha_maroon, 0.75f), mocha_maroon)) {
     if (config.current_frame != 0) {
       config.current_frame = 0;
+      _advance_once = true;
       updated = true;
     }
   };
