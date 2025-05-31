@@ -1,7 +1,7 @@
 #pragma once
 
-#include "serialization.h"
-#include "structs.h"
+#include "../serialization.h"
+#include "../structs.h"
 #include <array>
 
 using pc::types::Float2;

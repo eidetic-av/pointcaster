@@ -124,4 +124,31 @@ struct device_transform_filter
   }
 };
 
+struct color_transform_filter
+    : public thrust::unary_function<indexed_point_t, indexed_point_t> {
+
+  ColorConfiguration config;
+
+  __host__ __device__ explicit color_transform_filter(
+      const ColorConfiguration &color_config)
+      : config(color_config) {}
+
+  __device__ indexed_point_t operator()(indexed_point_t point) const {
+    auto color_in = thrust::get<1>(point);
+
+    float gain = config.uniform_gain;
+    auto clamp = [] __device__(float v) {
+      return static_cast<unsigned char>(fminf(fmaxf(v, 0.0f), 255.0f));
+    };
+
+    const pc::types::color color_out{.r = clamp(color_in.r * gain),
+                                     .g = clamp(color_in.g * gain),
+                                     .b = clamp(color_in.b * gain),
+                                     .a = clamp(color_in.a * gain)};
+
+    return thrust::make_tuple(thrust::get<0>(point), color_out,
+                              thrust::get<2>(point));
+  }
+};
+
 } // namespace pc::devices

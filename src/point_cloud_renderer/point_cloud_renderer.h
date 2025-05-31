@@ -1,8 +1,8 @@
 #pragma once
 
+#include "../shaders/particle_sphere.h"
+#include "../structs.h"
 #include "point_cloud_renderer_config.gen.h"
-#include "shaders/particle_sphere.h"
-#include "structs.h"
 #include <Corrade/Containers/Pointer.h>
 #include <Magnum/GL/Buffer.h>
 #include <Magnum/GL/Mesh.h>

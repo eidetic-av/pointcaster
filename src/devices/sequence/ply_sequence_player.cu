@@ -4,8 +4,8 @@
 #include "../../operators/operator.h"
 #include "../../structs.h"
 #include "../transform_filters.cuh"
+#include "../../filters/chroma_key.cuh"
 
-#include <atomic>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
@@ -62,6 +62,46 @@ struct ply_to_input_points
   }
 };
 
+// fuse required input filters for this type into a single kernel
+struct input_filter {
+  input_transform_filter transform_filter;
+
+  const bool chroma_key;
+  filters::chroma_key chroma_key_filter;
+
+  __host__ __device__ explicit input_filter(
+      const PlySequencePlayerConfiguration &_config)
+      : transform_filter{_config.transform},
+        chroma_key(_config.color.chroma_key.enabled) {
+    if (chroma_key) {
+      const auto &ck = _config.color.chroma_key;
+      chroma_key_filter = filters::chroma_key{
+          ck.target_hue_degrees, ck.hue_width_degrees, ck.minimum_saturation,
+          ck.minimum_value, ck.invert_mask};
+    }
+  }
+
+  __device__ bool operator()(const indexed_point_t &p) const {
+    bool keep_point = transform_filter(p);
+    if (chroma_key && !chroma_key_filter(p)) keep_point = false;
+    return keep_point;
+  }
+};
+
+// same with transform filters
+
+struct transform_filter {
+  device_transform_filter dtf;
+  color_transform_filter ctf;
+
+  __host__ __device__ transform_filter(PlySequencePlayerConfiguration config)
+      : dtf(config.transform), ctf(config.color) {};
+
+  __device__ indexed_point_t operator()(const indexed_point_t &p) const {
+    return ctf(dtf(p));
+  }
+};
+
 bool PlySequencePlayer::init_device_memory(size_t point_count) {
   std::lock_guard lock(_device_memory_access);
   _device_memory_ready = false;
@@ -102,28 +142,30 @@ void PlySequencePlayer::ensure_device_memory_capacity(size_t point_count) {
 
 pc::types::PointCloud PlySequencePlayer::point_cloud() {
   if (!config().active) return {};
-
-  const auto default_result = [&] {
-    return _frame_buffer.size() > _last_index
-               ? _frame_buffer[_last_index].value_or(PointCloud{})
-               : PointCloud{};
-  };
-
-  if (!_device_memory_ready) { return default_result(); }
-
-  const size_t current_frame = _current_frame.load();
-
-  if (current_frame < _loaded_frame_offset) return default_result();
-  const size_t idx = current_frame - _loaded_frame_offset;
-  if (idx >= _cpu_buffer_capacity) return default_result();
   
   pc::types::PointCloud cloud{};
-  if (_buffer_index_ready[idx].load(std::memory_order_acquire)) {
-    cloud = _frame_buffer[idx].value();
-    _last_index = idx;
-  } else {
-    cloud = default_result();
+
+  {
+    if (!_device_memory_ready) { return _last_point_cloud; }
+    if (!_buffer_initialised.load(std::memory_order_relaxed)) {
+      return _last_point_cloud;
+    }
+
+    const size_t current_frame = _current_frame.load();
+    const auto frame_index = std::min(_frame_buffer.size() - 1,
+                                      current_frame % config().buffer_capacity);
+    auto &frame = _frame_buffer[frame_index];
+    if (frame.loaded.load() && frame.frame_index.load() == current_frame) {
+      cloud = frame.point_cloud;
+    } else {
+      return _last_point_cloud;
+    }
   }
+
+  std::lock_guard gpu_lock(_device_memory_access);
+
+  const auto point_count = cloud.size();
+  _device_memory->ensure_capacity(point_count);
 
   auto &incoming_positions = _device_memory->incoming_positions;
   auto &incoming_colors = _device_memory->incoming_colors;
@@ -134,8 +176,6 @@ pc::types::PointCloud PlySequencePlayer::point_cloud() {
   auto &output_positions = _device_memory->output_positions;
   auto &output_colors = _device_memory->output_colors;
   auto &indices = _device_memory->indices;
-  
-  const size_t point_count = cloud.positions.size();
   
   // copy host data into device memory.
   thrust::copy(cloud.positions.begin(), cloud.positions.end(),
@@ -153,9 +193,9 @@ pc::types::PointCloud PlySequencePlayer::point_cloud() {
                     incoming_point_data.begin(), ply_to_input_points());
 
   auto incoming_points_end = incoming_point_data.begin() + point_count;
-  auto filtered_points_end = thrust::copy_if(
-      incoming_point_data.begin(), incoming_points_end, filtered_data.begin(),
-      input_transform_filter(config().transform));
+  auto filtered_points_end =
+      thrust::copy_if(incoming_point_data.begin(), incoming_points_end,
+                      filtered_data.begin(), input_filter(config()));
 
   const auto filtered_point_count =
       thrust::distance(filtered_data.begin(), filtered_points_end);
@@ -164,8 +204,7 @@ pc::types::PointCloud PlySequencePlayer::point_cloud() {
       thrust::make_tuple(transformed_positions.begin(),
                          transformed_colors.begin(), indices.begin()));
   thrust::transform(filtered_data.begin(), filtered_points_end,
-                    transformed_points_begin,
-                    device_transform_filter(config().transform));
+                    transformed_points_begin, transform_filter(config()));
 
   auto operator_output_begin = thrust::make_zip_iterator(thrust::make_tuple(
       output_positions.begin(), output_colors.begin(), indices.begin()));
@@ -190,7 +229,8 @@ pc::types::PointCloud PlySequencePlayer::point_cloud() {
                output_colors.begin() + output_point_count,
                cloud.colors.begin());
 
-  return cloud;
+  _last_point_cloud = std::move(cloud);
+  return _last_point_cloud;
 }
 
 } // namespace pc::devices

@@ -5,16 +5,17 @@
 #include "../../uuid.h"
 #include <algorithm>
 #include <atomic>
-#include <execution>
 #include <filesystem>
 #include <functional>
 #include <happly.h>
+#include <limits>
 #include <memory>
 #include <nfd.hpp>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #include <tbb/task_arena.h>
-#include <thread>
+#include <tbb/task_group.h>
+#include <utility>
 
 namespace pc::devices {
 
@@ -25,24 +26,31 @@ load_ply_to_pointcloud(const std::string &file_path) {
   profiling_zone.text(file_path);
   pc::logger->debug("Loading: {}", file_path);
 
-  ProfilingZone load_and_parse_zone("Load and parse");
-  happly::PLYData ply_in(file_path);
+  size_t point_count;
+  std::vector<float> x_values, y_values, z_values;
+  std::vector<unsigned char> r_values, g_values, b_values;
   pc::types::PointCloud cloud;
+  std::optional<happly::PLYData> ply_in;
 
-  constexpr auto vertex = "vertex";
-  const auto x_values = ply_in.getElement(vertex).getProperty<float>("x");
-  const auto y_values = ply_in.getElement(vertex).getProperty<float>("y");
-  const auto z_values = ply_in.getElement(vertex).getProperty<float>("z");
-  const auto r_values =
-      ply_in.getElement(vertex).getProperty<unsigned char>("red");
-  const auto g_values =
-      ply_in.getElement(vertex).getProperty<unsigned char>("green");
-  const auto b_values =
-      ply_in.getElement(vertex).getProperty<unsigned char>("blue");
+  {
+    ProfilingZone load_file_zone("Load file");
+    ply_in.emplace(file_path);
+  }
 
-  const auto point_count = x_values.size();
-  cloud.positions.resize(point_count);
-  cloud.colors.resize(point_count);
+  {
+    ProfilingZone parse_ply_zone("Parse");
+    constexpr auto vertex = "vertex";
+    x_values = ply_in->getElement(vertex).getProperty<float>("x");
+    y_values = ply_in->getElement(vertex).getProperty<float>("y");
+    z_values = ply_in->getElement(vertex).getProperty<float>("z");
+    r_values = ply_in->getElement(vertex).getProperty<unsigned char>("red");
+    g_values = ply_in->getElement(vertex).getProperty<unsigned char>("green");
+    b_values = ply_in->getElement(vertex).getProperty<unsigned char>("blue");
+
+    point_count = x_values.size();
+    cloud.positions.resize(point_count);
+    cloud.colors.resize(point_count);
+  }
 
   {
     ProfilingZone convert_zone("Convert and pack points");
@@ -76,12 +84,8 @@ PlySequencePlayerConfiguration PlySequencePlayer::load_directory() {
 
 PlySequencePlayer::PlySequencePlayer(PlySequencePlayerConfiguration &config)
     : DeviceBase<PlySequencePlayerConfiguration>(config),
-      _cpu_buffer_capacity(static_cast<size_t>(config.buffer_capacity)),
-      _current_frame(config.current_frame),
-      _loaded_frame_offset(config.current_frame) {
-
-  _frame_buffer.resize(_cpu_buffer_capacity);
-  _last_index = config.current_frame - _loaded_frame_offset;
+      _current_frame(config.current_frame), _last_scheduled_frame(0),
+      _ply_loader_arena(config.io_threads), _buffer_initialised{false} {
 
   if (!config.directory.empty()) {
     if (!std::filesystem::exists(config.directory)) {
@@ -98,53 +102,12 @@ PlySequencePlayer::PlySequencePlayer(PlySequencePlayerConfiguration &config)
     pc::logger->info("Found {} frames", _file_paths.size());
   }
 
-  constexpr auto default_point_buffer_size = 200'000;
+  // TODO
+  // set_frame_buffer_capacity(config.buffer_capacity);
+  set_frame_buffer_capacity(_file_paths.size());
+
+  constexpr auto default_point_buffer_size = 350'000;
   init_device_memory(default_point_buffer_size);
-
-  _buffer_index_ready =
-      std::make_unique<std::atomic_bool[]>(_cpu_buffer_capacity);
-  clear_buffer_ready_flags();
-
-  _loader_thread = std::jthread([this](std::stop_token stop_token) {
-    using namespace pc::profiling;
-    bool needs_initial_fill = true;
-    while (!stop_token.stop_requested()) {
-      std::unique_lock buffer_lock(_frame_buffer_access);
-      ProfilingZone load_buffer_zone("_loader_thread");
-      {
-        ProfilingZone wait_zone("Spin");
-        _loader_should_buffer.wait(buffer_lock, [&] {
-          return stop_token.stop_requested() || needs_initial_fill ||
-                 _current_frame < _loaded_frame_offset ||
-                 _current_frame >= _loaded_frame_offset + _cpu_buffer_capacity;
-        });
-      }
-      const size_t wanted_frame = _current_frame.load();
-      const bool should_shift_window =
-          wanted_frame < _loaded_frame_offset ||
-          wanted_frame >= _loaded_frame_offset + _cpu_buffer_capacity;
-      if (should_shift_window) {
-        const size_t previous_offset = _loaded_frame_offset;
-        _loaded_frame_offset = wanted_frame;
-        // 'unload' the frame that just fell off the 'tail' of the frame buffer
-        const size_t old_tail =
-            (previous_offset + _cpu_buffer_capacity) % _cpu_buffer_capacity;
-        _frame_buffer[old_tail].reset();
-        _buffer_index_ready[old_tail].store(false, std::memory_order_relaxed);
-      }
-      {
-        ProfilingZone fill_zone("Fill");
-        const auto max_point_count = fill_buffer();
-        const auto previous_max_point_count =
-            _max_point_count.load(std::memory_order_relaxed);
-        if (previous_max_point_count < max_point_count) {
-          _max_point_count.store(max_point_count, std::memory_order_relaxed);
-          ensure_device_memory_capacity(max_point_count);
-        }
-        needs_initial_fill = false;
-      }
-    }
-  });
 
   {
     std::lock_guard lock(PlySequencePlayer::devices_access);
@@ -156,10 +119,6 @@ PlySequencePlayer::PlySequencePlayer(PlySequencePlayerConfiguration &config)
 }
 
 PlySequencePlayer::~PlySequencePlayer() {
-  if (_loader_thread.joinable()) {
-    _loader_thread.request_stop();
-    _loader_should_buffer.notify_all();
-  }
   free_device_memory();
   std::lock_guard lock(PlySequencePlayer::devices_access);
   std::erase_if(PlySequencePlayer::attached_devices,
@@ -167,65 +126,54 @@ PlySequencePlayer::~PlySequencePlayer() {
 }
 
 void PlySequencePlayer::set_frame_buffer_capacity(size_t capacity) {
-  using namespace pc::profiling;
-  ProfilingZone set_capacity_zone(
-      "PlySequencePlayer::set_frame_buffer_capacity");
-  std::lock_guard lock(_frame_buffer_access);
-  if (_loaded_frame_offset >= capacity) { _loaded_frame_offset = 0; }
-  _cpu_buffer_capacity = capacity;
-  _frame_buffer.clear();
-  _frame_buffer.resize(capacity);
-  _buffer_index_ready = std::make_unique<std::atomic_bool[]>(capacity);
-  clear_buffer_ready_flags();
-  _loader_should_buffer.notify_one();
+  std::vector<InMemoryFrame> new_buffer(capacity);
+  std::swap(_frame_buffer, new_buffer);
 }
 
-void PlySequencePlayer::clear_buffer_ready_flags() {
-  for (size_t i = 0; i < _cpu_buffer_capacity; i++) {
-    _buffer_index_ready[i].store(false, std::memory_order_relaxed);
+void PlySequencePlayer::schedule_load(size_t frame_index) {
+  size_t command_id = _ply_load_command_id.load();
+  const auto i = frame_index % config().buffer_capacity;
+  auto &frame = _frame_buffer[i];
+  if (frame.frame_index.load() == frame_index && frame.loaded.load()) {
+    return;
   }
+  frame.loaded.store(false);
+  frame.frame_index.store(frame_index);
+  _ply_loader_arena.enqueue([this, frame_index, i, command_id] {
+    if (_ply_load_command_id.load() != command_id) { return; }
+    load_single_frame(frame_index, i);
+    if (!_buffer_initialised.load(std::memory_order_acquire)) {
+      const size_t frames_loaded =
+          std::ranges::count_if(_frame_buffer, [](auto &f) {
+            return f.loaded.load(std::memory_order_relaxed);
+          });
+      const size_t consider_initialised_frame_count =
+          std::min<size_t>(30, _file_paths.size());
+      if (frames_loaded >= consider_initialised_frame_count) {
+        _buffer_initialised.store(true, std::memory_order_release);
+      }
+    }
+  });
 }
 
-size_t PlySequencePlayer::fill_buffer() {
-  const size_t total_frames = frame_count();
-  if (total_frames == 0) return 0;
+void PlySequencePlayer::load_single_frame(size_t frame_index,
+                                          size_t buffer_index) {
+  using namespace pc::profiling;
+  ProfilingZone load_zone("load_single_frame");
 
-  const size_t window = std::min(_cpu_buffer_capacity, total_frames);
-  const size_t frame_offset = _loaded_frame_offset;
+  auto cloud = load_ply_to_pointcloud(_file_paths[frame_index]);
+  const size_t point_count = cloud.size();
 
-  // load the ply to our CPU pointcloud frame buffer
-  // - use parallel reduce and have the reduce keep track
-  // of the maximum point count
-  // (this is used to make sure our GPU device memory is sized appropriately)
+  const size_t current_max_points =
+      _max_point_count.load(std::memory_order_relaxed);
+  if (point_count > current_max_points) {
+    _max_point_count.store(point_count, std::memory_order_relaxed);
+    ensure_device_memory_capacity(point_count);
+  }
 
-  // contrain all concurrent calls to fill_buffer to the same
-  // number of threads.
-  // TODO tune this number of threads
-  static const auto ply_io_threads =
-      std::max<int>(1, std::thread::hardware_concurrency() - 2);
-  static tbb::task_arena fill_buffer_arena{ply_io_threads};
-
-  size_t max_point_count = 0;
-  fill_buffer_arena.execute([&] {
-    max_point_count = tbb::parallel_reduce(
-        tbb::blocked_range<size_t>(0, window), size_t(0),
-        [&](auto const &range, size_t thread_local_max_point_count) -> size_t {
-          for (size_t i = range.begin(), e = range.end(); i < e; ++i) {
-            if (!_buffer_index_ready[i].load(std::memory_order_acquire)) {
-              const size_t frame_idx = (frame_offset + i) % total_frames;
-              auto cloud = load_ply_to_pointcloud(_file_paths[frame_idx]);
-              thread_local_max_point_count =
-                  std::max(thread_local_max_point_count, cloud.size());
-              _frame_buffer[i].emplace(std::move(cloud));
-              _buffer_index_ready[i].store(true, std::memory_order_release);
-            }
-          }
-          return thread_local_max_point_count;
-        },
-        [](size_t a, size_t b) -> size_t { return std::max(a, b); });
-  });
-
-  return max_point_count;
+  auto &frame = _frame_buffer[buffer_index];
+  frame.point_cloud = std::move(cloud);
+  frame.loaded.store(true);
 }
 
 size_t PlySequencePlayer::frame_count() const { return _file_paths.size(); }
@@ -241,29 +189,69 @@ DeviceStatus PlySequencePlayer::status() const {
 
 void PlySequencePlayer::tick(float delta_time) {
   auto &conf = config();
-  if (!conf.playing && !_playing && !_advance_once &&
-      _last_selected_frame == conf.current_frame) {
-    return;
-  }
+  if (!conf.playing && !_playing && !_advance_once) { return; }
+
+  // advance accumulator
   _frame_accumulator += delta_time * conf.frame_rate;
   const size_t frames_to_advance = static_cast<size_t>(_frame_accumulator);
   _frame_accumulator -= frames_to_advance;
+
   const size_t total_frames = frame_count();
-  auto current_frame_index = conf.current_frame;
-  if (total_frames > 0) {
-    const auto new_frame_index =
-        conf.playing ? (current_frame_index + frames_to_advance) % total_frames
-                     : current_frame_index;
-    conf.current_frame = new_frame_index;
-    _current_frame.store(new_frame_index, std::memory_order_relaxed);
-    if (conf.buffer_capacity != _cpu_buffer_capacity) {
-      set_frame_buffer_capacity(conf.buffer_capacity);
-    }
-    _loader_should_buffer.notify_one();
+  const auto buffer_capacity = static_cast<size_t>(conf.buffer_capacity);
+  if (_frame_buffer.size() < buffer_capacity) {
+    set_frame_buffer_capacity(buffer_capacity);
   }
+  const auto prefetch_count = std::min<size_t>(buffer_capacity, total_frames);
+  const size_t start_frame =
+      static_cast<size_t>(conf.start_frame) % total_frames;
+
+  // compute where we are inside the buffer (0 … capacity-1)
+  size_t rel_current;
+  {
+    size_t cf = conf.current_frame;
+    rel_current = (cf + total_frames - start_frame) % total_frames;
+    rel_current = std::min(rel_current, prefetch_count - 1);
+  }
+
+  // advance relative index
+  size_t raw_rel = rel_current + (conf.playing ? frames_to_advance : 0);
+  size_t rel_next;
+  if (conf.playing && conf.looping) {
+    rel_next = raw_rel % prefetch_count;
+  } else {
+    rel_next = std::min(raw_rel, prefetch_count - 1);
+  }
+
+  // map back to absolute file index
+  size_t next_frame_index = (start_frame + rel_next) % total_frames;
+
+  if (next_frame_index < start_frame) {
+    next_frame_index = start_frame;
+  }
+
+  // cancel if we’ve wrapped or rewound in the ring
+  size_t last_rel = _last_scheduled_frame.load(std::memory_order_relaxed);
+  if (rel_next <= last_rel) {
+    _ply_load_command_id.fetch_add(1, std::memory_order_relaxed);
+    _last_scheduled_frame.store(rel_next - 1, std::memory_order_relaxed);
+  }
+
+  conf.current_frame = next_frame_index;
+  _current_frame.store(next_frame_index, std::memory_order_relaxed);
+
+  // schedule the next window in the ring
+  size_t buffer_start =
+      _last_scheduled_frame.load(std::memory_order_relaxed) + 1;
+  size_t buffer_end = rel_next + prefetch_count;
+  for (size_t off = buffer_start; off <= buffer_end; ++off) {
+    size_t rel = off % buffer_capacity;
+    size_t abs = (start_frame + rel) % total_frames;
+    schedule_load(abs);
+  }
+  _last_scheduled_frame.store(buffer_end, std::memory_order_relaxed);
+
   _playing = conf.playing;
   _advance_once = false;
-  _last_selected_frame = conf.current_frame;
 }
 
 } // namespace pc::devices

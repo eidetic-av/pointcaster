@@ -10,19 +10,20 @@
 #include "range_filter_operator.gen.h"
 #include "rotate_operator.gen.h"
 #include "sample_filter_operator.gen.h"
+#include "transform_cuda/rgb_gain_operator.gen.h"
 #include "transform_cuda/translate_operator.gen.h"
+#include "transform_cuda/uniform_gain_operator.gen.h"
 #include <functional>
 #include <variant>
 
-
 namespace pc::operators {
 
-using OperatorConfigurationVariant =
-    std::variant<NoiseOperatorConfiguration, SampleFilterOperatorConfiguration,
-                 RangeFilterOperatorConfiguration, RotateOperatorConfiguration,
-                 cuda::TranslateOperatorConfiguration,
-                 RakeOperatorConfiguration,
-                 pcl_cpu::ClusterExtractionConfiguration>;
+using OperatorConfigurationVariant = std::variant<
+    NoiseOperatorConfiguration, SampleFilterOperatorConfiguration,
+    RangeFilterOperatorConfiguration, RotateOperatorConfiguration,
+    cuda::TranslateOperatorConfiguration, cuda::RGBGainOperatorConfiguration,
+    cuda::UniformGainOperatorConfiguration, RakeOperatorConfiguration,
+    pcl_cpu::ClusterExtractionConfiguration>;
 
 // Extract types from variant into a tuple
 template <typename Variant> struct VariantTypes;

@@ -1,6 +1,6 @@
 #include "../logger.h"
-#include "../profiling.h"
 #include "../math.h"
+#include "../profiling.h"
 #include "denoise/denoise_operator.cuh"
 #include "denoise/kdtree.h"
 #include "noise_operator.cuh"
@@ -11,7 +11,9 @@
 #include "rotate_operator.cuh"
 #include "sample_filter_operator.cuh"
 #include "session_operator_host.h"
+#include "transform_cuda/rgb_gain_operator.cuh"
 #include "transform_cuda/translate_operator.cuh"
+#include "transform_cuda/uniform_gain_operator.cuh"
 #include <algorithm>
 #include <deque>
 #include <execution>
@@ -25,7 +27,6 @@
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 #include <variant>
-
 
 // #include <pcl/filters/voxel_grid.h>
 // #include <pcl/gpu/containers/device_array.hpp>
@@ -46,7 +47,7 @@ pc::types::PointCloud apply(const pc::types::PointCloud &point_cloud,
                             const std::string_view session_id) {
   using namespace pc::profiling;
   ProfilingZone zone("pc::operators::apply");
-    
+
   thrust::device_vector<position> positions(point_cloud.size());
   thrust::device_vector<color> colors(point_cloud.size());
 
@@ -123,7 +124,7 @@ apply(const pc::types::PointCloud &point_cloud,
       const std::string_view session_id) {
   using namespace pc::profiling;
   ProfilingZone zone("pc::operators::apply");
-    
+
   thrust::device_vector<position> positions(point_cloud.size());
   thrust::device_vector<color> colors(point_cloud.size());
 
@@ -215,6 +216,12 @@ operator_in_out_t SessionOperatorHost::run_operators(
           } else if constexpr (std::is_same_v<T,
                                               TranslateOperatorConfiguration>) {
             thrust::transform(begin, end, begin, TranslateOperator(config));
+          } else if constexpr (std::is_same_v<T,
+                                              RGBGainOperatorConfiguration>) {
+            thrust::transform(begin, end, begin, RGBGainOperator(config));
+          } else if constexpr (std::is_same_v<
+                                   T, UniformGainOperatorConfiguration>) {
+            thrust::transform(begin, end, begin, UniformGainOperator(config));
           }
 
           // PCL
@@ -335,12 +342,18 @@ operator_in_out_t SessionOperatorHost::run_operators(
                 return pc::types::Float3{mapped_x, mapped_y, mapped_z};
               };
 
-              config.minmax_positions.min_x = get_scaled_vector(minmax_x_points.first);
-              config.minmax_positions.max_x = get_scaled_vector(minmax_x_points.second);
-              config.minmax_positions.min_y = get_scaled_vector(minmax_y_points.first);
-              config.minmax_positions.max_y = get_scaled_vector(minmax_y_points.second);
-              config.minmax_positions.min_z = get_scaled_vector(minmax_z_points.first);
-              config.minmax_positions.max_z = get_scaled_vector(minmax_z_points.second);
+              config.minmax_positions.min_x =
+                  get_scaled_vector(minmax_x_points.first);
+              config.minmax_positions.max_x =
+                  get_scaled_vector(minmax_x_points.second);
+              config.minmax_positions.min_y =
+                  get_scaled_vector(minmax_y_points.first);
+              config.minmax_positions.max_y =
+                  get_scaled_vector(minmax_y_points.second);
+              config.minmax_positions.min_z =
+                  get_scaled_vector(minmax_z_points.first);
+              config.minmax_positions.max_z =
+                  get_scaled_vector(minmax_z_points.second);
 
               config.minmax.min_x = config.minmax_positions.min_x.x;
               config.minmax.max_x = config.minmax_positions.max_x.x;

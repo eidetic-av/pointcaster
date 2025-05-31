@@ -25,6 +25,20 @@ struct AutoTiltConfiguration {
   float threshold = 1.0f; // degrees
 };
 
+struct ChromaKeyConfiguration {
+  bool enabled = false;
+  float target_hue_degrees = 120; // @minmax(0, 360)
+  float hue_width_degrees = 120; // @minmax(0, 360)
+  float minimum_saturation = 0.135; // @minmax(0, 1)
+  float minimum_value = 0.135; // @minmax(0, 1)
+  bool invert_mask = false;
+};
+
+struct ColorConfiguration {
+  float uniform_gain = 1.0; // @minmax(0, 3)
+  ChromaKeyConfiguration chroma_key; // @optional
+};
+
 struct DeviceTransformConfiguration {
   bool unfolded = true;
   Float3 translate{0, 0, 0}; // @minmax(-10000, 10000)

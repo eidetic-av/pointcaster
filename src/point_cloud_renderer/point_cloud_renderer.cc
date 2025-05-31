@@ -2,9 +2,9 @@
 
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Utility/Assert.h>
-#include <Magnum/Magnum.h>
 #include <Magnum/GL/Attribute.h>
 #include <Magnum/GL/Renderer.h>
+#include <Magnum/Magnum.h>
 #include <Magnum/Math/Functions.h>
 #include <Magnum/SceneGraph/Drawable.h>
 #include <Magnum/Shaders/Generic.h>
