@@ -95,11 +95,9 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
   {}
 
   auto &positions = frame->positions;
-  auto count = positions.size();
-  if (count == 0) return;
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-  cloud->points.resize(count);
+  cloud->points.resize(positions.size());
   {
     ProfilingZone conversion_zone("Convert positions to PCL");
     thrust::transform(positions.begin(), positions.end(), cloud->points.begin(),
@@ -109,7 +107,7 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
   pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
   pcl::PointCloud<pcl::PointXYZ>::Ptr voxelised_cloud(
       new pcl::PointCloud<pcl::PointXYZ>);
-  {
+  if (!cloud->empty()) {
     ProfilingZone voxel_zone("Voxel grid filter");
     voxel_grid.setInputCloud(cloud);
     voxel_grid.setLeafSize(config.voxel_leaf_size, config.voxel_leaf_size,
@@ -118,7 +116,7 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
     voxel_grid.filter(*voxelised_cloud);
   }
 
-  if (config.filter_outlier_voxels) {
+  if (config.filter_outlier_voxels && !voxelised_cloud->empty()) {
     ProfilingZone voxel_zone("Outlier filter");
     pcl::StatisticalOutlierRemoval<pcl::PointXYZ> outlier_filter;
     outlier_filter.setInputCloud(voxelised_cloud);
@@ -133,7 +131,10 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
 
   current_voxels.store(voxelised_cloud);
 
-  {
+  std::vector<Cluster> updated_clusters;
+  std::vector<pcl::PointIndices> cluster_indices;
+
+  if (!voxelised_cloud->empty()) {
     ProfilingZone clustering_zone("Clustering");
     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree;
     {
@@ -143,7 +144,6 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
       tree->setInputCloud(voxelised_cloud);
     }
 
-    std::vector<pcl::PointIndices> cluster_indices;
     {
       ProfilingZone extract_clusters_zone("Extract clusters");
       pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
@@ -191,7 +191,6 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
           });
     }
 
-    std::vector<Cluster> updated_clusters;
     {
       ProfilingZone match_zone("Matching clusters");
       std::unordered_set<const Cluster *> matched_existing_clusters;
@@ -250,58 +249,6 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
       }
     }
 
-
-    if (config.publish_clusters) {
-      ProfilingZone publish_zone("Publish clusters");
-      // the following transforms our clusters gives us their bounding
-      // boxes in std containers, which are easily publishable
-      using std_aabb = std::array<std::array<float, 3>, 2>;
-      std::vector<std_aabb> aabbs(updated_clusters.size());
-      std::ranges::transform(
-          updated_clusters, aabbs.begin(), [](const Cluster &cluster) {
-            const auto &aabb = cluster.bounding_box;
-            return std_aabb({{aabb.min.x, aabb.min.y, aabb.min.z},
-                             {aabb.max.x, aabb.max.y, aabb.max.z}});
-          });
-      publisher::publish_all(operator_name, aabbs, {session_label, "clusters"});
-    }
-
-    if (config.publish_voxels) {
-      ProfilingZone publish_voxels_zone("Publish voxels");
-
-      // when publishing voxels, we send the position vector x,y,z with w
-      // representing the integer index of the cluster the associated voxel
-
-      // TODO we can probably optimise this by removing the serial loops inside
-      // the first parallel_for
-
-      size_t voxel_count = voxelised_cloud->points.size();
-
-      // map each point to its cluster id (default -1 if no cluster associated)
-      // returning a flat array that we can parallel iterate over next  
-      std::vector<int> cluster_ids(voxel_count, -1);
-      tbb::parallel_for(static_cast<size_t>(0), cluster_indices.size(),
-                        [&](size_t cluster_id) {
-                          for (auto idx : cluster_indices[cluster_id].indices) {
-                            cluster_ids[idx] = static_cast<int>(cluster_id);
-                          }
-                        });
-
-      // now we can loop through each entry in parallel and
-      // create our voxel list with associated cluster ids
-      std::vector<std::array<float, 4>> voxels_with_cluster_id(voxel_count);
-      tbb::parallel_for(
-          static_cast<size_t>(0), voxel_count, [&](size_t voxel_id) {
-            const auto &position = voxelised_cloud->points[voxel_id];
-            voxels_with_cluster_id[voxel_id] = {
-                position.x, position.y, position.z,
-                static_cast<float>(cluster_ids[voxel_id])};
-          });
-
-      const auto &operator_name = operator_friendly_names.at(config.id);
-      publisher::publish_all(operator_name, voxels_with_cluster_id,
-                             {session_label, "voxels"});
-    }
 
     if (config.calculate_pca) {
       ProfilingZone publish_zone("Principal Component Analysis");
@@ -480,6 +427,74 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
     // and latest clusters onto main thread now we're done with them
     current_clusters.store(
         std::make_shared<std::vector<Cluster>>(std::move(updated_clusters)));
+  }
+
+  if (config.publish_clusters) {
+    ProfilingZone publish_zone("Publish clusters");
+    // the following transforms our clusters gives us their bounding
+    // boxes in std containers, which are easily publishable
+    using std_aabb = std::array<std::array<float, 3>, 2>;
+    std::vector<std_aabb> aabbs(updated_clusters.size());
+    std::ranges::transform(
+        updated_clusters, aabbs.begin(), [](const Cluster &cluster) {
+          const auto &aabb = cluster.bounding_box;
+          return std_aabb({{aabb.min.x, aabb.min.y, aabb.min.z},
+                           {aabb.max.x, aabb.max.y, aabb.max.z}});
+        });
+    publisher::publish_all(operator_name, aabbs, {session_label, "clusters"});
+  }
+
+  if (config.publish_voxels) {
+    ProfilingZone publish_voxels_zone("Publish voxels");
+
+    // when publishing voxels, we send the position vector x,y,z with w
+    // representing the integer index of the cluster the associated voxel
+
+    // TODO we can probably optimise this by removing the serial loops inside
+    // the first parallel_for
+
+    size_t voxel_count = voxelised_cloud->points.size();
+    pc::logger->debug("{}.voxel_count: {}", config.id, voxel_count);
+
+    // map each point to its cluster id (default -1 if no cluster associated)
+    // returning a flat array that we can parallel iterate over next
+    std::vector<int> cluster_ids(voxel_count, -1);
+    tbb::parallel_for(static_cast<size_t>(0), cluster_indices.size(),
+                      [&](size_t cluster_id) {
+                        for (auto idx : cluster_indices[cluster_id].indices) {
+                          cluster_ids[idx] = static_cast<int>(cluster_id);
+                        }
+                      });
+
+    // now we can loop through each entry in parallel and
+    // create our voxel list with associated cluster ids
+    std::vector<std::array<float, 4>> voxels_with_cluster_id(voxel_count);
+    tbb::parallel_for(
+        static_cast<size_t>(0), voxel_count, [&](size_t voxel_id) {
+          const auto &position = voxelised_cloud->points[voxel_id];
+          voxels_with_cluster_id[voxel_id] = {
+              position.x, position.y, position.z,
+              static_cast<float>(cluster_ids[voxel_id])};
+        });
+
+    // only publish an empty voxel array a single time, not every frame
+    // so keep track of that inside a map
+    static std::unordered_map<uid, bool> has_published_empty_voxels;
+    if (!has_published_empty_voxels.contains(config.id)) {
+      has_published_empty_voxels[config.id] = false;
+    }
+
+    if (voxel_count > 0) {
+      const auto &operator_name = operator_friendly_names.at(config.id);
+      publisher::publish_all(operator_name, voxels_with_cluster_id,
+                             {session_label, "voxels"});
+      has_published_empty_voxels[config.id] = false;
+    } else if (!has_published_empty_voxels[config.id]) {
+      const auto &operator_name = operator_friendly_names.at(config.id);
+      publisher::publish_all(operator_name, voxels_with_cluster_id,
+                             {session_label, "voxels"});
+      has_published_empty_voxels[config.id] = true;
+    }
   }
 
   delete frame;
