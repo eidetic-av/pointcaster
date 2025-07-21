@@ -522,7 +522,7 @@ if (WITH_POINTCASTER)
       "*cmake*" "*CMake*" "*vcpkg*"
       "*ninja*" "*.lib" "*.exp"
       "resource*.cpp" "Log/*" "*cache*"
-      "data/*" "compile_commands.json")
+      "*data*/*" "compile_commands.json")
 
   if(DEFINED ENV{POINTCASTER_DEPLOY_LOCATIONS})
     set(DEPLOY_LOCATIONS $ENV{POINTCASTER_DEPLOY_LOCATIONS})
