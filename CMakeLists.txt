@@ -53,7 +53,7 @@ if (LINUX AND MOLD_LINKER_FOUND)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fuse-ld=mold")
 endif()
   
-find_package(Python REQUIRED COMPONENTS Interpreter)
+#find_package(Python REQUIRED COMPONENTS Interpreter)
 
 if(LINUX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive -Wfatal-errors")
