@@ -27,6 +27,11 @@ if (WIN32)
   list(APPEND RECEIVER_LINK_LIBS spdlog::spdlog)
 endif()
 
+if (VCPKG_TARGET_TRIPLET STREQUAL "arm-android-dynamic")
+  find_library(log-lib, log)
+  list(APPEND RECEIVER_LINK_LIBS ${log-lib})
+endif()
+
 # ----- Pointreceiver library -----
 
 set(RECEIVER_SOURCE_FILES src/pointreceiver.cc)
