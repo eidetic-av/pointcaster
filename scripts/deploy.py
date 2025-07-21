@@ -126,7 +126,7 @@ def main():
             for dest in remote_destinations:
                 print(f"Copying archive '{zip_filename}' to remote destination '{dest}'")
                 scp_cmd = ["scp", zip_filename, dest]
-                subprocess.run(scp_cmd, check=True)
+                subprocess.run(scp_cmd, check=True, timeout=15) #seconds
         try:
             if os.path.exists(zip_filename):
                 os.remove(zip_filename)
@@ -175,7 +175,7 @@ def main():
                         # subprocess.run(mkdir_cmd, check=True)
                         # Run scp to copy files.
                         scp_cmd = ["scp"] + files_to_send + [dest]
-                        subprocess.run(scp_cmd, check=True)
+                        subprocess.run(scp_cmd, check=True, timeout=15) #seconds
                     except subprocess.CalledProcessError as e:
                         print(f"Error deploying to {dest}: {e}")
                         deployment_failures.append(dest)
