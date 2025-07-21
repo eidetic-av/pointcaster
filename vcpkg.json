@@ -2,29 +2,69 @@
   "name": "pointcaster",
   "version-string": "0.0.1",
   "dependencies": [
-    "azure-kinect-sensor-sdk",
+    {
+      "name": "azure-kinect-sensor-sdk",
+      "platform": "!android"
+    },
     "bob-pointclouds",
     "concurrentqueue",
-    "corrade",
+    {
+      "name": "corrade",
+      "platform": "!android"
+    },
     "cppzmq",
-    "cuda",
-    "cuda-noise",
+    {
+      "name": "cuda",
+      "platform": "!android"
+    },
+    {
+      "name": "cuda-noise",
+      "platform": "!android"
+    },
     "draco",
-    "earcut-hpp",
-    "eigen3",
-    "fmt",
-    "happly",
-    "imgui",
+    {
+      "name": "earcut-hpp",
+      "platform": "!android"
+    },
+    {
+      "name": "eigen3",
+      "platform": "!android"
+    },
+    {
+      "name": "fmt",
+      "platform": "!android"
+    },
+    {
+      "name": "happly",
+      "platform": "!android"
+    },
+    {
+      "name": "imgui",
+      "platform": "!android"
+    },
     {
       "name": "imgui",
       "features": [
         "docking-experimental"
-      ]
+      ],
+      "platform": "!android"
     },
-    "imguizmo",
-    "liblo",
-    "libremidi",
-    "libusb",
+    {
+      "name": "imguizmo",
+      "platform": "!android"
+    },
+    {
+      "name": "liblo",
+      "platform": "!android"
+    },
+    {
+      "name": "libremidi",
+      "platform": "!android"
+    },
+    {
+      "name": "libusb",
+      "platform": "!android"
+    },
     {
       "name": "magnum",
       "features": [
@@ -43,30 +83,54 @@
         "tgaimporter",
         "trade",
         "windowlessglxapplication"
-      ]
+      ],
+      "platform": "!android"
     },
     {
       "name": "magnum-integration",
       "features": [
         "eigen",
         "imgui"
-      ]
+      ],
+      "platform": "!android"
     },
-    "mdns-cpp",
-    "msgpack",
-    "nanoflann",
-    "nativefiledialog-extended",
-    "orbbec-sdk",
-    "paho-mqttpp3",
+    {
+      "name": "mdns-cpp",
+      "platform": "!android"
+    },
+    {
+      "name": "msgpack",
+      "platform": "!android"
+    },
+    {
+      "name": "nanoflann",
+      "platform": "!android"
+    },
+    {
+      "name": "nativefiledialog-extended",
+      "platform": "!android"
+    },
+    {
+      "name": "orbbec-sdk",
+      "platform": "!android"
+    },
+    {
+      "name": "paho-mqttpp3",
+      "platform": "!android"
+    },
     {
       "name": "pcl",
       "default-features": false,
       "features": [
         "cuda"
-      ]
+      ],
+      "platform": "!android"
     },
     "readerwriterqueue",
-    "sdl2",
+    {
+      "name": "sdl2",
+      "platform": "!android"
+    },
     {
       "name": "sdl2",
       "default-features": false,
@@ -75,12 +139,30 @@
       ],
       "platform": "linux"
     },
-    "serdepp",
-    "spdlog",
-    "tbb",
-    "toml11",
-    "tracy",
-    "tweeny",
+    {
+      "name": "serdepp",
+      "platform": "!android"
+    },
+    {
+      "name": "spdlog",
+      "platform": "!android"
+    },
+    {
+      "name": "tbb",
+      "platform": "!android"
+    },
+    {
+      "name": "toml11",
+      "platform": "!android"
+    },
+    {
+      "name": "tracy",
+      "platform": "!android"
+    },
+    {
+      "name": "tweeny",
+      "platform": "!android"
+    },
     {
       "name": "zeromq",
       "default-features": false,
