@@ -74,8 +74,7 @@ endif()
 if (GENERATE_REFLECTIONS)
 
   set(REFLECTED_TYPES
-    src/session.h
-    src/point_cloud_renderer_config.h
+    src/session.h src/point_cloud_renderer/point_cloud_renderer_config.h
     src/analysis/analyser_2d_config.h
     src/camera/camera_config.h
     src/devices/device_config.h
@@ -357,7 +356,7 @@ if (WITH_POINTCASTER)
     src/radio/radio.cc
     src/client_sync/sync_server.cc
     src/snapshots.cc
-    src/point_cloud_renderer.cc
+    src/point_cloud_renderer/point_cloud_renderer.cc
     src/sphere_renderer.cc
     src/shaders/particle_sphere.cc
     src/shaders/texture_display.cc
