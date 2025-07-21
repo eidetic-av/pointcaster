@@ -17,3 +17,4 @@ imgui.ini
 run.log
 .vscode/
 *.gen.h
+.idea/
