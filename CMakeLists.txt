@@ -473,6 +473,15 @@ if (WITH_POINTCASTER)
     target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
   endif()
 
+# profiling
+
+  if (WITH_TRACY AND WIN32)
+    target_compile_options(pointcaster PRIVATE /Zi /Oy-)
+    target_link_options(pointcaster PRIVATE /DEBUG /INCREMENTAL:NO)
+  endif()
+
+  target_link_options(pointcaster PRIVATE /VERBOSE)
+
 endif()
 
 # ----- Pointreceiver library -----
