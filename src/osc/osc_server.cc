@@ -105,11 +105,13 @@ void OscServer::create_server(int port) {
   _server_thread->add_method(
       nullptr, nullptr,
       [](const char *path, const char *types, lo_arg **argv, int argc) {
+        pc::logger->debug("[OSC] {} ({})", path, types);
         // if (argc > 1) {
         if (std::strcmp(types, "f") == 0) { receive_msg(path, argv[0]->f); }
         if (std::strcmp(types, "fff") == 0) {
           receive_msg(path, Float3{argv[0]->f, argv[1]->f, argv[2]->f});
         }
+        else if (std::strcmp(types, "i") == 0) { receive_msg(path, argv[0]->i); };
         // } else {
         //   if (std::strcmp(types, "i") == 0) {
         //     receive_msg(path, argv[0]->i);

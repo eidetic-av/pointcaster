@@ -32,9 +32,13 @@ void OscClient::send_messages(std::stop_token st) {
   lo::Address osc_client("localhost", "9000");
 
   while (!st.stop_requested()) {
-    OscMessage msg;
-    while (_messages_to_publish.wait_dequeue_timed(msg, thread_wait_time)) {
-      osc_client.send(msg.address, msg.value);
+    try {
+      OscMessage msg;
+      while (_messages_to_publish.wait_dequeue_timed(msg, thread_wait_time)) {
+        osc_client.send(msg.address, msg.value);
+      }
+    } catch (const std::exception &e) {
+      pc::logger->error("OSC client send failed: {}", e.what());
     }
   }
 }
