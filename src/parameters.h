@@ -183,7 +183,7 @@ struct Parameter {
   }
 };
 
-enum class ParameterState : uint8_t { Unbound, Bound, Learning, Publish };
+enum class ParameterState : uint8_t { Unbound, Bound, Learning, Publish, Push };
 
 inline pc::string_map<Parameter> parameter_bindings;
 inline pc::string_map<ParameterState> parameter_states;
@@ -345,7 +345,7 @@ void unbind_parameters(std::string_view parameter_id);
 
 void publish_parameter(std::string_view parameter_id);
 
-void publish();
+void publish(float delta_secs);
 
 template <typename T>
 void set_parameter_value(std::string_view parameter_id, T new_value,
@@ -524,5 +524,19 @@ inline std::vector<std::string> published_parameter_topics() {
   }
   return result;
 }
+
+inline std::vector<std::string> pushed_parameter_topics() {
+  std::vector<std::string> result;
+  for (const auto &kvp : parameter_states) {
+    const auto &[parameter_id, state] = kvp;
+    if (state == ParameterState::Push) {
+      result.push_back(parameter_id);
+    }
+  }
+  return result;
+}
+
+void show_parameter_context_menu(std::string_view parameter_id);
+void draw_parameter_context_menu(std::string_view parameter_id);
 
 } // namespace pc::parameters

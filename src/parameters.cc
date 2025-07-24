@@ -5,8 +5,10 @@
 #include "utils/lru_cache.h"
 #include <algorithm>
 #include <functional>
+#include <imgui.h>
 #include <stack>
 #include <type_traits>
+#include "gui/widgets.h"
 #include <unordered_map>
 
 namespace pc::parameters {
@@ -116,18 +118,31 @@ template <typename T> cache::lru_cache<std::string, T> &get_cache() {
   return cache;
 }
 
-void publish() {
+void publish(float delta_secs) {
+
+  static float publisher_push_timer = 0;
+  publisher_push_timer += delta_secs;
+
+  bool should_do_parameter_push = false;
+  static constexpr auto publisher_push_frequency = 1; // seconds
+  if (publisher_push_timer >= publisher_push_frequency) {
+    should_do_parameter_push = true;
+    publisher_push_timer = 0;
+  }
+
   for (const auto &kvp : parameter_states) {
     const auto &[parameter_id, state] = kvp;
     if (!parameter_bindings.contains(parameter_id)) continue;
-    if (state == ParameterState::Publish) {
+    if (state == ParameterState::Publish || state == ParameterState::Push) {
       auto &binding = parameter_bindings.at(parameter_id);
       const auto &session_label =
           session_label_from_id[binding.host_session_id].empty()
               ? binding.host_session_id
               : session_label_from_id[binding.host_session_id];
+      bool force_publish =
+          state == ParameterState::Push && should_do_parameter_push;
       std::visit(
-          [parameter_id, session_label](auto &&parameter_ref) {
+          [parameter_id, session_label, force_publish](auto &&parameter_ref) {
             const auto &p = parameter_ref.get();
             using T = std::decay_t<decltype(p)>;
 
@@ -139,7 +154,7 @@ void publish() {
               value_updated = p != cached_value;
             }
 
-            if (value_updated) {
+            if (value_updated || force_publish) {
               if constexpr (is_publishable_container_v<T>) {
                 publisher::publish_all(parameter_id, p, {session_label});
               } else if constexpr (pc::types::VectorType<T>) {
@@ -156,6 +171,48 @@ void publish() {
           binding.value);
     }
   }
+}
+
+void show_parameter_context_menu(std::string_view parameter_id) {
+  ImGui::OpenPopup(std::format("{}##context_menu", parameter_id).c_str());
+}
+
+void draw_parameter_context_menu(std::string_view parameter_id) {
+  gui::push_context_menu_styles();
+  if (ImGui::BeginPopup(std::format("{}##context_menu", parameter_id).c_str(),
+                        ImGuiWindowFlags_AlwaysAutoResize)) {
+    auto &state = parameter_states[parameter_id];
+
+    bool is_param_publishing =
+        state == ParameterState::Publish || state == ParameterState::Push;
+
+    if (ImGui::MenuItem("Publish", nullptr, &is_param_publishing)) {
+      if ((state == ParameterState::Publish || state == ParameterState::Push) &&
+          !is_param_publishing) {
+        state = ParameterState::Unbound;
+      } else if (state == ParameterState::Unbound) {
+        state = ParameterState::Publish;
+      }
+    }
+
+    bool did_disable_push_input = false;
+    if (state != ParameterState::Publish && state != ParameterState::Push) {
+      ImGui::BeginDisabled();
+      did_disable_push_input = true;
+    }
+    bool is_param_pushing = state == ParameterState::Push;
+    if (ImGui::MenuItem("Push", nullptr, &is_param_pushing)) {
+      if (state == ParameterState::Push && !is_param_pushing) {
+        state = ParameterState::Publish;
+      } else if (state == ParameterState::Publish && is_param_pushing) {
+        state = ParameterState::Push;
+      }
+    }
+    if (did_disable_push_input) { ImGui::EndDisabled(); }
+
+    ImGui::EndPopup();
+  }
+  gui::pop_context_menu_styles();
 }
 
 } // namespace pc::parameters

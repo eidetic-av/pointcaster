@@ -6,6 +6,7 @@
 #include "widgets.h"
 #include <array>
 #include <cstring>
+#include <imgui.h>
 #include <imgui_internal.h>
 #include <string>
 
@@ -70,6 +71,8 @@ bool DragScalar(int component_index, int component_count,
     }
   } else if (param_state == ParameterState::Publish) {
     ImGui::PushStyleColor(ImGuiCol_Text, mocha_blue);
+  } else if (param_state == ParameterState::Push) {
+    ImGui::PushStyleColor(ImGuiCol_Text, mocha_green);
   }
 
   // draw the control
@@ -94,19 +97,23 @@ bool DragScalar(int component_index, int component_count,
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
       // Alt + Left click resets the value to default
       if (ImGui::IsKeyDown(ImGuiKey_LeftAlt)) {
-	std::memcpy(p_data, p_reset, GDataTypeInfo[data_type].Size);
+        std::memcpy(p_data, p_reset, GDataTypeInfo[data_type].Size);
       }
     }
-    // Right click starts parameter learn
+    // Right click parameter context menu
     else if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+      show_parameter_context_menu(parameter_id);
+    }
+    // Middle click starts parameter learn
+    else if (ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) {
       if (!learning_parameter) {
-	// if we were not learning, set it to learn
-	new_param_state = ParameterState::Learning;
-	pc::gui::learning_parameter = true;
-	auto f = reinterpret_cast<float*>(p_data);
-	auto min = reinterpret_cast<const float*>(p_min);
-	auto max = reinterpret_cast<const float*>(p_max);
-	store_learning_parameter_info(parameter_id, *min, *max, *f);
+        // if we were not learning, set it to learn
+        new_param_state = ParameterState::Learning;
+        pc::gui::learning_parameter = true;
+        auto f = reinterpret_cast<float *>(p_data);
+        auto min = reinterpret_cast<const float *>(p_min);
+        auto max = reinterpret_cast<const float *>(p_max);
+        store_learning_parameter_info(parameter_id, *min, *max, *f);
       } else {
         // if we were learning and we right clicked, return the slider to an
         // unbound state
@@ -119,7 +126,8 @@ bool DragScalar(int component_index, int component_count,
 
   if (param_state == ParameterState::Bound ||
       param_state == ParameterState::Learning ||
-      param_state == ParameterState::Publish) {
+      param_state == ParameterState::Publish ||
+      param_state == ParameterState::Push) {
     ImGui::PopStyleColor();
   }
 
@@ -192,10 +200,11 @@ bool DragScalarN(std::string_view parameter_id, ImGuiDataType data_type, void *p
       auto &t = parameter_states[parameter_id];
       t = ParameterState::Publish;
     } else if (IsMouseClicked(ImGuiMouseButton_Right)) {
-      ImGui::SetClipboardText(parameter_id.data());
-      pc::logger->info(parameter_id);
+      // ImGui::SetClipboardText(parameter_id.data());
+      show_parameter_context_menu(parameter_id);
     }
   }
+  draw_parameter_context_menu(parameter_id);
 
   Dummy({text_width + g.Style.ItemInnerSpacing.x, 0});
 
