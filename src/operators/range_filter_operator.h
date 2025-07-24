@@ -64,6 +64,7 @@ struct RangeFilterOperatorConfiguration {
   uid id;
   bool enabled = true;
   bool bypass = false;
+  bool invert = false; // @optional
   bool draw = true;
   RangeFilterOperatorTransformConfiguration transform;
   RangeFilterOperatorFillConfiguration fill;

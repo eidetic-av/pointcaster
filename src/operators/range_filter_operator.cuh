@@ -17,8 +17,10 @@ __device__ bool RangeFilterOperator::operator()(indexed_point_t point) const {
   const Float3 max{(center.x + half_size.x) * 1000, (center.y + half_size.y) * 1000,
                    (center.z + half_size.z) * 1000};
 
-  return pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y &&
-         pos.z >= min.z && pos.z <= max.z;
+  bool inside = pos.x >= min.x && pos.x <= max.x && pos.y >= min.y &&
+                pos.y <= max.y && pos.z >= min.z && pos.z <= max.z;
+
+  return _config.invert ? !inside : inside;
 };
 
 __device__ bool MinMaxXComparator::operator()(indexed_point_t lhs,
