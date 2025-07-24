@@ -40,6 +40,8 @@ namespace pc::client_sync {
 
 class SyncServer {
 public:
+  std::vector<std::function<void()>> on_client_connected;
+
   SyncServer(SyncServerConfiguration &config);
   ~SyncServer();
 

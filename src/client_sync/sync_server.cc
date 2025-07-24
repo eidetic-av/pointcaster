@@ -69,6 +69,9 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
                 if (message_type == MessageType::Connected) {
                   _connected_client_ids.insert(client_id);
                   pc::logger->info("Sync client '{}' connected", client_id);
+                  for (auto &client_connect_callback : on_client_connected) {
+                    client_connect_callback();
+                  }
                 } else if (message_type == MessageType::ClientHeartbeat) {
                   pc::logger->debug("Heartbeat from: {}", client_id);
                   _connected_client_ids.insert(client_id);
