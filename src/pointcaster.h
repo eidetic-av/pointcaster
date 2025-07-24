@@ -41,7 +41,7 @@
 #include "operators/session_bounding_boxes.h"
 #include "operators/session_operator_host.h"
 #include "path.h"
-#include "point_cloud_renderer.h"
+#include "point_cloud_renderer/point_cloud_renderer.h"
 #include "pointclouds.h"
 #include "pointer.h"
 #include "profiling.h"

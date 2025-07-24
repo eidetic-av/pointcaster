@@ -18,13 +18,12 @@
 #include "point_cloud_renderer_config.gen.h"
 #include "session.gen.h"
 #include "workspace.gen.h"
+#include <ImGuizmo.h>
 #include <algorithm>
 #include <imgui.h>
 #include <imgui_stdlib.h>
-#include <ImGuizmo.h>
 #include <serdepp/serializer.hpp>
 #include <variant>
-
 
 #ifdef WIN32
 #include <SDL2/SDL_Clipboard.h>

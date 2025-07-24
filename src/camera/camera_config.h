@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../analysis/analyser_2d_config.gen.h"
-#include "../point_cloud_renderer_config.gen.h"
+#include "../point_cloud_renderer/point_cloud_renderer_config.gen.h"
 #include "../serialization.h"
 #include "../structs.h"
 #include <Magnum/Math/Angle.h>
@@ -15,6 +15,7 @@ namespace pc::camera {
 using pc::types::Int;
 using pc::types::Float;
 using pc::types::Float3;
+using pc::types::Float4;
 using pc::types::Int2;
 using pc::types::MinMax;
 
@@ -31,6 +32,8 @@ static constexpr Float roll{0.0f};
 static constexpr Float3 translation{0.0f, 0.0f, 0.0f};
 static constexpr float fov = 45;
 
+static constexpr Float4 identity{0.0f, 0.0f, 0.0f, 1.0f};
+
 static constexpr Int2 rendering_resolution{3840, 2160};
 static constexpr Int2 analysis_resolution{480, 270};
 
@@ -42,9 +45,10 @@ static constexpr MinMax<float> orthographic_clipping = {-15, 15};
 struct TransformConfiguration {
   bool show_anchor;
   float distance = 3.5;
-  Float2 orbit{0.0f, 15.0f}; // @minmax(-360, 360)
-  float roll; // @minmax(-180, 180)
-  Float3 translation;
+  Float2 orbit = defaults::orbit; // @minmax(-360, 360)
+  float roll = 0; // @minmax(-180, 180)
+  Float4 rotation = defaults::identity; // @hidden
+  Float3 translation = defaults::translation;
 };
 
 struct CameraConfiguration {

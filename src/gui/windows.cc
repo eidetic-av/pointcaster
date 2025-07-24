@@ -2,6 +2,7 @@
 #include "catpuccin.h"
 #include "widgets.h"
 #include <imgui.h>
+#include <Magnum/Math/Quaternion.h>
 
 namespace pc::gui {
 
@@ -366,7 +367,36 @@ void draw_devices_window(PointCaster &app) {
             ImGui::PushID("device_config");
             ImGui::BeginChild(device_config.id.c_str(),
                               {-FLT_MIN, available_space.y});
-            pc::gui::draw_parameters(device_config.id);
+            auto previous_config = device_config;
+            auto did_update_config = pc::gui::draw_parameters(device_config.id);
+            if (did_update_config) {
+              // if we updated the rotation via eulers, they need to get
+              // converted into quaternion
+              if (previous_config.transform.rotation_deg !=
+                  device_config.transform.rotation_deg) {
+                using Magnum::Math::Deg;
+                using Magnum::Math::Quaternion;
+                using Magnum::Math::Vector3;
+                auto &transform = device_config.transform;
+                float yaw = transform.rotation_deg[0];
+                float pitch = transform.rotation_deg[1];
+                float roll = transform.rotation_deg[2];
+
+                // Eigen/ImGuizmo stored pitch as –x, so invert it here
+                Quaternion<float> qy = Quaternion<float>::rotation(
+                    Deg<float>(yaw), Vector3<float>::yAxis());
+                Quaternion<float> qx = Quaternion<float>::rotation(
+                    Deg<float>(-pitch), Vector3<float>::xAxis());
+                Quaternion<float> qz = Quaternion<float>::rotation(
+                    Deg<float>(roll), Vector3<float>::zAxis());
+
+                Quaternion<float> quat_out = qy * qx * qz;
+                transform.rotation[0] = quat_out.vector().x();
+                transform.rotation[1] = quat_out.vector().y();
+                transform.rotation[2] = quat_out.vector().z();
+                transform.rotation[3] = quat_out.scalar();
+              }
+            }
             ImGui::EndChild();
             ImGui::PopID();
           },

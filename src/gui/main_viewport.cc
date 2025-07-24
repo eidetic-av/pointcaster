@@ -5,7 +5,10 @@
 #include <ImGuizmo.h>
 #include <Magnum/Math/Quaternion.h>
 #include <Magnum/Math/Vector.h>
+#include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <imgui.h>
+#include <cmath>
 
 
 namespace pc::gui {
@@ -263,6 +266,7 @@ void draw_main_viewport(PointCaster &app) {
 
     ImGui::EndTabBar(); // session tab bar
   }
+
   ImGui::End();
   ImGui::PopStyleVar();
   ImGui::PopStyleVar();
@@ -343,6 +347,8 @@ void draw_main_viewport(PointCaster &app) {
       using Magnum::Matrix4;
       using Magnum::Vector3;
       using Magnum::Math::Quaternion;
+      using Magnum::Math::Rad;
+      using Magnum::Math::Deg;
 
       Matrix4 object_model_matrix;
       std::visit(
@@ -379,6 +385,44 @@ void draw_main_viewport(PointCaster &app) {
                            object_model_matrix_flat.data(),
                            delta_translation_matrix_array.data());
 
+      const ImVec2 view_manipulate_gizmo_size { 128, 128 };
+      const ImVec2 view_manipulate_gizmo_padding{0, 10};
+      const ImVec2 view_manipulate_gizmo_position = {
+          layer_pos_x + layer_size_x - view_manipulate_gizmo_size.x -
+              view_manipulate_gizmo_padding.x,
+          layer_pos_y + view_manipulate_gizmo_padding.y};
+      auto camera_distance =
+          selected_camera_controller->config().transform.distance;
+
+      const auto pre_view = camera_view_matrix;
+
+      ImGuizmo::ViewManipulate(camera_view_matrix.data(), camera_distance,
+                               view_manipulate_gizmo_position,
+                               view_manipulate_gizmo_size, 0x10101010);
+
+      // handle updates from the view manipulate gizmo
+      if (pre_view != camera_view_matrix) {
+        Eigen::Matrix4f view;
+        std::memcpy(view.data(), camera_view_matrix.data(), sizeof(view));
+
+        const Eigen::Matrix4f world = view.inverse();
+        const Eigen::Vector3f new_translation = world.block<3, 1>(0, 3) / 1000.0f;
+        const Eigen::Matrix3f new_rotation = world.block<3, 3>(0, 0);
+        const Eigen::Vector3f new_euler = new_rotation.eulerAngles(1, 0, 2);
+
+        constexpr auto rad2deg = 180.0f / static_cast<float>(M_PI);
+        const float new_yaw = new_euler[0] * rad2deg;
+        const float new_pitch = -new_euler[1] * rad2deg;
+        const float new_roll = new_euler[2] * rad2deg;
+
+        auto& selected_camera = *selected_camera_controller;
+        selected_camera.set_orbit({ new_yaw, new_pitch });
+        selected_camera.set_roll(new_roll);
+        selected_camera.set_translation(
+            {new_translation.x(), new_translation.y(), new_translation.z()});
+        // selected_camera.set_distance(new_translation.z());
+      }
+      // handle updates from the selected device transform gizmo
       if (ImGuizmo::IsUsing()) {
         Magnum::Matrix4 rotation_delta_matrix =
             Magnum::Matrix4::from(delta_rotation_matrix_array.data());
@@ -412,7 +456,15 @@ void draw_main_viewport(PointCaster &app) {
                                              translation_delta_vector[2]} *
                                       1000.0f);
               transform.scale *= uniform_scale_delta;
-              },
+              // also update euler values
+              auto euler_rad = updated_quaternion.toEuler();
+              Deg<float> deg_x{euler_rad.x()};
+              Deg<float> deg_y{euler_rad.y()};
+              Deg<float> deg_z{euler_rad.z()};
+              transform.rotation_deg[0] = static_cast<float>(deg_x);
+              transform.rotation_deg[1] = static_cast<float>(deg_y);
+              transform.rotation_deg[2] = static_cast<float>(deg_z);
+            },
             devices::selected_device_config->get());
       }
     };
