@@ -447,7 +447,7 @@ if (WITH_POINTCASTER)
 	    -forward-slash-prefix-opts >)
   endif()
 
-# allow extra lambda features on nvcc
+  # allow extra lambda features on nvcc
   target_compile_options(pointcaster PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
           --extended-lambda>)
 
@@ -473,7 +473,7 @@ if (WITH_POINTCASTER)
     target_link_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=address>")
   endif()
 
-# profiling
+  # profiling
 
   if (WITH_TRACY AND WIN32)
     target_compile_options(pointcaster PRIVATE /Zi /Oy-)
