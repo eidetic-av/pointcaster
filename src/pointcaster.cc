@@ -15,7 +15,7 @@
 #include "operators/session_operator_host.h"
 #include "parameters.h"
 #include "pch.h"
-#include "point_cloud_renderer_config.gen.h"
+#include "point_cloud_renderer/point_cloud_renderer_config.gen.h"
 #include "session.gen.h"
 #include "workspace.gen.h"
 #include <ImGuizmo.h>
@@ -304,12 +304,12 @@ PointCaster::PointCaster(const Arguments &args)
   setSwapInterval(1);
   setMinimalLoopPeriod(7);
 
-  try_init_unique_member<Radio>(workspace.radio, _radio,
-                                session_operator_hosts[0]);
-
   try_init_unique_member<MqttClient>(workspace.mqtt, _mqtt);
   try_init_unique_member<MidiDevice>(workspace.midi, _midi);
   try_init_unique_member<SyncServer>(workspace.sync_server, _sync_server);
+
+  try_init_unique_member<Radio>(workspace.radio, _radio,
+                                session_operator_hosts[0], *_sync_server);
 
 #ifdef WITH_OSC
   try_init_unique_member<OscClient>(workspace.osc_client, _osc_client);
@@ -1204,8 +1204,6 @@ void PointCaster::drawEvent() {
 
   swapBuffers();
 
-  parameters::publish();
-
   auto delta_secs = static_cast<float>(_timeline.previousFrameDuration());
   {
     // TODO make this some thing inside the PlyPlayer namespace maybe
@@ -1216,6 +1214,8 @@ void PointCaster::drawEvent() {
       player.get().tick(delta_secs);
     }
   }
+
+  parameters::publish(delta_secs);
 
   _timeline.nextFrame();
   FrameMark;
