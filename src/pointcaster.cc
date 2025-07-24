@@ -1349,18 +1349,6 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     workspace.layout.show_stats = !workspace.layout.show_stats;
     break;
   }
-  case KeyEvent::Key::LeftCtrl: {
-    holding_ctrl = true;
-    break;
-  }
-  case KeyEvent::Key::LeftAlt: {
-    holding_alt = true;
-    break;
-  }
-  case KeyEvent::Key::LeftShift: {
-    holding_shift = true;
-    break;
-  }
   default: {
     if (_imgui_context.handleKeyPressEvent(event)) event.setAccepted(true);
   }
@@ -1368,27 +1356,9 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
 }
 
 void PointCaster::keyReleaseEvent(KeyEvent &event) {
-  if (ImGui::GetIO().WantTextInput) {
-    if (_imgui_context.handleKeyReleaseEvent(event)) {
-      event.setAccepted(true);
-      return;
-    }
-  }
-
-  switch (event.key()) {
-  case KeyEvent::Key::LeftCtrl: {
-    holding_ctrl = false;
-    break;
-  }
-  case KeyEvent::Key::LeftAlt: {
-    holding_alt = false;
-    break;
-  }
-  case KeyEvent::Key::LeftShift: {
-    holding_shift = false;
-    break;
-  }
-  default: break;
+  if (_imgui_context.handleKeyReleaseEvent(event)) {
+    event.setAccepted(true);
+    return;
   }
 }
 

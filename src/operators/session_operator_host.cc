@@ -199,7 +199,10 @@ void SessionOperatorHost::draw_imgui_window() {
         if constexpr (std::is_same_v<T, RangeFilterOperatorConfiguration>) {
           RangeFilterOperator::init(operator_config, _scene, _parent_group);
         }
-
+        auto &io = ImGui::GetIO();
+        io.KeysDown[ImGuiKey_Enter] = false;
+        io.KeysDown[ImGuiKey_KeypadEnter] = false;
+        ImGui::ClearActiveID();
         ImGui::CloseCurrentPopup();
       }
     });
