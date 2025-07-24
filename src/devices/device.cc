@@ -129,13 +129,25 @@ synthesized_point_cloud(OperatorList &operators,
 
     std::lock_guard device_lock(devices_access);
     std::lock_guard config_lock(device_configs_access);
+    point_cloud_zone.text("Acquired device & device_config locks");
 
     for (size_t i = 0; i < attached_devices.size(); i++) {
       auto &device = attached_devices[i];
       std::visit(
           [&](auto &&config) {
             using T = std::decay_t<decltype(config)>;
-            auto device_cloud = device->point_cloud();
+
+            // TODO make a generic way to check if this device is part
+            // of the static channel or the live channel
+            if constexpr (std::same_as<T, PlySequencePlayerConfiguration>) {
+              if (config.streaming.use_static_channel) return;
+            }
+
+            types::PointCloud device_cloud;
+            {
+              ProfilingZone get_zone("Compute pointcloud");
+              device_cloud = device->point_cloud();
+            }
             {
               ProfilingZone combine_zone(std::format("{} operator+=", T::Name));
               result += std::move(device_cloud);
