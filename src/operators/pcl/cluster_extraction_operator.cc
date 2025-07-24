@@ -249,6 +249,20 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
       }
     }
 
+    if (config.publish_clusters) {
+      ProfilingZone publish_zone("Publish clusters");
+      // the following transforms our clusters gives us their bounding
+      // boxes in std containers, which are easily publishable
+      using std_aabb = std::array<std::array<float, 3>, 2>;
+      std::vector<std_aabb> aabbs(updated_clusters.size());
+      std::ranges::transform(
+          updated_clusters, aabbs.begin(), [](const Cluster &cluster) {
+            const auto &aabb = cluster.bounding_box;
+            return std_aabb({{aabb.min.x, aabb.min.y, aabb.min.z},
+                             {aabb.max.x, aabb.max.y, aabb.max.z}});
+          });
+      publisher::publish_all(operator_name, aabbs, {session_label, "clusters"});
+    }
 
     if (config.calculate_pca) {
       ProfilingZone publish_zone("Principal Component Analysis");
@@ -427,21 +441,6 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
     // and latest clusters onto main thread now we're done with them
     current_clusters.store(
         std::make_shared<std::vector<Cluster>>(std::move(updated_clusters)));
-  }
-
-  if (config.publish_clusters) {
-    ProfilingZone publish_zone("Publish clusters");
-    // the following transforms our clusters gives us their bounding
-    // boxes in std containers, which are easily publishable
-    using std_aabb = std::array<std::array<float, 3>, 2>;
-    std::vector<std_aabb> aabbs(updated_clusters.size());
-    std::ranges::transform(
-        updated_clusters, aabbs.begin(), [](const Cluster &cluster) {
-          const auto &aabb = cluster.bounding_box;
-          return std_aabb({{aabb.min.x, aabb.min.y, aabb.min.z},
-                           {aabb.max.x, aabb.max.y, aabb.max.z}});
-        });
-    publisher::publish_all(operator_name, aabbs, {session_label, "clusters"});
   }
 
   if (config.publish_voxels) {
