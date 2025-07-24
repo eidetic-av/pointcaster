@@ -16,7 +16,7 @@
 namespace pc {
 
 using PublishedParameterList = std::vector<std::string>;
-
+using PushedParameterList = std::vector<std::string>;
 using OperatorNameMap = std::map<std::string, operators::uid>;
 using OperatorColorMap = std::map<std::string, SerializedColor>;
 
@@ -38,6 +38,7 @@ struct PointcasterWorkspace {
   std::optional<client_sync::SyncServerConfiguration> sync_server;
 
   std::optional<PublishedParameterList> published_params;
+  PushedParameterList pushed_params; // @optional
   OperatorNameMap operator_names;   // @optional
   OperatorColorMap operator_colors; // @optional
 

@@ -375,6 +375,7 @@ void PointCaster::save_workspace(std::filesystem::path file_path) {
 
   // parse parameter topic lists
   output_workspace.published_params = parameters::published_parameter_topics();
+  output_workspace.pushed_params = parameters::pushed_parameter_topics();
 
   // save any friendly names assigned to operators
   output_workspace.operator_names.clear();
@@ -598,6 +599,11 @@ void PointCaster::load_workspace(std::filesystem::path file_path) {
         parameters::parameter_states.emplace(
             parameter_id, parameters::ParameterState::Publish);
       }
+    }
+    // unpack pushed parameters
+    for (auto &parameter_id : result.pushed_params) {
+      parameters::parameter_states.emplace(parameter_id,
+                                           parameters::ParameterState::Push);
     }
 
     // unpack any serialized friendly operator names
