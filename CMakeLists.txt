@@ -278,15 +278,7 @@ if (WITH_POINTCASTER)
 
   # ----- OpenCV -----
 
-  if (WIN32)
-    find_package(OpenCV REQUIRED HINTS "/opt/opencv/build")
-    get_target_property(OPENCV_DLL_RELEASE opencv_world IMPORTED_LOCATION_RELEASE)
-    get_target_property(OPENCV_DLL_DEBUG opencv_world IMPORTED_LOCATION_DEBUG)
-    list(APPEND INSTALL_DLLS_RELEASE "${OPENCV_DLL_RELEASE}")
-    list(APPEND INSTALL_DLLS_DEBUG "${OPENCV_DLL_DEBUG}")
-  else()
-    find_package(OpenCV CONFIG REQUIRED)
-  endif()
+  find_package(OpenCV CONFIG REQUIRED)
   list(APPEND LINK_LIBS ${OpenCV_LIBS})
   list(APPEND INCLUDE_DIRS ${OpenCV_INCLUDE_DIRS})
 
