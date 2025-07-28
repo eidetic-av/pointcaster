@@ -43,7 +43,7 @@ struct ob_to_input_points
   operator()(thrust::tuple<OBColorPoint, int> t) const {
     OBColorPoint p = thrust::get<0>(t);
     int idx = thrust::get<1>(t);
-    position pos{(float)p.x, (float)p.y, (float)p.z, 0.0f};
+    position pos{(short)p.x, (short)p.y, (short)p.z, 0};
     color col{(uint8_t)p.b, (uint8_t)p.g, (uint8_t)p.r};
     return thrust::make_tuple(pos, col, idx);
   }
