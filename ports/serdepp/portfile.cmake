@@ -4,7 +4,7 @@ vcpkg_from_github(
     REF v0.1.4.1
     SHA512 623414807e43d03f1ef1f9b7f02f10148b2745f5487047df3a678f92ccbe0a0f5f7d76cc6e2e88097e2c0e2cf2dde60b4f33dc9c6aaeafc7cd2dc3adfd88959f
     HEAD_REF main
-    PATCHES fix-toml.patch
+    PATCHES fix-toml.patch magic-enum-includes.patch
 )
 
 
