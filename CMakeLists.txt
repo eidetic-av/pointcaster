@@ -214,8 +214,8 @@ if (WITH_POINTCASTER)
   list(APPEND LINK_LIBS imgui::imgui)
   add_definitions(-DIMGUI_DEFINE_MATH_OPERATORS)
 
-  find_package(unofficial-imguizmo CONFIG REQUIRED)
-  list(APPEND LINK_LIBS unofficial::imguizmo::imguizmo)
+  find_package(imguizmo CONFIG REQUIRED)
+  list(APPEND LINK_LIBS imguizmo::imguizmo)
 
   list(APPEND THIRDPARTY_SRC thirdparty/imnodes/imnodes.cpp)
   list(APPEND INCLUDE_DIRS thirdparty/imnodes)
