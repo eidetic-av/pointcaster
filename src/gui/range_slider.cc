@@ -233,9 +233,8 @@ bool RangeSliderFloat(const char *label, float *v1, float *v2, float v_min,
     return false;
   }
 
-  const bool hovered = ItemHoverable(frame_bb, id, g.LastItemData.InFlags);
-  if (hovered)
-    SetHoveredID(id);
+  const bool hovered = ItemHoverable(frame_bb, id, g.LastItemData.ItemFlags);
+  if (hovered) SetHoveredID(id);
 
   if (!display_format)
     display_format = "(%.3f, %.3f)";
