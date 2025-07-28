@@ -445,7 +445,7 @@ if (WITH_POINTCASTER)
 
   # these turn off noisy compiler output from dependencies
   target_compile_options(pointcaster PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
-          --diag-suppress 20012,27,1394 >)
+          --diag-suppress 20012,20013,20014,20015,27,1394,221 >)
   target_compile_options(pointcaster PRIVATE $<$<CXX_COMPILER_ID:MSVC>:
           /wd4068 >)
 
