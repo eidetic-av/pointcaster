@@ -17,6 +17,7 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-release",
         "CMAKE_TOOLCHAIN_FILE": "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_BUILD_TYPE": "Release",
+        "CUDAToolkit_ROOT": "/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.9",
         "WITH_POINTCASTER": true
       },
       "vendor": {
