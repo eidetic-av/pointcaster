@@ -6,6 +6,10 @@
       "name": "azure-kinect-sensor-sdk",
       "platform": "!android"
     },
+    {
+      "name": "azure-kinect-depth-engine",
+      "platform": "!android"
+    },
     "bob-pointclouds",
     "concurrentqueue",
     {
@@ -63,26 +67,22 @@
     },
     {
       "name": "libusb",
-      "platform": "!android"
+      "platform": "!android & !windows"
     },
     {
       "name": "magnum",
       "features": [
         "debugtools",
         "gl",
-        "glxcontext",
         "magnumfont",
         "meshtools",
-        "objimporter",
         "primitives",
         "scenegraph",
         "sdl2application",
         "shaders",
-        "text",
         "texturetools",
         "tgaimporter",
-        "trade",
-        "windowlessglxapplication"
+        "trade"
       ],
       "platform": "!android"
     },
@@ -115,8 +115,17 @@
       "platform": "!android"
     },
     {
+      "name": "opencv4",
+      "platform": "!android",
+      "default-features": false,
+      "features": [
+        "cuda"
+      ]
+    },
+    {
       "name": "paho-mqttpp3",
-      "platform": "!android"
+      "platform": "!android",
+      "default-features": false
     },
     {
       "name": "pcl",
@@ -141,6 +150,10 @@
     },
     {
       "name": "serdepp",
+      "platform": "!android"
+    },
+    {
+      "name": "magic-enum",
       "platform": "!android"
     },
     {
@@ -171,5 +184,6 @@
       ]
     },
     "zpp-bits"
-  ]
+  ],
+  "builtin-baseline": "3bdaa9b42070c241c1bdb02b4cf01f90de579738"
 }
