@@ -1,4 +1,7 @@
 #pragma once
+
+#include <Magnum/Math/Half.h>
+
 #include "../aabb.h"
 #include "../gui/catpuccin.h"
 #include "../structs.h"
