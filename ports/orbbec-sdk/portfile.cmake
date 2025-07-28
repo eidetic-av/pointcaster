@@ -2,9 +2,8 @@ vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO orbbec/OrbbecSDK
   REF "v${VERSION}"
-  SHA512 72874b8bea22812aeb67fff8de01c0daaceb56112f348db522e31be7c7dc1bda2a067f166d40ceb2352076b4b7c8eeddf13f166e7d8f6eda49d432fb7069dc3c
+  SHA512 60b58d5abb5e493b03de4803595d35559b5b707e606b6f580ee2cc35fae9b12ffb37e56c7beb516dde9289fa0b51972f59763cecc70280b97983fd57dcca6513
   HEAD_REF main
-  PATCHES fix-lib-paths.patch
 )
 
 file(INSTALL
@@ -29,21 +28,35 @@ else()
   message(FATAL_ERROR "Platform not supported.")
 endif()
 
+# TODO
+# some predistributed dlls come even when using static builds?
+set(VCPKG_POLICY_DLLS_IN_STATIC_LIBRARY enabled)
+
 # the depth engine library will come from the k4a repo instead,
 # which works with both k4a and orbbec devices. So skip it for this port
 
 file(GLOB_RECURSE LIB_FILES "${SOURCE_PATH}/lib/${LIB_DIR}/*")
 
-foreach(LIB_FILE ${LIB_FILES})
+file(GLOB_RECURSE LIB_FILES
+     "${SOURCE_PATH}/lib/${LIB_DIR}/*")
+
+foreach(LIB_FILE IN LISTS LIB_FILES)
   get_filename_component(FILE_NAME ${LIB_FILE} NAME)
   if (NOT FILE_NAME MATCHES "depthengine")
-    if(FILE_NAME MATCHES "dll")
-      file(INSTALL ${LIB_FILE} DESTINATION ${CURRENT_PACKAGES_DIR}/bin)
-      # orbbec sdk doesn't ship with debug bins, just release
-      file(INSTALL ${LIB_FILE} DESTINATION ${CURRENT_PACKAGES_DIR}/debug/bin)
-    else()
-      file(INSTALL ${LIB_FILE} DESTINATION ${CURRENT_PACKAGES_DIR}/lib)
-      file(INSTALL ${LIB_FILE} DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib)
+    # orbbec sdk doesnt ship debug dlls, just use release in both configs
+    if (FILE_NAME MATCHES "\\.dll$")
+      file(INSTALL ${LIB_FILE}
+                   DESTINATION ${CURRENT_PACKAGES_DIR}/bin)
+      file(INSTALL ${LIB_FILE}
+                   DESTINATION ${CURRENT_PACKAGES_DIR}/debug/bin)
+    elseif (FILE_NAME MATCHES "\\.lib$")
+      file(INSTALL ${LIB_FILE}
+                   DESTINATION ${CURRENT_PACKAGES_DIR}/lib)
+      file(INSTALL ${LIB_FILE}
+                   DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib)
+      file(INSTALL ${LIB_FILE}
+                   DESTINATION
+                     "${CURRENT_PACKAGES_DIR}/share/OrbbecSDK/lib/${LIB_DIR}")
     endif()
   endif()
 endforeach()
