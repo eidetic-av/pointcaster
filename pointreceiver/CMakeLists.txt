@@ -2,19 +2,19 @@ message("-- Configuring pointreceiver lib for ${VCPKG_TARGET_TRIPLET}")
 
 # ----- Dependencies -----
 
+find_package(draco CONFIG REQUIRED)
+list(APPEND LINK_LIBS draco::draco)
+
+find_package(bob-pointclouds CONFIG REQUIRED)
+list(APPEND RECEIVER_LINK_LIBS bob::pointclouds)
+
 find_package(ZeroMQ CONFIG REQUIRED)
-if(RECEIVER_LIB_SHARED AND NOT WIN32) 
+if($"{VCPKG_LIBRARY_LINKAGE}" STREQUAL "dynamic") 
   list(APPEND RECEIVER_LINK_LIBS libzmq)
 else()
   list(APPEND RECEIVER_LINK_LIBS libzmq-static)
   list(APPEND RECEIVER_COMPILE_DEFS ZMQ_STATIC)
 endif()
-
-find_package(draco CONFIG REQUIRED)
-list(APPEND RECEIVER_LINK_LIBS draco::draco)
-
-find_package(bob-pointclouds CONFIG REQUIRED)
-list(APPEND RECEIVER_LINK_LIBS bob::pointclouds)
 
 find_path(READERWRITERQUEUE_INCLUDE_DIRS "readerwriterqueue/atomicops.h")
 list(APPEND RECEIVER_INCLUDE_DIRS ${READERWRITERQUEUE_INCLUDE_DIRS})
@@ -23,13 +23,11 @@ find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
 list(APPEND RECEIVER_INCLUDE_DIRS ${ZPP_BITS_INCLUDE_DIRS})
 
 if (WIN32)
+  find_package(fmt CONFIG REQUIRED)
+  list(APPEND RECEIVER_LINK_LIBS fmt::fmt)
+
   find_package(spdlog CONFIG REQUIRED)
   list(APPEND RECEIVER_LINK_LIBS spdlog::spdlog)
-endif()
-
-if (VCPKG_TARGET_TRIPLET STREQUAL "arm-android-dynamic")
-  find_library(log-lib, log)
-  list(APPEND RECEIVER_LINK_LIBS ${log-lib})
 endif()
 
 # ----- Pointreceiver library -----
@@ -40,17 +38,24 @@ add_library(pointreceiver_obj OBJECT ${RECEIVER_SOURCE_FILES})
 set_target_properties(pointreceiver_obj PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(pointreceiver_obj PRIVATE ${RECEIVER_INCLUDE_DIRS})
 target_compile_definitions(pointreceiver_obj PRIVATE ${RECEIVER_COMPILE_DEFS} LIBRARY_BUILD)
+target_compile_options(pointreceiver_obj PRIVATE -fvisibility=hidden -fvisibility-inlines-hidden)
+
+if (WIN32)
+  target_compile_options(pointreceiver_obj PRIVATE "/utf-8")
+endif()
+
 
 if(RECEIVER_LIB_SHARED)
   add_library(pointreceiver SHARED $<TARGET_OBJECTS:pointreceiver_obj>)
   if (WIN32)
     target_compile_options(pointreceiver PRIVATE -fdeclspec)
+    target_compile_options(pointreceiver PRIVATE "/utf-8")
   endif()
   set_property(TARGET pointreceiver PROPERTY
     MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 else()
   add_library(pointreceiver STATIC $<TARGET_OBJECTS:pointreceiver_obj>)
-  target_link_libraries(pointreceiver PRIVATE ${RECEIVER_LINK_LIBS} ${RECEIVER_STATIC_LIBS})
+  target_link_libraries(pointreceiver PRIVATE ${RECEIVER_STATIC_LIBS})
 endif()
 
 target_include_directories(pointreceiver 
@@ -61,6 +66,9 @@ target_link_libraries(pointreceiver PRIVATE ${RECEIVER_LINK_LIBS})
 
 set_target_properties(pointreceiver PROPERTIES 
   DEBUG_POSTFIX "d"
+  CXX_VISIBILITY_PRESET hidden
+  VISIBILITY_INLINES_HIDDEN ON
+  POSITION_INDEPENDENT_CODE ON
 )
 
 # copy our API header into the output directory
@@ -78,7 +86,7 @@ add_custom_command(TARGET pointreceiver POST_BUILD
   --triplet ${VCPKG_TARGET_TRIPLET} 
   --output $<TARGET_FILE_DIR:pointreceiver>)
 
-if (RECEIVER_LIB_SHARED AND NOT WIN32)
+if (RECEIVER_LIB_SHARED AND "${VCPKG_LIBRARY_LINKAGE}" STREQUAL "dynamic")
   # make sure that each dependency is copied to the build output directory too
   # not in win32 builds since all deps are static there
   foreach(lib_target ${RECEIVER_LINK_LIBS})
@@ -99,6 +107,9 @@ if (WITH_TESTS)
   target_link_libraries(pointreceiver-test PRIVATE ${RECEIVER_LINK_LIBS} 
     $<$<BOOL:${RECEIVER_LIB_SHARED}>:${RECEIVER_SHARED_LIBS}>
     $<$<NOT:$<BOOL:${RECEIVER_LIB_SHARED}>>:${RECEIVER_STATIC_LIBS}>)
+  if (WIN32)
+    target_compile_options(pointreceiver-test PRIVATE "/utf-8")
+  endif()
 endif()
 
 # ----- Upload/deploy build artefacts -----

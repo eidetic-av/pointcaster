@@ -116,14 +116,6 @@ if (GENERATE_REFLECTIONS)
   
 endif()
 
-find_package(ZeroMQ CONFIG REQUIRED)
-list(APPEND LINK_LIBS libzmq libzmq-static)
-if (WIN32)
-  # zmq windows dependency:
-  list(APPEND PLATFORM_LIBS bcrypt)
-endif()
-
-
 if (WITH_POINTCASTER)
 
   # ----- Geometry -----
@@ -149,6 +141,13 @@ if (WITH_POINTCASTER)
   list(APPEND INCLUDE_DIRS ${HAPPLY_INCLUDE_DIRS})
 
   # ----- Networking -----
+
+  find_package(ZeroMQ CONFIG REQUIRED)
+  list(APPEND LINK_LIBS libzmq libzmq-static)
+  if (WIN32)
+    # zmq windows dependency:
+    list(APPEND PLATFORM_LIBS bcrypt)
+  endif()
 
   if (WITH_MQTT)
     find_package(PahoMqttCpp CONFIG REQUIRED)

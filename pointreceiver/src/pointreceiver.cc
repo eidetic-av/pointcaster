@@ -598,6 +598,8 @@ bool pointreceiver_dequeue_point_cloud(
 
 }
 
+#ifndef __ANDROID__
+
 void testMessageLoop(pointreceiver_context *ctx) {
   int count = 0;
   while (count++ < 1000) {
@@ -678,3 +680,5 @@ int main(int argc, char *argv[]) {
   pointreceiver_destroy_context(ctx);
   return 0;
 }
+
+#endif

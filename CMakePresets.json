@@ -11,11 +11,14 @@
         "value": "x64",
         "strategy": "external"
       },
+      "environment": {
+        "VCPKG_ROOT": "/opt/vcpkg"
+      },
       "cacheVariables": {
         "ARCHIVE_NAME": "pointcaster_windows-release",
         "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-release",
-        "CMAKE_TOOLCHAIN_FILE": "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_BUILD_TYPE": "Release",
         "CUDAToolkit_ROOT": "/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.9",
         "WITH_POINTCASTER": true
@@ -58,7 +61,6 @@
       "description": "Build pointreceiver dll",
       "cacheVariables": {
         "ARCHIVE_NAME": "pointreceiver_windows-release",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
         "WITH_POINTCASTER": false,
         "WITH_RECEIVER_LIB": true,
         "WITH_TESTS": true
@@ -78,16 +80,24 @@
       "name": "pointreceiver-android-armeabi-v7a",
       "inherits": "pointreceiver-windows-release",
       "displayName": "PointReceiver Lib Android armeabi-v7a",
-      "description": "Build libpointreceiver.so",
+      "description": "Build libpointreceiver dynamic library for Android",
+      "architecture": {
+        "value": "arm-v7a",
+        "strategy": "external"
+      },
+      "environment": {
+        "ANDROID_NDK_HOME": "/opt/android/ndk/28.2.13676358"
+      },
       "cacheVariables": {
         "ARCHIVE_NAME": "pointreceiver_android-armeabi-v7a",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
-        "VCPKG_TARGET_TRIPLET": "arm-android-dynamic",
-        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_TARGET_TRIPLET": "arm-neon-android-libcpp",
         "CMAKE_SYSTEM_NAME": "Android",
         "CMAKE_ANDROID_ARCH_ABI": "armeabi-v7a",
-        "CMAKE_ANDROID_API": "29",
-        "CMAKE_ANDROID_NDK": "/opt/android",
+        "CMAKE_ANDROID_API": "31",
+        "CMAKE_ANDROID_STL_TYPE": "c++_static",
+        "CMAKE_ANDROID_NDK": "/opt/android/ndk/28.2.13676358",
+        "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "/opt/android/ndk/28.2.13676358/toolchains/llvm/prebuilt/windows-x86_64/bin/clang-scan-deps.exe",
         "WITH_TESTS": false,
         "RECEIVER_LIB_SHARED": true
       }
