@@ -12,6 +12,7 @@ get_filename_component(CMAKE_PRESET_NAME ${CMAKE_BINARY_DIR} NAME)
 ########################################################
 
 project(pointcaster LANGUAGES CXX)
+message(STATUS "Build type is ${CMAKE_BUILD_TYPE}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
