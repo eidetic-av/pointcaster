@@ -95,4 +95,12 @@ if(k4abt_FOUND)
 
   get_filename_component(k4abt_ROOT "${k4abt_INCLUDE_DIR}" PATH)
 
+
+  if (WIN32)
+    file(GLOB k4abt_RUNTIME_DEPENDENCIES
+      "${K4ABT_ROOT}/sdk/windows-desktop/amd64/release/bin/*.dll"
+      "${K4ABT_ROOT}/sdk/windows-desktop/amd64/release/bin/*.onnx"
+    )
+  endif()
+
 endif()

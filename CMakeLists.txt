@@ -495,9 +495,7 @@ if (WITH_POINTCATER AND WIN32)
     COMMAND_EXPAND_LISTS)
 
   if (WITH_K4A)
-    # and k4a is always shared never static, need to move k4a bins
-    file (GLOB K4ABT_BINS "${K4ABT_ROOT}/sdk/windows-desktop/amd64/release/bin/*")
-    foreach(K4ABT_BIN ${K4ABT_BINS})
+    foreach(K4ABT_BIN ${k4abt_RUNTIME_DEPENDENCIES})
       add_custom_command(TARGET pointcaster POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${K4ABT_BIN} $<TARGET_FILE_DIR:pointcaster>)
