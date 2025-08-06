@@ -169,8 +169,9 @@ PointCaster::PointCaster(const Arguments &args)
   ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
   // for editing parameters with the keyboard
-  auto backspace = ImGui::GetIO().KeyMap[ImGuiKey_Backspace];
-  ImGui::GetIO().AddInputCharacter(backspace);
+  // TODO
+  // auto backspace = ImGui::GetIO().KeyMap[ImGuiKey_Backspace];
+  // ImGui::GetIO().AddInputCharacter(backspace);
   ImGui::GetIO().AddKeyEvent(ImGuiKey_Backspace, true);
   ImGui::GetIO().AddKeyEvent(ImGuiKey_Backspace, false);
 

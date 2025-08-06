@@ -8,6 +8,7 @@ namespace pc::radio {
 struct RadioConfiguration {
   std::string address = "*";
   int port = 9992;
+  int static_channel_port = 9993;
   bool enabled = false;
   bool compress_frames;
   bool capture_stats;

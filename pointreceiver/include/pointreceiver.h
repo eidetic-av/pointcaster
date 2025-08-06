@@ -22,7 +22,7 @@
 #elif _WIN32
 #define PR_EXPORT __declspec(dllexport)
 #else
-#define PR_EXPORT
+#define PR_EXPORT __attribute__((visibility("default")))
 #endif
 
 #ifdef __cplusplus
@@ -45,6 +45,7 @@ typedef enum {
   POINTRECEIVER_MSG_TYPE_CLIENT_HEARTBEAT_RESPONSE, /**< Response to client heartbeat */
   POINTRECEIVER_MSG_TYPE_PARAMETER_UPDATE,          /**< Parameter update message */
   POINTRECEIVER_MSG_TYPE_PARAMETER_REQUEST,         /**< Parameter request message */
+  POINTRECEIVER_MSG_TYPE_ENDPOINT_UPDATE,           /**< Pointcaster server endpoint update message */
   POINTRECEIVER_MSG_TYPE_UNKNOWN                    /**< Unknown message type */
 } pointreceiver_message_type;
 
@@ -128,6 +129,17 @@ typedef struct {
   size_t count;                /**< Number of 3D float vector values in the array */
 } pointreceiver_float4_list_t;
 
+/**
+ * @brief Structure representing an endpoint update from a Pointcaster server.
+ *
+ * This structure encapsulates a pointer to an endpoint string,
+ * the number of chars in the string, and whether or not the endpoint is active.
+ */
+typedef struct {
+  size_t port; /**< Ephemeral port of the endpoint */
+  bool active; /**< Whether the endpoint has become active or been disabled in this update */
+} pointreceiver_endpoint_update;
+
 
 /**
  * @brief Structure representing a synchronized message.
@@ -151,6 +163,7 @@ typedef struct {
         float3_list_val; /**< List of 3D float vector values */
     pointreceiver_float4_list_t
         float4_list_val; /**< List of 4D float vector values */
+    pointreceiver_endpoint_update endpoint_update_val; /**< Endpoint Update value */
   } value;               /**< Union holding the message value */
 
 } pointreceiver_sync_message;
@@ -268,14 +281,15 @@ PR_EXPORT int pointreceiver_start_point_receiver(pointreceiver_context *ctx,
 PR_EXPORT int pointreceiver_stop_point_receiver(pointreceiver_context *ctx);
 
 /**
- * @brief Dequeues a point cloud frame from pointcaster if one is available.
+ * @brief Dequeues a point cloud frame from pointcaster's live frame queue if
+ * one is available.
  *
  * This function attempts to dequeue a complete point cloud frame and fills in
  * the provided frame structure with the point count and buffer pointers.
  *
  * @param ctx Pointer to the PointReceiver context.
- * @param[out] out_frame Pointer to a pointreceiver_pointcloud_frame structure where
- * the dequeued frame information will be stored.
+ * @param[out] out_frame Pointer to a pointreceiver_pointcloud_frame structure
+ * where the dequeued frame information will be stored.
  * @param timeout_ms Timeout in milliseconds to wait for a point cloud frame.
  * @return true if a frame was successfully dequeued, false otherwise.
  */
@@ -283,6 +297,25 @@ PR_EXPORT bool pointreceiver_dequeue_point_cloud(pointreceiver_context *ctx,
                                                  pointreceiver_pointcloud_frame *out_frame,
                                                  int timeout_ms);
 
+/**
+ * @brief Dequeues a point cloud frame from pointcaster's static frame queue
+ * if one is available.
+ *
+ * This function attempts to dequeue a complete point cloud frame from the
+ * static frame queue and fills in the provided frame structure with the
+ * point count and buffer pointers. It is up for the caller to keep track of
+ * their own map of source ids to latest point cloud frames.
+ *
+ * @param ctx Pointer to the PointReceiver context.
+ * @param[out] source_id The id of the source device sending the point cloud.
+ * @param[out] out_frame Pointer to a pointreceiver_pointcloud_frame structure
+ * where the dequeued frame information will be stored.
+ * @param timeout_ms Timeout in milliseconds to wait for a point cloud frame.
+ * @return true if a frame was successfully dequeued, false otherwise.
+ */
+PR_EXPORT bool pointreceiver_dequeue_static_point_cloud(
+    pointreceiver_context *ctx, char *out_source_id,
+    pointreceiver_pointcloud_frame *out_frame, int timeout_ms);
 
 #ifdef __cplusplus
 }

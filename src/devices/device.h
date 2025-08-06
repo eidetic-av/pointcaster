@@ -144,6 +144,20 @@ pc::types::PointCloud
 synthesized_point_cloud(pc::operators::OperatorList &operators,
                         const std::string_view session_id);
 
+struct StaticPointcloudRef {
+  std::string source_id;
+  std::reference_wrapper<bool> requires_update;
+  std::reference_wrapper<pc::types::PointCloud> point_cloud;
+  pc::operators::OperatorList operators;
+  bool disable_compression = false;
+};
+
+std::vector<StaticPointcloudRef>
+static_point_clouds(pc::operators::OperatorList &operators,
+                        const std::string_view session_id);
+
+void send_all_static_point_clouds();
+
 // TODO make all the k4a stuff more generic
 using pc::types::Float4;
 using K4ASkeleton =

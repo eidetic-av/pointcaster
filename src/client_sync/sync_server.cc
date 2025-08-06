@@ -68,6 +68,9 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
                 if (message_type == MessageType::Connected) {
                   _connected_client_ids.insert(client_id);
                   pc::logger->info("Sync client '{}' connected", client_id);
+                  // TODO the new client needs static point cloud frames,
+                  // but atm we just send to *all* clients
+                  pc::devices::send_all_static_point_clouds();
                   for (auto &client_connect_callback : on_client_connected) {
                     client_connect_callback();
                   }
@@ -166,6 +169,10 @@ void SyncServer::enqueue_parameter_update(ParameterUpdate update) {
 
 void SyncServer::enqueue_signal(MessageType signal) {
   _messages_to_send.enqueue(signal);
+}
+
+void SyncServer::publish_endpoint(EndpointUpdate update) {
+  _messages_to_send.enqueue(update);
 }
 
 SyncServer::~SyncServer() { _sync_thread->request_stop(); }

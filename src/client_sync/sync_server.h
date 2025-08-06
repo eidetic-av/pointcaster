@@ -65,6 +65,8 @@ public:
     }
   }
 
+  void publish_endpoint(EndpointUpdate update);
+
   void draw_imgui_window();
 
 private:

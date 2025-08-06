@@ -539,6 +539,13 @@ using color = bob::types::color;
 
 using uid = unsigned long;
 
+// point cloud message required for sending and receiving "static" clouds
+struct StaticPointCloudMessage {
+  std::string source_id;
+  using serialized_type = decltype(std::declval<PointCloud>().serialize());
+  serialized_type data;
+};
+
 // struct color {
 //   using vector_type = unsigned char;
 //   vector_type r, g, b, a = 0;

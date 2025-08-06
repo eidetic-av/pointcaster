@@ -3,6 +3,7 @@
 #include "../../parameters.h"
 #include "../../profiling.h"
 #include "../../uuid.h"
+#include "ply_sequence_player_config.gen.h"
 #include <algorithm>
 #include <atomic>
 #include <filesystem>
@@ -11,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <nfd.hpp>
+#include <optional>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #include <tbb/task_arena.h>
@@ -187,9 +189,33 @@ DeviceStatus PlySequencePlayer::status() const {
   return DeviceStatus::Inactive;
 }
 
+std::optional<std::reference_wrapper<pc::types::PointCloud>> PlySequencePlayer::last_point_cloud() {
+  if (_last_point_cloud.empty()) return std::nullopt;
+  return std::ref(_last_point_cloud);
+};
+
 void PlySequencePlayer::tick(float delta_time) {
   auto &conf = config();
-  if (!conf.playing && !_playing && !_advance_once) { return; }
+  auto force_update = false;
+
+  static std::map<std::string, PlySequencePlayerConfiguration> last_configs;
+  auto &last_config = last_configs[conf.id];
+  if (last_config.id.empty()) last_config = conf;
+
+  if (conf.streaming.use_static_channel) {
+    // if the configuration is different from last time we ticked, static
+    // streamers need to update to their clients
+    force_update = last_config.current_frame != conf.current_frame ||
+                   last_config.streaming.use_static_channel !=
+                       conf.streaming.use_static_channel ||
+                   last_config.transform != conf.transform ||
+                   last_config.color != conf.color;
+    conf.streaming.requires_update |= force_update;
+  }
+
+  last_config = conf;
+
+  if (!force_update && !conf.playing && !_playing && !_advance_once) { return; }
 
   // advance accumulator
   _frame_accumulator += delta_time * conf.frame_rate;

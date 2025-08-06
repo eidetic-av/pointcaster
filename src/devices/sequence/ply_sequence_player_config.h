@@ -4,9 +4,13 @@
 
 namespace pc::devices {
 
-using pc::devices::DeviceTransformConfiguration;
-
 struct PlySequencePlayer;
+
+struct PlyStreamingConfiguration {
+  bool use_static_channel = false; // @optional
+  bool requires_update = true; // @hidden
+  bool disable_compression = false; // @optional
+};
 
 struct PlySequencePlayerConfiguration {
   std::string id;
@@ -22,6 +26,7 @@ struct PlySequencePlayerConfiguration {
 
   DeviceTransformConfiguration transform; // @optional
   ColorConfiguration color; // @optional
+  PlyStreamingConfiguration streaming; // @optional
 
   using DeviceType = PlySequencePlayer;
   static constexpr auto PublishPath = "ply";

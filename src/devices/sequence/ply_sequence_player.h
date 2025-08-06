@@ -41,6 +41,9 @@ public:
   DeviceStatus status() const override;
   pc::types::PointCloud point_cloud() override;
 
+  std::optional<std::reference_wrapper<pc::types::PointCloud>>
+  last_point_cloud();
+
   bool draw_controls() override;
 
 private:

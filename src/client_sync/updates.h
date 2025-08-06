@@ -31,7 +31,13 @@ struct ParameterUpdate {
   ParameterVariant value;
 };
 
-using SyncMessage = std::variant<MessageType, ParameterUpdate>;
+struct EndpointUpdate {
+  std::string id;
+  size_t port;
+  bool active;
+};
+
+using SyncMessage = std::variant<MessageType, ParameterUpdate, EndpointUpdate>;
 
 template <typename T, typename Variant> struct is_variant_member;
 
