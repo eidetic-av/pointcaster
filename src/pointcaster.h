@@ -125,6 +125,7 @@ public:
       std::array<char, modeline_buffer_size>({});
 
   std::vector<std::jthread> _async_tasks;
+  std::jthread _keep_focus_poller;
 
   std::unique_ptr<Scene3D> _scene;
   std::unique_ptr<SceneGraph::DrawableGroup3D> _scene_root;

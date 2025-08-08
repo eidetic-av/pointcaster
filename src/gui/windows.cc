@@ -532,6 +532,7 @@ void draw_app_menu(PointCaster &app) {
       auto fs = app._full_screen;
       window_item("Fullscreen", "F", fs);
       if (fs != app._full_screen) app.set_full_screen(fs);
+      window_item("Maintain window focus", "", w.maintain_window_focus);
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Help")) {

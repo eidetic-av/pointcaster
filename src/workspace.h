@@ -43,6 +43,9 @@ struct PointcasterWorkspace {
   OperatorColorMap operator_colors; // @optional
 
   gui::PointcasterSessionLayout layout; // @optional
+
+  bool maintain_window_focus = false; // @optional
+  std::optional<int> maintain_window_focus_ms;
 };
 
 } // namespace pc

@@ -80,6 +80,23 @@ PointCaster::PointCaster(const Arguments &args)
   gl_conf.setSampleCount(8);
   if (!tryCreate(conf, gl_conf)) create(conf, gl_conf.setSampleCount(0));
 
+  _keep_focus_poller = std::jthread([this](std::stop_token stop_token) {
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::stop_callback on_stop{stop_token, [&] { cv.notify_all(); }};
+
+    while (!stop_token.stop_requested()) {
+      if (workspace.maintain_window_focus) {
+        if (auto *handle = window()) SDL_RaiseWindow(handle);
+        std::unique_lock lock(mutex);
+        auto focus_loop_wait_time = std::chrono::milliseconds(
+            workspace.maintain_window_focus_ms.value_or(5000));
+        cv.wait_for(lock, focus_loop_wait_time,
+                    [&] { return stop_token.stop_requested(); });
+      }
+    }
+  });
+
   // Set up ImGui
   ImGui::CreateContext();
   pc::gui::init_parameter_styles();
