@@ -437,6 +437,10 @@ if (WITH_POINTCASTER)
     target_compile_options(pointcaster PRIVATE /bigobj /utf-8)
     target_compile_options(pointcaster PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
 	    -forward-slash-prefix-opts >)
+
+    target_compile_options(pointcaster PRIVATE $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:/GL>)
+    target_link_options(pointcaster PRIVATE $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:/LTCG>)
+
   endif()
 
   # allow extra lambda features on nvcc
