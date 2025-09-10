@@ -4,6 +4,7 @@
 #include "denoise/denoise_operator.cuh"
 #include "denoise/kdtree.h"
 #include "noise_operator.cuh"
+#include "operator.h"
 #include "operator_host_config.gen.h"
 #include "pcl/cluster_extraction_operator.gen.h"
 #include "rake_operator.cuh"
@@ -18,6 +19,7 @@
 #include <deque>
 #include <execution>
 #include <future>
+#include <pointclouds.h>
 #include <thread>
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -299,7 +301,6 @@ operator_in_out_t SessionOperatorHost::run_operators(
             }
 
             if (fill_count > config.fill.count_threshold) {
-
               const auto fill_value =
                   fill_count / static_cast<float>(config.fill.max_fill);
               const auto fill_proportion =
@@ -309,58 +310,91 @@ operator_in_out_t SessionOperatorHost::run_operators(
               config.fill.proportion = fill_proportion;
 
               const float box_min_x =
-                  config.transform.position.x - config.transform.size.x;
+                  config.transform.position.x - (config.transform.size.x / 2);
               const float box_max_x =
-                  config.transform.position.x + config.transform.size.x;
+                  config.transform.position.x + (config.transform.size.x / 2);
               const float box_min_y =
-                  config.transform.position.y - config.transform.size.y;
+                  config.transform.position.y - (config.transform.size.y / 2);
               const float box_max_y =
-                  config.transform.position.y + config.transform.size.y;
+                  config.transform.position.y + (config.transform.size.y / 2);
               const float box_min_z =
-                  config.transform.position.z - config.transform.size.z;
+                  config.transform.position.z - (config.transform.size.z / 2);
               const float box_max_z =
-                  config.transform.position.z + config.transform.size.z;
+                  config.transform.position.z + (config.transform.size.z / 2);
 
-              auto minmax_x_points = thrust::minmax_element(
-                  filtered_begin, filtered_end, MinMaxXComparator{});
-              auto minmax_y_points = thrust::minmax_element(
-                  filtered_begin, filtered_end, MinMaxYComparator{});
-              auto minmax_z_points = thrust::minmax_element(
-                  filtered_begin, filtered_end, MinMaxZComparator{});
+              auto device_pos_first = filtered_positions.begin();
+              auto device_pos_last = device_pos_first + fill_count;
 
-              const auto get_scaled_vector = [&](auto vector_it) {
-                auto pos = thrust::get<0>(*vector_it).operator position();
-                const auto x = pos.x / 1000.0f;
-                const auto y = pos.y / 1000.0f;
-                const auto z = pos.z / 1000.0f;
-                const auto mapped_x =
-                    pc::math::remap(box_min_x, box_max_x, 0.0f, 1.0f, x, true);
-                const auto mapped_y =
-                    pc::math::remap(box_min_y, box_max_y, 0.0f, 1.0f, y, true);
-                const auto mapped_z =
-                    pc::math::remap(box_min_z, box_max_z, 0.0f, 1.0f, z, true);
+              auto host_pos = [&](const position *base,
+                                  int idx) -> pc::types::Float3 {
+                position p{};
+                cudaMemcpy(&p, base + idx, sizeof(position),
+                           cudaMemcpyDeviceToHost);
+                return {float(p.x) / 1000.f, float(p.y) / 1000.f,
+                        float(p.z) / 1000.f};
+              };
+
+              const position *device_pos =
+                  thrust::raw_pointer_cast(filtered_positions.data());
+
+              auto [min_x_it, max_x_it] = thrust::minmax_element(
+                  device_pos_first, device_pos_last, MinMaxXComparer{});
+              int min_x_idx = static_cast<int>(min_x_it - device_pos_first);
+              int max_x_idx = static_cast<int>(max_x_it - device_pos_first);
+
+              auto [min_y_it, max_y_it] = thrust::minmax_element(
+                  device_pos_first, device_pos_last, MinMaxYComparer{});
+              int min_y_idx = static_cast<int>(min_y_it - device_pos_first);
+              int max_y_idx = static_cast<int>(max_y_it - device_pos_first);
+
+              auto [min_z_it, max_z_it] = thrust::minmax_element(
+                  device_pos_first, device_pos_last, MinMaxZComparer{});
+              int min_z_idx = static_cast<int>(min_z_it - device_pos_first);
+              int max_z_idx = static_cast<int>(max_z_it - device_pos_first);
+
+              auto min_x = host_pos(device_pos, min_x_idx);
+              auto max_x = host_pos(device_pos, max_x_idx);
+              auto min_y = host_pos(device_pos, min_y_idx);
+              auto max_y = host_pos(device_pos, max_y_idx);
+              auto min_z = host_pos(device_pos, min_z_idx);
+              auto max_z = host_pos(device_pos, max_z_idx);
+
+              config.minmax_positions.min_x = min_x;
+              config.minmax_positions.max_x = max_x;
+              config.minmax_positions.min_y = min_y;
+              config.minmax_positions.max_y = max_y;
+              config.minmax_positions.min_z = min_z;
+              config.minmax_positions.max_z = max_z;
+
+              const auto get_normalised_position = [&](auto pos) {
+                const auto mapped_x = pc::math::remap(box_min_x, box_max_x,
+                                                      0.0f, 1.0f, pos.x, true);
+                const auto mapped_y = pc::math::remap(box_min_y, box_max_y,
+                                                      0.0f, 1.0f, pos.y, true);
+                const auto mapped_z = pc::math::remap(box_min_z, box_max_z,
+                                                      0.0f, 1.0f, pos.z, true);
                 return pc::types::Float3{mapped_x, mapped_y, mapped_z};
               };
 
-              config.minmax_positions.min_x =
-                  get_scaled_vector(minmax_x_points.first);
-              config.minmax_positions.max_x =
-                  get_scaled_vector(minmax_x_points.second);
-              config.minmax_positions.min_y =
-                  get_scaled_vector(minmax_y_points.first);
-              config.minmax_positions.max_y =
-                  get_scaled_vector(minmax_y_points.second);
-              config.minmax_positions.min_z =
-                  get_scaled_vector(minmax_z_points.first);
-              config.minmax_positions.max_z =
-                  get_scaled_vector(minmax_z_points.second);
+              config.minmax_normalised_positions.min_x =
+                  get_normalised_position(min_x);
+              config.minmax_normalised_positions.max_x =
+                  get_normalised_position(max_x);
+              config.minmax_normalised_positions.min_y =
+                  get_normalised_position(min_y);
+              config.minmax_normalised_positions.max_y =
+                  get_normalised_position(max_y);
+              config.minmax_normalised_positions.min_z =
+                  get_normalised_position(min_z);
+              config.minmax_normalised_positions.max_z =
+                  get_normalised_position(max_z);
 
-              config.minmax.min_x = config.minmax_positions.min_x.x;
-              config.minmax.max_x = config.minmax_positions.max_x.x;
-              config.minmax.min_y = config.minmax_positions.min_y.y;
-              config.minmax.max_y = config.minmax_positions.max_y.y;
-              config.minmax.min_z = config.minmax_positions.min_z.z;
-              config.minmax.max_z = config.minmax_positions.max_z.z;
+              config.minmax.min_x = config.minmax_normalised_positions.min_x.x;
+              config.minmax.max_x = config.minmax_normalised_positions.max_x.x;
+              config.minmax.min_y = config.minmax_normalised_positions.min_y.y;
+              config.minmax.max_y = config.minmax_normalised_positions.max_y.y;
+              config.minmax.min_z = config.minmax_normalised_positions.min_z.z;
+              config.minmax.max_z = config.minmax_normalised_positions.max_z.z;
 
               // for a very basic 'energy' parameter, we can calculate the
               // volume and then track changes in the volume over time

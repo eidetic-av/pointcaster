@@ -70,6 +70,7 @@ struct RangeFilterOperatorConfiguration {
   RangeFilterOperatorFillConfiguration fill;
   RangeFilterOperatorMinMaxConfiguration minmax;
   RangeFilterOperatorMinMaxVectorConfiguration minmax_positions; // @optional
+  RangeFilterOperatorMinMaxVectorConfiguration minmax_normalised_positions; // @optional
 };
 
 struct RangeFilterOperator : Operator {
@@ -91,15 +92,36 @@ struct RangeFilterOperator : Operator {
 };
 
 struct MinMaxXComparator {
-  __device__ bool operator()(indexed_point_t lhs, indexed_point_t rhs) const;
+  __host__ __device__ bool operator()(indexed_point_t lhs, indexed_point_t rhs) const;
 };
 
 struct MinMaxYComparator {
-  __device__ bool operator()(indexed_point_t lhs, indexed_point_t rhs) const;
+  __host__ __device__  bool operator()(indexed_point_t lhs, indexed_point_t rhs) const;
 };
 
 struct MinMaxZComparator {
-  __device__ bool operator()(indexed_point_t lhs, indexed_point_t rhs) const;
+  __host__ __device__ bool operator()(indexed_point_t lhs, indexed_point_t rhs) const;
+};
+
+struct MinMaxXComparer {
+  __host__ __device__ bool operator()(const pc::types::position &a,
+                                      const pc::types::position &b) {
+    return a.x < b.x;
+  };
+};
+
+struct MinMaxYComparer {
+  __host__ __device__ bool operator()(const pc::types::position &a,
+                                      const pc::types::position &b) {
+    return a.y < b.y;
+  };
+};
+
+struct MinMaxZComparer {
+  __host__ __device__ bool operator()(const pc::types::position &a,
+                                      const pc::types::position &b) {
+    return a.z < b.z;
+  };
 };
 
 // this function gets a copy of the config with a size that's half the
