@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Pointcaster
+Exec=pointcaster
+Icon=pointcaster
+Categories=Graphics;Video;Development;
+Terminal=false
