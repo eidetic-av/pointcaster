@@ -502,7 +502,7 @@ void draw_app_menu(PointCaster &app) {
       }
       if (ImGui::MenuItem("Save As...")) { pc::logger->info("Save as..."); }
       ImGui::Separator();
-      if (ImGui::MenuItem("Exit", "Q")) {
+      if (ImGui::MenuItem("Exit", "Ctrl-Q")) {
         ImGui::CloseCurrentPopup();
         // TODO ask to save & quit modal
         app.run_async([&] { app.quit(); });

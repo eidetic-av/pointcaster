@@ -1347,7 +1347,9 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
   }
 #endif
   case KeyEvent::Key::Q: {
+if (event.modifiers() == InputEvent::Modifier::Control) {
     quit();
+}
     break;
   }
   case KeyEvent::Key::R: {
