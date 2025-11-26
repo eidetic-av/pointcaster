@@ -18,6 +18,7 @@
 #include <imgui.h>
 #include <k4abttypes.h>
 #include <memory>
+#include <mutex>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_reduce.h>
 
@@ -35,6 +36,7 @@ namespace {
 // synthesized_point_cloud then returns pre-computed frames if the caller
 // submits the same session arg on before reset_pointcloud_frames is called
 pc::string_map<types::PointCloud> pointcloud_frame_cache;
+std::mutex pointcloud_frame_cache_access;
 } // namespace
 
 namespace detail {
@@ -61,26 +63,36 @@ void unbind_device_parameters(
 
 } // namespace detail
 
-void reset_pointcloud_frames() { pointcloud_frame_cache.clear(); }
+void reset_pointcloud_frames() {
+  std::lock_guard lock(pointcloud_frame_cache_access);
+  pointcloud_frame_cache.clear();
+}
 
 pc::types::PointCloud &compute_or_get_point_cloud(
     std::string_view session_id, std::map<std::string, bool> active_devices_map,
     std::vector<operators::OperatorConfigurationVariant> &session_operators) {
   // if we've already computed a pointcloud for the target session this frame,
   // return that
-  if (pointcloud_frame_cache.contains(session_id)) {
-    return pointcloud_frame_cache[session_id];
+  {
+    std::lock_guard lock(pointcloud_frame_cache_access);
+    auto it = pointcloud_frame_cache.find(session_id);
+    if (it != pointcloud_frame_cache.end()) {
+      return it->second;
+    }
   }
 
   using namespace pc::profiling;
   ProfilingZone point_cloud_zone("PointCloud::compute_or_get_point_cloud");
 
-  pointcloud_frame_cache[session_id] = {};
-  auto& pointcloud = pointcloud_frame_cache[session_id];
+  pc::types::PointCloud pointcloud;
   {
+
+    ProfilingZone locked_zone("compute_or_get_point_cloud::locked zone");
 
     std::lock_guard device_lock(devices_access);
     std::lock_guard config_lock(device_configs_access);
+
+    ProfilingZone lock_acquired_zone("compute_or_get_point_cloud::lock acquired");
 
     for (size_t i = 0; i < attached_devices.size(); i++) {
       auto &device = attached_devices[i];
@@ -91,6 +103,7 @@ pc::types::PointCloud &compute_or_get_point_cloud(
                 active_devices_map.at(config.id) == false) {
               return;
             }
+            ProfilingZone this_device_zone(std::format("{}->point_cloud", T::Name));
             auto device_cloud = device->point_cloud();
             {
               ProfilingZone combine_zone(std::format("{} operator+=", T::Name));
@@ -106,7 +119,11 @@ pc::types::PointCloud &compute_or_get_point_cloud(
     pointcloud =
         pc::operators::apply(pointcloud, session_operators, session_id);
   }
-  return pointcloud;
+
+  std::lock_guard lock(pointcloud_frame_cache_access);
+  auto [it, _] =
+      pointcloud_frame_cache.try_emplace(session_id, std::move(pointcloud));
+  return it->second;
 }
 
 pc::types::PointCloud

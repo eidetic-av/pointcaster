@@ -1,4 +1,5 @@
 #include "pointcaster.h"
+#include "structs.h"
 
 #include "camera/camera_config.gen.h"
 #include "camera/camera_controller.h"
@@ -24,6 +25,7 @@
 #include <imgui_stdlib.h>
 #include <serdepp/serializer.hpp>
 #include <variant>
+#include <oneapi/tbb/parallel_for.h>
 
 #ifdef WIN32
 #include <SDL2/SDL_Clipboard.h>
@@ -687,13 +689,37 @@ void PointCaster::load_device(DeviceConfigurationVariant &config) {
 }
 
 void PointCaster::render_cameras() {
+  using namespace pc::profiling;
+    
+  const auto session_count = static_cast<int>(workspace.sessions.size());
+
+  std::vector<PointCloud*> this_frame_pointclouds(session_count, nullptr);
+
+  {
+    ProfilingZone compute_zone("Compute point-clouds");
+    // pre-cache point clouds in parallel before rendering
+    tbb::task_arena session_pointcloud_processing_arena(session_count);
+    session_pointcloud_processing_arena.execute([this, &this_frame_pointclouds, session_count] {
+      tbb::parallel_for(0, session_count, [&](auto i) {
+        ProfilingZone compute_thread_zone(
+            fmt::format("Session {}", i));
+        auto &session = workspace.sessions[i];
+        auto &session_operator_host = session_operator_hosts[i];
+        auto& session_points = devices::compute_or_get_point_cloud(
+            session.id, session.active_devices,
+            session_operator_host._config.operators);
+        this_frame_pointclouds[i] = &session_points;
+      });
+    });
+  }
+  
   auto skeletons = devices::scene_skeletons();
 
   for (size_t i = 0; i < workspace.sessions.size(); i++) {
     auto &session = workspace.sessions[i];
     auto &session_operator_host = session_operator_hosts[i];
     auto &camera_controller = camera_controllers[i];
-    auto& camera = (*camera_controller).camera();
+    auto &camera = (*camera_controller).camera();
     auto &rendering_config = camera_controller->config().rendering;
 
     const auto frame_size =
@@ -704,9 +730,7 @@ void PointCaster::render_cameras() {
 
     camera_controller->setup_frame(frame_size);
 
-    PointCloud &points = devices::compute_or_get_point_cloud(
-        session.id, session.active_devices,
-        session_operator_host._config.operators);
+    auto &points = *this_frame_pointclouds[i];
 
     _point_cloud_renderer->points = points;
     _point_cloud_renderer->setDirty();
@@ -753,7 +777,6 @@ void PointCaster::render_cameras() {
     // if (points.empty()) {
 
       // TODO
-
 
       // // TODO this vector should defs be removed
       // // the synthesized_point_cloud api just requires a reference to a
