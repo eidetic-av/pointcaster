@@ -1126,35 +1126,60 @@ void PointCaster::draw_stats(const float delta_time) {
 auto output_count = 0;
 
 void PointCaster::drawEvent() {
+  using namespace pc::profiling;
+  ProfilingZone frame_zone("PointCaster::drawEvent");
 
+  pc::frame_counter::begin_new_frame();
+
+  {
+    ProfilingZone zone("Reset pointcloud frames");
   pc::devices::reset_pointcloud_frames();
+  }
 
   const auto delta_time = _timeline.previousFrameDuration();
   const auto delta_ms = static_cast<int>(delta_time * 1000);
-  TweenManager::instance()->tick(delta_ms);
 
+  {
+    ProfilingZone zone("TweenManager tick");
+  TweenManager::instance()->tick(delta_ms);
+  }
+
+  {
+    ProfilingZone zone("Main thread dispatcher");
   std::function<void()> main_thread_callback;
   while (MainThreadDispatcher::try_dequeue(main_thread_callback)) {
     main_thread_callback();
+    }
   }
 
+  {
+    ProfilingZone zone("Clear framebuffer and render cameras");
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
                                GL::FramebufferClear::Depth);
 
   render_cameras();
+  }
 
+  {
+    ProfilingZone zone("Begin ImGui frame");
   _imgui_context.newFrame();
   ImGuizmo::SetOrthographic(false);
   ImGuizmo::BeginFrame();
   pc::gui::begin_gui_helpers(_current_mode, _modeline_input);
+  }
 
+  {
+    ProfilingZone zone("GUI input setup");
   // Enable text input, if needed/
   if (ImGui::GetIO().WantTextInput && !isTextInputActive()) startTextInput();
   else if (!ImGui::GetIO().WantTextInput && isTextInputActive())
     stopTextInput();
+  }
 
-  // Draw gui windows
+  {
+    ProfilingZone zone("Draw GUI windows");
 
+    // Draw gui windows
   gui::draw_main_viewport(*this);
 
   if (!workspace.layout.hide_ui) {
@@ -1198,18 +1223,26 @@ void PointCaster::drawEvent() {
     }
 
 #ifdef WITH_OSC
-    if (workspace.osc_client.has_value() && (*workspace.osc_client).show_window)
+      if (workspace.osc_client.has_value() &&
+          (*workspace.osc_client).show_window)
       _osc_client->draw_imgui_window();
 
-    if (workspace.osc_server.has_value() && (*workspace.osc_server).show_window)
+      if (workspace.osc_server.has_value() &&
+          (*workspace.osc_server).show_window)
       _osc_server->draw_imgui_window();
 #endif
 
     // draw_modeline();
+    }
   }
 
+  {
+    ProfilingZone zone("ImGui cursor update");
   _imgui_context.updateApplicationCursor(*this);
+  }
 
+  {
+    ProfilingZone zone("Render ImGui and viewports");
   // Render ImGui window
   GL::Renderer::enable(GL::Renderer::Feature::Blending);
   GL::Renderer::enable(GL::Renderer::Feature::ScissorTest);
@@ -1218,14 +1251,17 @@ void PointCaster::drawEvent() {
 
   _imgui_context.drawFrame();
 
-  if (ImGuiConfigFlags_ViewportsEnable) {
+    if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
     ImGui::UpdatePlatformWindows();
     ImGui::RenderPlatformWindowsDefault();
   }
 
   GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
   GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+  }
 
+  {
+    ProfilingZone zone("GL error check");
   // TODO this can be removed and if we want GL errors we can set
   // MAGNUM_GPU_VALIDATION=ON instead or run the application with
   // --magnum-gpu-validation on
@@ -1240,13 +1276,17 @@ void PointCaster::drawEvent() {
     pc::logger->warn("StackOverflow");
   if (error == GL::Renderer::Error::StackUnderflow)
     pc::logger->warn("StackUnderflow");
+  }
 
+  {
+    ProfilingZone zone("Swap buffers & schedule redraw");
   redraw();
-
   swapBuffers();
+  }
 
   auto delta_secs = static_cast<float>(_timeline.previousFrameDuration());
   {
+    ProfilingZone zone("PlySequencePlayer tick");
     // TODO make this some thing inside the PlyPlayer namespace maybe
     // or some more abstract class or function that handles all things that need
     // a tick each frame
@@ -1256,9 +1296,16 @@ void PointCaster::drawEvent() {
     }
   }
 
+  {
+    ProfilingZone zone("parameters::publish");
   parameters::publish(delta_secs);
+  }
 
+  {
+    ProfilingZone zone("Timeline nextFrame");
   _timeline.nextFrame();
+  }
+
   FrameMark;
 }
 
