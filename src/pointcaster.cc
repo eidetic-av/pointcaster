@@ -19,6 +19,7 @@
 #include "point_cloud_renderer/point_cloud_renderer_config.gen.h"
 #include "session.gen.h"
 #include "workspace.gen.h"
+#include "frame_counter.h"
 #include <ImGuizmo.h>
 #include <algorithm>
 #include <imgui.h>
