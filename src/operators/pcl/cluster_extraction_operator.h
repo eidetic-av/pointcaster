@@ -7,10 +7,13 @@
 #include <memory>
 #include <oneapi/tbb/concurrent_queue.h>
 #include <oneapi/tbb/parallel_pipeline.h>
+#include <pcl/impl/point_types.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl/PointIndices.h>
 #include <thrust/host_vector.h>
 #include <vector>
+#include <optional>
 
 namespace pc::operators::pcl_cpu {
 
@@ -27,6 +30,7 @@ struct ClusterExtractionConfiguration {
   int outlier_filter_voxel_count = 30;
   float outlier_filter_deviation_threshold = 1.0f;
   bool publish_voxels = false;
+  bool reduce_to_voxels = false; // @optional
   int cluster_tolerance = 270;       // @minmax(120, 1200)
   int cluster_voxel_count_min = 10;  // @minmax(3, 1000)
   int cluster_voxel_count_max = 100; // @minmax(3, 1000)
@@ -35,6 +39,7 @@ struct ClusterExtractionConfiguration {
   int cluster_timeout_ms = 100;
   int cluster_match_tolerance = 500; // @minmax(0, 5000)
   bool publish_clusters = false;
+  bool reduce_to_clusters = false; // @optional
   bool calculate_pca = true;
   bool draw_pca = true;
   bool publish_pca = false;
@@ -97,6 +102,12 @@ public:
     pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud;
   };
 
+  struct ClusterExtractionResult {
+    pcl::PointCloud<pcl::PointXYZ>::Ptr voxelised_cloud;
+    std::optional<std::vector<pcl::PointIndices>> cluster_indices;
+    std::optional<std::vector<Cluster>> updated_clusters;
+  };
+
   static ClusterExtractionPipeline &instance(const std::string_view session_id);
   const std::string session_id;
 
@@ -104,6 +115,9 @@ public:
   std::atomic<pcl::PointCloud<pcl::PointXYZ>::Ptr> current_voxels;
   std::atomic<std::shared_ptr<std::vector<Cluster>>> current_clusters;
   std::atomic<std::shared_ptr<std::vector<PCAResult>>> current_cluster_pca;
+
+  std::jthread voxel_publish_thread;
+  std::atomic_bool publish_voxels_enabled{true};
 
   ClusterExtractionPipeline(const std::string_view session_id);
   ~ClusterExtractionPipeline();
@@ -113,6 +127,11 @@ public:
   operator=(const ClusterExtractionPipeline &) = delete;
   ClusterExtractionPipeline(ClusterExtractionPipeline &&) = delete;
   ClusterExtractionPipeline &operator=(ClusterExtractionPipeline &&) = delete;
+
+  static ClusterExtractionResult run_cluster_extraction(
+      ClusterExtractionPipeline::InputFrame &frame,
+      std::atomic<std::shared_ptr<std::vector<Cluster>>> &current_clusters);
+
 
 private:
   struct IngestTask {

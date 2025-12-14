@@ -49,10 +49,37 @@ ClusterExtractionPipeline::ClusterExtractionPipeline(
                 ExtractTask{session_id, current_voxels, current_clusters,
                             current_cluster_pca}));
   });
+
+  voxel_publish_thread = std::jthread([this](std::stop_token st) {
+    using namespace std::chrono_literals;
+    auto next = std::chrono::steady_clock::now();
+
+    // TODO this is all temporary!!!
+
+    while (!st.stop_requested()) {
+      next += 16ms;
+      std::this_thread::sleep_until(next);
+
+      if (!publish_voxels_enabled.load()) continue;
+
+      auto voxels = current_voxels.load();
+      if (!voxels || voxels->empty()) continue;
+
+      std::vector<std::array<float, 4>> voxels_with_cluster_id;
+      voxels_with_cluster_id.reserve(voxels->size());
+      for (const auto &p : voxels->points) {
+        voxels_with_cluster_id.push_back(
+            {p.x, p.y, p.z, -1.0f});
+      }
+      publisher::publish_all("pcl_voxels", voxels_with_cluster_id,
+                             {session_label_from_id[session_id], "voxels"});
+    }
+  });
 }
 
 ClusterExtractionPipeline::~ClusterExtractionPipeline() {
   _host_thread.request_stop();
+  voxel_publish_thread.request_stop();
 }
 
 // TODO swap raw ptrs for shared pointers in pipeline stages
@@ -76,25 +103,110 @@ ClusterExtractionPipeline::IngestTask::operator()(tbb::flow_control &fc) const {
 void ClusterExtractionPipeline::ExtractTask::operator()(
     ClusterExtractionPipeline::InputFrame *frame) const {
   if (frame == nullptr) return;
-  using namespace std::chrono;
-  using namespace std::chrono_literals;
   using namespace pc::profiling;
 
   ProfilingZone function_zone("ClusterExtractionPipeline::ExtractTask::()");
-
-  auto start_time = system_clock::now();
 
   auto &config = frame->extraction_config;
   const auto operator_name = operator_friendly_names.at(config.id);
   const auto session_label = session_label_from_id[session_id];
 
+  auto result = run_cluster_extraction(*frame, current_clusters);
+
+  current_voxels.store(result.voxelised_cloud);
+  if (result.updated_clusters && config.publish_clusters) {
+    ProfilingZone publish_zone("Publish clusters");
+    // the following transforms our clusters gives us their bounding
+    // boxes in std containers, which are easily publishable
+    using std_aabb = std::array<std::array<float, 3>, 2>;
+    std::vector<std_aabb> aabbs(result.updated_clusters->size());
+    std::ranges::transform(result.updated_clusters.value(), aabbs.begin(),
+                           [](const Cluster &cluster) {
+                             const auto &aabb = cluster.bounding_box;
+                             return std_aabb(
+                                 {{aabb.min.x, aabb.min.y, aabb.min.z},
+                                  {aabb.max.x, aabb.max.y, aabb.max.z}});
+                           });
+    publisher::publish_all(operator_name, aabbs, {session_label, "clusters"});
+  }
+
+  if (config.publish_voxels) {
+    ProfilingZone publish_voxels_zone("Publish voxels");
+
+    // when publishing voxels, we send the position vector x,y,z with w
+    // representing the integer index of the cluster the associated voxel
+
+    size_t voxel_count =
+        result.voxelised_cloud ? result.voxelised_cloud->size() : 0;
+    pc::logger->debug("{}.voxel_count: {}", config.id, voxel_count);
+
+    std::optional<std::vector<std::array<float, 4>>> voxels_with_cluster_id;
+    if (result.cluster_indices) {
+      // map each point to its cluster id (default -1 if no cluster associated)
+      // returning a flat array that we can parallel iterate over next
+      std::vector<int> cluster_ids(voxel_count, -1);
+      auto& cluster_indices = result.cluster_indices.value();
+      tbb::parallel_for(static_cast<size_t>(0), cluster_indices.size(),
+                        [&](size_t cluster_id) {
+                          // TODO potential optimisation for large sets of
+                          // clusters here by making this loop parallel
+                          for (auto idx : cluster_indices[cluster_id].indices) {
+                            cluster_ids[idx] = static_cast<int>(cluster_id);
+                          }
+                        });
+
+      // now we can loop through each entry in parallel and
+      // create our voxel list with associated cluster ids
+      auto &voxels = voxels_with_cluster_id.emplace(voxel_count);
+      tbb::parallel_for(
+          static_cast<size_t>(0), voxel_count, [&](size_t voxel_id) {
+            const auto &position = result.voxelised_cloud->points[voxel_id];
+            voxels[voxel_id] = {position.x, position.y, position.z,
+                                static_cast<float>(cluster_ids[voxel_id])};
+          });
+    }
+
+    static tbb::concurrent_unordered_map<uid, bool> has_published_empty_voxels;
+    if (!has_published_empty_voxels.contains(config.id)) {
+      has_published_empty_voxels[config.id] = false;
+    }
+    if (voxel_count > 0) {
+      const auto &operator_name = operator_friendly_names.at(config.id);
+      // publisher::publish_all(operator_name, voxels_with_cluster_id,
+      //                        {session_label, "voxels"});
+      has_published_empty_voxels[config.id] = false;
+    } else if (!has_published_empty_voxels[config.id]) {
+      const auto &operator_name = operator_friendly_names.at(config.id);
+      // publisher::publish_all(operator_name, voxels_with_cluster_id,
+      //                        {session_label, "voxels"});
+      has_published_empty_voxels[config.id] = true;
+    }
+  }
+
+  // store our results for other threads to use
+  if (result.updated_clusters) {
+    auto current_clusters_ptr = std::make_shared<std::vector<Cluster>>(
+        std::move(result.updated_clusters.value()));
+    current_clusters.store(std::move(current_clusters_ptr));
+  }
+
+  delete frame;
+}
+
+ClusterExtractionPipeline::ClusterExtractionResult
+ClusterExtractionPipeline::run_cluster_extraction(
+    InputFrame &frame,
+    std::atomic<std::shared_ptr<std::vector<Cluster>>> &current_clusters) {
+  using namespace pc::profiling;
+
+  ClusterExtractionResult result;
+
+  auto &config = frame.extraction_config;
+
   // TODO check timestamp against current time
   // in order to throw away older frames
 
-  // TODO configuration options for voxel sampling and clustering
-  {}
-
-  auto &positions = frame->positions;
+  auto &positions = frame.positions;
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
   cloud->points.resize(positions.size());
@@ -128,8 +240,6 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
     outlier_filter.setStddevMulThresh(std_deviation_threshold);
     outlier_filter.filter(*voxelised_cloud);
   }
-
-  current_voxels.store(voxelised_cloud);
 
   std::vector<Cluster> updated_clusters;
   std::vector<pcl::PointIndices> cluster_indices;
@@ -198,7 +308,7 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
       if (!existing_clusters) {
         existing_clusters = std::make_shared<std::vector<Cluster>>();
       }
-      auto now = system_clock::now();
+      auto now = std::chrono::system_clock::now();
 
       for (int i = 0; i < cluster_bounds.size(); ++i) {
         const auto &new_bound = cluster_bounds[i];
@@ -241,261 +351,212 @@ void ClusterExtractionPipeline::ExtractTask::operator()(
             matched_existing_clusters.end()) {
           // this existing cluster has not been matched, check its timeout
           if (now - existing_cluster.last_seen_time <=
-              milliseconds(config.cluster_timeout_ms)) {
+              std::chrono::milliseconds(config.cluster_timeout_ms)) {
             // and add it to our updated list if it should still be alive
             updated_clusters.push_back(existing_cluster);
           }
         }
       }
+
+      result.cluster_indices = { std::move(cluster_indices) };
+      result.updated_clusters = { std::move(updated_clusters) };
     }
 
-    if (config.publish_clusters) {
-      ProfilingZone publish_zone("Publish clusters");
-      // the following transforms our clusters gives us their bounding
-      // boxes in std containers, which are easily publishable
-      using std_aabb = std::array<std::array<float, 3>, 2>;
-      std::vector<std_aabb> aabbs(updated_clusters.size());
-      std::ranges::transform(
-          updated_clusters, aabbs.begin(), [](const Cluster &cluster) {
-            const auto &aabb = cluster.bounding_box;
-            return std_aabb({{aabb.min.x, aabb.min.y, aabb.min.z},
-                             {aabb.max.x, aabb.max.y, aabb.max.z}});
-          });
-      publisher::publish_all(operator_name, aabbs, {session_label, "clusters"});
-    }
+    result.voxelised_cloud = voxelised_cloud;
 
     if (config.calculate_pca) {
-      ProfilingZone publish_zone("Principal Component Analysis");
+      pc::logger->error("PCA calculation has been disabled!");
+      //   ProfilingZone publish_zone("Principal Component Analysis");
 
-      // we use a parallel for to loop through each cluster and use
-      // Principal Component Analysis to calculate the principal axis and the
-      // cluster's span (width) across the principal axis
+      //   // we use a parallel for to loop through each cluster and use
+      //   // Principal Component Analysis to calculate the principal axis and
+      //   the
+      //   // cluster's span (width) across the principal axis
 
-      tbb::concurrent_vector<PCAResult> cluster_pca_results;
+      //   tbb::concurrent_vector<PCAResult> cluster_pca_results;
 
-      tbb::parallel_for(
-          tbb::blocked_range<size_t>(0, updated_clusters.size()),
-          [&updated_clusters,
-           &cluster_pca_results](const tbb::blocked_range<size_t> &r) {
-            for (size_t i = r.begin(); i != r.end(); ++i) {
+      //   tbb::parallel_for(
+      //       tbb::blocked_range<size_t>(0, updated_clusters.size()),
+      //       [&updated_clusters,
+      //        &cluster_pca_results](const tbb::blocked_range<size_t> &r) {
+      //         for (size_t i = r.begin(); i != r.end(); ++i) {
 
-              const auto &cluster = updated_clusters[i];
-              const auto &cluster_cloud = cluster.point_cloud;
+      //           const auto &cluster = updated_clusters[i];
+      //           const auto &cluster_cloud = cluster.point_cloud;
 
-              if (!cluster_cloud || cluster_cloud->empty()) continue;
+      //           if (!cluster_cloud || cluster_cloud->empty()) continue;
 
-              // compute the Principal Component Analysis on the cluster
-              Eigen::Matrix3f eigenvectors;
-              Eigen::Vector3f eigenvalues;
-              try {
-                pcl::PCA<pcl::PointXYZ> cluster_pca;
-                cluster_pca.setInputCloud(cluster_cloud);
-                eigenvectors = cluster_pca.getEigenVectors();
-                eigenvalues = cluster_pca.getEigenValues();
-              } catch (const std::exception &e) {
-                pc::logger->error("PCA Error: {}", e.what());
-                continue;
-              }
+      //           // compute the Principal Component Analysis on the cluster
+      //           Eigen::Matrix3f eigenvectors;
+      //           Eigen::Vector3f eigenvalues;
+      //           try {
+      //             pcl::PCA<pcl::PointXYZ> cluster_pca;
+      //             cluster_pca.setInputCloud(cluster_cloud);
+      //             eigenvectors = cluster_pca.getEigenVectors();
+      //             eigenvalues = cluster_pca.getEigenValues();
+      //           } catch (const std::exception &e) {
+      //             pc::logger->error("PCA Error: {}", e.what());
+      //             continue;
+      //           }
 
-              // we need to identify the vertical (up-down) axis by comparing
-              // with our global up-axis.
-              // - this is so that we ignore up-down and just get horizontal
-              // span
-              static const Eigen::Vector3f up_axis(0, 1, 0);
-              int up_down_index = 0;
-              float max_dot_product =
-                  std::abs(eigenvectors.col(0).dot(up_axis));
-              for (int i = 1; i < 3; ++i) {
-                float dot_product = std::abs(eigenvectors.col(i).dot(up_axis));
-                if (dot_product > max_dot_product) {
-                  max_dot_product = dot_product;
-                  up_down_index = i;
-                }
-              }
-              // then identify the horizontal axis with the largest eigenvalue
-              int horizontal_axis_index = (up_down_index == 0) ? 1 : 0;
-              if (eigenvalues(horizontal_axis_index) <
-                  eigenvalues(3 - up_down_index - horizontal_axis_index)) {
-                horizontal_axis_index =
-                    3 - up_down_index - horizontal_axis_index;
-              }
-              // select the corresponding eigenvector
-              Eigen::Vector3f horizontal_axis =
-                  eigenvectors.col(horizontal_axis_index);
+      //           // we need to identify the vertical (up-down) axis by
+      //           comparing
+      //           // with our global up-axis.
+      //           // - this is so that we ignore up-down and just get
+      //           horizontal
+      //           // span
+      //           static const Eigen::Vector3f up_axis(0, 1, 0);
+      //           int up_down_index = 0;
+      //           float max_dot_product =
+      //               std::abs(eigenvectors.col(0).dot(up_axis));
+      //           for (int i = 1; i < 3; ++i) {
+      //             float dot_product =
+      //             std::abs(eigenvectors.col(i).dot(up_axis)); if (dot_product
+      //             > max_dot_product) {
+      //               max_dot_product = dot_product;
+      //               up_down_index = i;
+      //             }
+      //           }
+      //           // then identify the horizontal axis with the largest
+      //           eigenvalue int horizontal_axis_index = (up_down_index == 0) ?
+      //           1 : 0; if (eigenvalues(horizontal_axis_index) <
+      //               eigenvalues(3 - up_down_index - horizontal_axis_index)) {
+      //             horizontal_axis_index =
+      //                 3 - up_down_index - horizontal_axis_index;
+      //           }
+      //           // select the corresponding eigenvector
+      //           Eigen::Vector3f horizontal_axis =
+      //               eigenvectors.col(horizontal_axis_index);
 
-              // calculate the centroid of the cluster
-              // TODO its probably useful to do this elsewhere
-              Eigen::Vector4f centroid;
-              pcl::compute3DCentroid(*cluster_cloud, centroid);
+      //           // calculate the centroid of the cluster
+      //           // TODO its probably useful to do this elsewhere
+      //           Eigen::Vector4f centroid;
+      //           pcl::compute3DCentroid(*cluster_cloud, centroid);
 
-              // project points onto the selected horizontal axis and find
-              // min/max projections
-              // - set up the result variables for this:
-              static constexpr auto max_f = std::numeric_limits<float>::max();
-              static constexpr auto min_f =
-                  std::numeric_limits<float>::lowest();
-              float min_projection = max_f;
-              float max_projection = min_f;
-              Eigen::Vector3f min_point, max_point;
-              // also find min/max extremes for each axis (unprojected, aabb
-              // aligned)
-              // - set up these results:
-              std::array<PCAResult::minMax, 3> axis_extremes;
-              for (int axis = 0; axis < 3; axis++) {
-                axis_extremes[axis] = {PCAResult::float3{max_f, max_f, max_f},
-                                       PCAResult::float3{min_f, min_f, min_f}};
-              }
+      //           // project points onto the selected horizontal axis and find
+      //           // min/max projections
+      //           // - set up the result variables for this:
+      //           static constexpr auto max_f =
+      //           std::numeric_limits<float>::max(); static constexpr auto
+      //           min_f =
+      //               std::numeric_limits<float>::lowest();
+      //           float min_projection = max_f;
+      //           float max_projection = min_f;
+      //           Eigen::Vector3f min_point, max_point;
+      //           // also find min/max extremes for each axis (unprojected,
+      //           aabb
+      //           // aligned)
+      //           // - set up these results:
+      //           std::array<PCAResult::minMax, 3> axis_extremes;
+      //           for (int axis = 0; axis < 3; axis++) {
+      //             axis_extremes[axis] = {PCAResult::float3{max_f, max_f,
+      //             max_f},
+      //                                    PCAResult::float3{min_f, min_f,
+      //                                    min_f}};
+      //           }
 
-              for (const auto &point : cluster_cloud->points) {
-                Eigen::Vector3f p(point.x, point.y, point.z);
-                // projected along the principal horizontal axis
-                float projection =
-                    (p - centroid.head<3>()).dot(horizontal_axis);
-                if (projection < min_projection) {
-                  min_projection = projection;
-                  min_point = p;
-                }
-                if (projection > max_projection) {
-                  max_projection = projection;
-                  max_point = p;
-                }
-                // unprojected, aabb aligned min/max axis values
-                for (int axis = 0; axis < 3; ++axis) {
-                  if (p[axis] < axis_extremes[axis][0][axis]) {
-                    axis_extremes[axis][0] = {p.x(), p.y(), p.z()};
-                  }
-                  if (p[axis] > axis_extremes[axis][1][axis]) {
-                    axis_extremes[axis][1] = {p.x(), p.y(), p.z()};
-                  }
-                }
-              }
-              // and collect the results
-              cluster_pca_results.push_back(PCAResult{
-                  .centroid = {centroid.x(), centroid.y(), centroid.z()},
-                  .principal_axis_span = {std::array<float, 3>{min_point.x(),
-                                                               min_point.y(),
-                                                               min_point.z()},
-                                          std::array<float, 3>{max_point.x(),
-                                                               max_point.y(),
-                                                               max_point.z()}},
-                  .axis_extremes = axis_extremes});
-            }
-          });
+      //           for (const auto &point : cluster_cloud->points) {
+      //             Eigen::Vector3f p(point.x, point.y, point.z);
+      //             // projected along the principal horizontal axis
+      //             float projection =
+      //                 (p - centroid.head<3>()).dot(horizontal_axis);
+      //             if (projection < min_projection) {
+      //               min_projection = projection;
+      //               min_point = p;
+      //             }
+      //             if (projection > max_projection) {
+      //               max_projection = projection;
+      //               max_point = p;
+      //             }
+      //             // unprojected, aabb aligned min/max axis values
+      //             for (int axis = 0; axis < 3; ++axis) {
+      //               if (p[axis] < axis_extremes[axis][0][axis]) {
+      //                 axis_extremes[axis][0] = {p.x(), p.y(), p.z()};
+      //               }
+      //               if (p[axis] > axis_extremes[axis][1][axis]) {
+      //                 axis_extremes[axis][1] = {p.x(), p.y(), p.z()};
+      //               }
+      //             }
+      //           }
+      //           // and collect the results
+      //           cluster_pca_results.push_back(PCAResult{
+      //               .centroid = {centroid.x(), centroid.y(), centroid.z()},
+      //               .principal_axis_span = {std::array<float,
+      //               3>{min_point.x(),
+      //                                                            min_point.y(),
+      //                                                            min_point.z()},
+      //                                       std::array<float,
+      //                                       3>{max_point.x(),
+      //                                                            max_point.y(),
+      //                                                            max_point.z()}},
+      //               .axis_extremes = axis_extremes});
+      //         }
+      //       });
 
-      // move result to host instance
-      auto output_pca_results = std::make_shared<std::vector<PCAResult>>(
-          std::move_iterator(cluster_pca_results.begin()),
-          std::move_iterator(cluster_pca_results.end()));
+      //   // move result to host instance
+      //   auto output_pca_results = std::make_shared<std::vector<PCAResult>>(
+      //       std::move_iterator(cluster_pca_results.begin()),
+      //       std::move_iterator(cluster_pca_results.end()));
 
-      // // auto output_pca_results =
-      // std::make_shared<std::vector<PCAResult>>(principal_spans.size());
-      // // std::copy(cluster_pca_results.begin(), cluster_pca_results.end(),
-      // output_pca_results->begin());
-      // // current_cluster_pca.store(output_pca_results);
+      //   // // auto output_pca_results =
+      //   // std::make_shared<std::vector<PCAResult>>(principal_spans.size());
+      //   // // std::copy(cluster_pca_results.begin(),
+      //   cluster_pca_results.end(),
+      //   // output_pca_results->begin());
+      //   // // current_cluster_pca.store(output_pca_results);
 
-      if (config.publish_pca) {
-        ProfilingZone publish_zone("Publish PCA results");
-        // publish the structure as a flat array, but also as individual
-        // channels
-        const auto cluster_count = output_pca_results->size();
+      //   if (config.publish_pca) {
+      //     ProfilingZone publish_zone("Publish PCA results");
+      //     // publish the structure as a flat array, but also as individual
+      //     // channels
+      //     const auto cluster_count = output_pca_results->size();
 
-        // TODO it would be useful for publisher::publish_all to handle
-        // reflecting over types to do both the flattened and specific channel
-        // publishing automatically
+      //     // TODO it would be useful for publisher::publish_all to handle
+      //     // reflecting over types to do both the flattened and specific
+      //     channel
+      //     // publishing automatically
 
-        // using float3 = std::array<float, 3>;
-        // using minMax = std::array<float3, 2>;
-        // std::vector<float3> centroids;
-        // centroids.reserve(cluster_count);
-        // std::vector<minMax> pca_spans;
-        // pca_spans.reserve(cluster_count);
-        // std::vector<std::array<minMax, 3>> axis_extremes;
-        // axis_extremes.reserve(cluster_count);
+      //     // using float3 = std::array<float, 3>;
+      //     // using minMax = std::array<float3, 2>;
+      //     // std::vector<float3> centroids;
+      //     // centroids.reserve(cluster_count);
+      //     // std::vector<minMax> pca_spans;
+      //     // pca_spans.reserve(cluster_count);
+      //     // std::vector<std::array<minMax, 3>> axis_extremes;
+      //     // axis_extremes.reserve(cluster_count);
 
-        // for (const auto& pca_result : *output_pca_results) {
-        // centroids.push_back(pca_result.centroid);
-        // pca_spans.push_back(pca_result.principal_axis_span);
-        // axis_extremes.push_back(pca_result.axis_extremes);
-        // }
+      //     // for (const auto& pca_result : *output_pca_results) {
+      //     // centroids.push_back(pca_result.centroid);
+      //     // pca_spans.push_back(pca_result.principal_axis_span);
+      //     // axis_extremes.push_back(pca_result.axis_extremes);
+      //     // }
 
-        static const auto id_string = "pcl";
-        using FlattenedPCAResult =
-            decltype(std::declval<PCAResult>().flattened());
-        std::vector<FlattenedPCAResult> flattened_pca_results(cluster_count);
-        std::transform(output_pca_results->begin(), output_pca_results->end(),
-                       flattened_pca_results.begin(),
-                       [](const auto &result) { return result.flattened(); });
-        publisher::publish_all("flattened", flattened_pca_results,
-                               {id_string, "pca"});
+      //     static const auto id_string = "pcl";
+      //     using FlattenedPCAResult =
+      //         decltype(std::declval<PCAResult>().flattened());
+      //     std::vector<FlattenedPCAResult>
+      //     flattened_pca_results(cluster_count);
+      //     std::transform(output_pca_results->begin(),
+      //     output_pca_results->end(),
+      //                    flattened_pca_results.begin(),
+      //                    [](const auto &result) { return result.flattened();
+      //                    });
+      //     publisher::publish_all("flattened", flattened_pca_results,
+      //                            {id_string, "pca"});
 
-        // specific channels
-        // publisher::publish_all("centroids", centroids, { id_string, "pca" });
-        // publisher::publish_all("pca_spans", pca_spans, { id_string, "pca" });
-        // publisher::publish_all("extremes", axis_extremes, { id_string, "pca"
-        // });
-      }
+      //     // specific channels
+      //     // publisher::publish_all("centroids", centroids, { id_string,
+      //     "pca" });
+      //     // publisher::publish_all("pca_spans", pca_spans, { id_string,
+      //     "pca" });
+      //     // publisher::publish_all("extremes", axis_extremes, { id_string,
+      //     "pca"
+      //     // });
+      //   }
 
-      current_cluster_pca.store(std::move(output_pca_results));
-    }
-
-    // and latest clusters onto main thread now we're done with them
-    current_clusters.store(
-        std::make_shared<std::vector<Cluster>>(std::move(updated_clusters)));
-  }
-
-  if (config.publish_voxels) {
-    ProfilingZone publish_voxels_zone("Publish voxels");
-
-    // when publishing voxels, we send the position vector x,y,z with w
-    // representing the integer index of the cluster the associated voxel
-
-    // TODO we can probably optimise this by removing the serial loops inside
-    // the first parallel_for
-
-    size_t voxel_count = voxelised_cloud->points.size();
-    pc::logger->debug("{}.voxel_count: {}", config.id, voxel_count);
-
-    // map each point to its cluster id (default -1 if no cluster associated)
-    // returning a flat array that we can parallel iterate over next
-    std::vector<int> cluster_ids(voxel_count, -1);
-    tbb::parallel_for(static_cast<size_t>(0), cluster_indices.size(),
-                      [&](size_t cluster_id) {
-                        for (auto idx : cluster_indices[cluster_id].indices) {
-                          cluster_ids[idx] = static_cast<int>(cluster_id);
-                        }
-                      });
-
-    // now we can loop through each entry in parallel and
-    // create our voxel list with associated cluster ids
-    std::vector<std::array<float, 4>> voxels_with_cluster_id(voxel_count);
-    tbb::parallel_for(
-        static_cast<size_t>(0), voxel_count, [&](size_t voxel_id) {
-          const auto &position = voxelised_cloud->points[voxel_id];
-          voxels_with_cluster_id[voxel_id] = {
-              position.x, position.y, position.z,
-              static_cast<float>(cluster_ids[voxel_id])};
-        });
-
-    // only publish an empty voxel array a single time, not every frame
-    // so keep track of that inside a map
-    static std::unordered_map<uid, bool> has_published_empty_voxels;
-    if (!has_published_empty_voxels.contains(config.id)) {
-      has_published_empty_voxels[config.id] = false;
-    }
-
-    if (voxel_count > 0) {
-      const auto &operator_name = operator_friendly_names.at(config.id);
-      publisher::publish_all(operator_name, voxels_with_cluster_id,
-                             {session_label, "voxels"});
-      has_published_empty_voxels[config.id] = false;
-    } else if (!has_published_empty_voxels[config.id]) {
-      const auto &operator_name = operator_friendly_names.at(config.id);
-      publisher::publish_all(operator_name, voxels_with_cluster_id,
-                             {session_label, "voxels"});
-      has_published_empty_voxels[config.id] = true;
+      //   current_cluster_pca.store(std::move(output_pca_results));
     }
   }
-
-  delete frame;
+  return result;
 }
 } // namespace pc::operators::pcl_cpu

@@ -1,12 +1,12 @@
 #include "../logger.h"
 #include "../math.h"
 #include "../profiling.h"
-#include "denoise/denoise_operator.cuh"
+
 #include "denoise/kdtree.h"
+#include "denoise/denoise_operator.cuh"
 #include "noise_operator.cuh"
 #include "operator.h"
 #include "operator_host_config.gen.h"
-#include "pcl/cluster_extraction_operator.gen.h"
 #include "rake_operator.cuh"
 #include "range_filter_operator.cuh"
 #include "rotate_operator.cuh"
@@ -14,8 +14,11 @@
 #include "session_operator_host.h"
 #include "transform_cuda/rgb_gain_operator.cuh"
 #include "transform_cuda/translate_operator.cuh"
+
 #include "minmax_extremes.cuh"
+#include "pcl/cluster_extraction_operator.gen.h"
 #include "transform_cuda/uniform_gain_operator.cuh"
+
 #include <algorithm>
 #include <cstddef>
 #include <deque>
@@ -23,6 +26,7 @@
 #include <future>
 #include <pointclouds.h>
 #include <thread>
+
 #include <thrust/copy.h>
 #include <thrust/count.h>
 #include <thrust/device_vector.h>
@@ -30,6 +34,7 @@
 #include <thrust/host_vector.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
+
 #include <variant>
 
 // #include <pcl/filters/voxel_grid.h>
@@ -242,13 +247,49 @@ operator_in_out_t SessionOperatorHost::run_operators(
 
             auto &pipeline =
                 pcl_cpu::ClusterExtractionPipeline::instance(session_id);
-            pipeline.input_queue.emplace(
-                pcl_cpu::ClusterExtractionPipeline::InputFrame{
-                    .timestamp = 0,
-                    .extraction_config = config,
-                    .positions = thrust::host_vector<pc::types::position>(
-                        thrust::get<0>(begin.get_iterator_tuple()),
-                        thrust::get<0>(end.get_iterator_tuple()))});
+
+            auto device_positions_begin =
+                thrust::get<0>(begin.get_iterator_tuple());
+            auto device_positions_end =
+                thrust::get<0>(end.get_iterator_tuple());
+
+            pcl_cpu::ClusterExtractionPipeline::InputFrame frame{
+                .timestamp = 0,
+                .extraction_config = config,
+                .positions = thrust::host_vector<pc::types::position>(
+                    device_positions_begin, device_positions_end)};
+
+            // if we're not changing the input point cloud for its next
+            // destination operator, we can run the entire pipeline async
+            if (!config.reduce_to_voxels && !config.reduce_to_clusters) {
+              pipeline.input_queue.emplace(frame);
+            } else {
+              // if we are altering the pointcloud this frame, we reed to
+              // run the reduction synchronously
+              auto result =
+                  pcl_cpu::ClusterExtractionPipeline::run_cluster_extraction(
+                      frame, pipeline.current_clusters);
+
+              if (result.voxelised_cloud) {
+                if (config.reduce_to_voxels) {
+                  thrust::host_vector<position> reduced_positions;
+                  auto &voxels = *result.voxelised_cloud;
+                  reduced_positions.resize(voxels.points.size());
+                  thrust::transform(voxels.points.begin(), voxels.points.end(),
+                                    reduced_positions.begin(),
+                                    pcl_cpu::PointXYZToPosition{});
+                  thrust::copy(reduced_positions.begin(),
+                               reduced_positions.end(), device_positions_begin);
+                  auto voxel_count =
+                      static_cast<std::ptrdiff_t>(reduced_positions.size());
+                  end = begin + voxel_count;
+
+                } else if (config.reduce_to_clusters) {
+                  exit(1);
+                }
+              }
+            }
+
             // pc::logger->debug("input new frame");
 
             // TODO move these to draw function in session_operator_host.cc
@@ -294,7 +335,7 @@ operator_in_out_t SessionOperatorHost::run_operators(
               } else {
                 ProfilingZone compute_zone("copy_if");
                 auto new_end = thrust::copy_if(begin, end, begin,
-                                                RangeFilterOperator{config});
+                                               RangeFilterOperator{config});
                 filtered_count = thrust::distance(begin, new_end);
                 end = new_end;
               }
@@ -306,13 +347,13 @@ operator_in_out_t SessionOperatorHost::run_operators(
 
                 if (filtered_count > config.fill.count_threshold) {
                   ProfilingZone analysis_zone("analysis");
-              const auto fill_value =
+                  const auto fill_value =
                       filtered_count / static_cast<float>(config.fill.max_fill);
-              const auto fill_proportion =
+                  const auto fill_proportion =
                       filtered_count / static_cast<float>(starting_point_count);
 
-              config.fill.fill_value = fill_value;
-              config.fill.proportion = fill_proportion;
+                  config.fill.fill_value = fill_value;
+                  config.fill.proportion = fill_proportion;
 
                   if (config.minmax.enabled) {
                     ProfilingZone minmax_zone("minmax_elements");
@@ -375,17 +416,17 @@ operator_in_out_t SessionOperatorHost::run_operators(
                       config.minmax_positions.min_z = min_z_pos;
                       config.minmax_positions.max_z = max_z_pos;
 
-              config.minmax_normalised_positions.min_x =
+                      config.minmax_normalised_positions.min_x =
                           get_normalised_position(min_x_pos, bounding_box);
-              config.minmax_normalised_positions.max_x =
+                      config.minmax_normalised_positions.max_x =
                           get_normalised_position(max_x_pos, bounding_box);
-              config.minmax_normalised_positions.min_y =
+                      config.minmax_normalised_positions.min_y =
                           get_normalised_position(min_y_pos, bounding_box);
-              config.minmax_normalised_positions.max_y =
+                      config.minmax_normalised_positions.max_y =
                           get_normalised_position(max_y_pos, bounding_box);
-              config.minmax_normalised_positions.min_z =
+                      config.minmax_normalised_positions.min_z =
                           get_normalised_position(min_z_pos, bounding_box);
-              config.minmax_normalised_positions.max_z =
+                      config.minmax_normalised_positions.max_z =
                           get_normalised_position(max_z_pos, bounding_box);
 
                       config.minmax.min_x =
@@ -451,19 +492,19 @@ operator_in_out_t SessionOperatorHost::run_operators(
                   //   //   volume_cache[config.id] = {elapsed_seconds,
                   //   volume};
                   //   // }
-              // }
+                  // }
 
-            } else {
-              config.fill.fill_value = 0;
-              config.fill.proportion = 0;
+                } else {
+                  config.fill.fill_value = 0;
+                  config.fill.proportion = 0;
                   if (config.minmax.reset_on_empty) {
-              config.minmax.min_x = 0;
-              config.minmax.max_x = 0;
-              config.minmax.min_y = 0;
-              config.minmax.max_y = 0;
-              config.minmax.min_z = 0;
-              config.minmax.max_z = 0;
-            }
+                    config.minmax.min_x = 0;
+                    config.minmax.max_x = 0;
+                    config.minmax.min_y = 0;
+                    config.minmax.max_y = 0;
+                    config.minmax.min_z = 0;
+                    config.minmax.max_z = 0;
+                  }
                 }
               }
             }
