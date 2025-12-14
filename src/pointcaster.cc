@@ -15,7 +15,6 @@
 #include "imgui_internal.h"
 #include "operators/session_operator_host.h"
 #include "parameters.h"
-#include "pch.h"
 #include "point_cloud_renderer/point_cloud_renderer_config.gen.h"
 #include "session.gen.h"
 #include "workspace.gen.h"
