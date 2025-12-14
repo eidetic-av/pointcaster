@@ -110,8 +110,6 @@ Radio::Radio(RadioConfiguration &config,
         auto next_send_time = steady_clock::now() + broadcast_rate;
 
         while (!st.stop_requested()) {
-          pc::profiling::ProfilingZone radio_zone("Radio");
-
           if (!_config.enabled) {
             std::this_thread::sleep_until(next_send_time);
             next_send_time += broadcast_rate;
