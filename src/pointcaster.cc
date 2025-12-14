@@ -27,6 +27,7 @@
 #include <variant>
 #include <oneapi/tbb/parallel_for.h>
 
+#include <SDL_video.h>
 #ifdef WIN32
 #include <SDL2/SDL_Clipboard.h>
 #else
@@ -231,19 +232,19 @@ PointCaster::PointCaster(const Arguments &args)
   _ground_grid->transform(Matrix4::scaling(Vector3(1.0f)) *
                           Matrix4::translation(Vector3(0, 0, 0)));
 
-//   const auto fetch_devices = [this] {
-//     std::lock_guard lock(this->_session_devices_mutex);
-//     return this->workspace.devices;
-//   };
+  //   const auto fetch_devices = [this] {
+  //     std::lock_guard lock(this->_session_devices_mutex);
+  //     return this->workspace.devices;
+  //   };
 
-// #ifndef WIN32
-//   const auto fetch_usb_config = [this] {
-//     std::lock_guard lock(this->_usb_config_mutex);
-//     return this->workspace.usb.value();
-//   };
-//   _usb_monitor =
-//       std::make_unique<UsbMonitor>(fetch_usb_config, fetch_devices);
-// #endif
+  // #ifndef WIN32
+  //   const auto fetch_usb_config = [this] {
+  //     std::lock_guard lock(this->_usb_config_mutex);
+  //     return this->workspace.usb.value();
+  //   };
+  //   _usb_monitor =
+  //       std::make_unique<UsbMonitor>(fetch_usb_config, fetch_devices);
+  // #endif
 
   OrbbecDevice::init_context();
   _session_operator_graph = std::make_unique<OperatorGraph>("Session");
@@ -785,36 +786,36 @@ void PointCaster::render_cameras() {
 
     // if (points.empty()) {
 
-      // TODO
+    // TODO
 
-      // // TODO this vector should defs be removed
-      // // the synthesized_point_cloud api just requires a reference to a
-      // // list which we dont have at the moment
-      // std::vector<operators::OperatorHostConfiguration> fix_me_operator_list{
-      //     _session_operator_host->_config};
+    // // TODO this vector should defs be removed
+    // // the synthesized_point_cloud api just requires a reference to a
+    // // list which we dont have at the moment
+    // std::vector<operators::OperatorHostConfiguration> fix_me_operator_list{
+    //     _session_operator_host->_config};
 
-      // // using namespace std::chrono;
-      // // using namespace std::chrono_literals;
+    // // using namespace std::chrono;
+    // // using namespace std::chrono_literals;
 
-      // // auto begin = high_resolution_clock::now();
+    // // auto begin = high_resolution_clock::now();
 
-      // points = devices::synthesized_point_cloud(fix_me_operator_list);
+    // points = devices::synthesized_point_cloud(fix_me_operator_list);
 
-      // // auto end = high_resolution_clock::now();
-      // // auto duration_ms = duration_cast<milliseconds>(end - begin).count();
-      // // pc::logger->warn("devices::synthesized_point_cloud: {}ms",
-      // // duration_ms);
+    // // auto end = high_resolution_clock::now();
+    // // auto duration_ms = duration_cast<milliseconds>(end - begin).count();
+    // // pc::logger->warn("devices::synthesized_point_cloud: {}ms",
+    // // duration_ms);
 
-      // _session_operator_host->_config = fix_me_operator_list[0];
+    // _session_operator_host->_config = fix_me_operator_list[0];
 
-      // // TODO
-      // // get the points from THIS camera
-      // // auto& config = camera_controller->config();
-      // // int node_id = _session_operator_graph->node_id_from_reference(config);
-      // // auto path = _session_operator_graph->path_to(node_id);
-      // // if (path.size() > 1) pc::logger->info(path.size());
+    // // TODO
+    // // get the points from THIS camera
+    // // auto& config = camera_controller->config();
+    // // int node_id = _session_operator_graph->node_id_from_reference(config);
+    // // auto path = _session_operator_graph->path_to(node_id);
+    // // if (path.size() > 1) pc::logger->info(path.size());
 
-      // if (rendering_config.snapshots) points += snapshots::point_cloud();
+    // if (rendering_config.snapshots) points += snapshots::point_cloud();
 
     // }
   }
@@ -1144,7 +1145,7 @@ void PointCaster::drawEvent() {
 
   {
     ProfilingZone zone("Reset pointcloud frames");
-  pc::devices::reset_pointcloud_frames();
+    pc::devices::reset_pointcloud_frames();
   }
 
   const auto delta_time = _timeline.previousFrameDuration();
@@ -1152,147 +1153,147 @@ void PointCaster::drawEvent() {
 
   {
     ProfilingZone zone("TweenManager tick");
-  TweenManager::instance()->tick(delta_ms);
+    TweenManager::instance()->tick(delta_ms);
   }
 
   {
     ProfilingZone zone("Main thread dispatcher");
-  std::function<void()> main_thread_callback;
-  while (MainThreadDispatcher::try_dequeue(main_thread_callback)) {
-    main_thread_callback();
+    std::function<void()> main_thread_callback;
+    while (MainThreadDispatcher::try_dequeue(main_thread_callback)) {
+      main_thread_callback();
     }
   }
 
   {
     ProfilingZone zone("Clear framebuffer and render cameras");
-  GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
-                               GL::FramebufferClear::Depth);
+    GL::defaultFramebuffer.clear(GL::FramebufferClear::Color |
+                                 GL::FramebufferClear::Depth);
 
-  render_cameras();
+    render_cameras();
   }
 
   {
     ProfilingZone zone("Begin ImGui frame");
-  _imgui_context.newFrame();
-  ImGuizmo::SetOrthographic(false);
-  ImGuizmo::BeginFrame();
-  pc::gui::begin_gui_helpers(_current_mode, _modeline_input);
+    _imgui_context.newFrame();
+    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::BeginFrame();
+    pc::gui::begin_gui_helpers(_current_mode, _modeline_input);
   }
 
   {
     ProfilingZone zone("GUI input setup");
-  // Enable text input, if needed/
-  if (ImGui::GetIO().WantTextInput && !isTextInputActive()) startTextInput();
-  else if (!ImGui::GetIO().WantTextInput && isTextInputActive())
-    stopTextInput();
+    // Enable text input, if needed/
+    if (ImGui::GetIO().WantTextInput && !isTextInputActive()) startTextInput();
+    else if (!ImGui::GetIO().WantTextInput && isTextInputActive())
+      stopTextInput();
   }
 
   {
     ProfilingZone zone("Draw GUI windows");
 
     // Draw gui windows
-  gui::draw_main_viewport(*this);
+    gui::draw_main_viewport(*this);
 
-  if (!workspace.layout.hide_ui) {
-    if (workspace.layout.show_devices_window) {
-      pc::gui::draw_devices_window(*this);
-    }
+    if (!workspace.layout.hide_ui) {
+      if (workspace.layout.show_devices_window) {
+        pc::gui::draw_devices_window(*this);
+      }
 
-    if (workspace.layout.show_camera_window) {
-      camera_controllers.at(workspace.selected_session_index)
-          ->draw_imgui_controls();
-    }
+      if (workspace.layout.show_camera_window) {
+        camera_controllers.at(workspace.selected_session_index)
+            ->draw_imgui_controls();
+      }
 
-    if (workspace.layout.show_stats) draw_stats(delta_time);
-    if (workspace.layout.show_radio_window) _radio->draw_imgui_window();
-    if (workspace.layout.show_snapshots_window)
-      _snapshots_context->draw_imgui_window();
+      if (workspace.layout.show_stats) draw_stats(delta_time);
+      if (workspace.layout.show_radio_window) _radio->draw_imgui_window();
+      if (workspace.layout.show_snapshots_window)
+        _snapshots_context->draw_imgui_window();
 
-    // clear gizmos e.g. bounding boxes, voxels
-    for (auto &session_operator_host : session_operator_hosts) {
-      session_operator_host.clear_gizmos();
-    }
-    // render the selected session's gizmos
-    auto &selected_session_operator_host =
-        session_operator_hosts.at(workspace.selected_session_index);
-    if (workspace.layout.show_global_transform_window) {
-      selected_session_operator_host.draw_imgui_window();
-    }
-    selected_session_operator_host.draw_gizmos();
+      // clear gizmos e.g. bounding boxes, voxels
+      for (auto &session_operator_host : session_operator_hosts) {
+        session_operator_host.clear_gizmos();
+      }
+      // render the selected session's gizmos
+      auto &selected_session_operator_host =
+          session_operator_hosts.at(workspace.selected_session_index);
+      if (workspace.layout.show_global_transform_window) {
+        selected_session_operator_host.draw_imgui_window();
+      }
+      selected_session_operator_host.draw_gizmos();
 
-    if (workspace.layout.show_session_operator_graph_window)
-      _session_operator_graph->draw();
+      if (workspace.layout.show_session_operator_graph_window)
+        _session_operator_graph->draw();
 
-    if (workspace.mqtt.has_value() && (*workspace.mqtt).show_window)
-      _mqtt->draw_imgui_window();
+      if (workspace.mqtt.has_value() && (*workspace.mqtt).show_window)
+        _mqtt->draw_imgui_window();
 
-    if (workspace.midi.has_value() && (*workspace.midi).show_window) {
-      ImGui::SetNextWindowSize({600, 400}, ImGuiCond_FirstUseEver);
-      ImGui::Begin("MIDI");
-      _midi->draw_imgui_window();
-      ImGui::End();
-    }
+      if (workspace.midi.has_value() && (*workspace.midi).show_window) {
+        ImGui::SetNextWindowSize({600, 400}, ImGuiCond_FirstUseEver);
+        ImGui::Begin("MIDI");
+        _midi->draw_imgui_window();
+        ImGui::End();
+      }
 
 #ifdef WITH_OSC
       if (workspace.osc_client.has_value() &&
           (*workspace.osc_client).show_window)
-      _osc_client->draw_imgui_window();
+        _osc_client->draw_imgui_window();
 
       if (workspace.osc_server.has_value() &&
           (*workspace.osc_server).show_window)
-      _osc_server->draw_imgui_window();
+        _osc_server->draw_imgui_window();
 #endif
 
-    // draw_modeline();
+      // draw_modeline();
     }
   }
 
   {
     ProfilingZone zone("ImGui cursor update");
-  _imgui_context.updateApplicationCursor(*this);
+    _imgui_context.updateApplicationCursor(*this);
   }
 
   {
     ProfilingZone zone("Render ImGui and viewports");
-  // Render ImGui window
-  GL::Renderer::enable(GL::Renderer::Feature::Blending);
-  GL::Renderer::enable(GL::Renderer::Feature::ScissorTest);
-  GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
-  GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
+    // Render ImGui window
+    GL::Renderer::enable(GL::Renderer::Feature::Blending);
+    GL::Renderer::enable(GL::Renderer::Feature::ScissorTest);
+    GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
+    GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
 
-  _imgui_context.drawFrame();
+    _imgui_context.drawFrame();
 
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-    ImGui::UpdatePlatformWindows();
-    ImGui::RenderPlatformWindowsDefault();
-  }
+      ImGui::UpdatePlatformWindows();
+      ImGui::RenderPlatformWindowsDefault();
+    }
 
-  GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
-  GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+    GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
+    GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
   }
 
   {
     ProfilingZone zone("GL error check");
-  // TODO this can be removed and if we want GL errors we can set
-  // MAGNUM_GPU_VALIDATION=ON instead or run the application with
-  // --magnum-gpu-validation on
-  auto error = GL::Renderer::error();
-  if (error == GL::Renderer::Error::InvalidFramebufferOperation)
-    pc::logger->warn("InvalidFramebufferOperation");
-  if (error == GL::Renderer::Error::InvalidOperation)
-    pc::logger->warn("InvalidOperation");
-  if (error == GL::Renderer::Error::InvalidValue)
-    pc::logger->warn("InvalidValue");
-  if (error == GL::Renderer::Error::StackOverflow)
-    pc::logger->warn("StackOverflow");
-  if (error == GL::Renderer::Error::StackUnderflow)
-    pc::logger->warn("StackUnderflow");
+    // TODO this can be removed and if we want GL errors we can set
+    // MAGNUM_GPU_VALIDATION=ON instead or run the application with
+    // --magnum-gpu-validation on
+    auto error = GL::Renderer::error();
+    if (error == GL::Renderer::Error::InvalidFramebufferOperation)
+      pc::logger->warn("InvalidFramebufferOperation");
+    if (error == GL::Renderer::Error::InvalidOperation)
+      pc::logger->warn("InvalidOperation");
+    if (error == GL::Renderer::Error::InvalidValue)
+      pc::logger->warn("InvalidValue");
+    if (error == GL::Renderer::Error::StackOverflow)
+      pc::logger->warn("StackOverflow");
+    if (error == GL::Renderer::Error::StackUnderflow)
+      pc::logger->warn("StackUnderflow");
   }
 
   {
     ProfilingZone zone("Swap buffers & schedule redraw");
-  redraw();
-  swapBuffers();
+    redraw();
+    swapBuffers();
   }
 
   auto delta_secs = static_cast<float>(_timeline.previousFrameDuration());
@@ -1309,12 +1310,12 @@ void PointCaster::drawEvent() {
 
   {
     ProfilingZone zone("parameters::publish");
-  parameters::publish(delta_secs);
+    parameters::publish(delta_secs);
   }
 
   {
     ProfilingZone zone("Timeline nextFrame");
-  _timeline.nextFrame();
+    _timeline.nextFrame();
   }
 
   FrameMark;
@@ -1429,8 +1430,8 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
 #endif
   case KeyEvent::Key::Q: {
     if (event.modifiers() == InputEvent::Modifier::Ctrl) {
-    quit();
-}
+      quit();
+    }
     break;
   }
   case KeyEvent::Key::R: {
