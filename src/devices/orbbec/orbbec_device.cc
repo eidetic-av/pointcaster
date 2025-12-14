@@ -29,15 +29,15 @@ void OrbbecDevice::discover_devices() {
   discovered_devices.clear();
   pc::logger->debug("Discovering Orbbec devices...");
   try {
-  _ob_device_list = _ob_ctx->queryDeviceList();
-  auto count = _ob_device_list->deviceCount();
-  for (int i = 0; i < count; i++) {
-    auto device = _ob_device_list->getDevice(i);
-    auto info = device->getDeviceInfo();
-    if (strcmp(info->connectionType(), "Ethernet") == 0) {
-      discovered_devices.push_back({info->ipAddress(), info->serialNumber()});
+    _ob_device_list = _ob_ctx->queryDeviceList();
+    auto count = _ob_device_list->deviceCount();
+    for (int i = 0; i < count; i++) {
+      auto device = _ob_device_list->getDevice(i);
+      auto info = device->getDeviceInfo();
+      if (strcmp(info->connectionType(), "Ethernet") == 0) {
+        discovered_devices.push_back({info->ipAddress(), info->serialNumber()});
+      }
     }
-  }
   } catch (const ob::Error &e) {
     pc::logger->error("Failed to discover Orbbec devices: [{}] {}", e.getName(),
                       e.getMessage());

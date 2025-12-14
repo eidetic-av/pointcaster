@@ -120,11 +120,11 @@ pc::types::PointCloud OrbbecDevice::point_cloud() {
     {
       ProfilingZone filter_call_zone("Input Transform Filter");
 
-    auto filtered_points_end = thrust::copy_if(
+      auto filtered_points_end = thrust::copy_if(
           transformed_begin, transformed_end, filtered_data.begin(),
-        input_transform_filter{transform_config});
-    filtered_point_count =
-        thrust::distance(filtered_data.begin(), filtered_points_end);
+          input_transform_filter{transform_config});
+      filtered_point_count =
+          thrust::distance(filtered_data.begin(), filtered_points_end);
     }
 
     input_transform_zone.text(
