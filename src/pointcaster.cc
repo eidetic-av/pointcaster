@@ -44,6 +44,8 @@
 
 namespace pc {
 
+std::atomic_bool quitting{false};
+
 PointCaster::PointCaster(const Arguments &args)
     : Platform::Application(args, NoCreate) {
 
@@ -349,6 +351,7 @@ PointCaster::PointCaster(const Arguments &args)
 }
 
 void PointCaster::quit() {
+  quitting = true;
   std::lock_guard lock(pc::devices::devices_access);
   pc::devices::attached_devices.clear();
   OrbbecDevice::destroy_context();
@@ -1133,6 +1136,8 @@ void PointCaster::draw_stats(const float delta_time) {
 auto output_count = 0;
 
 void PointCaster::drawEvent() {
+  if (quitting) return;
+
   using namespace pc::profiling;
   ProfilingZone frame_zone("PointCaster::drawEvent");
 
