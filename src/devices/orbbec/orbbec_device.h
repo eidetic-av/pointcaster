@@ -1,12 +1,14 @@
 #pragma once
 
 #include "../device.h"
+#include "../../profiling_mutex.h"
 #include "orbbec_device_config.gen.h"
 #include <atomic>
 #include <libobsensor/ObSensor.hpp>
 #include <optional>
 #include <thread>
 #include <chrono>
+#include <cstdint>
 
 
 namespace pc::devices {
@@ -87,6 +89,10 @@ private:
 
   std::atomic<std::chrono::steady_clock::time_point> _last_updated_time{};
   std::atomic_bool _in_error_state = false;
+
+
+  PC_PROFILING_MUTEX(_process_current_cloud_access);
+  std::uint64_t _last_processed_frame_index{0};
 
   pc::types::PointCloud _current_point_cloud;
 

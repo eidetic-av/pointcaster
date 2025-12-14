@@ -2,6 +2,8 @@
 #include "../../profiling.h"
 #include "../transform_filters.cuh"
 #include "orbbec_device.h"
+#include "../../frame_counter.h"
+
 #include <Eigen/Eigen>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
@@ -77,8 +79,14 @@ pc::types::PointCloud OrbbecDevice::point_cloud() {
     return _current_point_cloud;
   }
 
+  std::lock_guard lock(_process_current_cloud_access);
+
+  const auto current_frame_index = pc::frame_counter::current_frame_index();
+  if (_last_processed_frame_index == current_frame_index) {
+    return _current_point_cloud;
+  }
+
   auto &incoming_data = _device_memory->incoming_data;
-  auto &incoming_point_data = _device_memory->incoming_point_data;
   auto &filtered_data = _device_memory->filtered_data;
   auto &indices = _device_memory->indices;
   auto &transformed_positions = _device_memory->transformed_positions;
@@ -102,19 +110,22 @@ pc::types::PointCloud OrbbecDevice::point_cloud() {
   size_t filtered_point_count;
   {
     ProfilingZone input_transform_zone("Transform & Filter Input Points");
-
     auto ob_indexed_points_begin = thrust::make_zip_iterator(
         thrust::make_tuple(incoming_data.begin(), indices.begin()));
-    thrust::transform(ob_indexed_points_begin,
-                      ob_indexed_points_begin + incoming_point_count,
-                      incoming_point_data.begin(), ob_to_input_points{});
-    auto incoming_points_end =
-        incoming_point_data.begin() + incoming_point_count;
+    auto ob_indexed_points_end = ob_indexed_points_begin + incoming_point_count;
+    auto transformed_begin = thrust::make_transform_iterator(
+        ob_indexed_points_begin, ob_to_input_points{});
+    auto transformed_end = transformed_begin + incoming_point_count;
+
+    {
+      ProfilingZone filter_call_zone("Input Transform Filter");
+
     auto filtered_points_end = thrust::copy_if(
-        incoming_point_data.begin(), incoming_points_end, filtered_data.begin(),
+          transformed_begin, transformed_end, filtered_data.begin(),
         input_transform_filter{transform_config});
     filtered_point_count =
         thrust::distance(filtered_data.begin(), filtered_points_end);
+    }
 
     input_transform_zone.text(
         std::format("FilteredCount: {}", filtered_point_count));
@@ -164,6 +175,8 @@ pc::types::PointCloud OrbbecDevice::point_cloud() {
   }
 
   _buffer_updated = false;
+  _last_processed_frame_index = current_frame_index;
+
   return _current_point_cloud;
 }
 
