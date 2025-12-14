@@ -27,6 +27,8 @@ void OrbbecDevice::destroy_context() {
 void OrbbecDevice::discover_devices() {
   discovering_devices = true;
   discovered_devices.clear();
+  pc::logger->debug("Discovering Orbbec devices...");
+  try {
   _ob_device_list = _ob_ctx->queryDeviceList();
   auto count = _ob_device_list->deviceCount();
   for (int i = 0; i < count; i++) {
@@ -36,6 +38,13 @@ void OrbbecDevice::discover_devices() {
       discovered_devices.push_back({info->ipAddress(), info->serialNumber()});
     }
   }
+  } catch (const ob::Error &e) {
+    pc::logger->error("Failed to discover Orbbec devices: [{}] {}", e.getName(),
+                      e.getMessage());
+  } catch (...) {
+    pc::logger->error("Unknown error during Orbbec device discovery");
+  }
+  pc::logger->debug("Finished discovering devices.");
   discovering_devices = false;
 }
 
