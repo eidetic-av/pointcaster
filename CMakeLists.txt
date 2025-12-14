@@ -48,6 +48,8 @@ if (WITH_TRACY)
   set(TRACY_ENABLE ON CACHE BOOL "Enable profiling using Tracy" FORCE)
 endif()
 
+option(WITH_VLD "Find and link to Visual Leak Detector" OFF)
+
 find_program(MOLD_LINKER_FOUND mold)
 if (LINUX AND MOLD_LINKER_FOUND)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fuse-ld=mold")
@@ -334,6 +336,15 @@ if (WITH_POINTCASTER)
     add_compile_definitions(TRACY_ON_DEMAND)
   endif()
 
+  # ----- Debugging -----
+
+  if (WIN32 AND WITH_VLD)
+    find_package(VLD CONFIG)
+    list(APPEND INCLUDE_DIRS ${VLD_INCLUDE_DIRS})
+    list(APPEND LINK_LIBS ${VLD_LIBRARIES})
+    add_compile_definitions(WITH_VLD)
+  endif()
+
   # ----- Pointcaster application -----
 
   set(SOURCE_FILES
@@ -439,7 +450,7 @@ if (WITH_POINTCASTER)
 	    -forward-slash-prefix-opts >)
 
     target_compile_options(pointcaster PRIVATE $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:/GL>)
-    target_link_options(pointcaster PRIVATE $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:/LTCG>)
+    target_link_options(pointcaster PRIVATE $<$<CONFIG:Release>:/LTCG>)
 
   endif()
 
@@ -457,9 +468,10 @@ if (WITH_POINTCASTER)
 
   if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CXX_FLAGS_DEBUG 
-      "${CMAKE_CXX_FLAGS_DEBUG} /analyze /Z7" 
+      "${CMAKE_CXX_FLAGS_DEBUG} /analyze" 
       CACHE STRING "Debug flags" FORCE)
   endif()
+  target_link_options(pointcaster PRIVATE $<$<CONFIG:Debug>:/debug:fastlink>)
 
   if (WITH_THREAD_SANITIZER)
     target_compile_options(pointcaster PRIVATE "$<$<CONFIG:DEBUG>:-fsanitize=thread>")
@@ -472,7 +484,8 @@ if (WITH_POINTCASTER)
   # profiling
 
   if (WITH_TRACY AND WIN32)
-    target_compile_options(pointcaster PRIVATE /Zi /Oy-)
+    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "ProgramDatabase")
+    target_compile_options(pointcaster PRIVATE /Oy-)
     target_link_options(pointcaster PRIVATE /DEBUG /INCREMENTAL:NO)
   endif()
 
