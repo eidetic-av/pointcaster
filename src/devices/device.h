@@ -4,6 +4,7 @@
 #include "../operators/session_operator_host.h"
 #include "../pointer.h"
 #include "../uuid.h"
+#include "../profiling_mutex.h"
 #include "device_config.gen.h"
 #include "device_variants.h"
 #include <Corrade/Containers/Pointer.h>
@@ -39,7 +40,7 @@ public:
 // all devices live here to be
 // accessible throughout the application
 inline std::vector<std::shared_ptr<IDevice>> attached_devices;
-inline std::mutex devices_access;
+inline PC_PROFILING_MUTEX(devices_access);
 
 // all instances of device configurations that get serialized into our session
 // configuration live here
@@ -47,7 +48,7 @@ inline std::vector<std::reference_wrapper<DeviceConfigurationVariant>>
     device_configs;
 inline std::optional<std::reference_wrapper<DeviceConfigurationVariant>>
     selected_device_config;
-inline std::mutex device_configs_access;
+inline PC_PROFILING_MUTEX(device_configs_access);
 
 // we forward declare these wrapper functions because we can't include
 // parameters.h (for the real funcs) as the serialization code conflicts with
