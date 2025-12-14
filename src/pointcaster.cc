@@ -49,6 +49,11 @@ PointCaster::PointCaster(const Arguments &args)
 
   pc::logger->info("This is pointcaster");
 
+#if defined(_WIN32) && !defined(NDEBUG)
+  _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+  _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
+#endif
+
   MainThreadDispatcher::init();
 
   // Get OS resolution
