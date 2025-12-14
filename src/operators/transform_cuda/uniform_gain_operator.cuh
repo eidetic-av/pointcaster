@@ -1,3 +1,5 @@
+#pragma once
+
 #include "../../structs.h"
 #include "uniform_gain_operator.gen.h"
 #include <thrust/functional.h>
