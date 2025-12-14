@@ -83,8 +83,8 @@ private:
     lo::Message value;
   };
 
-  std::jthread _sender_thread;
   moodycamel::BlockingConcurrentQueue<OscMessage> _messages_to_publish{};
+  std::jthread _sender_thread;
 
   void send_messages(std::stop_token st);
 };
