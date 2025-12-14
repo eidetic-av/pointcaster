@@ -4,22 +4,10 @@
 
 namespace pc::operators {
 
-__device__ bool RangeFilterOperator::operator()(indexed_point_t point) const {
+__device__ __forceinline__ bool RangeFilterOperator::operator()(indexed_point_t point) const {
   auto &pos = thrust::get<0>(point);
-
-  const auto &center = _config.transform.position;
-  const auto &size = _config.transform.size;
-  const Float3 half_size{size.x / 2, size.y / 2, size.z / 2};
-
-  // config is in metres, point cloud is in mm
-  const Float3 min{(center.x - half_size.x) * 1000, (center.y - half_size.y) * 1000,
-                   (center.z - half_size.z) * 1000};
-  const Float3 max{(center.x + half_size.x) * 1000, (center.y + half_size.y) * 1000,
-                   (center.z + half_size.z) * 1000};
-
-  bool inside = pos.x >= min.x && pos.x <= max.x && pos.y >= min.y &&
-                pos.y <= max.y && pos.z >= min.z && pos.z <= max.z;
-
+  bool inside = pos.x >= min_mm.x && pos.x <= max_mm.x && pos.y >= min_mm.y &&
+                pos.y <= max_mm.y && pos.z >= min_mm.z && pos.z <= max_mm.z;
   return _config.invert ? !inside : inside;
 };
 

@@ -14,8 +14,10 @@
 #include "session_operator_host.h"
 #include "transform_cuda/rgb_gain_operator.cuh"
 #include "transform_cuda/translate_operator.cuh"
+#include "minmax_extremes.cuh"
 #include "transform_cuda/uniform_gain_operator.cuh"
 #include <algorithm>
+#include <cstddef>
 #include <deque>
 #include <execution>
 #include <future>
@@ -282,158 +284,179 @@ operator_in_out_t SessionOperatorHost::run_operators(
 
             auto starting_point_count = thrust::distance(begin, end);
 
-            thrust::device_vector<position> filtered_positions(
-                starting_point_count);
-            thrust::device_vector<color> filtered_colors(starting_point_count);
-            thrust::device_vector<int> filtered_indices(starting_point_count);
+            {
+              auto filtered_count = 0;
 
-            auto filtered_begin = thrust::make_zip_iterator(thrust::make_tuple(
-                filtered_positions.begin(), filtered_colors.begin(),
-                filtered_indices.begin()));
-            auto filtered_end = thrust::copy_if(begin, end, filtered_begin,
+              if (config.bypass) {
+                ProfilingZone compute_zone("count_if");
+                filtered_count =
+                    thrust::count_if(begin, end, RangeFilterOperator{config});
+              } else {
+                ProfilingZone compute_zone("copy_if");
+                auto new_end = thrust::copy_if(begin, end, begin,
                                                 RangeFilterOperator{config});
+                filtered_count = thrust::distance(begin, new_end);
+                end = new_end;
+              }
 
-            int fill_count = thrust::distance(filtered_begin, filtered_end);
-            config.fill.fill_count = fill_count;
+              {
+                ProfilingZone update_zone("update");
 
-            if (!config.bypass) {
-              end = thrust::copy(filtered_begin, filtered_end, begin);
-            }
+                config.fill.fill_count = filtered_count;
 
-            if (fill_count > config.fill.count_threshold) {
+                if (filtered_count > config.fill.count_threshold) {
+                  ProfilingZone analysis_zone("analysis");
               const auto fill_value =
-                  fill_count / static_cast<float>(config.fill.max_fill);
+                      filtered_count / static_cast<float>(config.fill.max_fill);
               const auto fill_proportion =
-                  fill_count / static_cast<float>(starting_point_count);
+                      filtered_count / static_cast<float>(starting_point_count);
 
               config.fill.fill_value = fill_value;
               config.fill.proportion = fill_proportion;
 
-              const float box_min_x =
-                  config.transform.position.x - (config.transform.size.x / 2);
-              const float box_max_x =
-                  config.transform.position.x + (config.transform.size.x / 2);
-              const float box_min_y =
-                  config.transform.position.y - (config.transform.size.y / 2);
-              const float box_max_y =
-                  config.transform.position.y + (config.transform.size.y / 2);
-              const float box_min_z =
-                  config.transform.position.z - (config.transform.size.z / 2);
-              const float box_max_z =
-                  config.transform.position.z + (config.transform.size.z / 2);
+                  if (config.minmax.enabled) {
+                    ProfilingZone minmax_zone("minmax_elements");
 
-              auto device_pos_first = filtered_positions.begin();
-              auto device_pos_last = device_pos_first + fill_count;
+                    Extremes extremes = thrust::transform_reduce(
+                        begin, begin + filtered_count, AsExtremes{},
+                        make_initial_extremes(), MergeExtremes{});
 
-              auto host_pos = [&](const position *base,
-                                  int idx) -> pc::types::Float3 {
-                position p{};
-                cudaMemcpy(&p, base + idx, sizeof(position),
-                           cudaMemcpyDeviceToHost);
-                return {float(p.x) / 1000.f, float(p.y) / 1000.f,
-                        float(p.z) / 1000.f};
-              };
+                    constexpr auto to_float3 =
+                        [](const position &p) -> pc::types::Float3 {
+                      return {static_cast<float>(p.x) / 1000.0f,
+                              static_cast<float>(p.y) / 1000.0f,
+                              static_cast<float>(p.z) / 1000.0f};
+                    };
 
-              const position *device_pos =
-                  thrust::raw_pointer_cast(filtered_positions.data());
+                    struct box {
+                      float3 min;
+                      float3 max;
+                    };
+                    const box bounding_box = {
+                        .min = {.x = config.transform.position.x -
+                                     (config.transform.size.x / 2),
+                                .y = config.transform.position.y -
+                                     (config.transform.size.y / 2),
+                                .z = config.transform.position.z -
+                                     (config.transform.size.z / 2)},
+                        .max{.x = config.transform.position.x +
+                                  (config.transform.size.x / 2),
+                             .y = config.transform.position.y +
+                                  (config.transform.size.y / 2),
+                             .z = config.transform.position.z +
+                                  (config.transform.size.z / 2)}};
 
-              auto [min_x_it, max_x_it] = thrust::minmax_element(
-                  device_pos_first, device_pos_last, MinMaxXComparer{});
-              int min_x_idx = static_cast<int>(min_x_it - device_pos_first);
-              int max_x_idx = static_cast<int>(max_x_it - device_pos_first);
+                    constexpr auto get_normalised_position =
+                        [](const pc::types::Float3 &pos,
+                           const box &bounds) -> pc::types::Float3 {
+                      const auto mapped_x = pc::math::remap(
+                          bounds.min.x, bounds.max.x, 0.0f, 1.0f, pos.x, true);
+                      const auto mapped_y = pc::math::remap(
+                          bounds.min.y, bounds.max.y, 0.0f, 1.0f, pos.y, true);
+                      const auto mapped_z = pc::math::remap(
+                          bounds.min.z, bounds.max.z, 0.0f, 1.0f, pos.z, true);
+                      return {mapped_x, mapped_y, mapped_z};
+                    };
 
-              auto [min_y_it, max_y_it] = thrust::minmax_element(
-                  device_pos_first, device_pos_last, MinMaxYComparer{});
-              int min_y_idx = static_cast<int>(min_y_it - device_pos_first);
-              int max_y_idx = static_cast<int>(max_y_it - device_pos_first);
+                    {
+                      ProfilingZone host_fetch_zone("minmax host fetch");
 
-              auto [min_z_it, max_z_it] = thrust::minmax_element(
-                  device_pos_first, device_pos_last, MinMaxZComparer{});
-              int min_z_idx = static_cast<int>(min_z_it - device_pos_first);
-              int max_z_idx = static_cast<int>(max_z_it - device_pos_first);
+                      auto min_x_pos = to_float3(extremes.min_x_pos);
+                      auto max_x_pos = to_float3(extremes.max_x_pos);
+                      auto min_y_pos = to_float3(extremes.min_y_pos);
+                      auto max_y_pos = to_float3(extremes.max_y_pos);
+                      auto min_z_pos = to_float3(extremes.min_z_pos);
+                      auto max_z_pos = to_float3(extremes.max_z_pos);
 
-              auto min_x = host_pos(device_pos, min_x_idx);
-              auto max_x = host_pos(device_pos, max_x_idx);
-              auto min_y = host_pos(device_pos, min_y_idx);
-              auto max_y = host_pos(device_pos, max_y_idx);
-              auto min_z = host_pos(device_pos, min_z_idx);
-              auto max_z = host_pos(device_pos, max_z_idx);
-
-              config.minmax_positions.min_x = min_x;
-              config.minmax_positions.max_x = max_x;
-              config.minmax_positions.min_y = min_y;
-              config.minmax_positions.max_y = max_y;
-              config.minmax_positions.min_z = min_z;
-              config.minmax_positions.max_z = max_z;
-
-              const auto get_normalised_position = [&](auto pos) {
-                const auto mapped_x = pc::math::remap(box_min_x, box_max_x,
-                                                      0.0f, 1.0f, pos.x, true);
-                const auto mapped_y = pc::math::remap(box_min_y, box_max_y,
-                                                      0.0f, 1.0f, pos.y, true);
-                const auto mapped_z = pc::math::remap(box_min_z, box_max_z,
-                                                      0.0f, 1.0f, pos.z, true);
-                return pc::types::Float3{mapped_x, mapped_y, mapped_z};
-              };
+                      config.minmax_positions.min_x = min_x_pos;
+                      config.minmax_positions.max_x = max_x_pos;
+                      config.minmax_positions.min_y = min_y_pos;
+                      config.minmax_positions.max_y = max_y_pos;
+                      config.minmax_positions.min_z = min_z_pos;
+                      config.minmax_positions.max_z = max_z_pos;
 
               config.minmax_normalised_positions.min_x =
-                  get_normalised_position(min_x);
+                          get_normalised_position(min_x_pos, bounding_box);
               config.minmax_normalised_positions.max_x =
-                  get_normalised_position(max_x);
+                          get_normalised_position(max_x_pos, bounding_box);
               config.minmax_normalised_positions.min_y =
-                  get_normalised_position(min_y);
+                          get_normalised_position(min_y_pos, bounding_box);
               config.minmax_normalised_positions.max_y =
-                  get_normalised_position(max_y);
+                          get_normalised_position(max_y_pos, bounding_box);
               config.minmax_normalised_positions.min_z =
-                  get_normalised_position(min_z);
+                          get_normalised_position(min_z_pos, bounding_box);
               config.minmax_normalised_positions.max_z =
-                  get_normalised_position(max_z);
+                          get_normalised_position(max_z_pos, bounding_box);
 
-              config.minmax.min_x = config.minmax_normalised_positions.min_x.x;
-              config.minmax.max_x = config.minmax_normalised_positions.max_x.x;
-              config.minmax.min_y = config.minmax_normalised_positions.min_y.y;
-              config.minmax.max_y = config.minmax_normalised_positions.max_y.y;
-              config.minmax.min_z = config.minmax_normalised_positions.min_z.z;
-              config.minmax.max_z = config.minmax_normalised_positions.max_z.z;
+                      config.minmax.min_x =
+                          config.minmax_normalised_positions.min_x.x;
+                      config.minmax.max_x =
+                          config.minmax_normalised_positions.max_x.x;
+                      config.minmax.min_y =
+                          config.minmax_normalised_positions.min_y.y;
+                      config.minmax.max_y =
+                          config.minmax_normalised_positions.max_y.y;
+                      config.minmax.min_z =
+                          config.minmax_normalised_positions.min_z.z;
+                      config.minmax.max_z =
+                          config.minmax_normalised_positions.max_z.z;
+                    }
+                  }
 
-              // for a very basic 'energy' parameter, we can calculate the
-              // volume and then track changes in the volume over time
-              constexpr static auto calculate_volume = [](const auto &mm) {
-                return (mm.max_x - mm.min_x) * (mm.max_y - mm.min_y) *
-                       (mm.max_z - mm.min_z);
-              };
-
-              // // and we keep a cache of the last volume per range operator
-              // // instance to be able to calculate the volume change over time
-              // using uid = unsigned long int;
-              // static std::unordered_map<uid, std::tuple<float, float>>
-              // 	  volume_cache; // returns the last time and last volume
-              // value
-
-              // using namespace std::chrono;
-              // static const auto start_time = duration_cast<milliseconds>(
-              // 	  high_resolution_clock::now().time_since_epoch());
-              // const auto now = duration_cast<milliseconds>(
-              // 	  high_resolution_clock::now().time_since_epoch());
-              // const float elapsed_seconds =
-              // 	  (now.count() - start_time.count()) / 1000.0f;
-
-              // if (!volume_cache.contains(config.id)) {
-              // 	volume_cache[config.id] = {elapsed_seconds, 0.0f};
-              // }
-
-              // const auto [cache_time, last_volume] = volume_cache[config.id];
-              // if (elapsed_seconds - cache_time >=
-              // 	  config.minmax.volume_change_timespan) {
-              // 	const auto volume = calculate_volume(config.minmax);
-              // 	config.minmax.volume_change = std::abs(volume -
-              // last_volume);
-              //   volume_cache[config.id] = {elapsed_seconds, volume};
+                  //
+                  //   // for a very basic 'energy' parameter, we can
+                  //   calculate the
+                  //   // volume and then track changes in the volume over
+                  //   time constexpr static auto calculate_volume =
+                  //       [](const auto &mm) {
+                  //         return (mm.max_x - mm.min_x) * (mm.max_y -
+                  //         mm.min_y) *
+                  //                (mm.max_z - mm.min_z);
+                  //       };
+                  //
+                  //   // // and we keep a cache of the last volume per
+                  //   range
+                  //   // operator
+                  //   // // instance to be able to calculate the volume
+                  //   change
+                  //   // over time using uid = unsigned long int; static
+                  //   // std::unordered_map<uid, std::tuple<float, float>>
+                  //   // 	  volume_cache; // returns the last time and
+                  //   last volume
+                  //   // value
+                  //
+                  //   // using namespace std::chrono;
+                  //   // static const auto start_time =
+                  //   // duration_cast<milliseconds>(
+                  //   // high_resolution_clock::now().time_since_epoch());
+                  //   // const auto now = duration_cast<milliseconds>(
+                  //   // high_resolution_clock::now().time_since_epoch());
+                  //   // const float elapsed_seconds =
+                  //   // 	  (now.count() - start_time.count()) / 1000.0f;
+                  //
+                  //   // if (!volume_cache.contains(config.id)) {
+                  //   // 	volume_cache[config.id] = {elapsed_seconds,
+                  //   0.0f};
+                  //   // }
+                  //
+                  //   // const auto [cache_time, last_volume] =
+                  //   // volume_cache[config.id]; if (elapsed_seconds -
+                  //   cache_time
+                  //   // >= 	  config.minmax.volume_change_timespan)
+                  //   {
+                  //   // const auto volume =
+                  //   calculate_volume(config.minmax);
+                  //   // 	config.minmax.volume_change = std::abs(volume -
+                  //   // last_volume);
+                  //   //   volume_cache[config.id] = {elapsed_seconds,
+                  //   volume};
+                  //   // }
               // }
 
             } else {
               config.fill.fill_value = 0;
               config.fill.proportion = 0;
+                  if (config.minmax.reset_on_empty) {
               config.minmax.min_x = 0;
               config.minmax.max_x = 0;
               config.minmax.min_y = 0;
@@ -441,46 +464,9 @@ operator_in_out_t SessionOperatorHost::run_operators(
               config.minmax.min_z = 0;
               config.minmax.max_z = 0;
             }
-
-            // if (config.fill.publish) {
-            // publisher::publish_all(
-            //     "fill_value", std::array<float, 1>{config.fill.fill_value},
-            //     {"operator", "range_filter", std::to_string(config.id),
-            //      "fill"});
-            // publisher::publish_all(
-            //     "proportion", std::array<float, 1>{config.fill.proportion},
-            //     {"operator", "range_filter", std::to_string(config.id),
-            //      "fill"});
-            // }
-
-            // if (config.minmax.publish) {
-            //   auto &mm = config.minmax;
-            //   auto id = std::to_string(config.id);
-            //   publisher::publish_all(
-            // 			     "min_x", std::array<float, 1>{mm.min_x},
-            // 			     {"operator", "range_filter", id,
-            // "minmax"});
-            //   publisher::publish_all(
-            // 			     "max_x", std::array<float, 1>{mm.max_x},
-            // 			     {"operator", "range_filter", id,
-            // "minmax"});
-            //   publisher::publish_all(
-            // 			     "min_y", std::array<float, 1>{mm.min_y},
-            // 			     {"operator", "range_filter", id,
-            // "minmax"});
-            //   publisher::publish_all(
-            // 			     "max_y", std::array<float, 1>{mm.max_y},
-            // 			     {"operator", "range_filter", id,
-            // "minmax"});
-            //   publisher::publish_all(
-            // 			     "min_z", std::array<float, 1>{mm.min_z},
-            // 			     {"operator", "range_filter", id,
-            // "minmax"});
-            //   publisher::publish_all(
-            // 			     "max_z", std::array<float, 1>{mm.max_z},
-            // 			     {"operator", "range_filter", id,
-            // "minmax"});
-            // }
+                }
+              }
+            }
           }
         },
         operator_config);

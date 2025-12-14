@@ -34,10 +34,11 @@ struct RangeFilterOperatorFillConfiguration {
   int max_fill = 5000;
   float fill_value;
   float proportion;
-  bool publish = false;
 };
 
 struct RangeFilterOperatorMinMaxConfiguration {
+  bool enabled = false; // @optional
+  bool reset_on_empty = true; // @optional
   float min_x;
   float max_x;
   float min_y;
@@ -46,7 +47,6 @@ struct RangeFilterOperatorMinMaxConfiguration {
   float max_z;
   float volume_change;
   float volume_change_timespan = 0.03f;
-  bool publish = false;
 };
 
 struct RangeFilterOperatorMinMaxVectorConfiguration {
@@ -76,11 +76,24 @@ struct RangeFilterOperatorConfiguration {
 struct RangeFilterOperator : Operator {
 
   RangeFilterOperatorConfiguration _config;
+  Float3 min_mm;
+  Float3 max_mm;
+  bool invert;
 
   RangeFilterOperator(const RangeFilterOperatorConfiguration &config)
-      : _config(config){};
+      : _config(config), invert(config.invert) {
+    const auto &position = config.transform.position;
+    const auto &size = config.transform.size;
+    const Float3 half_size{size.x * 0.5f, size.y * 0.5f, size.z * 0.5f};
+    min_mm = Float3{(position.x - half_size.x) * 1000.0f,
+                    (position.y - half_size.y) * 1000.0f,
+                    (position.z - half_size.z) * 1000.0f};
+    max_mm = Float3{(position.x + half_size.x) * 1000.0f,
+                    (position.y + half_size.y) * 1000.0f,
+                    (position.z + half_size.z) * 1000.0f};
+  };
 
-  __device__ bool operator()(indexed_point_t point) const;
+  __device__ __forceinline__ bool operator()(indexed_point_t point) const;
 
   // TODO these static funcs are a bit random...
   // should be replaced with something outside of the operator
