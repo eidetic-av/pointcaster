@@ -21,7 +21,13 @@ __host__ __device__ static inline float as_rad(float deg) {
 };
 
 struct input_transform_filter {
-  DeviceTransformConfiguration config;
+  const DeviceTransformConfiguration _config;
+  const pc::types::Float3 _flip_signs;
+
+  input_transform_filter(const DeviceTransformConfiguration &config)
+      : _config(config), _flip_signs{.x = config.flip_x ? -1.0f : 1.0f,
+                                     .y = config.flip_y ? -1.0f : 1.0f,
+                                     .z = config.flip_z ? -1.0f : 1.0f} {}
 
   __device__ bool check_empty(position pos, color col) const {
     if (pos.x == 0.0f && pos.y == 0.0f && pos.z == 0.0f) return false;
@@ -30,16 +36,20 @@ struct input_transform_filter {
   }
 
   __device__ bool check_crop(position pos) const {
-    auto x = config.flip_x ? -pos.x : pos.x;
-    auto y = config.flip_y ? pos.y : -pos.y;
-    auto z = config.flip_z ? -pos.z : pos.z;
-    return x >= config.crop_x.min && x <= config.crop_x.max &&
-           y >= config.crop_y.min && y <= config.crop_y.max &&
-           z >= config.crop_z.min && z <= config.crop_z.max;
+    const auto x = pos.x * _flip_signs.x;
+    const auto y = pos.y * _flip_signs.y;
+    const auto z = pos.z * _flip_signs.z;
+    return x >= _config.crop_x.min && x <= _config.crop_x.max &&
+           y >= _config.crop_y.min && y <= _config.crop_y.max &&
+           z >= _config.crop_z.min && z <= _config.crop_z.max;
   }
 
-  __device__ bool sample(int index) const {
-    return (index % config.sample) == 0;
+  __device__ __forceinline__ bool sample(int index) const {
+    const int s = _config.sample;
+    if (s <= 1) return true;
+    // for a power of 2 number, use bitmask, its faster than modulo
+    if ((s & (s - 1)) == 0) { return (index & (s - 1)) == 0; }
+    return (index % s) == 0;
   }
 
   __device__ bool operator()(indexed_point_t point) const {
