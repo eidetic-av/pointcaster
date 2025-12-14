@@ -18,7 +18,6 @@
 #include <imgui.h>
 #include <k4abttypes.h>
 #include <memory>
-#include <mutex>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_reduce.h>
 
@@ -36,7 +35,7 @@ namespace {
 // synthesized_point_cloud then returns pre-computed frames if the caller
 // submits the same session arg on before reset_pointcloud_frames is called
 pc::string_map<types::PointCloud> pointcloud_frame_cache;
-std::mutex pointcloud_frame_cache_access;
+PC_PROFILING_MUTEX(pointcloud_frame_cache_access);
 } // namespace
 
 namespace detail {
@@ -82,20 +81,33 @@ pc::types::PointCloud &compute_or_get_point_cloud(
   }
 
   using namespace pc::profiling;
-  ProfilingZone point_cloud_zone("PointCloud::compute_or_get_point_cloud");
+  ProfilingZone point_cloud_zone(
+      fmt::format("PointCloud::compute_or_get_point_cloud: {}", session_id));
 
-  pc::types::PointCloud pointcloud;
+  // this structure holds a 'snapshot' of devices to use for processing this frame,
+  // so we don't hold open locks for device and device config access
+  struct DeviceView {
+    std::shared_ptr<IDevice> device;
+    DeviceConfigurationVariant* config;
+  };
+  std::vector<DeviceView> devices_snapshot;
+
   {
-
-    ProfilingZone locked_zone("compute_or_get_point_cloud::locked zone");
+    ProfilingZone snapshot_zone(fmt::format("snapshot devices: {}", session_id));
 
     std::lock_guard device_lock(devices_access);
     std::lock_guard config_lock(device_configs_access);
 
-    ProfilingZone lock_acquired_zone("compute_or_get_point_cloud::lock acquired");
+    devices_snapshot.reserve(attached_devices.size());
+    for (std::size_t i = 0; i < attached_devices.size(); i++) {
+      devices_snapshot.push_back({attached_devices[i], &device_configs[i].get()});
+    }
+  }
 
-    for (size_t i = 0; i < attached_devices.size(); i++) {
-      auto &device = attached_devices[i];
+  pc::types::PointCloud pointcloud;
+  {
+    ProfilingZone work_zone(fmt::format("device work: {}", session_id));
+    for (auto& device_view : devices_snapshot) {
       std::visit(
           [&](auto &&config) {
             using T = std::decay_t<decltype(config)>;
@@ -104,13 +116,13 @@ pc::types::PointCloud &compute_or_get_point_cloud(
               return;
             }
             ProfilingZone this_device_zone(std::format("{}->point_cloud", T::Name));
-            auto device_cloud = device->point_cloud();
+            auto device_cloud = device_view.device->point_cloud();
             {
               ProfilingZone combine_zone(std::format("{} operator+=", T::Name));
               pointcloud += std::move(device_cloud);
             }
           },
-          device_configs[i].get());
+          *device_view.config);
     }
   }
 
