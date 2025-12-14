@@ -4,6 +4,7 @@
 #include "../logger.h"
 #include "../network_globals.h"
 #include "../parameters.h"
+#include "../profiling.h"
 #include "../publisher/publisher.h"
 #include <zpp_bits.h>
 
@@ -142,6 +143,9 @@ SyncServer::SyncServer(SyncServerConfiguration &config) : _config(config) {
                                                       send_queue_wait_time)) {
 
             if (_connected_client_ids.empty()) { continue; }
+
+            using namespace pc::profiling;
+            ProfilingZone serialize_and_send_zone("serialize_and_send");
 
             // serialize the outgoing message
             auto [buffer, out] = zpp::bits::data_out();
