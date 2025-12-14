@@ -61,6 +61,9 @@ public:
   void stop_sensors() override;
   void reload() override;
 
+  // open returns an optional device_index and device if it succeeds
+  std::optional<std::pair<size_t, k4a::device>> open();
+
   void reattach(int index);
 
   void set_paused(bool paused) override;

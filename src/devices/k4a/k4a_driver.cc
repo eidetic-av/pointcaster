@@ -47,63 +47,21 @@ K4ADriver::K4ADriver(AzureKinectConfiguration &config)
   // if the config's serial number is specified at launch, and if the device
   // with the target serial number is not found, we put the driver into a
   // "lost_device" state waiting for it to be plugged in
-
   try {
-
-    bool found_target = false;
-
-    k4a::device device;
-
-    // we need to loop through every index of connected device,
-    // because these change as devices are unplugged and replugged,
-    // and there's no way to retrieve a serial number without first opening the
-    // device
-    int i = 0;
-    for (; i < k4a::device::get_installed_count(); i++) {
-      try {
-        pc::logger->info("Opening device at index {}", i);
-
-        device = k4a::device::open(i);
-        auto this_serial_number = device.get_serialnum();
-
-        if (_serial_number.empty()) {
-          // if we weren't looking for a specific serial number,
-          // and we successfully opened a new device
-          found_target = true;
-          _serial_number = this_serial_number;
-          break;
-        }
-
-        if (_serial_number == this_serial_number) {
-          // if we were looking for this specific serial number,
-          // and we succesfully opened that specific device
-          found_target = true;
-          break;
-        }
-
-        // if we succesfully opened the device, but didn't match the serial
-        // number we were looking for, we need to close the device and try again
-        pc::logger->info("Found k4a with wrong serial num... trying again...");
-        device.close();
-
-      } catch (const k4a::error &e) {
-        // if the device failed to open, just continue on to try the next device
-        pc::logger->error("Failed to open the k4a at {}", i);
-        pc::logger->error(e.what());
-      }
-    }
-
+    auto device_result = open();
     // if no device was found, it means we were looking for a serial number and
     // didn't find it. In this case, throw here and consider the device "lost",
     // i.e. initialise the configuration but wait for it to be plugged in
-    if (!found_target) {
-      throw k4a::error("Failed to open device requested k4a device");
+    if (!device_result) {
+      pc::logger->warn("Failed to open k4a device");
+      return;
     }
+
+    auto& [index, device] = device_result.value();
 
     pc::logger->info("Starting k4a device with serial num: {}", _serial_number);
 
-    device_index = i;
-
+    device_index = index;
     _device = std::make_unique<k4a::device>(std::move(device));
   
     init_device_memory();
@@ -116,7 +74,6 @@ K4ADriver::K4ADriver(AzureKinectConfiguration &config)
     pc::logger->info("k4a {} Open", (unsigned int)device_index);
 
     return;
-
   } catch (const k4a::error &e) { pc::logger->debug(e.what()); } catch (...) {
     pc::logger->debug("Unknown exception");
   }
@@ -139,8 +96,51 @@ K4ADriver::~K4ADriver() {
   _tracker_loop.join();
   _imu_loop.join();
   stop_sensors();
-  if (!lost_device) { _device->close(); }
+  if (!lost_device && _device && _device->is_valid()) { _device->close(); }
   free_device_memory();
+}
+
+std::optional<std::pair<size_t, k4a::device>> K4ADriver::open() {
+  k4a::device device;
+  bool found_target = false;
+  // we need to loop through every index of connected device,
+  // because these change as devices are unplugged and replugged,
+  // and there's no way to retrieve a serial number without first opening the
+  // device
+  int i = 0;
+  for (; i < k4a::device::get_installed_count(); i++) {
+    try {
+      pc::logger->info("Opening device at index {}", i);
+
+      device = k4a::device::open(i);
+      auto this_serial_number = device.get_serialnum();
+
+      if (_serial_number.empty()) {
+        // if we weren't looking for a specific serial number,
+        // and we successfully opened a new device
+        found_target = true;
+        _serial_number = this_serial_number;
+        break;
+      }
+
+      if (_serial_number == this_serial_number) {
+        // if we were looking for this specific serial number,
+        // and we succesfully opened that specific device
+        found_target = true;
+        break;
+      }
+      // if we succesfully opened the device, but didn't match the serial
+      // number we were looking for, we need to close the device and try again
+      pc::logger->debug("Found k4a with wrong serial num... trying again...");
+      device.close();
+    } catch (const k4a::error &e) {
+      // if the device failed to open, just continue on to try the next device
+      pc::logger->error("Failed to open the k4a at {}", i);
+      pc::logger->error(e.what());
+      return std::nullopt;
+    }
+  }
+  return {{i, std::move(device)}};
 }
 
 void K4ADriver::start_sensors() {
@@ -235,8 +235,11 @@ void K4ADriver::capture_frames() {
   while (!_stop_requested) {
 
     if (lost_device) {
-      if (lost_device_check_count++ % 20 == 0)
+      if (lost_device_check_count++ % 20 == 0) {
         pc::logger->warn("Waiting for lost K4A ({})...", id());
+        // TODO make this a configurable option to attempt reconnect
+        open();
+      }
       if (_device == nullptr) {
         std::this_thread::sleep_for(250ms);
       } else {
