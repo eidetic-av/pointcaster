@@ -425,8 +425,7 @@ if (WITH_POINTCASTER)
   target_link_libraries(pointcaster PRIVATE 
     ${LINK_LIBS} ${OPTIONAL_LIBS} ${PLATFORM_LIBS})
 
-  target_precompile_headers(pointcaster PRIVATE 
-    ${CMAKE_SOURCE_DIR}/src/pch.h)
+  include(PointcasterPrecompiledHeaders)
 
   # optimisations
 
@@ -545,7 +544,7 @@ if (WITH_POINTCASTER)
 
   list(APPEND DEPLOY_EXCLUDES
       "*cmake*" "*CMake*" "*vcpkg*"
-      "*ninja*" "*.lib" "*.exp"
+      "*ninja*" "*.lib" "*.exp" "*.log"
       "resource*.cpp" "Log/*" "*cache*"
       "*data*/*" "compile_commands.json")
 
