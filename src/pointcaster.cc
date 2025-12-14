@@ -385,7 +385,8 @@ void PointCaster::save_workspace(std::filesystem::path file_path) {
   // the config for the app's lifetime
   for (size_t i = 0; i < camera_controllers.size(); i++) {
     if (output_workspace.sessions.size() <= i) {
-      pc::logger->warn("Mismatched camera controllers & workspace sessions count during workspace save");
+      pc::logger->warn("Mismatched camera controllers & workspace sessions "
+                       "count during workspace save");
       break;
     }
     output_workspace.sessions[i].camera = camera_controllers[i]->config();
@@ -433,10 +434,10 @@ void PointCaster::save_workspace(std::filesystem::path file_path) {
             const auto member_names = type_info.member_names().members();
 
             // insert the variant type name to the device table
-            device_table.insert_or_assign("device_variant", toml::value(T::Name));
+            device_table.insert_or_assign("device_variant",
+                                          toml::value(T::Name));
             // iterate each struct member to add to the device table
-            auto handle_member = [&](std::string_view member_name,
-                                                auto index) {
+            auto handle_member = [&](std::string_view member_name, auto index) {
               using MemberType = pc::reflect::type_at_t<typename T::MemberTypes,
                                                         decltype(index)::value>;
               // retrieve the actual member reference at runtime
@@ -1099,7 +1100,7 @@ void PointCaster::draw_stats(const float delta_time) {
     }
 
     for (size_t i = 0; i < workspace.sessions.size(); i++) {
-      auto& session = workspace.sessions[i];
+      auto &session = workspace.sessions[i];
       auto &camera_controller = camera_controllers[i];
       ImGui::PushID(session.id.c_str());
       if (ImGui::CollapsingHeader(session.label.c_str())) {

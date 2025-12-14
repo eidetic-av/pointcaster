@@ -59,7 +59,7 @@ SessionOperatorHost::SessionOperatorHost(
 
 template <typename T>
 bool operator_collapsing_header(
-    T operator_config,
+    T& operator_config,
     std::optional<std::function<void()>> delete_callback = {},
     std::optional<std::function<void(std::string_view)>> title_edit_callback =
         {},
