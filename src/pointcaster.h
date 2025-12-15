@@ -1,7 +1,5 @@
 #pragma once
 
-#include "pch.h"
-
 #include "workspace.gen.h"
 #include "devices/sequence/ply_sequence_player_config.gen.h"
 #include "gui/catpuccin.h"

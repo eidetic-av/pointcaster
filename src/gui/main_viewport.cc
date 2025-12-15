@@ -1,5 +1,4 @@
 #include "main_viewport.h"
-#include "../pch.h"
 #include "widgets.h"
 #include "windows.h"
 #include <ImGuizmo.h>
