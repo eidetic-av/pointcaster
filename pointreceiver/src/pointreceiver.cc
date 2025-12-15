@@ -260,7 +260,7 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
                 } else if constexpr (std::same_as<
                                          T, pc::client_sync::EndpointUpdate>) {
                   msg_enqueue_result = ctx->message_queue.try_enqueue(message);
-} else {
+                } else {
                   msg_enqueue_result = false;
                   log("Couldn't enqueue message type");
                 }
@@ -512,7 +512,7 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
             }
           }
 
-else {
+          else {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_UNKNOWN;
           }
         },
@@ -524,7 +524,8 @@ else {
     // parse the endpoint update and ensure we have connected sockets
     auto endpoint_update = std::get<EndpointUpdate>(message);
     if (endpoint_update.active) {
-      // ensure_static_socket_active(ctx, endpoint_update.id, endpoint_update.port);
+      // ensure_static_socket_active(ctx, endpoint_update.id,
+      // endpoint_update.port);
     } else {
       // ctx->static_pointcloud_sockets.erase(endpoint_update.id);
     }
@@ -550,22 +551,22 @@ bool pointreceiver_free_sync_message(pointreceiver_context *ctx,
   // must free it
   switch (out_message->value_type) {
   case POINTRECEIVER_PARAM_VALUE_FLOAT3LIST: {
-      free(out_message->value.float3_list_val.data);
-      out_message->value.float3_list_val.data = NULL;
+    free(out_message->value.float3_list_val.data);
+    out_message->value.float3_list_val.data = NULL;
     out_message->value.float3_list_val.count = 0;
-  break;
+    break;
   }
   case POINTRECEIVER_PARAM_VALUE_FLOAT4LIST: {
-      free(out_message->value.float4_list_val.data);
-      out_message->value.float4_list_val.data = NULL;
+    free(out_message->value.float4_list_val.data);
+    out_message->value.float4_list_val.data = NULL;
     out_message->value.float4_list_val.count = 0;
     break;
-    }
-    case POINTRECEIVER_PARAM_VALUE_AABBLIST: {
-      free(out_message->value.aabb_list_val.data);
-      out_message->value.aabb_list_val.data = NULL;
+  }
+  case POINTRECEIVER_PARAM_VALUE_AABBLIST: {
+    free(out_message->value.aabb_list_val.data);
+    out_message->value.aabb_list_val.data = NULL;
     out_message->value.aabb_list_val.count = 0;
-  break;
+    break;
   }
   case POINTRECEIVER_PARAM_VALUE_CONTOURSLIST: {
     pointreceiver_contours_list_t *contours_list =
@@ -616,7 +617,7 @@ int pointreceiver_start_point_receiver(pointreceiver_context *ctx,
     socket.set(zmq::sockopt::linger, 0);
     socket.set(zmq::sockopt::rcvhwm, 1);
     socket.set(zmq::sockopt::conflate, 1);
-    socket.set(zmq::sockopt::rcvtimeo, 10); //ms
+    socket.set(zmq::sockopt::rcvtimeo, 10); // ms
 
     socket.connect(endpoint);
     /*log("Listening for pointcloud stream at '{}'", endpoint);*/
@@ -630,9 +631,8 @@ int pointreceiver_start_point_receiver(pointreceiver_context *ctx,
     socket.join("live");
     log("Connected");
 
-
     zmq::socket_t static_socket(zmq_ctx(), zmq::socket_type::dish);
-    static_socket.set(zmq::sockopt::rcvtimeo, 10); //ms
+    static_socket.set(zmq::sockopt::rcvtimeo, 10); // ms
     static_socket.set(zmq::sockopt::linger, 0);
     static_socket.set(zmq::sockopt::conflate, 1);
     auto colon_pos = endpoint.rfind(':');
@@ -661,8 +661,8 @@ int pointreceiver_start_point_receiver(pointreceiver_context *ctx,
         last_num_sockets = num_sockets;
       }
 
-      auto event_count = poller->wait_all(
-          socket_poller_events, std::chrono::milliseconds(100));
+      auto event_count = poller->wait_all(socket_poller_events,
+                                          std::chrono::milliseconds(100));
       if (event_count == 0) continue;
 
       for (size_t i = 0; i < event_count; i++) {
@@ -740,9 +740,9 @@ bool pointreceiver_dequeue_static_point_cloud(
 
   bool result = ctx->static_cloud_frames.wait_dequeue_timed(
       ctx->current_static_point_cloud, std::chrono::milliseconds(timeout_ms));
-  
-  auto& source_id = ctx->current_static_point_cloud.source_id;
-  auto& cloud = ctx->current_static_point_cloud.point_cloud;
+
+  auto &source_id = ctx->current_static_point_cloud.source_id;
+  auto &cloud = ctx->current_static_point_cloud.point_cloud;
 
   if (!result) return false;
 
@@ -852,7 +852,7 @@ void testMessageLoop(pointreceiver_context *ctx) {
         case POINTRECEIVER_PARAM_VALUE_AABBLIST:
           log("Got an AABBList here");
           break;
-case POINTRECEIVER_PARAM_VALUE_CONTOURSLIST:
+        case POINTRECEIVER_PARAM_VALUE_CONTOURSLIST:
           log("Got contours: {}", msg.value.contours_list_val.count);
           break;
         default: log("Unknown parameter update type"); break;
