@@ -260,6 +260,9 @@ int pointreceiver_start_message_receiver(pointreceiver_context *ctx,
                 } else if constexpr (std::same_as<
                                          T, pc::client_sync::EndpointUpdate>) {
                   msg_enqueue_result = ctx->message_queue.try_enqueue(message);
+} else {
+                  msg_enqueue_result = false;
+                  log("Couldn't enqueue message type");
                 }
               },
               message);
@@ -446,7 +449,70 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
             } else {
               out_message->value.aabb_list_val.data = nullptr;
             }
-          } else {
+          } else if constexpr (std::same_as<T, ContoursList>) {
+            out_message->value_type = POINTRECEIVER_PARAM_VALUE_CONTOURSLIST;
+
+            const auto &contours = val;
+            const size_t contour_count = contours.size();
+            out_message->value.contours_list_val.count = contour_count;
+
+            if (contour_count == 0) {
+              out_message->value.contours_list_val.data = nullptr;
+              return;
+            }
+
+            // allocate outer contour array
+            out_message->value.contours_list_val.data =
+                static_cast<pointreceiver_contour_t *>(std::malloc(
+                    contour_count * sizeof(pointreceiver_contour_t)));
+
+            if (!out_message->value.contours_list_val.data) {
+              out_message->value.contours_list_val.count = 0;
+              set_message_success = false;
+              return;
+            }
+            size_t total_vertex_count = 0;
+            for (size_t i = 0; i < contour_count; ++i) {
+              total_vertex_count += contours[i].size();
+            }
+            // allocate one vertex buffer
+            pointreceiver_float2_t *flat_vertices = nullptr;
+            if (total_vertex_count > 0) {
+              flat_vertices = static_cast<pointreceiver_float2_t *>(std::malloc(
+                  total_vertex_count * sizeof(pointreceiver_float2_t)));
+
+              if (!flat_vertices) {
+                std::free(out_message->value.contours_list_val.data);
+                out_message->value.contours_list_val.data = nullptr;
+                out_message->value.contours_list_val.count = 0;
+                set_message_success = false;
+                return;
+              }
+            }
+            // fill and assign each contour in a range of the flat buffer
+            size_t write_index = 0;
+            for (size_t contour_index = 0; contour_index < contour_count;
+                 ++contour_index) {
+              const auto &contour = contours[contour_index];
+              const size_t vertex_count = contour.size();
+
+              pointreceiver_contour_t &out_contour =
+                  out_message->value.contours_list_val.data[contour_index];
+
+              out_contour.count = vertex_count;
+              out_contour.data =
+                  (vertex_count > 0) ? (flat_vertices + write_index) : nullptr;
+
+              for (size_t vertex_index = 0; vertex_index < vertex_count;
+                   ++vertex_index) {
+                out_contour.data[vertex_index].x = contour[vertex_index][0];
+                out_contour.data[vertex_index].y = contour[vertex_index][1];
+              }
+              write_index += vertex_count;
+            }
+          }
+
+else {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_UNKNOWN;
           }
         },
@@ -482,27 +548,49 @@ bool pointreceiver_free_sync_message(pointreceiver_context *ctx,
 
   // if the message contains a type that uses dynamically allocated memory, we
   // must free it
-  if (out_message->value_type == POINTRECEIVER_PARAM_VALUE_FLOAT3LIST) {
-    if (out_message->value.float3_list_val.data) {
+  switch (out_message->value_type) {
+  case POINTRECEIVER_PARAM_VALUE_FLOAT3LIST: {
       free(out_message->value.float3_list_val.data);
-      out_message->value.float3_list_val.data = nullptr;
-    }
+      out_message->value.float3_list_val.data = NULL;
     out_message->value.float3_list_val.count = 0;
-  } else if (out_message->value_type == POINTRECEIVER_PARAM_VALUE_FLOAT4LIST) {
-    if (out_message->value.float4_list_val.data) {
-      free(out_message->value.float4_list_val.data);
-      out_message->value.float4_list_val.data = nullptr;
-    }
-    out_message->value.float3_list_val.count = 0;
-  } else if (out_message->value_type == POINTRECEIVER_PARAM_VALUE_AABBLIST) {
-    if (out_message->value.aabb_list_val.data) {
-      free(out_message->value.aabb_list_val.data);
-      out_message->value.aabb_list_val.data = nullptr;
-    }
-    out_message->value.aabb_list_val.count = 0;
+  break;
   }
-
-  // For other message types, no cleanup is necessary.
+  case POINTRECEIVER_PARAM_VALUE_FLOAT4LIST: {
+      free(out_message->value.float4_list_val.data);
+      out_message->value.float4_list_val.data = NULL;
+    out_message->value.float4_list_val.count = 0;
+    break;
+    }
+    case POINTRECEIVER_PARAM_VALUE_AABBLIST: {
+      free(out_message->value.aabb_list_val.data);
+      out_message->value.aabb_list_val.data = NULL;
+    out_message->value.aabb_list_val.count = 0;
+  break;
+  }
+  case POINTRECEIVER_PARAM_VALUE_CONTOURSLIST: {
+    pointreceiver_contours_list_t *contours_list =
+        &out_message->value.contours_list_val;
+    if (contours_list && contours_list->data) {
+      // find the base pointer of the flat buffer (first non-empty contour)
+      pointreceiver_float2_t *flat_vertices = NULL;
+      for (size_t i = 0; i < contours_list->count; ++i) {
+        if (contours_list->data[i].data) {
+          flat_vertices = contours_list->data[i].data;
+          break;
+        }
+      }
+      if (flat_vertices) { free(flat_vertices); }
+      free(contours_list->data);
+      contours_list->data = NULL;
+    }
+    contours_list->count = 0;
+    break;
+  }
+  default: {
+    // for other message types, no cleanup necessary
+    break;
+  }
+  }
   return true;
 }
 
@@ -763,6 +851,9 @@ void testMessageLoop(pointreceiver_context *ctx) {
           break;
         case POINTRECEIVER_PARAM_VALUE_AABBLIST:
           log("Got an AABBList here");
+          break;
+case POINTRECEIVER_PARAM_VALUE_CONTOURSLIST:
+          log("Got contours: {}", msg.value.contours_list_val.count);
           break;
         default: log("Unknown parameter update type"); break;
         }

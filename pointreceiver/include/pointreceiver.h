@@ -53,15 +53,30 @@ typedef enum {
  * @brief Enumerates the possible types for parameter values.
  */
 typedef enum {
-  POINTRECEIVER_PARAM_VALUE_FLOAT = 0, /**< Float value */
-  POINTRECEIVER_PARAM_VALUE_INT,       /**< Integer value */
-  POINTRECEIVER_PARAM_VALUE_FLOAT3,    /**< 3D float vector */
-  POINTRECEIVER_PARAM_VALUE_FLOAT4,    /**< 4D float vector */
+  POINTRECEIVER_PARAM_VALUE_FLOAT = 0,  /**< Float value */
+  POINTRECEIVER_PARAM_VALUE_INT,        /**< Integer value */
+  POINTRECEIVER_PARAM_VALUE_FLOAT3,     /**< 3D float vector */
+  POINTRECEIVER_PARAM_VALUE_FLOAT4,     /**< 4D float vector */
   POINTRECEIVER_PARAM_VALUE_FLOAT3LIST, /**< List of 3D float vectors */
   POINTRECEIVER_PARAM_VALUE_FLOAT4LIST, /**< List of 4D float vectors */
-  POINTRECEIVER_PARAM_VALUE_AABBLIST, /**< List of Axis-aligned bounding boxes */
-  POINTRECEIVER_PARAM_VALUE_UNKNOWN    /**< Unknown parameter type */
+  POINTRECEIVER_PARAM_VALUE_AABBLIST,   /**< List of Axis-aligned bounding boxes
+                                         */
+  POINTRECEIVER_PARAM_VALUE_CONTOURSLIST, /**< List of contours. 2D polygons
+                                             stored as a list of vertex
+                                             locations in pointcaster camera
+                                             space */
+  POINTRECEIVER_PARAM_VALUE_UNKNOWN       /**< Unknown parameter type */
 } pointreceiver_param_value_type;
+
+/**
+ * @brief Structure representing a 2D float vector.
+ *
+ * Contains the x and y components.
+ */
+typedef struct {
+  float x; /**< X component of the 3D vector */
+  float y; /**< Y component of the 3D vector */
+} pointreceiver_float2_t;
 
 /**
  * @brief Structure representing a 3D float vector.
@@ -129,6 +144,17 @@ typedef struct {
   size_t count;                /**< Number of 3D float vector values in the array */
 } pointreceiver_float4_list_t;
 
+typedef struct {
+  pointreceiver_float2_t *data; /**< Vertex list*/
+  size_t count;                /**< Number of vertices in the countour */
+} pointreceiver_contour_t;
+
+typedef struct {
+  pointreceiver_contour_t *data; /**< Contours list*/
+  size_t count;                /**< Number of contours in the list */
+} pointreceiver_contours_list_t;
+
+
 /**
  * @brief Structure representing an endpoint update from a Pointcaster server.
  *
@@ -163,6 +189,8 @@ typedef struct {
         float3_list_val; /**< List of 3D float vector values */
     pointreceiver_float4_list_t
         float4_list_val; /**< List of 4D float vector values */
+pointreceiver_aabb_list_t aabb_list_val; /**< List of AABB values */
+    pointreceiver_contours_list_t contours_list_val; /**< List of contours */
     pointreceiver_endpoint_update endpoint_update_val; /**< Endpoint Update value */
   } value;               /**< Union holding the message value */
 
