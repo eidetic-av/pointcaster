@@ -184,12 +184,11 @@ typedef struct {
     int int_val;                             /**< Integer value */
     pointreceiver_float3_t float3_val;       /**< 3D float vector value */
     pointreceiver_float4_t float4_val;       /**< 4D float vector value */
-    pointreceiver_aabb_list_t aabb_list_val; /**< List of AABB values */
     pointreceiver_float3_list_t
         float3_list_val; /**< List of 3D float vector values */
     pointreceiver_float4_list_t
         float4_list_val; /**< List of 4D float vector values */
-pointreceiver_aabb_list_t aabb_list_val; /**< List of AABB values */
+    pointreceiver_aabb_list_t aabb_list_val; /**< List of AABB values */
     pointreceiver_contours_list_t contours_list_val; /**< List of contours */
     pointreceiver_endpoint_update endpoint_update_val; /**< Endpoint Update value */
   } value;               /**< Union holding the message value */
