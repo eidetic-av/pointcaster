@@ -424,7 +424,13 @@ void draw_devices_window(PointCaster &app) {
     if (!requested_orbbec_discovery) {
       requested_orbbec_discovery = true;
       app.run_async([] {
+pc::logger->info("Starting Orbbec device discovery...");
+        try {
         OrbbecDevice::discover_devices();
+} catch (const std::exception &e) {
+          pc::logger->error("Orbbec discovery failed: {}", e.what());
+        }
+        pc::logger->info("Orbbec device discovery finished.");
       });
     }
 
