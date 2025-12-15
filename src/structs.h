@@ -91,10 +91,6 @@ struct Float2 {
   using vector_type = float;
   vector_type x, y = 0;
 
-  constexpr Float2() = default;
-  constexpr Float2(vector_type _value) : x(_value), y(_value){};
-  constexpr Float2(vector_type _x, vector_type _y) : x(_x), y(_y){};
-
   vector_type& operator[](std::size_t index) {
     switch(index) {
       case 0: return x;
