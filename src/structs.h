@@ -89,7 +89,7 @@ template <> struct VectorSize<Float> {
 
 struct Float2 {
   using vector_type = float;
-  vector_type x, y = 0;
+  vector_type x = 0, y = 0;
 
   vector_type& operator[](std::size_t index) {
     switch(index) {
@@ -127,7 +127,7 @@ template <> struct VectorSize<Float2> {
 
 struct Float3 {
   using vector_type = float;
-  vector_type x, y, z = 0;
+  vector_type x = 0, y = 0, z = 0;
 
   vector_type& operator[](std::size_t index) {
     switch(index) {
@@ -247,7 +247,7 @@ template <> struct VectorSize<Int> {
 
 struct Int2 {
   using vector_type = int;
-  vector_type x, y = 0;
+  vector_type x = 0, y = 0;
 
   constexpr Int2() = default;
   constexpr Int2(vector_type _value) : x(_value), y(_value){};
@@ -297,7 +297,7 @@ template <> struct VectorSize<Int2> {
 
 struct Int3 {
   using vector_type = int;
-  vector_type x, y, z = 0;
+  vector_type x = 0, y = 0, z = 0;
 
   vector_type& operator[](std::size_t index) {
     switch(index) {
@@ -338,7 +338,7 @@ template <> struct VectorSize<Int3> {
 
 struct Uint2 {
   using vector_type = unsigned int;
-  vector_type x, y = 0;
+  vector_type x = 0, y = 0;
 
   vector_type& operator[](std::size_t index) {
     switch(index) {
@@ -376,7 +376,7 @@ template <> struct VectorSize<Uint2> {
 
 struct Short2 {
   using vector_type = short;
-  vector_type x, y = 0;
+  vector_type x = 0, y = 0;
 
   constexpr Short2() = default;
   constexpr Short2(vector_type _value) : x(_value), y(_value){};
@@ -426,7 +426,7 @@ template <> struct VectorSize<Short2> {
 
 struct Short3 {
   using vector_type = short;
-  vector_type x, y, z = 0;
+  vector_type x = 0, y = 0, z = 0;
 
   vector_type& operator[](std::size_t index) {
     switch(index) {
