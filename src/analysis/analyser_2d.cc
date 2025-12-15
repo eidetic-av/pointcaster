@@ -593,15 +593,14 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
       }
 
       // TODO total flow energy
-      if (feature_point_positions.size() > 0) {
-	flow_energy = flow_energy / feature_point_positions.size();
-	publisher::publish_all("flow_energy", flow_energy, address_nodes);
-      } else {
-	publisher::publish_all("flow_energy", 0.0f, address_nodes);
-      }
-
       if (optical_flow.publish) {
-	publisher::publish_all("flow", flow_field_flattened, address_nodes);
+        publisher::publish_all("flow", flow_field_flattened, address_nodes);
+        if (feature_point_positions.size() > 0) {
+          flow_energy = flow_energy / feature_point_positions.size();
+          publisher::publish_all("flow_energy", flow_energy, address_nodes);
+        } else {
+          publisher::publish_all("flow_energy", 0.0f, address_nodes);
+        }
       }
     }
 
