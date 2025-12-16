@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../device.h"
+#include "../../gui/right_click_menu.h"
 #include "../../profiling_mutex.h"
 #include "orbbec_device_config.gen.h"
 #include <atomic>
@@ -24,14 +25,15 @@ struct OrbbecDeviceInfo
     std::string serial_num;
 };
 
-class OrbbecDevice : public DeviceBase<OrbbecDeviceConfiguration> {
+class OrbbecDevice : public DeviceBase<OrbbecDeviceConfiguration>,
+                     public pc::gui::IRightClickMenu {
 
 public:
   inline static std::vector<std::reference_wrapper<OrbbecDevice>>
       attached_devices;
   inline static std::mutex devices_access;
   inline static std::vector<OrbbecDeviceInfo> discovered_devices;
-  inline static std::atomic_bool discovering_devices;
+  inline static std::atomic_bool discovering_devices{false};
 
   static void init_context();
   static void destroy_context();
@@ -59,6 +61,7 @@ public:
 
   /// returns signal_detach bool, a request for if the device should be detached
   bool draw_imgui_controls();
+  bool draw_right_click_menu() override;
 
   const std::string &ip() { return config().ip; }
 
@@ -66,6 +69,7 @@ private:
   inline static std::unique_ptr<ob::Context> _ob_ctx;
   inline static std::shared_ptr<ob::DeviceList> _ob_device_list;
   inline static std::mutex _start_stop_access;
+  inline static std::jthread _discovery_thread;
 
   std::shared_ptr<ob::Config> _ob_config;
   std::shared_ptr<ob::Device> _ob_device;

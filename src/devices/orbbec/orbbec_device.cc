@@ -26,17 +26,30 @@ void OrbbecDevice::destroy_context() {
 
 void OrbbecDevice::discover_devices() {
   discovering_devices = true;
-  discovered_devices.clear();
+  {
+    std::lock_guard lock(devices_access);
+    discovered_devices.clear();
+  }
+
   pc::logger->debug("Discovering Orbbec devices...");
   try {
     _ob_device_list = _ob_ctx->queryDeviceList();
     auto count = _ob_device_list->deviceCount();
+
+    std::vector<OrbbecDeviceInfo> local_found;
+    local_found.reserve(static_cast<size_t>(count));
+
     for (int i = 0; i < count; i++) {
       auto device = _ob_device_list->getDevice(i);
       auto info = device->getDeviceInfo();
-      if (strcmp(info->connectionType(), "Ethernet") == 0) {
-        discovered_devices.push_back({info->ipAddress(), info->serialNumber()});
+      if (std::strcmp(info->connectionType(), "Ethernet") == 0) {
+        local_found.push_back({info->ipAddress(), info->serialNumber()});
       }
+    }
+
+    {
+      std::lock_guard lock(devices_access);
+      discovered_devices = std::move(local_found);
     }
   } catch (const ob::Error &e) {
     pc::logger->error("Failed to discover Orbbec devices: [{}] {}", e.getName(),
@@ -44,6 +57,7 @@ void OrbbecDevice::discover_devices() {
   } catch (...) {
     pc::logger->error("Unknown error during Orbbec device discovery");
   }
+
   pc::logger->debug("Finished discovering devices.");
   discovering_devices = false;
 }
@@ -369,5 +383,83 @@ bool OrbbecDevice::draw_imgui_controls() {
 
   return signal_detach;
 }
+
+bool OrbbecDevice::draw_right_click_menu() {
+  const std::string popup_name = std::format("##orbbec_right_click/{}", config().id);
+
+  static std::unordered_set<ImGuiID> opened_this_activation;
+  const ImGuiID popup_id = ImGui::GetID(popup_name.c_str());
+
+  const bool popup_currently_open =
+      ImGui::IsPopupOpen(popup_name.c_str(), ImGuiPopupFlags_AnyPopupId);
+
+  // only open once when we become "active" (i.e. caller started calling us).
+  if (!popup_currently_open && !opened_this_activation.contains(popup_id)) {
+    opened_this_activation.insert(popup_id);
+    ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Always);
+    ImGui::OpenPopup(popup_name.c_str());
+  }
+
+  if (ImGui::BeginPopup(popup_name.c_str(), ImGuiWindowFlags_AlwaysAutoResize)) {
+    static bool replace_menu_was_open = false;
+
+    const bool replace_menu_open = ImGui::BeginMenu("Replace");
+    if (replace_menu_open && !replace_menu_was_open) {
+      if (!discovering_devices.load(std::memory_order_relaxed)) {
+        _discovery_thread = std::jthread([](std::stop_token) {
+          try {
+            OrbbecDevice::discover_devices();
+          } catch (const std::exception& e) {
+            pc::logger->error("Orbbec discovery thread exception: {}", e.what());
+          } catch (...) {
+            pc::logger->error("Orbbec discovery thread: unknown exception");
+          }
+        });
+      }
+    }
+    replace_menu_was_open = replace_menu_open;
+
+    if (replace_menu_open) {
+      if (discovering_devices.load(std::memory_order_relaxed)) {
+        ImGui::BeginDisabled();
+        ImGui::MenuItem("Searching for Orbbec devices...", nullptr, false, false);
+        ImGui::EndDisabled();
+      } else {
+        std::vector<OrbbecDeviceInfo> snapshot;
+        {
+          std::lock_guard lock(devices_access);
+          snapshot = discovered_devices;
+        }
+
+        if (snapshot.empty()) {
+          ImGui::BeginDisabled();
+          ImGui::MenuItem("None", nullptr, false, false);
+          ImGui::EndDisabled();
+        } else {
+          for (const auto& dev : snapshot) {
+            const auto label = fmt::format("{}##replace_{}", dev.ip, dev.serial_num);
+            if (ImGui::MenuItem(label.c_str())) {
+              config().ip = dev.ip;
+              restart();
+              ImGui::CloseCurrentPopup(); 
+            }
+          }
+        }
+      }
+      ImGui::EndMenu();
+    }
+    ImGui::EndPopup();
+  }
+
+  // if popup is closed (clicked out or CloseCurrentPopup), deactivate.
+  const bool still_open =
+      ImGui::IsPopupOpen(popup_name.c_str(), ImGuiPopupFlags_AnyPopupId);
+  if (!still_open) {
+    opened_this_activation.erase(popup_id); // allow re-open on next activation
+  }
+
+  return still_open;
+}
+
 
 } // namespace pc::devices

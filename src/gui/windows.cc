@@ -16,6 +16,7 @@ void draw_devices_window(PointCaster &app) {
 
   static unsigned int selected_device_row = 0;
   static int editing_device_row_id = -1;
+  static std::optional<int> active_right_click_device_row;
 
   // this ensures newly added devices are 'selected'
   static int last_device_count = -1;
@@ -265,15 +266,20 @@ void draw_devices_window(PointCaster &app) {
         ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, bg_color);
 
         // detect clicks for selection using the full cell's rectangle
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-            ImGui::IsMouseHoveringRect(device_id_cell_min,
-                                       device_id_cell_max)) {
+        if ((ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
+            ImGui::IsMouseClicked(ImGuiMouseButton_Right)) &&
+                ImGui::IsMouseHoveringRect(device_id_cell_min,
+                                           device_id_cell_max)) {
           selected_device_row = i;
         }
         if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
             ImGui::IsMouseHoveringRect(device_id_cell_min,
                                        device_id_cell_max)) {
           editing_device_row_id = i;
+        }
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) &&
+            ImGui::IsMouseHoveringRect(row_min, row_max)) {
+          active_right_click_device_row = i;
         }
 
         if (!is_active || !is_session_active) ImGui::EndDisabled();
@@ -350,6 +356,23 @@ void draw_devices_window(PointCaster &app) {
     edited_device_id.reset();
   }
 
+  if (active_right_click_device_row) {
+    const int idx = *active_right_click_device_row;
+    if (idx < devices::attached_devices.size()) {
+      auto dev = devices::attached_devices[idx];
+      if (auto *menu = dynamic_cast<pc::gui::IRightClickMenu *>(dev.get())) {
+        gui::push_context_menu_styles();
+        const bool popup_alive = menu->draw_right_click_menu();
+        if (!popup_alive) active_right_click_device_row.reset();
+        gui::pop_context_menu_styles();
+      } else {
+        active_right_click_device_row.reset();
+      }
+    } else {
+      active_right_click_device_row.reset();
+    }
+  }
+
   ImGui::Dummy({0, 10});
 
   // the scrollable child that contains the device configuration parameters of
@@ -411,9 +434,9 @@ void draw_devices_window(PointCaster &app) {
     // USB devices
     ImGui::SeparatorText("USB Devices");
     if (ImGui::MenuItem("Azure Kinect")) { app.open_kinect_sensors(); }
-    if (ImGui::MenuItem("Orbbec (USB)")) {
-      pc::logger->error("Orbbec USB device is not yet implemented");
-    }
+    // if (ImGui::MenuItem("Orbbec (USB)")) {
+    //   pc::logger->error("Orbbec USB device is not yet implemented");
+    // }
 
     // Network devices
     ImGui::SeparatorText("Network Devices");
