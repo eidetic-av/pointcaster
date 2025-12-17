@@ -1,11 +1,12 @@
 #include "main_viewport.h"
 #include "widgets.h"
 #include "windows.h"
+#include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <ImGuizmo.h>
 #include <Magnum/Math/Quaternion.h>
 #include <Magnum/Math/Vector.h>
-#include <Eigen/Core>
-#include <Eigen/Geometry>
+#include <cmath>
 #include <imgui.h>
 #include <regex>
 
@@ -154,7 +155,7 @@ void draw_main_viewport(PointCaster &app) {
             const auto &session = workspace.sessions[i];
             auto tab_name = std::format("{}###{}", session.label, session.id);
             if (ImGui::GetID(tab_name.c_str()) == button.tab_id) {
-              pc::logger->info("Should remove: {}", session.label);
+              pc::logger->debug("Should remove: {}", session.label);
               remove_session_id = session.id;
               remove_session_pos = {button.pos.x - 30, button.pos.y + 30};
               remove_session_window_id =
