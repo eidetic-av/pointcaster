@@ -7,8 +7,7 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <imgui.h>
-#include <cmath>
-
+#include <regex>
 
 namespace pc::gui {
 
@@ -19,6 +18,7 @@ void draw_main_viewport(PointCaster &app) {
   static std::string remove_session_window_id;
   static std::optional<int> rename_session_index;
   static std::optional<int> new_session_index;
+  static std::optional<int> duplicate_session_index;
   static ImVec2 rename_tab_pos;
   static std::string rename_edit_buffer;
 
@@ -26,7 +26,7 @@ void draw_main_viewport(PointCaster &app) {
   static ImVec2 tab_bar_padding = {10.0f, 5.0f};
   ImGuiViewport *vp = ImGui::GetMainViewport();
 
-  auto& workspace = app.workspace;
+  auto &workspace = app.workspace;
 
   // draw the tab bar at the top which can't be docked into and isn't part of
   // the workspace
@@ -99,82 +99,136 @@ void draw_main_viewport(PointCaster &app) {
         ImGui::EndTabItem();
       }
 
+      bool wants_to_rename = false;
+
+      gui::push_context_menu_styles();
+      if (ImGui::BeginPopupContextItem()) {
+        if (ImGui::MenuItem("Rename")) { wants_to_rename = true; }
+        if (ImGui::MenuItem("Duplicate")) { duplicate_session_index = i; }
+        ImGui::EndPopup();
+      }
+      gui::pop_context_menu_styles();
+
       // rename a session on a double click of its tab
-      if (ImGui::IsItemHovered() &&
-          ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+      if (wants_to_rename ||
+          (ImGui::IsItemHovered() &&
+           ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))) {
         rename_session_index = i;
         rename_tab_pos = ImGui::GetItemRectMin();
         rename_edit_buffer = session.label;
         ImGui::OpenPopup("RenameSession");
       }
-    }
 
-    auto *session_tab_bar = ImGui::GetCurrentTabBar();
+      auto *session_tab_bar = ImGui::GetCurrentTabBar();
 
-    // calculate close button positions and ids for each tab
-    struct CloseButton {
-      ImVec2 pos;
-      ImGuiID tab_id;
-    };
-    std::vector<CloseButton> close_buttons;
-    close_buttons.resize(session_tab_bar->Tabs.size());
-    // iterate the tab count minus a few due to the
-    // buttons that are also "tabs" in the bar
-    for (int i = 0; i < session_tab_bar->Tabs.size() - 2; i++) {
-      auto tab_index = i + 1;
-      float close_button_x =
-          tab_index * (tab_width + tab_bar_padding.x / 2) - 3;
-      float close_button_y = tab_bar_padding.y + 1;
-      const auto &tab = session_tab_bar->Tabs[tab_index];
-      close_buttons[i] = {{close_button_x, close_button_y}, tab.ID};
-    }
+      // calculate close button positions and ids for each tab
+      struct CloseButton {
+        ImVec2 pos;
+        ImGuiID tab_id;
+      };
+      std::vector<CloseButton> close_buttons;
+      close_buttons.resize(session_tab_bar->Tabs.size());
+      // iterate the tab count minus a few due to the
+      // buttons that are also "tabs" in the bar
+      for (int i = 0; i < session_tab_bar->Tabs.size() - 2; i++) {
+        auto tab_index = i + 1;
+        float close_button_x =
+            tab_index * (tab_width + tab_bar_padding.x / 2) - 3;
+        float close_button_y = tab_bar_padding.y + 1;
+        const auto &tab = session_tab_bar->Tabs[tab_index];
+        close_buttons[i] = {{close_button_x, close_button_y}, tab.ID};
+      }
 
-    // draw close buttons over top of our tab bar
-    // and handle setting up removal of session when clicked
-    for (const auto &button : close_buttons) {
-      // draw a close session button on the right hand side of each tab
-      if (button.pos.x == 0) continue;
-      ImGui::SetCursorScreenPos(button.pos);
-      if (gui::draw_icon_button(
-              ICON_FA_XMARK, false,
-              catpuccin::with_alpha(catpuccin::imgui::mocha_text, 0.25f),
-              catpuccin::with_alpha(catpuccin::imgui::mocha_text, 0.5f))) {
+      // draw close buttons over top of our tab bar
+      // and handle setting up removal of session when clicked
+      for (const auto &button : close_buttons) {
+        // draw a close session button on the right hand side of each tab
+        if (button.pos.x == 0) continue;
+        ImGui::SetCursorScreenPos(button.pos);
+        if (gui::draw_icon_button(
+                ICON_FA_XMARK, false,
+                catpuccin::with_alpha(catpuccin::imgui::mocha_text, 0.25f),
+                catpuccin::with_alpha(catpuccin::imgui::mocha_text, 0.5f))) {
 
-        for (int i = 0; i < workspace.sessions.size(); ++i) {
-          const auto &session = workspace.sessions[i];
-          auto tab_name = std::format("{}###{}", session.label, session.id);
-          if (ImGui::GetID(tab_name.c_str()) == button.tab_id) {
-            pc::logger->info("Should remove: {}", session.label);
-            remove_session_id = session.id;
-            remove_session_pos = {button.pos.x - 30, button.pos.y + 30};
-            remove_session_window_id =
-                std::format("Delete Session?###{}", uuid::digit());
-            ImGui::OpenPopup(remove_session_window_id.c_str());
-            break;
+          for (int i = 0; i < workspace.sessions.size(); ++i) {
+            const auto &session = workspace.sessions[i];
+            auto tab_name = std::format("{}###{}", session.label, session.id);
+            if (ImGui::GetID(tab_name.c_str()) == button.tab_id) {
+              pc::logger->info("Should remove: {}", session.label);
+              remove_session_id = session.id;
+              remove_session_pos = {button.pos.x - 30, button.pos.y + 30};
+              remove_session_window_id =
+                  std::format("Delete Session?###{}", uuid::digit());
+              ImGui::OpenPopup(remove_session_window_id.c_str());
+              break;
+            }
           }
         }
       }
-    }
 
-    // handle reordering of sessions by dragging tabs around
-
-    if (session_tab_bar->ReorderRequestTabId) {
-      int source_index = -1;
-      for (int i = 0; i < workspace.sessions.size(); i++) {
-        const auto &session = workspace.sessions[i];
-        auto tab_name = std::format("{}###{}", session.label, session.id);
-        if (ImGui::GetID(tab_name.c_str()) ==
-            session_tab_bar->ReorderRequestTabId) {
-          source_index = i;
-          break;
+      // handle reordering of sessions by dragging tabs around
+      // TODO this is buggy and maybe doesn't serialize
+      if (session_tab_bar->ReorderRequestTabId) {
+        int source_index = -1;
+        for (int i = 0; i < workspace.sessions.size(); i++) {
+          const auto &session = workspace.sessions[i];
+          auto tab_name = std::format("{}###{}", session.label, session.id);
+          if (ImGui::GetID(tab_name.c_str()) ==
+              session_tab_bar->ReorderRequestTabId) {
+            source_index = i;
+            break;
+          }
+        }
+        int destination_index =
+            source_index + session_tab_bar->ReorderRequestOffset;
+        if (source_index >= 0 && destination_index >= 0 &&
+            destination_index < workspace.sessions.size()) {
+          std::swap(workspace.sessions[source_index],
+                    workspace.sessions[destination_index]);
         }
       }
-      int destination_index =
-          source_index + session_tab_bar->ReorderRequestOffset;
-      if (source_index >= 0 && destination_index >= 0 &&
-          destination_index < workspace.sessions.size()) {
-        std::swap(workspace.sessions[source_index],
-                  workspace.sessions[destination_index]);
+
+      // duplicate a session
+      if (duplicate_session_index) {
+        const auto &original_session =
+            workspace.sessions[*duplicate_session_index];
+        const std::string &original_label = original_session.label;
+        // duplicate the target session
+        workspace.sessions.push_back(original_session);
+        auto &new_session = workspace.sessions.back();
+        // give it and its camera a unique id
+        new_session.id = uuid::word();
+        new_session.camera.id = uuid::word();
+        // copy operators and give them unique ids
+        auto& new_operators = new_session.session_operator_host.operators;
+        new_operators = original_session.session_operator_host.operators;
+        for (auto &operator_variant : new_operators) {
+          std::visit([](auto &&op) { op.id = uuid::digit(); },
+                     operator_variant);
+        }
+        // while the new label is equal to any existing session label...
+        std::smatch match;
+        while (
+            std::ranges::any_of(workspace.sessions, [&](const auto &session) {
+              return (&session != &new_session) &&
+                     (session.label == new_session.label);
+            })) {
+          // match a suffix number if it exists and increment it
+          static const std::regex trailing_number_regex(R"(^(.*?)(\d+)$)");
+          if (std::regex_match(new_session.label, match,
+                               trailing_number_regex)) {
+            const std::string prefix = match[1].str();
+            const int suffix_value = std::stoi(match[2].str());
+            new_session.label = std::format("{}{}", prefix, suffix_value + 1);
+          } else {
+            // otherwise append a suffix number
+            new_session.label = std::format("{}_1", new_session.label);
+          }
+        }
+        // sync the app state and focus the duplicate
+        app.sync_session_instances();
+        workspace.selected_session_index = workspace.sessions.size() - 1;
+        duplicate_session_index.reset();
       }
     }
 
@@ -214,6 +268,7 @@ void draw_main_viewport(PointCaster &app) {
         }
         remove_session_id.reset();
         rename_session_index.reset();
+        duplicate_session_index.reset();
         new_session_index.reset();
         ImGui::CloseCurrentPopup();
       }
