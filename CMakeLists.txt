@@ -508,16 +508,7 @@ endif()
 
 # ----- Post-build actions -----
 
-if (WITH_POINTCATER AND WIN32)
-  # if we have any extra DLLS that need to be copied into
-  # the output directory
-  add_custom_command(TARGET pointcaster POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      $<$<CONFIG:Release>:${INSTALL_DLLS_RELEASE}>
-      $<$<CONFIG:Debug>:${INSTALL_DLLS_DEBUG}>
-      $<TARGET_FILE_DIR:pointcaster>
-    COMMAND_EXPAND_LISTS)
-
+if (WITH_POINTCASTER AND WIN32)
   if (WITH_K4A)
     foreach(K4ABT_BIN ${k4abt_RUNTIME_DEPENDENCIES})
       add_custom_command(TARGET pointcaster POST_BUILD
@@ -525,7 +516,6 @@ if (WITH_POINTCATER AND WIN32)
         ${K4ABT_BIN} $<TARGET_FILE_DIR:pointcaster>)
     endforeach()
   endif()
-
 endif()
 
 if (LINUX)

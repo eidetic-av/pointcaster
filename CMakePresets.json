@@ -19,6 +19,7 @@
         "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-release-custom",
+        "X_VCPKG_APPLOCAL_DEPS_INSTALL": true,
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_BUILD_TYPE": "Release",
         "CUDAToolkit_ROOT": "/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.9",
