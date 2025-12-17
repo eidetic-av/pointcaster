@@ -238,6 +238,7 @@ void CameraController::add_translation(const Float3 metres) {
 }
 
 void CameraController::dolly(Sdl2Application::MouseScrollEvent &event) {
+  if (_config.transform.locked) return;
   const auto delta =
       -event.offset().y() / static_cast<float>(_config.scroll_precision);
   if (!_config.rendering.orthographic) add_distance(delta / 10);
@@ -251,6 +252,7 @@ void CameraController::dolly(Sdl2Application::MouseScrollEvent &event) {
 }
 
 void CameraController::mouse_orbit(Sdl2Application::MouseMoveEvent &event) {
+  if (_config.transform.locked) return;
   auto delta = Vector2{event.relativePosition()} * _rotate_speed;
   if (event.modifiers() == Sdl2Application::InputEvent::Modifier::Ctrl) {
     add_roll(-delta.y());
@@ -261,6 +263,7 @@ void CameraController::mouse_orbit(Sdl2Application::MouseMoveEvent &event) {
 
 void CameraController::mouse_translate(Sdl2Application::MouseMoveEvent &event,
                                        bool lock_y_axis) {
+  if (_config.transform.locked) return;
   const auto frame_centre = _frame_size / 2;
   const auto centre_depth = depth_at(frame_centre);
   const Vector3 p = unproject(event.position(), centre_depth);

@@ -49,6 +49,7 @@ struct TransformConfiguration {
   float roll = 0; // @minmax(-180, 180)
   Float4 rotation = defaults::identity; // @hidden
   Float3 translation = defaults::translation;
+  bool locked = false; // @optional
 };
 
 struct CameraConfiguration {
