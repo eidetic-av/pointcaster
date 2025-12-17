@@ -54,8 +54,8 @@ struct TransformConfiguration {
 
 struct CameraConfiguration {
   std::string id;
-  float fov = defaults::fov;
-  int scroll_precision{1};
+  float fov = defaults::fov; // @hidden
+  int scroll_precision{1}; // @minmax(1, 20)
   TransformConfiguration transform; // @optional
   PointCloudRendererConfiguration rendering; // @optional
   analysis::Analyser2DConfiguration analysis; // @optional
