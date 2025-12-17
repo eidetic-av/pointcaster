@@ -1,6 +1,7 @@
 #include "analyser_2d.h"
 #include "../logger.h"
 #include "../publisher/publisher.h"
+#include "../session.gen.h"
 #include <Corrade/Containers/Array.h>
 #include <Magnum/GL/BufferImage.h>
 #include <Magnum/GL/PixelFormat.h>
@@ -363,9 +364,10 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     if (stop_token.stop_requested())
       break;
 
-      // TODO the first address node needs to be per-camera somehow
-    std::initializer_list<std::string_view> address_nodes = {"camera",
-                                                             "analyser_2d"};
+    const auto session_label{
+        session_label_from_id[std::string(_host->host_id())]};
+    std::initializer_list<std::string_view> address_nodes = {
+        session_label, "camera", "analysis"};
 
     if (contours.publish) {
       publisher::publish_all("contours", contour_list_std, address_nodes);

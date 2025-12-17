@@ -43,7 +43,11 @@ public:
 
   ~CameraController();
 
+  std::string_view host_id() const override { return session_id; }
+
   CameraConfiguration &config() { return _config; };
+  const CameraConfiguration &config() const { return _config; }
+
   Camera3D &camera() const { return *_camera; }
 
   void setup_frame(Magnum::Vector2i frame_size);

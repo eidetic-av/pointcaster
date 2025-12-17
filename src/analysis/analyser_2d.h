@@ -13,8 +13,10 @@
 
 namespace pc::analysis {
 
-// TODO this previously used abstract class is now totally unecessary
-struct Analyser2DHost {};
+struct Analyser2DHost {
+  virtual ~Analyser2DHost() = default;
+  virtual std::string_view host_id() const = 0;
+};
 
 class Analyser2D {
 
@@ -28,8 +30,6 @@ public:
 
   Analyser2D(const Analyser2D&) = delete;
   Analyser2D& operator=(const Analyser2D&) = delete;
-
-  std::string_view id();
   
   void set_frame_size(Magnum::Vector2i frame_size);
   void dispatch_analysis(Magnum::GL::Texture2D &texture,
