@@ -280,13 +280,22 @@ if (WITH_POINTCASTER)
 
   # ----- OpenCV -----
 
+  set(OpenCV_ROOT "${VCPKG_INSTALLED_DIR}/x64-windows-static-md-release/share/opencv4")
   find_package(OpenCV CONFIG REQUIRED)
-  list(APPEND LINK_LIBS ${OpenCV_LIBS})
   list(APPEND INCLUDE_DIRS ${OpenCV_INCLUDE_DIRS})
+  list(APPEND LINK_LIBS 
+    opencv_core opencv_imgproc
+    opencv_optflow opencv_video
+    opencv_cudaarithm opencv_cudafilters
+    opencv_cudaimgproc opencv_cudaoptflow
+    opencv_cudawarping
+  )
 
   # ----- PCL -----
 
-  find_package(PCL CONFIG REQUIRED)
+  find_package(PCL CONFIG REQUIRED COMPONENTS
+    common filters segmentation kdtree search
+  )
   list(APPEND LINK_LIBS ${PCL_LIBRARIES})
 
   # ----- TBB -----

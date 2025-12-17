@@ -17,7 +17,8 @@
       "cacheVariables": {
         "ARCHIVE_NAME": "pointcaster_windows-release",
         "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-release",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-release-custom",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_BUILD_TYPE": "Release",
         "CUDAToolkit_ROOT": "/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.9",
@@ -38,7 +39,7 @@
       "description": "Build with debug info",
       "cacheVariables": {
         "ARCHIVE_NAME": "pointcaster_windows-debug",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-custom",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_PDB_OUTPUT_DIRECTORY": "${sourceDir}/build/${presetName}",
         "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "ProgramDatabase"
