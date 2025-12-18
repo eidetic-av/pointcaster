@@ -1,15 +1,18 @@
 #pragma once
 
 #include "../gui/overlay_text.h"
+#include "../plugins/opencv_cuda/cuda_analyser_2d.h"
 #include "analyser_2d_config.gen.h"
+#include <Corrade/PluginManager/Manager.h>
 #include <Magnum/GL/Texture.h>
 #include <Magnum/Image.h>
 #include <Magnum/Magnum.h>
 #include <chrono>
 #include <condition_variable>
 #include <opencv2/opencv.hpp>
-#include <thread>
 #include <optional>
+#include <thread>
+
 
 namespace pc::analysis {
 
@@ -23,26 +26,26 @@ class Analyser2D {
 public:
   Analyser2D(const Analyser2DHost *host)
       : _host(host), _analysis_thread([this](auto stop_token) {
-	  frame_analysis(stop_token);
-	}) {}
+          frame_analysis(stop_token);
+        }) {}
 
   ~Analyser2D();
 
-  Analyser2D(const Analyser2D&) = delete;
-  Analyser2D& operator=(const Analyser2D&) = delete;
-  
+  Analyser2D(const Analyser2D &) = delete;
+  Analyser2D &operator=(const Analyser2D &) = delete;
+
   void set_frame_size(Magnum::Vector2i frame_size);
   void dispatch_analysis(Magnum::GL::Texture2D &texture,
                          Analyser2DConfiguration &config);
 
-  Magnum::GL::Texture2D& analysis_frame();
+  Magnum::GL::Texture2D &analysis_frame();
 
   int analysis_time();
   std::vector<gui::OverlayText> analysis_labels();
 
 private:
-  const Analyser2DHost* _host;
-  
+  const Analyser2DHost *_host;
+
   std::optional<Magnum::Image2D> _input_image;
   std::optional<pc::analysis::Analyser2DConfiguration> _input_config;
   Magnum::Vector2i _frame_size;
@@ -64,15 +67,25 @@ private:
   std::vector<gui::OverlayText> _analysis_labels;
   std::mutex _analysis_labels_mutex;
 
-  cv::Mat setup_input_frame(Magnum::Image2D &input,
-			    const pc::analysis::Analyser2DConfiguration &config);
+  using CudaPluginManager = Corrade::PluginManager::Manager<pc::analysis::AbstractCudaAnalyser2D>;
+  std::unique_ptr<CudaPluginManager> _cuda_plugin_manager;
+  Corrade::Containers::Pointer<pc::analysis::AbstractCudaAnalyser2D> _cuda_plugin;
+  std::atomic_bool _cuda_tried_load = false;
+  std::atomic_bool _cuda_loaded = false;
+  std::jthread _plugin_load_thread;
+
+  void try_load_cuda_plugin();
+
+  cv::Mat
+  setup_input_frame(Magnum::Image2D &input,
+                    const pc::analysis::Analyser2DConfiguration &config);
 
   std::tuple<std::vector<cv::Point2f>, std::vector<cv::Point2f>,
              std::vector<uchar>>
   calculate_optical_flow(const cv::Mat &input_frame_1,
-			 const cv::Mat &input_frame_2,
-			 const pc::analysis::OpticalFlowConfiguration &config,
-			 const bool use_cuda);
+                         const cv::Mat &input_frame_2,
+                         const pc::analysis::OpticalFlowConfiguration &config,
+                         const bool use_cuda);
 
   void frame_analysis(std::stop_token stop_token);
 };

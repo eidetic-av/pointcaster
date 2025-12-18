@@ -52,3 +52,18 @@ if(unresolved_deps)
     message(WARNING "  ${dep}")
   endforeach()
 endif()
+
+if(MOVE_EXISTING_DEPS)
+
+  get_filename_component(INPUT_DIR "${INPUT_EXECUTABLE}" DIRECTORY)
+  file(GLOB dlls "${INPUT_DIR}/*.dll")
+  get_filename_component(executable_name "${INPUT_EXECUTABLE}" NAME)
+
+  foreach(dll IN LISTS dlls)
+    get_filename_component(name "${dll}" NAME)
+    if(name STREQUAL executable_name)
+      continue()
+    endif()
+    file(RENAME "${dll}" "${OUTPUT_DIRECTORY}/${name}")
+  endforeach()
+endif()

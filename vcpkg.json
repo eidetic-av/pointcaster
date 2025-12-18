@@ -11,6 +11,7 @@
       "platform": "!android"
     },
     "bob-pointclouds",
+    "boost-dll",
     "concurrentqueue",
     {
       "name": "corrade",
