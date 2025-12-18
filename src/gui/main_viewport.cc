@@ -528,6 +528,7 @@ void draw_main_viewport(PointCaster &app) {
     auto scale_mode = rendering.scale_mode;
     const Vector2 frame_space{window_size.x, window_size.y};
     selected_camera_controller->viewport_size = frame_space;
+    static std::atomic_bool hovering_camera_image = false;
 
     if (scale_mode == (int)ScaleMode::Span) {
 
@@ -583,6 +584,15 @@ void draw_main_viewport(PointCaster &app) {
       ImGuiIntegration::image(selected_camera_controller->color_frame(),
                               {width, height});
 
+      bool mouse_over_letterbox =
+          ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+      if (!mouse_over_letterbox) {
+        hovering_camera_image = false;
+      } else if (!hovering_camera_image) {
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+          hovering_camera_image = true;
+      }
+
       draw_imguizmo_layer(image_pos.x, image_pos.y, frame_space.x(),
                           frame_space.y());
 
@@ -609,10 +619,11 @@ void draw_main_viewport(PointCaster &app) {
       if (workspace.layout.show_log) { app.draw_onscreen_log(); }
     }
 
-    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootWindow)) {
-      app.interacting_camera_controller = *selected_camera_controller;
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootWindow) ||
+        hovering_camera_image) {
+      camera::interacting_camera_controller = *selected_camera_controller;
     } else {
-      app.interacting_camera_controller.reset();
+      camera::interacting_camera_controller.reset();
     }
   }
   ImGui::End();

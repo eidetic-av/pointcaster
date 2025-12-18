@@ -112,4 +112,7 @@ private:
   Magnum::Float depth_at(const Magnum::Vector2i &window_position);
 };
 
+inline std::optional<std::reference_wrapper<CameraController>>
+    interacting_camera_controller;
+
 } // namespace pc::camera

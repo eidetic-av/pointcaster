@@ -1487,12 +1487,12 @@ void PointCaster::mouseReleaseEvent(MouseEvent &event) {
 
 void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
   if (_imgui_context.handleMouseMoveEvent(event) &&
-      !interacting_camera_controller) {
+      !camera::interacting_camera_controller) {
     event.setAccepted(true);
     return;
   }
 
-  if (!interacting_camera_controller) {
+  if (!camera::interacting_camera_controller) {
     event.setAccepted(true);
     return;
   }
@@ -1502,7 +1502,7 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
     return;
   }
 
-  auto &camera_controller = interacting_camera_controller->get();
+  auto &camera_controller = camera::interacting_camera_controller->get();
 
   // rotate / orbit
   if (event.buttons() == MouseMoveEvent::Button::Left) {
@@ -1519,14 +1519,13 @@ void PointCaster::mouseMoveEvent(MouseMoveEvent &event) {
 
 void PointCaster::mouseScrollEvent(MouseScrollEvent &event) {
   if (_imgui_context.handleMouseScrollEvent(event) &&
-      !interacting_camera_controller) {
+      !camera::interacting_camera_controller) {
     /* Prevent scrolling the page */
     event.setAccepted(true);
     return;
   }
 
-  if (!interacting_camera_controller) return;
-  auto &camera_controller = interacting_camera_controller->get();
+  auto &camera_controller = camera::interacting_camera_controller->get();
 
   const Magnum::Float delta = event.offset().y();
   if (Math::abs(delta) < 1.0e-2f) return;
