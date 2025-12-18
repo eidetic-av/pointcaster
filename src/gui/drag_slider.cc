@@ -156,28 +156,8 @@ bool DragScalarN(std::string_view parameter_id, ImGuiDataType data_type, void *p
   const auto scalar_name = strings::last_element(parameter_id);
   const auto formatted_label = strings::sentence_case(scalar_name);
 
-  const auto find_mode = _current_mode == Mode::Find;
-  const auto navigate_match = _current_mode == Mode::NavigateMatch;
-
   size_t label_highlight_start = 0;
   size_t label_highlight_end = 0;
-
-  // check for a match with our labels if we're in find mode
-  if (find_mode || navigate_match) {
-    // TODO matching on the name and the label to ignore capitalisation
-    // const auto element_match = scalar_name.find(_modeline_input);
-    const auto label_match = formatted_label.find(_modeline_input);
-
-    // if (element_match != std::string::npos) {
-    //   pc::logger->debug("found_parameter element_match with {}", parameter_id);
-    // }
-
-    if (_modeline_input.size() != 0 && label_match != std::string::npos) {
-      label_highlight_start = label_match;
-      label_highlight_end = label_match + _modeline_input.length();
-      pc::logger->debug(formatted_label);
-    }
-  }
 
   const auto frame_start = window->DC.CursorPos;
   const auto text_width = label_width(window->Size.x) - 1;
@@ -215,13 +195,11 @@ bool DragScalarN(std::string_view parameter_id, ImGuiDataType data_type, void *p
 
   if (label_highlight_end == 0) {
     // Render text normally
-    const auto render_disabled = find_mode && !_modeline_input.empty();
-    if (render_disabled)
-      ImGui::BeginDisabled();
+    const auto render_disabled = false;
+    if (render_disabled) ImGui::BeginDisabled();
     RenderTextClipped(text_bb.Min, text_bb.Max, text_start, text_end, NULL,
                       ImVec2(1.0f, 0.5f));
-    if (render_disabled)
-      ImGui::EndDisabled();
+    if (render_disabled) ImGui::EndDisabled();
   } else {
     ImGui::PushStyleColor(ImGuiCol_Text, mocha_maroon);
 

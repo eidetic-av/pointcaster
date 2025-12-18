@@ -247,7 +247,6 @@ PointCaster::PointCaster(const Arguments &args)
   // #endif
 
   OrbbecDevice::init_context();
-  _session_operator_graph = std::make_unique<OperatorGraph>("Session");
 
   // load last session
   auto data_dir = path::get_or_create_data_directory();
@@ -1006,66 +1005,6 @@ void PointCaster::draw_onscreen_log() {
   }
 }
 
-void PointCaster::draw_modeline() {
-  constexpr auto modeline_height = 20;
-  constexpr auto modeline_color = catpuccin::imgui::mocha_crust;
-
-  ImGui::PushID("modeline");
-
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, modeline_color);
-  ImGui::PushStyleColor(ImGuiCol_Border, modeline_color);
-
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {0, 0});
-
-  const auto viewport_size = ImGui::GetMainViewport()->Size;
-  const ImVec2 modeline_size{viewport_size.x, modeline_height};
-  const ImVec2 modeline_min{0, viewport_size.y - modeline_size.y};
-  const ImVec2 modeline_max{viewport_size.x, viewport_size.y};
-
-  ImGui::SetNextWindowPos(modeline_min);
-  ImGui::SetNextWindowSize(modeline_size);
-
-  auto window_flags =
-      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings;
-  if (_current_mode != Mode::Find) window_flags |= ImGuiWindowFlags_NoInputs;
-
-  ImGui::Begin("modeline", nullptr, window_flags);
-
-  if (_current_mode == Mode::Find) {
-    ImGui::Text("/");
-    ImGui::SameLine();
-    ImGui::SetKeyboardFocusHere();
-
-    if (ImGui::InputText("##modeline.find", _modeline_input.data(),
-                         modeline_buffer_size)) {};
-  }
-
-  ImGui::End();
-
-  ImGui::PopStyleVar();
-  ImGui::PopStyleVar();
-
-  ImGui::PopStyleColor();
-  ImGui::PopStyleColor();
-
-  ImGui::PopID();
-  ;
-}
-
-void PointCaster::find_mode_keypress(KeyEvent &event) {
-  const auto &key = event.key();
-  if (key == KeyEvent::Key::Enter) {
-    _current_mode = Mode::NavigateMatch;
-    _modeline_input.fill({});
-  } else if (key == KeyEvent::Key::Esc) {
-    _current_mode = Mode::Normal;
-    _modeline_input.fill({});
-  } else if (_imgui_context.handleKeyPressEvent(event)) {
-    event.setAccepted(true);
-  }
-}
-
 void PointCaster::draw_stats(const float delta_time) {
   ImGui::PushID("FrameStats");
   ImGui::SetNextWindowPos({50.0f, 200.0f}, ImGuiCond_FirstUseEver);
@@ -1177,7 +1116,7 @@ void PointCaster::drawEvent() {
     _imgui_context.newFrame();
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::BeginFrame();
-    pc::gui::begin_gui_helpers(_current_mode, _modeline_input);
+    pc::gui::begin_gui_helpers();
   }
 
   {
@@ -1221,9 +1160,6 @@ void PointCaster::drawEvent() {
       }
       selected_session_operator_host.draw_gizmos();
 
-      if (workspace.layout.show_session_operator_graph_window)
-        _session_operator_graph->draw();
-
       if (workspace.mqtt.has_value() && (*workspace.mqtt).show_window)
         _mqtt->draw_imgui_window();
 
@@ -1243,8 +1179,6 @@ void PointCaster::drawEvent() {
           (*workspace.osc_server).show_window)
         _osc_server->draw_imgui_window();
 #endif
-
-      // draw_modeline();
     }
   }
 
@@ -1360,20 +1294,6 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     return;
   }
 
-  if (_current_mode == Mode::Find) {
-    find_mode_keypress(event);
-    if (_imgui_context.handleKeyPressEvent(event)) event.setAccepted(true);
-    return;
-  }
-  if (_current_mode != Mode::Normal && event.key() == KeyEvent::Key::Esc) {
-    _current_mode = Mode::Normal;
-    return;
-  } else if (_current_mode == Mode::Normal &&
-             event.key() == KeyEvent::Key::Slash) {
-    _current_mode = Mode::Find;
-    return;
-  }
-
   switch (event.key()) {
   case KeyEvent::Key::C: {
     workspace.layout.show_camera_window = !workspace.layout.show_camera_window;
@@ -1388,14 +1308,8 @@ void PointCaster::keyPressEvent(KeyEvent &event) {
     break;
   }
   case KeyEvent::Key::G: {
-    if (event.modifiers() == InputEvent::Modifier::Shift) {
-      //workspace.layout.hide_ui = !workspace.layout.hide_ui;
-      workspace.layout.show_session_operator_graph_window =
-          !workspace.layout.show_session_operator_graph_window;
-    } else {
-      workspace.layout.show_global_transform_window =
-          !workspace.layout.show_global_transform_window;
-    }
+    workspace.layout.show_global_transform_window =
+        !workspace.layout.show_global_transform_window;
     break;
   }
   case KeyEvent::Key::M: {

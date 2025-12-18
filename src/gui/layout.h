@@ -10,7 +10,6 @@ struct PointcasterSessionLayout {
   bool show_snapshots_window = false;              // @optional
   bool show_global_transform_window = false;       // @optional
   bool show_stats = false;                         // @optional
-  bool show_session_operator_graph_window = false; // @optional
 };
 
 } // namespace pc::gui

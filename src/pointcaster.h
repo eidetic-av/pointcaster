@@ -27,12 +27,10 @@
 #include "devices/sequence/ply_sequence_player_config.gen.h"
 #include "devices/usb.h"
 #include "fonts/IconsFontAwesome6.h"
-#include "graph/operator_graph.h"
 #include "gui/widgets.h"
 #include "logger.h"
 #include "main_thread_dispatcher.h"
 #include "midi/midi_device.h"
-#include "modes.h"
 #include "mqtt/mqtt_client.h"
 #include "mqtt/mqtt_client_config.gen.h"
 #include "objects/wireframe_objects.h"
@@ -63,7 +61,6 @@ using namespace pc;
 using namespace pc::camera;
 using namespace pc::client_sync;
 using namespace pc::devices;
-using namespace pc::graph;
 using namespace pc::midi;
 using namespace pc::mqtt;
 using namespace pc::operators;
@@ -118,10 +115,6 @@ public:
 
   std::mutex _session_devices_mutex;
 
-  Mode _current_mode{Mode::Normal};
-  std::array<char, modeline_buffer_size> _modeline_input =
-      std::array<char, modeline_buffer_size>({});
-
   std::vector<std::jthread> _async_tasks;
   std::jthread _keep_focus_poller;
 
@@ -131,14 +124,11 @@ public:
   std::optional<Vector2i> _display_resolution;
 
   std::vector<std::unique_ptr<CameraController>> camera_controllers;
-  std::optional<std::reference_wrapper<CameraController>>
-      interacting_camera_controller;
 
   std::unique_ptr<PointCloudRenderer> _point_cloud_renderer;
   std::unique_ptr<SphereRenderer> _sphere_renderer;
 
   std::unique_ptr<WireframeGrid> _ground_grid;
-  std::unique_ptr<OperatorGraph> _session_operator_graph;
 
   std::unique_ptr<Snapshots> _snapshots_context;
 
@@ -187,7 +177,6 @@ public:
   void draw_control_bar();
   void draw_devices_window();
   void draw_onscreen_log();
-  void draw_modeline();
 
   Vector2i _restore_window_size;
   Vector2i _restore_window_position;
@@ -207,8 +196,6 @@ protected:
 
   void keyPressEvent(KeyEvent &event) override;
   void keyReleaseEvent(KeyEvent &event) override;
-
-  void find_mode_keypress(KeyEvent &event);
 
   void textInputEvent(TextInputEvent &event) override;
   void mousePressEvent(MouseEvent &event) override;

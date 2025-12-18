@@ -2,8 +2,6 @@
 #include "../math.h"
 #include "../profiling.h"
 
-#include "denoise/kdtree.h"
-#include "denoise/denoise_operator.cuh"
 #include "noise_operator.cuh"
 #include "operator.h"
 #include "operator_host_config.gen.h"

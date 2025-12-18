@@ -2,7 +2,6 @@
 
 #include "../fonts/IconsFontAwesome6.h"
 #include "../math.h"
-#include "../modes.h"
 #include "../parameters.h"
 #include "../structs.h"
 #include "../tween/tween_config.gen.h"
@@ -35,15 +34,10 @@ using namespace pc::parameters;
 void init_parameter_styles();
 
 /* Must be called at the start of each imgui frame */
-void begin_gui_helpers(const Mode current_mode,
-		       const std::array<char, modeline_buffer_size>& modeline_input);
+void begin_gui_helpers();
 
 /* Used for generating unique ids for imgui parameters */
 extern unsigned int _parameter_index;
-
-/* these are updated at the start of each frame */
-extern Mode _current_mode;
-extern std::string_view _modeline_input;
 
 // a cache for our tooltips, so that parameter tooltips show friendly names
 inline std::map<std::string, std::string> parameter_tooltips;

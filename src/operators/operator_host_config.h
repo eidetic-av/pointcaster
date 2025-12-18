@@ -2,7 +2,6 @@
 
 #include "../serialization.h"
 #include "../structs.h"
-#include "denoise/denoise_operator.gen.h"
 #include "noise_operator.gen.h"
 #include "operator.h"
 #include "pcl/cluster_extraction_operator.gen.h"

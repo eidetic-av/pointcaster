@@ -221,9 +221,6 @@ if (WITH_POINTCASTER)
   find_package(imguizmo CONFIG REQUIRED)
   list(APPEND LINK_LIBS imguizmo::imguizmo)
 
-  list(APPEND THIRDPARTY_SRC thirdparty/imnodes/imnodes.cpp)
-  list(APPEND INCLUDE_DIRS thirdparty/imnodes)
-
   # ----- Magnum 3D engine -----
 
   find_package(Corrade CONFIG REQUIRED Main PluginManager)
@@ -386,7 +383,6 @@ if (WITH_POINTCASTER)
     src/tween/tween_manager.cc
     src/publisher/publisher.cc
     src/publisher/publisher_utils.cc
-    src/graph/operator_graph.cc
     src/operators/session_operator_host.cc
     src/operators/session_operator_host.cu
     src/operators/noise_operator.cc
@@ -394,8 +390,6 @@ if (WITH_POINTCASTER)
     src/operators/rake_operator.cc
     src/operators/sample_filter_operator.cc
     src/operators/range_filter_operator.cc
-    src/operators/denoise/kdtree.cu
-    src/operators/denoise/denoise_operator.cc
     src/operators/pcl/cluster_extraction_operator.cc
     ${THIRDPARTY_SRC}
     ${POINTCASTER_SRC}
@@ -465,7 +459,7 @@ if (WITH_POINTCASTER)
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_RESOLVE_DEVICE_SYMBOLS ON
     CUDA_PROPAGATE_HOST_FLAGS OFF
-    CUDA_ARCHITECTURES "61-real;75-real;86-real;89-real;89-virtual"
+    CUDA_ARCHITECTURES "75-real;86-real;89-real;89-virtual"
   )
 
   if (POINTCASTER_DEPENDENCIES)

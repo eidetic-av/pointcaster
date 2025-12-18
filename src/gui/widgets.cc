@@ -11,24 +11,9 @@
 namespace pc::gui {
 
 unsigned int _parameter_index;
-Mode _current_mode;
-std::string_view _modeline_input;
 
-void begin_gui_helpers(
-    const Mode current_mode,
-    const std::array<char, modeline_buffer_size> &modeline_input) {
+void begin_gui_helpers() {
   _parameter_index = 0;
-  _current_mode = current_mode;
-  if (current_mode == Mode::Find) {
-    // find the first element equal to null terminator to get the actual input
-    // length
-    constexpr char default_initialised_char = {};
-    const auto modeline_input_end = std::find(
-        modeline_input.begin(), modeline_input.end(), default_initialised_char);
-    const std::size_t input_length =
-        std::distance(modeline_input.begin(), modeline_input_end);
-    _modeline_input = std::string_view(modeline_input.data(), input_length);
-  }
   if (gui::refresh_tooltips) {
     gui::parameter_tooltips.clear();
     gui::refresh_tooltips = false;
