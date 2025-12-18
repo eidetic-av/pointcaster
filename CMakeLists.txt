@@ -409,6 +409,8 @@ if (WITH_POINTCASTER)
     list(APPEND SOURCE_FILES resources/windows-dpi.manifest)
   endif()
 
+# ----- Pointcaster executable -----
+
   add_executable(pointcaster ${SOURCE_FILES} ${RESOURCES})
 
 # ----- Pointcaster build properties
@@ -508,16 +510,6 @@ endif()
 
 # ----- Post-build actions -----
 
-if (WITH_POINTCASTER AND WIN32)
-  if (WITH_K4A)
-    foreach(K4ABT_BIN ${k4abt_RUNTIME_DEPENDENCIES})
-      add_custom_command(TARGET pointcaster POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${K4ABT_BIN} $<TARGET_FILE_DIR:pointcaster>)
-    endforeach()
-  endif()
-endif()
-
 if (LINUX)
   # copy compile_commands.json for lsp integration on linux
   add_custom_target(copy-compile-commands ALL
@@ -528,17 +520,36 @@ endif()
 
 # copy the required third-party notices into our output directory
 if (WITH_POINTCASTER)
+
+  if (WIN32)
+    add_custom_command(TARGET pointcaster POST_BUILD 
+      COMMAND ${CMAKE_COMMAND}
+        -DINPUT_EXECUTABLE="$<TARGET_FILE:pointcaster>"
+        -DOUTPUT_DIRECTORY="$<TARGET_FILE_DIR:pointcaster>"
+        -DVCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR}"
+        -DVCPKG_TARGET_TRIPLET="${VCPKG_TARGET_TRIPLET}"
+        -DCUDA_BIN_DIR="${CUDAToolkit_BIN_DIR}"
+        -P "${CMAKE_SOURCE_DIR}/cmake/CopyRuntimeDependencies.cmake"
+    )
+  endif()
+
+  if (WITH_K4A)
+    foreach(K4ABT_BIN ${k4abt_RUNTIME_DEPENDENCIES})
+      add_custom_command(TARGET pointcaster POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${K4ABT_BIN} $<TARGET_FILE_DIR:pointcaster>)
+    endforeach()
+  endif()
+
   add_custom_command(TARGET pointcaster POST_BUILD 
     COMMAND ${Python_EXECUTABLE} 
     ${CMAKE_SOURCE_DIR}/scripts/generate_license.py
     --target ${CMAKE_BINARY_DIR} 
     --triplet ${VCPKG_TARGET_TRIPLET} 
-    --output $<TARGET_FILE_DIR:pointcaster>)
-endif()
+    --output $<TARGET_FILE_DIR:pointcaster>
+  )
 
-# ----- Upload/deploy build artefacts -----
-
-if (WITH_POINTCASTER)
+# upload/deploy build artefacts
 
   list(APPEND DEPLOY_EXCLUDES
       "*cmake*" "*CMake*" "*vcpkg*"
@@ -563,4 +574,5 @@ if (WITH_POINTCASTER)
           --archive --sha256 
           --name ${ARCHIVE_NAME}
           -- "b2://pointcaster-builds")
+
 endif()
