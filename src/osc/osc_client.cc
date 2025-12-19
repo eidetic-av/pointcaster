@@ -40,6 +40,9 @@ void OscClient::send_messages(std::stop_token st) {
     } catch (const std::exception &e) {
       pc::logger->error("OSC client send failed: {}", e.what());
     }
+    catch (...) { 
+      pc::logger->error("OSC client send failed with unknown exception");
+    }
   }
 }
 
