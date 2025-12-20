@@ -325,7 +325,18 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     }
 
     if (contours.publish_centroids) {
-      publisher::publish_all("contour_centroids", centroids, address_nodes);
+      std::vector<std::array<float, 2>> centroids_output;
+      centroids_output.reserve(centroids.size());
+      auto output_scale = analysis_config.output.scale;
+      auto output_offset = analysis_config.output.offset;
+      for (const auto &centroid : centroids) {
+        centroids_output.push_back({
+            centroid[0] * output_scale.x + output_offset.x,
+            centroid[1] * output_scale.y + output_offset.y,
+        });
+      }
+      publisher::publish_all("contour_centroids", centroids_output,
+                             address_nodes);
     }
 
     // Scale our contours to the output image size if we intend to draw them
