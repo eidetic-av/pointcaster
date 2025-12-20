@@ -55,8 +55,10 @@ typedef enum {
 typedef enum {
   POINTRECEIVER_PARAM_VALUE_FLOAT = 0,  /**< Float value */
   POINTRECEIVER_PARAM_VALUE_INT,        /**< Integer value */
+  POINTRECEIVER_PARAM_VALUE_FLOAT2,     /**< 3D float vector */
   POINTRECEIVER_PARAM_VALUE_FLOAT3,     /**< 3D float vector */
   POINTRECEIVER_PARAM_VALUE_FLOAT4,     /**< 4D float vector */
+  POINTRECEIVER_PARAM_VALUE_FLOAT2LIST, /**< List of 3D float vectors */
   POINTRECEIVER_PARAM_VALUE_FLOAT3LIST, /**< List of 3D float vectors */
   POINTRECEIVER_PARAM_VALUE_FLOAT4LIST, /**< List of 4D float vectors */
   POINTRECEIVER_PARAM_VALUE_AABBLIST,   /**< List of Axis-aligned bounding boxes
@@ -123,6 +125,17 @@ typedef struct {
 } pointreceiver_aabb_list_t;
 
 /**
+ * @brief Structure representing a list of 2D float vectors.
+ *
+ * This structure encapsulates a pointer to an array of 2D float vector values and
+ * the number of elements in the array.
+ */
+typedef struct {
+  pointreceiver_float2_t *data; /**< Pointer to an array of 3D float vector values */
+  size_t count;                /**< Number of 3D float vector values in the array */
+} pointreceiver_float2_list_t;
+
+/**
  * @brief Structure representing a list of 3D float vectors.
  *
  * This structure encapsulates a pointer to an array of 3D float vector values and
@@ -182,8 +195,11 @@ typedef struct {
   union {
     float float_val;                         /**< Float value */
     int int_val;                             /**< Integer value */
+    pointreceiver_float2_t float2_val;       /**< 3D float vector value */
     pointreceiver_float3_t float3_val;       /**< 3D float vector value */
     pointreceiver_float4_t float4_val;       /**< 4D float vector value */
+    pointreceiver_float2_list_t
+        float2_list_val; /**< List of 2D float vector values */
     pointreceiver_float3_list_t
         float3_list_val; /**< List of 3D float vector values */
     pointreceiver_float4_list_t

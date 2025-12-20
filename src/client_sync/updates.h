@@ -21,8 +21,9 @@ using Contour = std::vector<array2f>;
 using ContoursList = std::vector<Contour>;
 
 using ParameterVariant =
-    std::variant<float, int, Float2, Float3, Float4, array3f, Float2List,
-                 Float3List, Float4List, AABBList, ContoursList>;
+    std::variant<float, int, Float2, Float3, Float4, array3f,
+                 std::list<array2f>, std::list<array3f>, std::list<array4f>,
+                 Float2List, Float3List, Float4List, AABBList, ContoursList>;
 
 struct ParameterUpdate {
   std::string id;

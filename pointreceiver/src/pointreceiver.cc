@@ -361,6 +361,11 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
           } else if constexpr (std::same_as<T, int>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_INT;
             out_message->value.int_val = val;
+          } else if constexpr (std::same_as<T, pc::types::Float2> ||
+                               std::same_as<T, std::array<float, 2>>) {
+            out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT2;
+            out_message->value.float2_val.x = val[0];
+            out_message->value.float2_val.y = val[1];
           } else if constexpr (std::same_as<T, pc::types::Float3> ||
                                std::same_as<T, std::array<float, 3>>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT3;
@@ -374,53 +379,83 @@ bool pointreceiver_dequeue_message(pointreceiver_context *ctx,
             out_message->value.float4_val.y = val[1];
             out_message->value.float4_val.z = val[2];
             out_message->value.float4_val.w = val[3];
-          } else if constexpr (std::same_as<T, Float3List>) {
+          } else if constexpr (std::same_as<T, Float2List> ||
+                               std::same_as<T,
+                                            std::list<std::array<float, 2>>>) {
+            out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT2LIST;
+            const auto &float2List = val;
+            const size_t count = float2List.size();
+            out_message->value.float2_list_val.count = count;
+            if (count == 0) {
+              out_message->value.float2_list_val.data = nullptr;
+              return;
+            }
+            out_message->value.float2_list_val.data =
+                static_cast<pointreceiver_float2_t *>(
+                    std::malloc(count * sizeof(pointreceiver_float2_t)));
+            if (!out_message->value.float2_list_val.data) {
+              out_message->value.float2_list_val.count = 0;
+              set_message_success = false;
+              return;
+            }
+            size_t i = 0;
+            for (const auto &v : float2List) {
+              out_message->value.float2_list_val.data[i].x = v[0];
+              out_message->value.float2_list_val.data[i].y = v[1];
+              ++i;
+            }
+          } else if constexpr (std::same_as<T, Float3List> ||
+                               std::same_as<T,
+                                            std::list<std::array<float, 3>>>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT3LIST;
             const auto &float3List = val;
-            size_t count = float3List.size();
+            const size_t count = float3List.size();
             out_message->value.float3_list_val.count = count;
-            if (count > 0) {
-              // allocate memory for 'count' vectors
-              out_message->value.float3_list_val.data =
-                  static_cast<pointreceiver_float3_t *>(
-                      std::malloc(count * sizeof(pointreceiver_float3_t)));
-              if (!out_message->value.float3_list_val.data) {
-                out_message->value.float3_list_val.count = 0;
-                set_message_success = false;
-                return;
-              }
-              for (size_t i = 0; i < count; i++) {
-                out_message->value.float3_list_val.data[i].x = float3List[i][0];
-                out_message->value.float3_list_val.data[i].y = float3List[i][1];
-                out_message->value.float3_list_val.data[i].z = float3List[i][2];
-              }
-            } else {
+            if (count == 0) {
               out_message->value.float3_list_val.data = nullptr;
+              return;
             }
-          } else if constexpr (std::same_as<T, Float4List>) {
-
+            out_message->value.float3_list_val.data =
+                static_cast<pointreceiver_float3_t *>(
+                    std::malloc(count * sizeof(pointreceiver_float3_t)));
+            if (!out_message->value.float3_list_val.data) {
+              out_message->value.float3_list_val.count = 0;
+              set_message_success = false;
+              return;
+            }
+            size_t i = 0;
+            for (const auto &v : float3List) {
+              out_message->value.float3_list_val.data[i].x = v[0];
+              out_message->value.float3_list_val.data[i].y = v[1];
+              out_message->value.float3_list_val.data[i].z = v[2];
+              ++i;
+            }
+          } else if constexpr (std::same_as<T, Float4List> ||
+                               std::same_as<T,
+                                            std::list<std::array<float, 4>>>) {
             out_message->value_type = POINTRECEIVER_PARAM_VALUE_FLOAT4LIST;
             const auto &float4List = val;
-            size_t count = float4List.size();
+            const size_t count = float4List.size();
             out_message->value.float4_list_val.count = count;
-            if (count > 0) {
-              // allocate memory for 'count' vectors
-              out_message->value.float4_list_val.data =
-                  static_cast<pointreceiver_float4_t *>(
-                      std::malloc(count * sizeof(pointreceiver_float4_t)));
-              if (!out_message->value.float4_list_val.data) {
-                out_message->value.float4_list_val.count = 0;
-                set_message_success = false;
-                return;
-              }
-              for (size_t i = 0; i < count; i++) {
-                out_message->value.float4_list_val.data[i].x = float4List[i][0];
-                out_message->value.float4_list_val.data[i].y = float4List[i][1];
-                out_message->value.float4_list_val.data[i].z = float4List[i][2];
-                out_message->value.float4_list_val.data[i].w = float4List[i][3];
-              }
-            } else {
+            if (count == 0) {
               out_message->value.float4_list_val.data = nullptr;
+              return;
+            }
+            out_message->value.float4_list_val.data =
+                static_cast<pointreceiver_float4_t *>(
+                    std::malloc(count * sizeof(pointreceiver_float4_t)));
+            if (!out_message->value.float4_list_val.data) {
+              out_message->value.float4_list_val.count = 0;
+              set_message_success = false;
+              return;
+            }
+            size_t i = 0;
+            for (const auto &v : float4List) {
+              out_message->value.float4_list_val.data[i].x = v[0];
+              out_message->value.float4_list_val.data[i].y = v[1];
+              out_message->value.float4_list_val.data[i].z = v[2];
+              out_message->value.float4_list_val.data[i].w = v[3];
+              ++i;
             }
 
           } else if constexpr (std::same_as<T, AABBList>) {
@@ -831,6 +866,10 @@ void testMessageLoop(pointreceiver_context *ctx) {
         case POINTRECEIVER_PARAM_VALUE_INT:
           log("Value: {}", msg.value.int_val);
           break;
+        case POINTRECEIVER_PARAM_VALUE_FLOAT2:
+          log("Value: ({}, {})", msg.value.float2_val.x,
+              msg.value.float2_val.y);
+          break;
         case POINTRECEIVER_PARAM_VALUE_FLOAT3:
           log("Value: ({}, {}, {})", msg.value.float3_val.x,
               msg.value.float3_val.y, msg.value.float3_val.z);
@@ -840,6 +879,10 @@ void testMessageLoop(pointreceiver_context *ctx) {
           log("Value: ({}, {}, {}, {})", msg.value.float4_val.x,
               msg.value.float4_val.y, msg.value.float4_val.z,
               msg.value.float4_val.w);
+          break;
+        case POINTRECEIVER_PARAM_VALUE_FLOAT2LIST:
+          // TODO log contents or at least size?
+          log("Got a Float2List here");
           break;
         case POINTRECEIVER_PARAM_VALUE_FLOAT3LIST:
           // TODO log contents or at least size?
