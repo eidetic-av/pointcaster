@@ -325,7 +325,7 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
     }
 
     if (contours.publish_centroids) {
-      publisher::publish_all("centroids", centroids, address_nodes);
+      publisher::publish_all("contour_centroids", centroids, address_nodes);
     }
 
     // Scale our contours to the output image size if we intend to draw them
