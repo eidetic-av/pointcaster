@@ -26,6 +26,15 @@ struct TriangulateConfiguration {
   float minimum_area = 0.0f; // @minmax(0, 10)
 };
 
+struct ContourSmoothingConfiguration {
+  bool enabled = false;
+  int iterations = 3; // @minmax(1, 6)
+  int resample_count = 1000; // @minmax(10, 5000)
+  float corner_cutting = 0.25; // @minmax(0.05, 0.45)
+  bool preserve_sharp_corners = false;
+  float sharp_corner_angle = 45; // @minmax(20, 90)
+};
+
 struct ContourDetectionConfiguration {
   bool enabled = false;
   bool draw = false;
@@ -35,6 +44,7 @@ struct ContourDetectionConfiguration {
   bool simplify = false;
   float simplify_arc_scale = 0.001f; // @minmax(0.00001f, 10.0f)
   float simplify_min_area = 0.0001f; // @minmax(0.00001f, 10.0f)
+  ContourSmoothingConfiguration smoothing; // @optional
   TriangulateConfiguration triangulate;
 };
 

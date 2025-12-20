@@ -1,4 +1,5 @@
 #include "analyser_2d.h"
+#include "contour_smoothing.h"
 #include "../logger.h"
 #include "../publisher/publisher.h"
 #include "../session.gen.h"
@@ -277,6 +278,14 @@ void Analyser2D::frame_analysis(std::stop_token stop_token) {
         const double epsilon = (contours.simplify_arc_scale / 10) *
                                cv::arcLength(norm_contour, false);
         cv::approxPolyDP(norm_contour, norm_contour, epsilon, false);
+      }
+
+      if (contours.smoothing.enabled) {
+        const auto &smoothing = contours.smoothing;
+        norm_contour =
+            contour_smoothing::chaikin_smooth(norm_contour, smoothing);
+        norm_contour = contour_smoothing::resample_by_arclength(
+            norm_contour, smoothing.resample_count);
       }
 
       if (!use_contour) continue;

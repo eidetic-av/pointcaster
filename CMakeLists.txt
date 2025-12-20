@@ -362,6 +362,7 @@ if (WITH_POINTCASTER)
     src/devices/sequence/ply_sequence_player_gui.cc
     src/camera/camera_controller.cc
     src/analysis/analyser_2d.cc
+    src/analysis/contour_smoothing.cc
     src/radio/radio.cc
     src/client_sync/sync_server.cc
     src/snapshots.cc
