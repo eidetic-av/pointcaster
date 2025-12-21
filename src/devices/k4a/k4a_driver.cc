@@ -1,7 +1,6 @@
 #include "k4a_driver.h"
 #include "../../logger.h"
 #include "k4a_config.gen.h"
-#include "k4a_utils.h"
 #include <future>
 #include <k4a/k4a.hpp>
 #include <numeric>
@@ -10,11 +9,10 @@
 namespace pc::devices {
 
 using namespace std::chrono_literals;
-using namespace pc::k4a_utils;
 
 K4ADriver::K4ADriver(AzureKinectConfiguration &config)
     : _capture_loop(&K4ADriver::capture_frames, this),
-      _tracker_loop(&K4ADriver::track_bodies, this),
+      // _tracker_loop(&K4ADriver::track_bodies, this),
       _imu_loop(&K4ADriver::process_imu, this) {
   static std::mutex serial_driver_construction;
   std::lock_guard<std::mutex> lock(serial_driver_construction);
@@ -93,7 +91,7 @@ K4ADriver::~K4ADriver() {
   _open = false;
   _stop_requested = true;
   _capture_loop.join();
-  _tracker_loop.join();
+  // _tracker_loop.join();
   _imu_loop.join();
   stop_sensors();
   if (!lost_device && _device && _device->is_valid()) { _device->close(); }
@@ -194,7 +192,7 @@ void K4ADriver::stop_sensors() {
 void K4ADriver::reload() {
   stop_sensors();
   _point_cloud = {};
-  _skeletons.clear();
+  // _skeletons.clear();
   start_sensors();
 }
 
@@ -221,7 +219,7 @@ std::string K4ADriver::id() const { return _serial_number; }
 void K4ADriver::set_paused(bool paused) { _pause_sensor = paused; }
 
 void K4ADriver::enable_body_tracking(const bool enabled) {
-  if (!enabled) _skeletons.clear();
+  // if (!enabled) _skeletons.clear();
   _body_tracking_enabled = enabled;
 }
 
@@ -271,7 +269,7 @@ void K4ADriver::capture_frames() {
           active_count--;
           try {
             stop_sensors();
-            _tracker.reset();
+            // _tracker.reset();
             _device.reset();
           } catch (k4a::error e) { pc::logger->error(e.what()); }
         }
@@ -292,7 +290,7 @@ void K4ADriver::capture_frames() {
 
     try {
       if (is_aligning()) run_aligner(capture);
-      if (_body_tracking_enabled) _tracker->enqueue_capture(capture);
+      // if (_body_tracking_enabled) _tracker->enqueue_capture(capture);
 
       auto depth_image = capture.get_depth_image();
       auto color_image = capture.get_color_image();
@@ -320,110 +318,6 @@ void K4ADriver::capture_frames() {
 
 void K4ADriver::track_bodies() {
 
-  using namespace Eigen;
-
-  // reserve space for five skeletons
-  _skeletons.reserve(5);
-
-  while (!_stop_requested) {
-
-    if (!_body_tracking_enabled || !_tracker || !_open || !_running) {
-      std::this_thread::sleep_for(50ms);
-      continue;
-    }
-
-    k4abt_frame_t body_frame_handle = nullptr;
-    k4abt::frame body_frame(body_frame_handle);
-    if (!_tracker->pop_result(&body_frame, 50ms)) continue;
-
-    const auto body_count = body_frame.get_num_bodies();
-    if (body_count == 0) continue;
-
-    auto config = _last_config;
-    // TODO make all the following serialize into the config
-    auto alignment_center = Eigen::Vector3f(
-        _alignment_center.x, _alignment_center.y, _alignment_center.z);
-    auto aligned_position_offset =
-        Eigen::Vector3f(_aligned_position_offset.x, _aligned_position_offset.y,
-                        _aligned_position_offset.z);
-
-    // transform the skeletons based on device config
-    // and place them into the _skeletons list
-    _skeletons.clear();
-    for (std::size_t body_num = 0; body_num < body_count; body_num++) {
-      const k4abt_skeleton_t raw_skeleton = body_frame.get_body_skeleton(0);
-      K4ASkeleton skeleton;
-      // parse each joint
-      for (std::size_t joint = 0; joint < K4ABT_JOINT_COUNT; joint++) {
-        auto pos = raw_skeleton.joints[joint].position.xyz;
-        auto orientation = raw_skeleton.joints[joint].orientation.wxyz;
-
-        Vector3f pos_f(pos.x, pos.y, pos.z);
-        Quaternionf ori_f(orientation.w, orientation.x, orientation.y,
-                          orientation.z);
-
-        // perform any auto-tilt
-        {
-          std::lock_guard lock(_auto_tilt_value_mutex);
-          pos_f = _auto_tilt_value * pos_f;
-          ori_f = _auto_tilt_value * ori_f;
-        }
-        // flip y and z axes for our world space
-        pos_f = Vector3f(pos_f[0], -pos_f[1], -pos_f[2]);
-
-        static constexpr auto rad = [](float deg) {
-          constexpr auto mult = 3.141592654f / 180.0f;
-          return deg * mult;
-        };
-
-        auto &transform = config.transform;
-
-        // create the rotation around our center
-        AngleAxisf rot_x(rad(transform.rotation_deg.x), Vector3f::UnitX());
-        AngleAxisf rot_y(rad(transform.rotation_deg.y), Vector3f::UnitY());
-        AngleAxisf rot_z(rad(transform.rotation_deg.z), Vector3f::UnitZ());
-        Quaternionf q = rot_z * rot_y * rot_x;
-        Affine3f rot_transform = Translation3f(-alignment_center) * q *
-                                 Translation3f(alignment_center);
-
-        // perform manual rotation
-        pos_f = rot_transform * pos_f;
-        ori_f = q * ori_f;
-
-        // then alignment translation
-        pos_f += alignment_center + aligned_position_offset;
-
-        // perform our manual translation
-        pos_f += Vector3f(transform.offset.x, transform.offset.y,
-                          transform.offset.z);
-
-        // specified axis flips
-        if (transform.flip_x) {
-          pos_f.x() = -pos_f.x();
-          ori_f *= Quaternionf(AngleAxisf(M_PI, Vector3f::UnitX()));
-        }
-        if (transform.flip_y) {
-          pos_f.y() = -pos_f.y();
-          ori_f *= Quaternionf(AngleAxisf(M_PI, Vector3f::UnitY()));
-        }
-        if (transform.flip_z) {
-          pos_f.z() = -pos_f.z();
-          ori_f *= Quaternionf(AngleAxisf(M_PI, Vector3f::UnitZ()));
-        }
-
-        // and scaling
-        pos_f *= transform.scale;
-
-        position pos_out = {static_cast<short>(std::round(pos_f.x())),
-                            static_cast<short>(std::round(pos_f.y())),
-                            static_cast<short>(std::round(pos_f.z())), 0};
-
-        skeleton[joint].first = {pos_out.x, pos_out.y, pos_out.z};
-        skeleton[joint].second = {ori_f.w(), ori_f.x(), ori_f.y(), ori_f.z()};
-      }
-      _skeletons.push_back(skeleton);
-    }
-  }
 }
 
 void K4ADriver::process_imu() {
@@ -515,84 +409,84 @@ bool K4ADriver::is_aligning() {
 bool K4ADriver::is_aligned() { return _aligned; }
 
 void K4ADriver::run_aligner(const k4a::capture &frame) {
-  if (!_tracker) return;
+  // if (!_tracker) return;
 
-  _tracker->enqueue_capture(frame);
-  k4abt::frame body_frame = _tracker->pop_result();
-  const auto body_count = body_frame.get_num_bodies();
+  // _tracker->enqueue_capture(frame);
+  // k4abt::frame body_frame = _tracker->pop_result();
+  // const auto body_count = body_frame.get_num_bodies();
 
-  if (body_count > 0) {
-    const k4abt_skeleton_t skeleton = body_frame.get_body(0).skeleton;
-    _alignment_skeleton_frames.push_back(skeleton);
+  // if (body_count > 0) {
+  //   const k4abt_skeleton_t skeleton = body_frame.get_body(0).skeleton;
+  //   _alignment_skeleton_frames.push_back(skeleton);
 
-    if (++_alignment_frame_count == _total_alignment_frames) {
-      // alignment frames have finished capturing
+  //   if (++_alignment_frame_count == _total_alignment_frames) {
+  //     // alignment frames have finished capturing
 
-      // first average the joint positions over the captured frames
-      const auto avg_joint_positions =
-          calculateAverageJointPositions(_alignment_skeleton_frames);
+  //     // first average the joint positions over the captured frames
+  //     const auto avg_joint_positions =
+  //         calculateAverageJointPositions(_alignment_skeleton_frames);
 
-      // set the rotational centerto the position of the hips
-      const auto left_hip_pos =
-          avg_joint_positions[k4abt_joint_id_t::K4ABT_JOINT_HIP_LEFT];
-      const auto right_hip_pos =
-          avg_joint_positions[k4abt_joint_id_t::K4ABT_JOINT_HIP_RIGHT];
-      const auto hip_x = (left_hip_pos.x + right_hip_pos.x) / 2.0f;
-      const auto hip_y = (left_hip_pos.y + right_hip_pos.y) / 2.0f;
-      const auto hip_z = (left_hip_pos.z + right_hip_pos.z) / 2.0f;
+  //     // set the rotational centerto the position of the hips
+  //     const auto left_hip_pos =
+  //         avg_joint_positions[k4abt_joint_id_t::K4ABT_JOINT_HIP_LEFT];
+  //     const auto right_hip_pos =
+  //         avg_joint_positions[k4abt_joint_id_t::K4ABT_JOINT_HIP_RIGHT];
+  //     const auto hip_x = (left_hip_pos.x + right_hip_pos.x) / 2.0f;
+  //     const auto hip_y = (left_hip_pos.y + right_hip_pos.y) / 2.0f;
+  //     const auto hip_z = (left_hip_pos.z + right_hip_pos.z) / 2.0f;
 
-      _alignment_center.x = -std::round(hip_x);
-      _alignment_center.y = std::round(hip_y);
-      _alignment_center.z = std::round(hip_z);
+  //     _alignment_center.x = -std::round(hip_x);
+  //     _alignment_center.y = std::round(hip_y);
+  //     _alignment_center.z = std::round(hip_z);
 
-      // then set the y offset to the position of the feet
-      const auto left_foot_pos =
-          avg_joint_positions[k4abt_joint_id_t::K4ABT_JOINT_FOOT_LEFT];
-      const auto right_foot_pos =
-          avg_joint_positions[k4abt_joint_id_t::K4ABT_JOINT_FOOT_RIGHT];
-      const auto feet_y = (left_foot_pos.y + right_foot_pos.y) / 2.0f;
-      // (we do -hip_y + feet_y so that the origin (0,0) is aligned with the
-      // floor and center of the skeleton, but our rotational center is the
-      // hips because that's easier to reason about when making manual
-      // adjustments)
-      _aligned_position_offset.y = std::round(-hip_y + feet_y);
+  //     // then set the y offset to the position of the feet
+  //     const auto left_foot_pos =
+  //         avg_joint_positions[k4abt_joint_id_t::K4ABT_JOINT_FOOT_LEFT];
+  //     const auto right_foot_pos =
+  //         avg_joint_positions[k4abt_joint_id_t::K4ABT_JOINT_FOOT_RIGHT];
+  //     const auto feet_y = (left_foot_pos.y + right_foot_pos.y) / 2.0f;
+  //     // (we do -hip_y + feet_y so that the origin (0,0) is aligned with the
+  //     // floor and center of the skeleton, but our rotational center is the
+  //     // hips because that's easier to reason about when making manual
+  //     // adjustments)
+  //     _aligned_position_offset.y = std::round(-hip_y + feet_y);
 
-      if (primary_aligner) {
-        // if this is the 'primary' alignment device, we set the orientation
-        // offset so that the skeleton faces 'forward' in the scene
+  //     if (primary_aligner) {
+  //       // if this is the 'primary' alignment device, we set the orientation
+  //       // offset so that the skeleton faces 'forward' in the scene
 
-        // average the joint orientations over the captured frames
-        const auto avg_joint_orientations =
-            calculateAverageJointOrientations(_alignment_skeleton_frames);
-        // assuming the pelvis is the source of truth for orientation
-        const auto pelvis_orientation =
-            avg_joint_orientations[k4abt_joint_id_t::K4ABT_JOINT_PELVIS];
+  //       // average the joint orientations over the captured frames
+  //       const auto avg_joint_orientations =
+  //           calculateAverageJointOrientations(_alignment_skeleton_frames);
+  //       // assuming the pelvis is the source of truth for orientation
+  //       const auto pelvis_orientation =
+  //           avg_joint_orientations[k4abt_joint_id_t::K4ABT_JOINT_PELVIS];
 
-        // move it into an Eigen object for easy maths
-        _aligned_orientation_offset = Eigen::Quaternion<float>(
-            pelvis_orientation.w, pelvis_orientation.x, pelvis_orientation.y,
-            pelvis_orientation.z);
+  //       // move it into an Eigen object for easy maths
+  //       _aligned_orientation_offset = Eigen::Quaternion<float>(
+  //           pelvis_orientation.w, pelvis_orientation.x, pelvis_orientation.y,
+  //           pelvis_orientation.z);
 
-        // get the euler angles
-        const auto euler =
-            _aligned_orientation_offset.toRotationMatrix().eulerAngles(0, 1, 2);
+  //       // get the euler angles
+  //       const auto euler =
+  //           _aligned_orientation_offset.toRotationMatrix().eulerAngles(0, 1, 2);
 
-        // convert to degrees
-        constexpr auto deg = [](float rad) -> float {
-          constexpr auto mult = 180.0f / 3.141592654f;
-          return rad * mult;
-        };
+  //       // convert to degrees
+  //       constexpr auto deg = [](float rad) -> float {
+  //         constexpr auto mult = 180.0f / 3.141592654f;
+  //         return rad * mult;
+  //       };
 
-        // align with kinect orientation offset
-        const auto rot_x = deg(euler.x()) - 90;
-        const auto rot_y = deg(euler.y()) - 90;
-        const auto rot_z = deg(euler.z());
-      }
+  //       // align with kinect orientation offset
+  //       const auto rot_x = deg(euler.x()) - 90;
+  //       const auto rot_y = deg(euler.y()) - 90;
+  //       const auto rot_z = deg(euler.z());
+  //     }
 
-      _alignment_skeleton_frames.clear();
-      _aligned = true;
-    }
-  }
+  //     _alignment_skeleton_frames.clear();
+  //     _aligned = true;
+  //   }
+  // }
 }
 
 void K4ADriver::set_depth_mode(const k4a_depth_mode_t mode) {

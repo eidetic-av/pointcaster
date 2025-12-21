@@ -10,7 +10,6 @@
 #include <Corrade/Containers/Pointer.h>
 #include <functional>
 #include <imgui.h>
-#include <k4abttypes.h>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -161,9 +160,8 @@ void send_all_static_point_clouds();
 
 // TODO make all the k4a stuff more generic
 using pc::types::Float4;
-using K4ASkeleton =
-    std::array<std::pair<pc::types::position, Float4>, K4ABT_JOINT_COUNT>;
-extern std::vector<K4ASkeleton> scene_skeletons();
+// using K4ASkeleton =
+//     std::array<std::pair<pc::types::position, Float4>, K4ABT_JOINT_COUNT>;
 
 extern pc::types::position global_translate;
 extern void draw_global_controls();

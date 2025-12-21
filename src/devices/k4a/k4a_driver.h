@@ -9,7 +9,6 @@
 #include <exception>
 #include <k4a/k4a.h>
 #include <k4a/k4a.hpp>
-#include <k4abt.hpp>
 #include <thread>
 #include <atomic>
 
@@ -26,9 +25,6 @@ using pc::types::PointCloud;
 using pc::types::position;
 using pc::types::Short3;
 using pc::types::Uint2;
-
-using K4ASkeleton =
-    std::array<std::pair<pc::types::position, Float4>, K4ABT_JOINT_COUNT>;
 
 // Forward declaration hides CUDA types, allowing K4ADriver to have CUDA
 // members. This prevents issues when this header is included in TUs not
@@ -77,7 +73,6 @@ public:
 
   void enable_body_tracking(const bool enabled);
   bool tracking_bodies() { return _body_tracking_enabled; };
-  std::vector<K4ASkeleton> skeletons() { return _skeletons; };
 
   void set_depth_mode(const k4a_depth_mode_t mode);
 
@@ -121,7 +116,6 @@ private:
   AzureKinectConfiguration _last_config;
 
   std::unique_ptr<k4a::device> _device;
-  std::unique_ptr<k4abt::tracker> _tracker;
 
   std::atomic_bool _pause_sensor{false};
   bool _stop_requested = false;
@@ -138,12 +132,10 @@ private:
   std::array<color, incoming_point_count> _colors_buffer;
 
   bool _body_tracking_enabled;
-  std::thread _tracker_loop;
-  std::vector<K4ASkeleton> _skeletons;
 
   static constexpr unsigned int _total_alignment_frames = 10;
   unsigned int _alignment_frame_count = _total_alignment_frames;
-  std::vector<k4abt_skeleton_t> _alignment_skeleton_frames;
+  // std::vector<k4abt_skeleton_t> _alignment_skeleton_frames;
   bool _aligned = false;
   position _alignment_center{0, 0, 0};
   position _aligned_position_offset;

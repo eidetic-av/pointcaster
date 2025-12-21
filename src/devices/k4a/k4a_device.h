@@ -5,7 +5,6 @@
 #include "k4a_driver.h"
 #include <array>
 #include <atomic>
-#include <k4abt.hpp>
 #include <utility>
 #include <vector>
 

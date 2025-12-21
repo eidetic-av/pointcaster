@@ -16,7 +16,6 @@
 #include "sequence/ply_sequence_player_config.gen.h"
 #include <chrono>
 #include <imgui.h>
-#include <k4abttypes.h>
 #include <memory>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_reduce.h>
@@ -290,8 +289,8 @@ void send_all_static_point_clouds() {
 
 // TODO all of this skeleton stuff needs to be made generic accross multiple
 // camera types
-std::vector<K4ASkeleton> scene_skeletons() {
-  std::vector<K4ASkeleton> result;
+// std::vector<K4ASkeleton> scene_skeletons() {
+//   std::vector<K4ASkeleton> result;
   // for (auto& device : pc::devices::attached_devices) {
   // 	auto driver = dynamic_cast<K4ADriver*>(device->_driver.get());
   // 	if (!driver->tracking_bodies()) continue;
@@ -299,7 +298,7 @@ std::vector<K4ASkeleton> scene_skeletons() {
   // 		result.push_back(skeleton);
   // 	}
   // }
-  return result;
-}
+  // return result;
+// }
 
 } // namespace pc::devices

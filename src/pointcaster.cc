@@ -296,35 +296,35 @@ PointCaster::PointCaster(const Arguments &args)
   // set up the spheres that render skeleton joints
   /* Setup points (render as spheres) */
   {
-    const std::size_t total_joint_count = K4ABT_JOINT_COUNT * 5;
-    const Vector3 start_pos{-999, -999, -999};
-    const Vector3 joint_size{0.015};
+    // const std::size_t total_joint_count = K4ABT_JOINT_COUNT * 5;
+    // const Vector3 start_pos{-999, -999, -999};
+    // const Vector3 joint_size{0.015};
 
-    _sphere_instance_data =
-        Containers::Array<SphereInstanceData>{NoInit, total_joint_count};
+    // _sphere_instance_data =
+    //     Containers::Array<SphereInstanceData>{NoInit, total_joint_count};
 
-    for (std::size_t i = 0; i < total_joint_count; i++) {
-      /* Fill in the instance data. Most of this stays the same, except
-         for the translation */
-      _sphere_instance_data[i].transformationMatrix =
-          Matrix4::translation(start_pos) * Matrix4::scaling(joint_size);
-      _sphere_instance_data[i].normalMatrix =
-          _sphere_instance_data[i].transformationMatrix.normalMatrix();
-      _sphere_instance_data[i].color =
-          Color3{Vector3(std::rand(), std::rand(), std::rand()) /
-                 Magnum::Float(RAND_MAX)};
-    }
+    // for (std::size_t i = 0; i < total_joint_count; i++) {
+    //   /* Fill in the instance data. Most of this stays the same, except
+    //      for the translation */
+    //   _sphere_instance_data[i].transformationMatrix =
+    //       Matrix4::translation(start_pos) * Matrix4::scaling(joint_size);
+    //   _sphere_instance_data[i].normalMatrix =
+    //       _sphere_instance_data[i].transformationMatrix.normalMatrix();
+    //   _sphere_instance_data[i].color =
+    //       Color3{Vector3(std::rand(), std::rand(), std::rand()) /
+    //              Magnum::Float(RAND_MAX)};
+    // }
 
-    _sphere_shader =
-        Shaders::PhongGL{Shaders::PhongGL::Configuration{}.setFlags(
-            Shaders::PhongGL::Flag::VertexColor |
-            Shaders::PhongGL::Flag::InstancedTransformation)};
-    _sphere_instance_buffer = GL::Buffer{};
-    _sphere_mesh = MeshTools::compile(Primitives::icosphereSolid(2));
-    _sphere_mesh.addVertexBufferInstanced(
-        _sphere_instance_buffer, 1, 0, Shaders::PhongGL::TransformationMatrix{},
-        Shaders::PhongGL::NormalMatrix{}, Shaders::PhongGL::Color3{});
-    _sphere_mesh.setInstanceCount(_sphere_instance_data.size());
+    // _sphere_shader =
+    //     Shaders::PhongGL{Shaders::PhongGL::Configuration{}.setFlags(
+    //         Shaders::PhongGL::Flag::VertexColor |
+    //         Shaders::PhongGL::Flag::InstancedTransformation)};
+    // _sphere_instance_buffer = GL::Buffer{};
+    // _sphere_mesh = MeshTools::compile(Primitives::icosphereSolid(2));
+    // _sphere_mesh.addVertexBufferInstanced(
+    //     _sphere_instance_buffer, 1, 0, Shaders::PhongGL::TransformationMatrix{},
+    //     Shaders::PhongGL::NormalMatrix{}, Shaders::PhongGL::Color3{});
+    // _sphere_mesh.setInstanceCount(_sphere_instance_data.size());
   }
 
   // Start the timer, loop at 144 Hz max
@@ -722,7 +722,7 @@ void PointCaster::render_cameras() {
     });
   }
   
-  auto skeletons = devices::scene_skeletons();
+  // auto skeletons = devices::scene_skeletons();
 
   for (size_t i = 0; i < workspace.sessions.size(); i++) {
     auto &session = workspace.sessions[i];
@@ -750,27 +750,27 @@ void PointCaster::render_cameras() {
     // draw shaders
     _point_cloud_renderer->draw(camera, rendering_config);
 
-    if (rendering_config.skeletons) {
-      if (!skeletons.empty()) {
-        int i = 0;
-        for (auto &skeleton : skeletons) {
-          for (auto &joint : skeleton) {
-            auto pos = joint.first;
-            _sphere_instance_data[i].transformationMatrix.translation() = {
-                pos.x / 1000.0f, pos.y / 1000.0f, pos.z / 1000.0f};
-            i++;
-          }
-        }
-        _sphere_instance_buffer.setData(_sphere_instance_data,
-                                        GL::BufferUsage::DynamicDraw);
-        GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
-        _sphere_shader.setProjectionMatrix(camera.projectionMatrix())
-            .setTransformationMatrix(camera.cameraMatrix())
-            .setNormalMatrix(camera.cameraMatrix().normalMatrix())
-            .draw(_sphere_mesh);
-        GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-      }
-    }
+    // if (rendering_config.skeletons) {
+    //   if (!skeletons.empty()) {
+    //     int i = 0;
+    //     for (auto &skeleton : skeletons) {
+    //       for (auto &joint : skeleton) {
+    //         auto pos = joint.first;
+    //         _sphere_instance_data[i].transformationMatrix.translation() = {
+    //             pos.x / 1000.0f, pos.y / 1000.0f, pos.z / 1000.0f};
+    //         i++;
+    //       }
+    //     }
+    //     _sphere_instance_buffer.setData(_sphere_instance_data,
+    //                                     GL::BufferUsage::DynamicDraw);
+    //     GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
+    //     _sphere_shader.setProjectionMatrix(camera.projectionMatrix())
+    //         .setTransformationMatrix(camera.cameraMatrix())
+    //         .setNormalMatrix(camera.cameraMatrix().normalMatrix())
+    //         .draw(_sphere_mesh);
+    //     GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+    //   }
+    // }
 
     // render camera
     camera.draw(*_scene_root);

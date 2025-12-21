@@ -258,9 +258,6 @@ if (WITH_POINTCASTER)
       src/devices/k4a/k4a_driver.cc
       src/devices/k4a/k4a_driver.cu)
 
-    find_package(k4abt REQUIRED)
-    list(APPEND OPTIONAL_LIBS k4a::k4abt)
-
     add_compile_definitions(WITH_K4A)
 
     if (WIN32)
@@ -406,47 +403,7 @@ if (WITH_POINTCASTER)
 
 # ----- Plugins -----
 
-  # OpenCV CUDA for Analyser2D on cameras using GPU
-
-  set(OPENCV_CUDA_PLUGIN_DIR "$<TARGET_FILE_DIR:pointcaster>/plugins/opencv_cuda")
-
-  corrade_add_plugin(CudaAnalyser2D
-    ${OPENCV_CUDA_PLUGIN_DIR}
-    ${OPENCV_CUDA_PLUGIN_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/plugins/opencv_cuda/CudaAnalyser2D.conf
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/plugins/opencv_cuda/cuda_analyser_2d.cc
-  )
-  set_target_properties(CudaAnalyser2D PROPERTIES 
-    RUNTIME_OUTPUT_DIRECTORY ${OPENCV_CUDA_PLUGIN_DIR}
-    LIBRARY_OUTPUT_DIRECTORY ${OPENCV_CUDA_PLUGIN_DIR}
-    ARCHIVE_OUTPUT_DIRECTORY ${OPENCV_CUDA_PLUGIN_DIR}
-  )
-  target_link_libraries(CudaAnalyser2D PRIVATE 
-    Corrade::PluginManager ${OPENCV_CORE_LIBS}
-    opencv_cudaarithm opencv_cudafilters opencv_cudaimgproc
-    opencv_cudaoptflow opencv_cudawarping
-  )
-
-  add_custom_command(TARGET CudaAnalyser2D POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${OPENCV_CUDA_PLUGIN_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "${CMAKE_CURRENT_SOURCE_DIR}/src/plugins/opencv_cuda/CudaAnalyser2D.conf"
-      "${OPENCV_CUDA_PLUGIN_DIR}/CudaAnalyser2D.conf"
-  )
-
-  add_custom_command(TARGET CudaAnalyser2D POST_BUILD 
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${OPENCV_CUDA_PLUGIN_DIR}/deps"
-    COMMAND ${CMAKE_COMMAND}
-      -DINPUT_EXECUTABLE="$<TARGET_FILE:CudaAnalyser2D>"
-      -DOUTPUT_DIRECTORY="${OPENCV_CUDA_PLUGIN_DIR}/deps"
-      -DVCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR}"
-      -DVCPKG_TARGET_TRIPLET="${VCPKG_TARGET_TRIPLET}"
-      -DCUDA_BIN_DIR="${CUDAToolkit_BIN_DIR}"
-      -DMOVE_EXISTING_DEPS=ON
-      -P "${CMAKE_SOURCE_DIR}/cmake/CopyRuntimeDependencies.cmake"
-  )
-
-  list(APPEND POINTCASTER_DEPENDENCIES CudaAnalyser2D)
+  include(RuntimePlugins)
 
 # ----- Pointcaster executable -----
 
@@ -570,14 +527,6 @@ if (WITH_POINTCASTER)
         -DCUDA_BIN_DIR="${CUDAToolkit_BIN_DIR}"
         -P "${CMAKE_SOURCE_DIR}/cmake/CopyRuntimeDependencies.cmake"
     )
-  endif()
-
-  if (WITH_K4A)
-    foreach(K4ABT_BIN ${k4abt_RUNTIME_DEPENDENCIES})
-      add_custom_command(TARGET pointcaster POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${K4ABT_BIN} $<TARGET_FILE_DIR:pointcaster>)
-    endforeach()
   endif()
 
   add_custom_command(TARGET pointcaster POST_BUILD 
