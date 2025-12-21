@@ -120,6 +120,8 @@
       "platform": "!android",
       "default-features": false,
       "features": [
+        "world",
+        "contrib",
         "cuda"
       ]
     },
