@@ -119,11 +119,7 @@
       "name": "opencv4",
       "platform": "!android",
       "default-features": false,
-      "features": [
-        "world",
-        "contrib",
-        "cuda"
-      ]
+      "features": [ "cuda" ]
     },
     {
       "name": "paho-mqttpp3",

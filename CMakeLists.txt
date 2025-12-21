@@ -278,7 +278,8 @@ if (WITH_POINTCASTER)
 
   set(OpenCV_ROOT "${VCPKG_INSTALLED_DIR}/x64-windows-static-md-release/share/opencv4")
   find_package(OpenCV CONFIG REQUIRED)
-  list(APPEND LINK_LIBS opencv_world)
+  list(APPEND OPENCV_CORE_LIBS opencv_core opencv_imgproc opencv_optflow opencv_video)
+  list(APPEND LINK_LIBS ${OPENCV_CORE_LIBS})
   list(APPEND INCLUDE_DIRS ${OpenCV_INCLUDE_DIRS})
   # need to also include opencv headers globally because they're used by
   # plugins, not just the pointcaster target
