@@ -2,10 +2,11 @@ vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO KDAB/KDDockWidgets
     REF "v${VERSION}" 
-    SHA512 7b88f354e2aca4ac4c0f59874b6a7d6baaf77f5b54dd57b981ec7831e40acc0e2f6d3c6300af3d93c594bf34c7072c6a8a19a50c65039ccae22a9e47b90499d8
+    SHA512 1e220c5cf608c5bb9242b530eb1e45a15dae462b126c12d253483a1213e72374baa75943d8734c5dc79e34b03b480d1a87cd59cb945996abc0ab20b5d649a5cb
     HEAD_REF master
     PATCHES
-        dependencies.diff
+    	dependencies.diff
+	guiprivate.diff
 )
 file(REMOVE_RECURSE
     "${SOURCE_PATH}/src/3rdparty"

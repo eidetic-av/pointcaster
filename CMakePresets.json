@@ -15,9 +15,11 @@
 			"cacheVariables": 
 			{
 				"CMAKE_BUILD_TYPE": "Release",
-        "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
+				"VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
 				"VCPKG_TARGET_TRIPLET": "x64-linux-release",
-				"CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+				"CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+				"CMAKE_INSTALL_PREFIX": "/usr",
+				"CPACK_APPIMAGE_TOOL_EXECUTABLE": "/home/dev/.local/bin/appimagetool/squashfs-root/AppRun"
 			}
 		}
 	]

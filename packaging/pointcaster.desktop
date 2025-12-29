@@ -2,6 +2,6 @@
 Type=Application
 Name=Pointcaster
 Exec=pointcaster
-Icon=pointcaster
-Categories=Graphics;Video;Development;
+Icon=pointcaster-icon
+Categories=Development
 Terminal=false

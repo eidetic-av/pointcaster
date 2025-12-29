@@ -1,139 +1,135 @@
 import QtQuick
+import QtQuick.Controls.Fusion
 import QtQuick.Controls
 import QtQuick.Layouts
 import Pointcaster.Controls
+import com.kdab.dockwidgets as KDDW
 
 ApplicationWindow {
     id: root
-    width: 1280
-    height: 800
     visible: true
-    title: "Material Layout Demo"
+    title: "Pointcaster"
 
-    readonly property int navRailWidth: 72
-    readonly property int detailPaneWidth: 400
-    readonly property int cardGridMinWidth: 720
+    minimumWidth: 1200
+    minimumHeight: 800
 
-    minimumWidth: navRailWidth + detailPaneWidth + cardGridMinWidth
-    minimumHeight: 500
+    palette {
+        window:            "#1e1e2e"
+        windowText:        "#cdd6f4"
+        base:              "#181825"
+        text:              "#cdd6f4"
+        button:            "#313244"
+        buttonText:        "#cdd6f4"
+        highlight:         "#89b4fa"
+        highlightedText:   "#1e1e2e"
+    }
 
-    RowLayout {
-        anchors.fill: parent
-        spacing: 0
+    FontLoader {
+        id: regularFont
+        source: "qrc:/fonts/AtkinsonHyperlegibleNext-Regular.otf"
+    }
 
-        // Left navigation rail
-        Rectangle {
-            Layout.preferredWidth: root.navRailWidth
-            Layout.minimumWidth: root.navRailWidth
-            Layout.maximumWidth: root.navRailWidth
-            Layout.fillHeight: true
+    font.family: regularFont.name
 
-            Column {
-                anchors.centerIn: parent
-                spacing: 24
+    menuBar : MenuBar {
 
-                ToolButton { icon.name: "search" }
-                ToolButton { icon.name: "favorite" }
-                ToolButton { icon.name: "settings" }
+        Menu {
+            title: qsTr("&File")
+
+            Action { text: qsTr("&Save layout") }
+            Action { text: qsTr("&Restore layout") }
+
+            MenuSeparator{}
+            Action {
+                text: qsTr("&Quit")
+                onTriggered: Qt.quit()
             }
         }
 
-        // Center scrollable card grid (wrapped in a ScrollView for proper Layout behavior)
-        ScrollView {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.minimumWidth: root.cardGridMinWidth
-            clip: true
-
-            GridLayout {
-                id: grid
-                columns: 3
-                columnSpacing: 16
-                rowSpacing: 16
-                anchors.margins: 32
-
-                Repeater {
-                    model: 9
-                    Rectangle {
-                        Layout.preferredWidth: 240
-                        Layout.preferredHeight: 300
-                        radius: 12
-                        color: "#ffffff"
-                        border.color: "#dddddd"
-
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 12
-                            spacing: 8
-
-                            Rectangle {
-                                Layout.preferredHeight: 120
-                                Layout.fillWidth: true
-                                radius: 8
-                                color: "#ddd"
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "Image"
-                                    font.pointSize: 10
-                                }
-                            }
-
-                            Text {
-                                text: "Product Title"
-                                font.bold: true
-                                font.pointSize: 14
-                                wrapMode: Text.WordWrap
-                            }
-
-                            Text {
-                                text: "From your recent favorites"
-                                font.pointSize: 12
-                                color: "#666"
-                                wrapMode: Text.WordWrap
-                            }
-
-                            TextButton {
-                                text: "View"
-                                Layout.alignment: Qt.AlignHCenter
-                                Layout.preferredWidth: 120
-                            }
-                        }
-                    }
-                }
-            }
+        Menu {
+            title: qsTr("&Window")
         }
 
-        // Right detail pane
-        Rectangle {
-            Layout.preferredWidth: root.detailPaneWidth
-            Layout.minimumWidth: root.detailPaneWidth
-            Layout.maximumWidth: root.detailPaneWidth
-            Layout.fillHeight: true
-            color: "#f5f5f5"
-            border.color: "#cccccc"
+        Menu {
+            title: qsTr("&Help")
 
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 12
-
-                Text {
-                    text: "Details"
-                    font.pixelSize: 20
-                    font.bold: true
-                }
-
-                Text {
-                    text: "This is the detail panel. Select a product to see more information here."
-                    wrapMode: Text.WordWrap
-                    font.pixelSize: 14
-                }
-
-                TextButton {
-                    text: "Add to Basket"
-                    Layout.alignment: Qt.AlignLeft
-                }
+            Action {
+                text: qsTr("&About")
+                onTriggered: aboutPopup.open()
             }
         }
     }
+
+    KDDW.DockingArea {
+        id: dockingArea
+        anchors.fill: parent
+        uniqueName: "MainDockingArea"
+
+        KDDW.DockWidget {
+            id: browseDock
+            uniqueName: "browseDock"
+            title: "Browse"
+
+            Rectangle {
+                width: 100
+                height: 100
+                color: "#2E8BC0"
+            }
+        }
+
+        KDDW.DockWidget {
+            id: detailDock
+            uniqueName: "detailDock"
+            title: "Details"
+
+            Rectangle {
+                width: 200
+                height: 700
+                color: "#8B2EC0"
+            }
+        }
+
+        Component.onCompleted: {
+            addDockWidget(browseDock, KDDW.KDDockWidgets.Location_OnLeft)
+            addDockWidget(detailDock,
+                          KDDW.KDDockWidgets.Location_OnRight,
+                          browseDock)
+        }
+    }
+
+    Popup {
+        id: aboutPopup
+        modal: true
+        dim: true
+        focus: true
+        width: 360
+        height: 200
+
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+
+        background: Rectangle {
+            color: "#181825"
+            radius: 8
+            border.color: "#89b4fa"
+        }
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 12
+
+            Label {
+                text: "Pointcaster\n\nAbout dialog placeholder"
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+            }
+
+            Button {
+                text: "Close"
+                onClicked: aboutPopup.close()
+            }
+        }
+    }
+
 }
+
