@@ -1,43 +1,32 @@
-# debian trixie from 2025-11-06
-FROM debian@sha256:01a723bf5bfb21b9dda0c9a33e0538106e4d02cce8f557e118dd61259553d598
+FROM debian:12-slim
 
-ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV ARCH=x86_64
 
-# we use debian snapshot packages so build dependencies provided through
-# apt are pinned to a single date
-
-ARG SNAPSHOT=20251106T204438Z
-
-# freeze apt to the snapshot date by specifying package repos
-
-RUN set -eux; \
-	cat > /etc/apt/sources.list.d/debian.sources <<EOF
-Types: deb 
-URIs: http://snapshot.debian.org/archive/debian/${SNAPSHOT}
-Suites: trixie trixie-updates
-Components: main contrib non-free-firmware
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-
-Types: deb
-URIs: http://snapshot.debian.org/archive/debian-security/${SNAPSHOT}
-Suites: trixie-security
-Components: main contrib non-free-firmware
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-EOF
-
-RUN set -eux; \
-	echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot-no-expire; \
-	apt-get -y update && apt-get -y dist-upgrade
-
 # install build toolchain
+RUN set -eux; \
+    apt-get update; \
+    apt-get -y install --no-install-recommends \
+        build-essential ninja-build pkg-config gnupg \
+        git curl wget ca-certificates tar zip unzip \
+        autoconf-archive libtool \
+        m4 gettext libltdl-dev \
+        bison flex patchelf \
+        python3 python3-jinja2 python3-pip; \
+    rm -rf /var/lib/apt/lists/*
 
-RUN set -eux; apt-get -y install --no-install-recommends \
-	build-essential g++ ninja-build pkg-config \
-	git curl wget ca-certificates tar zip unzip \
-	autoconf automake autoconf-archive libtool m4 gettext \
-	libltdl-dev bison flex patchelf \
-	python3 python3-jinja2 python3-pip
+# platform libs
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        libgl1-mesa-dev libegl1-mesa-dev libgles-dev \
+        libx11-dev libx11-xcb-dev '^libxcb.*-dev' \
+        libglu1-mesa-dev libxrender-dev libxi-dev \
+        libxkbcommon-dev libxkbcommon-x11-dev libxext-dev \
+        libglib2.0-bin libopengl-dev libglx-dev \
+        libfontconfig-dev libfreetype6-dev libdbus-1-dev \
+        libtinfo6 libzstd1 zlib1g; \
+    rm -rf /var/lib/apt/lists/*
 
 # download and install cmake
 
@@ -48,23 +37,28 @@ RUN set -eux; \
     curl -fsSLO "${BASE_URL}/cmake-${CMAKE_VERSION}-linux-x86_64.sh"; \
     grep "cmake-${CMAKE_VERSION}-linux-x86_64.sh" "cmake-${CMAKE_VERSION}-SHA-256.txt" > cmake.sha256; \
     sha256sum -c cmake.sha256; \
-    sh "cmake-${CMAKE_VERSION}-linux-x86_64.sh" --skip-license --prefix=/usr/local
+    sh "cmake-${CMAKE_VERSION}-linux-x86_64.sh" --skip-license --prefix=/usr/local; \
+    rm -f cmake-${CMAKE_VERSION}-linux-x86_64.sh cmake-${CMAKE_VERSION}-SHA-256.txt cmake.sha256
 
-# platform libs
+# LLVM 21 (from apt.llvm.org)
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends gnupg; \
+    rm -rf /var/lib/apt/lists/*; \
+    wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /usr/share/keyrings/llvm-snapshot.gpg; \
+    printf 'deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-21 main\n' > /etc/apt/sources.list.d/llvm21.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        llvm-21 llvm-21-dev clang-21 clang-tools-21 lld-21; \
+    rm -rf /var/lib/apt/lists/*
 
-RUN set -eux; apt-get install -y --no-install-recommends \
-    libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
-    libx11-dev libx11-xcb-dev libwayland-dev libwayland-egl1 \
-    '^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev \
-    libxrender-dev libxi-dev libxkbcommon-dev \
-    libxkbcommon-x11-dev libegl1-mesa-dev libxkbcommon-dev \
-    libxi-dev libxext-dev libglib2.0-bin libopengl-dev \
-    libxrender-dev libxkbcommon-dev libglx-dev \
-    libfontconfig-dev libfreetype6-dev libdbus-1-dev
+# and set clang as the compiler and lld as linker
+ENV CC=clang-21 CXX=clang++-21
+ENV LDFLAGS="-fuse-ld=lld"
 
-# add qt installer
-
-RUN set -eux; pip install --no-input aqtinstall --break-system-packages
+# add qt installer (aqt)
+RUN set -eux; \
+    python3 -m pip install --no-input aqtinstall --break-system-packages 
 
 # set up dev user
 
@@ -72,26 +66,29 @@ ARG USERNAME=dev
 ARG USER_UID=1000
 ARG USER_GID=1000
 
-RUN groupadd --gid ${USER_GID} ${USERNAME} \
-    && useradd --uid ${USER_UID} --gid ${USER_GID} -m ${USERNAME}
+RUN set -eux; \
+    groupadd --gid "${USER_GID}" "${USERNAME}"; \
+    useradd --uid "${USER_UID}" --gid "${USER_GID}" -m "${USERNAME}"
 
-# install some dev niceities
-
-RUN apt-get install -y vim fish
-
-# from here on, run as dev
+# dev niceties
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends vim fish; \
+    rm -rf /var/lib/apt/lists/*
 
 USER ${USERNAME}
 WORKDIR /pointcaster
 
 # install qt6 libs
 
+ARG QT_VERSION=6.11.0
 ARG QT_INSTALL_DIR=/home/${USERNAME}/.local/share/qt
 RUN set -eux; aqt install-qt \
         --outputdir "${QT_INSTALL_DIR}" \
-        linux desktop 6.11.0 linux_gcc_64 \
+        linux desktop ${QT_VERSION} linux_gcc_64 \
         -m qtshadertools
-ENV CMAKE_PREFIX_PATH="${QT_INSTALL_DIR}/6.11.0/gcc_64"
+
+ENV CMAKE_PREFIX_PATH="${QT_INSTALL_DIR}/${QT_VERSION}/gcc_64"
 
 # download and bootstrap vcpkg into the user's home dir
 
@@ -118,4 +115,3 @@ RUN set -eux; \
     chmod +x appimagetool-x86_64.AppImage; \
     mkdir appimagetool && cd appimagetool; \
     ../appimagetool-x86_64.AppImage --appimage-extract
-   

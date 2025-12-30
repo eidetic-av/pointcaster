@@ -19,7 +19,8 @@
 				"VCPKG_TARGET_TRIPLET": "x64-linux-release",
 				"CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
 				"CMAKE_INSTALL_PREFIX": "/usr",
-				"CPACK_APPIMAGE_TOOL_EXECUTABLE": "/home/dev/.local/bin/appimagetool/squashfs-root/AppRun"
+				"CPACK_APPIMAGE_TOOL_EXECUTABLE": "/home/dev/.local/bin/appimagetool/squashfs-root/AppRun",
+				"CMAKE_THREAD_LIBS_INIT": "-lpthread"
 			}
 		}
 	]

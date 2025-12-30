@@ -27,11 +27,19 @@ install(CODE [[
   file(GET_RUNTIME_DEPENDENCIES
     EXECUTABLES $<TARGET_FILE:pointcaster>
     RESOLVED_DEPENDENCIES_VAR resolved_deps
+    POST_EXCLUDE_REGEXES
+      "^/lib/x86_64-linux-gnu/libc\\.so\\."
+      "^/lib/x86_64-linux-gnu/libm\\.so\\."
+      "^/lib/x86_64-linux-gnu/libdl\\.so\\."
+      "^/lib/x86_64-linux-gnu/libpthread\\.so\\."
+      "^/lib/x86_64-linux-gnu/librt\\.so\\."
+      "^/lib/x86_64-linux-gnu/libgcc_s\\.so\\."
+      "^/lib/x86_64-linux-gnu/libresolv\\.so\\."
+      "^/lib64/ld-linux-x86-64\\.so\\."
   )
+
   foreach(dep ${resolved_deps})
     file(COPY "${dep}" DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
-    file(REAL_PATH "${dep}" resolved_dep_path)
-    file(COPY "${resolved_dep_path}" DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
   endforeach()
 ]])
 
@@ -41,6 +49,11 @@ install(
     FILES "/usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0.0.0"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RENAME "libxcb-cursor.so.0"
+)
+install(
+    FILES "/usr/lib/x86_64-linux-gnu/libOpenGL.so.0.0.0"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    RENAME "libOpenGL.so.0"
 )
 
 # set up for the AppImage runtime environment
