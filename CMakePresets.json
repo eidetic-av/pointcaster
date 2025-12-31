@@ -2,8 +2,7 @@
 	"version": 8,
 	"configurePresets": [ 
 		{
-			"name": "linux-release",
-			"displayName": "Pointcaster Release build for Linux x64",
+			"name": "default-preset",
 			"generator": "Ninja",
 			"binaryDir": "${sourceDir}/build/${presetName}",
 			"installDir": "${sourceDir}/build/${presetName}/install",
@@ -14,13 +13,40 @@
 			},
 			"cacheVariables": 
 			{
-				"CMAKE_BUILD_TYPE": "Release",
-				"VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
-				"VCPKG_TARGET_TRIPLET": "x64-linux-release",
 				"CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+				"VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
+				"VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
+				"X_VCPKG_APPLOCAL_DEPS_INSTALL": true
+			}
+
+		},
+		{
+			"name": "linux-release",
+			"inherits": "default-preset",
+			"displayName": "Pointcaster Release build for Linux x64",
+			"cacheVariables": 
+			{
+				"CMAKE_BUILD_TYPE": "Release",
+				"VCPKG_TARGET_TRIPLET": "x64-linux-release",
 				"CMAKE_INSTALL_PREFIX": "/usr",
 				"CPACK_APPIMAGE_TOOL_EXECUTABLE": "/home/dev/.local/bin/appimagetool/squashfs-root/AppRun",
 				"CMAKE_THREAD_LIBS_INIT": "-lpthread"
+			}
+		},
+		{
+			"name": "windows-release",
+			"inherits": "default-preset",
+			"displayName": "Pointcaster Release build for Windows x64",
+			"environment": {
+				"VCPKG_ROOT": "/opt/vcpkg",
+				"Qt6_DIR": "C:/opt/Qt/6.11.0/msvc2022_64",
+				"VCPKG_KEEP_ENV_VARS": "Qt6_DIR"
+			},
+			"cacheVariables": 
+			{
+				"CMAKE_BUILD_TYPE": "Release",
+				"VCPKG_TARGET_TRIPLET": "x64-windows-static-md-custom-release",
+				"CMAKE_PREFIX_PATH": "C:/opt/Qt/6.11.0/msvc2022_64"
 			}
 		}
 	]
