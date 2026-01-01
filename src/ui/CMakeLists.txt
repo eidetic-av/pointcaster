@@ -4,14 +4,14 @@
 find_package(KDDockWidgets-qt6 CONFIG REQUIRED)
 
 qt_import_qml_plugins(pointcaster)
-qt_import_plugins(pointcaster INCLUDE kddockwidgetsplugin)
+qt_import_plugins(pointcaster INCLUDE kddockwidgetsplugin Qt6::Quick3D)
 
 # the gui library
 
 add_library(PointcasterGUI INTERFACE)
 target_link_libraries(PointcasterGUI INTERFACE
 	Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick
-	Qt6::QuickControls2 Qt6::OpenGL
+	Qt6::Quick3D Qt6::QuickControls2 Qt6::OpenGL
 	KDAB::kddockwidgets
 )
 
