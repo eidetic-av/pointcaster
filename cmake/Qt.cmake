@@ -8,3 +8,4 @@ find_package(Qt6 REQUIRED COMPONENTS
 
 qt_policy(SET QTP0004 NEW)
 
+find_package(KDDockWidgets-qt6 CONFIG REQUIRED)

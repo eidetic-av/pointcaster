@@ -6,25 +6,17 @@ set(CMAKE_INSTALL_PREFIX "/usr")
 set(CMAKE_INSTALL_QMLDIR "qml")
 set(QT_QML_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml")
 
-qt_add_executable(pointcaster pointcaster.cc)
-
 add_subdirectory(ui)
 
-target_link_libraries(pointcaster
-	PRIVATE PointcasterGUI
-		PointcasterControls
-		PointcasterApp
+qt_add_executable(pointcaster
+    pointcaster.cc
 )
 
-install(TARGETS pointcaster
-	BUNDLE DESTINATION .
-	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+target_link_libraries(pointcaster PRIVATE ${UI_LINK_LIBS})
 
-install(TARGETS 
-	PointcasterGUI
-	PointcasterControls
-	PointcasterApp
-	LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-	ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-	RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+qt_import_qml_plugins(pointcaster)
+
+install(TARGETS pointcaster
+    BUNDLE  DESTINATION .
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

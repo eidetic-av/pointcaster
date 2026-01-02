@@ -4,7 +4,6 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick3D
 import QtQuick3D.Helpers
-import Pointcaster.Controls
 import com.kdab.dockwidgets as KDDW
 
 ApplicationWindow {
@@ -28,7 +27,7 @@ ApplicationWindow {
 
     FontLoader {
         id: regularFont
-        source: "qrc:/fonts/AtkinsonHyperlegibleNext-Regular.otf"
+        source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf"
     }
 
     font.family: regularFont.name

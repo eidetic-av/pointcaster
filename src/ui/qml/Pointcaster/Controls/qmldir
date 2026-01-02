@@ -1,3 +1,0 @@
-module Pointcaster.Controls
-TextButton 1.0 TextButton.qml
-TitleBar 1.0 TitleBar.qml

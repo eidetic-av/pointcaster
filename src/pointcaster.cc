@@ -1,19 +1,18 @@
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QUrl>
 #include <kddockwidgets/Config.h>
 #include <kddockwidgets/qtquick/Platform.h>
 #include <kddockwidgets/qtquick/ViewFactory.h>
 
-class CustomTitlebarViewFactory : public KDDockWidgets::QtQuick::ViewFactory
-{
+class CustomTitlebarViewFactory : public KDDockWidgets::QtQuick::ViewFactory {
 public:
     ~CustomTitlebarViewFactory() override;
 
-    QUrl titleBarFilename() const override
-    {
-	    return QUrl::fromLocalFile(
-			    QCoreApplication::applicationDirPath() +
-			    "/../qml/Pointcaster/Controls/qml/Pointcaster/Controls/TitleBar.qml");
+  QUrl titleBarFilename() const override {
+    return QUrl(
+        QStringLiteral("qrc:/qt/qml/Pointcaster/Workspace/Window/TitleBar.qml"));
     }
 };
 
@@ -36,7 +35,7 @@ int main(int argc, char *argv[])
 			[]() { QCoreApplication::exit(-1); },
 			Qt::QueuedConnection);
 
-	engine.loadFromModule("Pointcaster.App", "App");
+  	engine.loadFromModule("Pointcaster.Workspace", "MainWindow");
 
 	return app.exec();
 }
