@@ -1,0 +1,15 @@
+{
+  "name": "pointcaster-qt",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "..",
+    "args": {
+      "USER_UID": "1001",
+      "USER_GID": "1001"
+    }
+  },
+  "remoteUser": "dev",
+  "updateRemoteUserUID": false,
+  "workspaceFolder": "/pointcaster",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/pointcaster,type=bind"
+}
