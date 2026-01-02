@@ -1,3 +1,5 @@
 build
 .Trash-1000
 compile_commands.json
+.qtcreator
+.cache
