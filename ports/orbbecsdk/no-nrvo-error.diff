@@ -1,0 +1,12 @@
+diff --git a/cmake/compiler_flags.cmake b/cmake/compiler_flags.cmake
+index cc2c20c0..a3cd6cc8 100644
+--- a/cmake/compiler_flags.cmake
++++ b/cmake/compiler_flags.cmake
+@@ -88,6 +88,7 @@ if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_C_COMPILER_ID}" STREQU
+     add_compile_options(-Wno-error=unused-lambda-capture)
+     add_compile_options(-Wno-constexpr-not-const)
+     add_compile_options(-Wno-error=unreachable-code) # Ignore unreachable-code warning: some code is platform-dependent (Windows/Linux)
++    add_compile_options(-Wno-nrvo)
+     check_cxx_compiler_flag("-Wno-unsafe-buffer-usage" HAS_NO_UNSAFE_BUFFER_USAGE)
+     if(HAS_NO_UNSAFE_BUFFER_USAGE)
+         add_compile_options(-Wno-unsafe-buffer-usage)

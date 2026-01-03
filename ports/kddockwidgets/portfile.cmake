@@ -6,7 +6,7 @@ vcpkg_from_github(
     HEAD_REF master
     PATCHES
     	dependencies.diff
-	guiprivate.diff
+	    guiprivate.diff
 )
 file(REMOVE_RECURSE
     "${SOURCE_PATH}/src/3rdparty"

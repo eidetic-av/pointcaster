@@ -52,10 +52,6 @@ RUN set -eux; \
         llvm-21 llvm-21-dev clang-21 clang-tools-21 lld-21; \
     rm -rf /var/lib/apt/lists/*
 
-# and set clang as the compiler and lld as linker
-ENV CC=clang-21 CXX=clang++-21
-ENV LDFLAGS="-fuse-ld=lld"
-
 # add qt installer (aqt)
 RUN set -eux; \
     python3 -m pip install --no-input aqtinstall --break-system-packages 

@@ -6,6 +6,13 @@
 #include <kddockwidgets/qtquick/Platform.h>
 #include <kddockwidgets/qtquick/ViewFactory.h>
 
+#include <Corrade/PluginManager/Manager.h>
+#include "plugins/devices/orbbec/orbbec_device.h"
+
+#include <boost/dll/runtime_symbol_info.hpp>
+
+#include <iostream>
+
 class CustomTitlebarViewFactory : public KDDockWidgets::QtQuick::ViewFactory {
 public:
     ~CustomTitlebarViewFactory() override;
@@ -36,6 +43,33 @@ int main(int argc, char *argv[])
 			Qt::QueuedConnection);
 
   	engine.loadFromModule("Pointcaster.Workspace", "MainWindow");
+
+  using OrbbecPluginManager = Corrade::PluginManager::Manager<pc::devices::AbstractOrbbecDevice>;
+  std::unique_ptr<OrbbecPluginManager> _orbbec_plugin_manager;
+  Corrade::Containers::Pointer<pc::devices::AbstractOrbbecDevice> _orbbec_plugin;
+//   std::atomic_bool _orbbec_tried_load = false;
+//   std::atomic_bool _orbbec_loaded = false;
+//   std::jthread _plugin_load_thread;
+
+    _orbbec_plugin_manager = std::make_unique<Corrade::PluginManager::Manager<
+        pc::devices::AbstractOrbbecDevice>>();
+
+	const auto exe_dir = boost::dll::program_location().parent_path();
+	const auto plugin_dir = exe_dir.parent_path() / "plugins" / "orbbec";
+	const auto plugin_path = (plugin_dir / "OrbbecDevice.so").string();
+
+	const auto loaded_orbbec_plugin =
+		(_orbbec_plugin_manager->load(plugin_path) & Corrade::PluginManager::LoadState::Loaded);
+	
+
+	if (loaded_orbbec_plugin) {
+		std::cout << "oi!\n";
+	}
+	
+    // if ( &
+    //     Corrade::PluginManager::LoadState::Loaded) {
+    //   _orbbec_plugin = _orbbec_plugin_manager->instantiate("OrbbecDevice");
+    // }
 
 	return app.exec();
 }
