@@ -17,10 +17,6 @@ find_package(Corrade CONFIG REQUIRED Main PluginManager)
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
 target_link_libraries(pointcaster PRIVATE Corrade::Main Corrade::PluginManager)
 
-# minimal cross platform executable pwd tools
-find_package(cpplocate CONFIG REQUIRED)
-target_link_libraries(pointcaster PRIVATE cpplocate::cpplocate)
-
 # platform, device & operator plugins
 add_subdirectory(plugins)
 
