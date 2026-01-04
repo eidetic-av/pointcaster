@@ -13,7 +13,7 @@ set(CPACK_PACKAGE_VENDOR "Matt Hughes")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Pointcaster")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 
-if(CMAKE_SYSTEM_NAME STREQUAL "LINUX")
+if(NOT WIN32)
 
     # non-Qt runtime deps
     install(CODE [[
@@ -42,6 +42,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "LINUX")
         DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         RENAME "libxcb-cursor.so.0"
     )
+
+    # TODO this isn't copying on pop-os build???
     install(
         FILES "/usr/lib/x86_64-linux-gnu/libOpenGL.so.0.0.0"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -60,7 +62,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "LINUX")
         "${CMAKE_SOURCE_DIR}/packaging/pointcaster-icon.png"
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps"
     )
-
 
     set(CPACK_GENERATOR "AppImage")
 
