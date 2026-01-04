@@ -1,17 +1,22 @@
-#include "orbbec_device.h"
+#include "../device_plugin.h"
+
 #include <Corrade/PluginManager/AbstractManager.h>
 
+#include <Corrade/Containers/Array.h>
+#include <Corrade/Containers/String.h>
+#include <Corrade/Containers/StringView.h>
+#include <Corrade/PluginManager/AbstractPlugin.h>
 
 namespace pc::devices {
 
-class OrbbecDevice final : public AbstractOrbbecDevice {
+class OrbbecDevice final : public DevicePlugin {
 public:
   explicit OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
-                          Corrade::Containers::StringView plugin)
-      : AbstractOrbbecDevice{manager, plugin} {}
+                        Corrade::Containers::StringView plugin)
+      : DevicePlugin{manager, plugin} {}
 };
 
 } // namespace pc::devices
 
 CORRADE_PLUGIN_REGISTER(OrbbecDevice, pc::devices::OrbbecDevice,
-                        "net.pointcaster.OrbbecDevice/1.0")
+                        "net.pointcaster.DevicePlugin/1.0")

@@ -15,6 +15,7 @@ add_custom_target(link_compile_commands ALL
 )
 
 include(Qt)
+include(QmlAdapterGenerator)
 
 add_subdirectory(src)
 

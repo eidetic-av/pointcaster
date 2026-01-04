@@ -17,7 +17,7 @@ find_package(Corrade CONFIG REQUIRED Main PluginManager)
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
 target_link_libraries(pointcaster PRIVATE Corrade::Main Corrade::PluginManager)
 
-# platform, device & operator plugins
+# dynamic runtime loaded dependencies
 add_subdirectory(plugins)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
