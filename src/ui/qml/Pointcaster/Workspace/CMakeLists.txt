@@ -14,6 +14,10 @@ target_link_libraries(PointcasterWorkspace PRIVATE
     KDAB::kddockwidgets
 )
 
+install(DIRECTORY "${QT_QML_OUTPUT_DIRECTORY}/Pointcaster/Workspace"
+	DESTINATION "${CMAKE_INSTALL_QMLDIR}/Pointcaster"
+)
+
 install(TARGETS PointcasterWorkspace
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"

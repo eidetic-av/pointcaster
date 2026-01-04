@@ -1,27 +1,52 @@
 get_filename_component(_orbbecsdk_root "${CMAKE_CURRENT_LIST_DIR}" PATH)
 get_filename_component(_orbbecsdk_root "${_orbbecsdk_root}" PATH)
 
-set(_orbbecsdk_lib "${_orbbecsdk_root}/lib/libOrbbecSDK.so")
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(_orbbecsdk_dll_release "${_orbbecsdk_root}/bin/OrbbecSDK.dll")
+    set(_orbbecsdk_dll_debug   "${_orbbecsdk_root}/debug/bin/OrbbecSDK.dll")
+    set(_orbbecsdk_lib_release "${_orbbecsdk_root}/lib/OrbbecSDK.lib")
+    set(_orbbecsdk_lib_debug   "${_orbbecsdk_root}/debug/lib/OrbbecSDK.lib")
+    set(_orbbecsdk_lib "${_orbbecsdk_dll_release}")
+else()
+    set(_orbbecsdk_so_release "${_orbbecsdk_root}/lib/libOrbbecSDK.so")
+    set(_orbbecsdk_so_debug   "${_orbbecsdk_root}/debug/lib/libOrbbecSDK.so")
+    set(_orbbecsdk_lib "${_orbbecsdk_so_release}")
+endif()
 
 if (EXISTS "${_orbbecsdk_lib}")
 
     add_library(Orbbec::OrbbecSDK SHARED IMPORTED)
 
-    set_target_properties(Orbbec::OrbbecSDK PROPERTIES
-        IMPORTED_LOCATION_RELEASE      "${_orbbecsdk_root}/lib/libOrbbecSDK.so"
-        IMPORTED_LOCATION_DEBUG        "${_orbbecsdk_root}/debug/lib/libOrbbecSDK.so"
-        IMPORTED_CONFIGURATIONS        "Debug;Release"
-        INTERFACE_INCLUDE_DIRECTORIES  "${_orbbecsdk_root}/include"
-    )
+    if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        # MSVC requires IMPORTED_IMPLIB_* as well as IMPORTED_LOCATION_*
+        set_target_properties(Orbbec::OrbbecSDK PROPERTIES
+            IMPORTED_LOCATION_RELEASE "${_orbbecsdk_dll_release}"
+            IMPORTED_LOCATION_DEBUG   "${_orbbecsdk_dll_debug}"
+            IMPORTED_IMPLIB_RELEASE   "${_orbbecsdk_lib_release}"
+            IMPORTED_IMPLIB_DEBUG     "${_orbbecsdk_lib_debug}"
+            IMPORTED_CONFIGURATIONS   "Debug;Release"
+            INTERFACE_INCLUDE_DIRECTORIES "${_orbbecsdk_root}/include"
+        )
+    else()
+        set_target_properties(Orbbec::OrbbecSDK PROPERTIES
+            IMPORTED_LOCATION_RELEASE "${_orbbecsdk_so_release}"
+            IMPORTED_LOCATION_DEBUG   "${_orbbecsdk_so_debug}"
+            IMPORTED_CONFIGURATIONS   "Debug;Release"
+            INTERFACE_INCLUDE_DIRECTORIES "${_orbbecsdk_root}/include"
+        )
+    endif()
 
     set(OrbbecSDK_FOUND TRUE)
 
 else()
-
-    # Library not present / installation incomplete
     set(OrbbecSDK_FOUND FALSE)
-
 endif()
 
 unset(_orbbecsdk_lib)
+unset(_orbbecsdk_dll_release)
+unset(_orbbecsdk_dll_debug)
+unset(_orbbecsdk_lib_release)
+unset(_orbbecsdk_lib_debug)
+unset(_orbbecsdk_so_release)
+unset(_orbbecsdk_so_debug)
 unset(_orbbecsdk_root)
