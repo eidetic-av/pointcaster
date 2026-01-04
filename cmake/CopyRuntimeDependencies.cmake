@@ -28,6 +28,10 @@ file(GET_RUNTIME_DEPENDENCIES
     # don't copy in Windows system libs
     "api-ms-win-.*"
     "ext-ms-.*"
+    # and dont windows runtime libs (automatically)
+    "VCRUNTIME.*"
+    "CONCRT.*"
+    "MSVCP.*"
     # don't copy in linux system libs
     "libc.so.*"
     "libdl.so.*"

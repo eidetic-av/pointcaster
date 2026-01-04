@@ -9,7 +9,8 @@
 #include <Corrade/PluginManager/Manager.h>
 #include "plugins/devices/orbbec/orbbec_device.h"
 
-#include <boost/dll/runtime_symbol_info.hpp>
+#include <cpplocate/cpplocate.h>
+#include <filesystem>
 
 #include <iostream>
 
@@ -44,9 +45,14 @@ int main(int argc, char *argv[])
 
   	engine.loadFromModule("Pointcaster.Workspace", "MainWindow");
 
+	const auto exe_path = cpplocate::getExecutablePath();
+	const auto exe_dir = std::filesystem::path(exe_path).parent_path();
+	const auto plugin_dir = exe_dir.parent_path() / "plugins";
+
   using OrbbecPluginManager = Corrade::PluginManager::Manager<pc::devices::AbstractOrbbecDevice>;
   std::unique_ptr<OrbbecPluginManager> _orbbec_plugin_manager;
   Corrade::Containers::Pointer<pc::devices::AbstractOrbbecDevice> _orbbec_plugin;
+
 //   std::atomic_bool _orbbec_tried_load = false;
 //   std::atomic_bool _orbbec_loaded = false;
 //   std::jthread _plugin_load_thread;
@@ -54,13 +60,15 @@ int main(int argc, char *argv[])
     _orbbec_plugin_manager = std::make_unique<Corrade::PluginManager::Manager<
         pc::devices::AbstractOrbbecDevice>>();
 
-	const auto exe_dir = boost::dll::program_location().parent_path();
-	const auto plugin_dir = exe_dir.parent_path() / "plugins" / "orbbec";
-	const auto plugin_path = (plugin_dir / "OrbbecDevice.so").string();
+
+	/*const auto plugin_path = (plugin_dir / "OrbbecDevice.so").string();*/
+	const auto plugin_path = (plugin_dir / "orbbec" / "OrbbecDevice.dll").string();
+    std::cout << "plugin path is going to be: " << plugin_path << "\n";
+	/*const auto loaded_orbbec_plugin =*/
+	/*	(_orbbec_plugin_manager->load(plugin_path) & Corrade::PluginManager::LoadState::Loaded);*/
 
 	const auto loaded_orbbec_plugin =
-		(_orbbec_plugin_manager->load(plugin_path) & Corrade::PluginManager::LoadState::Loaded);
-	
+		(_orbbec_plugin_manager->load("OrbbecDevice") & Corrade::PluginManager::LoadState::Loaded);
 
 	if (loaded_orbbec_plugin) {
 		std::cout << "oi!\n";

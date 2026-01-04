@@ -19,16 +19,31 @@ if(VCPKG_TARGET_IS_LINUX)
     SOURCE_BASE ${VERSION}
   )
 
-  file(INSTALL "${SOURCE_PATH}/include/" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
-  file(INSTALL "${SOURCE_PATH}/lib/" DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
-  file(INSTALL "${SOURCE_PATH}/lib/" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/lib")
-  file(INSTALL "${SOURCE_PATH}/shared/" DESTINATION "${CURRENT_PACKAGES_DIR}/shared")
-
 elseif(VCPKG_TARGET_IS_WINDOWS)
 
-  message(FATAL_ERROR "Implement orbbec-sdk port install for windows")
+  set(WINDOWS_ARCHIVE_FILE_NAME "OrbbecSDK_v2.6.3_202512232226_4e448f9_win_x64.zip")
+
+  vcpkg_download_distfile(ARCHIVE_FILE
+    URLS "https://github.com/orbbec/OrbbecSDK_v2/releases/download/v${VERSION}/${WINDOWS_ARCHIVE_FILE_NAME}"
+    FILENAME "${WINDOWS_ARCHIVE_FILE_NAME}"
+    SHA512 2372a22cedc40252babd8f66f0fa84c08218bfa630cde2a39f3d567edfb24877caa775aa855b8d1e98f267c03068a3d3637b1b9e0ac6861b061dda5ae46db357
+  )
+
+  vcpkg_extract_source_archive(
+    SOURCE_PATH
+    ARCHIVE "${ARCHIVE_FILE}"
+    SOURCE_BASE ${VERSION}
+    NO_REMOVE_ONE_LEVEL
+  )
 
 endif()
+
+file(INSTALL "${SOURCE_PATH}/include/" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
+file(INSTALL "${SOURCE_PATH}/lib/" DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
+file(INSTALL "${SOURCE_PATH}/lib/" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/lib")
+file(INSTALL "${SOURCE_PATH}/bin/" DESTINATION "${CURRENT_PACKAGES_DIR}/bin")
+file(INSTALL "${SOURCE_PATH}/bin/" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/bin")
+file(INSTALL "${SOURCE_PATH}/shared/" DESTINATION "${CURRENT_PACKAGES_DIR}/shared")
 
 configure_file(
   "${CMAKE_CURRENT_LIST_DIR}/OrbbecSDKConfig.cmake.in"

@@ -11,23 +11,26 @@ qt_add_executable(pointcaster
 )
 
 add_subdirectory(ui)
-qt_import_qml_plugins(pointcaster)
 
-# libs needed for plugin loading
-find_package(boost_dll)
+# corrade lib used for dynamic plugin / lib loading
 find_package(Corrade CONFIG REQUIRED Main PluginManager)
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
-target_link_libraries(pointcaster PRIVATE Corrade::Main Corrade::PluginManager Boost::dll)
+target_link_libraries(pointcaster PRIVATE Corrade::Main Corrade::PluginManager)
 
-# the plugins themselves
+# minimal cross platform executable pwd tools
+find_package(cpplocate CONFIG REQUIRED)
+target_link_libraries(pointcaster PRIVATE cpplocate::cpplocate)
+
+# platform, device & operator plugins
 add_subdirectory(plugins)
 
-# find_package(Corrade CONFIG REQUIRED Main)
-# set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
-
-# target_link_libraries(pointcaster PRIVATE 
-#     Corrade::Main
-# )
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  add_custom_command(TARGET pointcaster POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+    -DROOT=$<TARGET_FILE_DIR:pointcaster>
+    -P ${CMAKE_SOURCE_DIR}/cmake/PruneMsvcDependencies.cmake
+  )
+endif()
 
 install(TARGETS pointcaster
     BUNDLE  DESTINATION .
