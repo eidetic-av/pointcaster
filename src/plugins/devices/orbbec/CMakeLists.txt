@@ -26,16 +26,30 @@ add_custom_command(TARGET OrbbecDevice POST_BUILD
   "${CMAKE_CURRENT_SOURCE_DIR}/OrbbecDevice.conf"
   "${ORBBEC_PLUGIN_DIR}/OrbbecDevice.conf"
 )
-add_custom_command(TARGET OrbbecDevice POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${ORBBEC_PLUGIN_DIR}/deps"
-  COMMAND ${CMAKE_COMMAND}
-  -DINPUT_EXECUTABLE="$<TARGET_FILE:OrbbecDevice>"
-  -DOUTPUT_DIRECTORY="${ORBBEC_PLUGIN_DIR}/deps"
-  -DVCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR}"
-  -DVCPKG_TARGET_TRIPLET="${VCPKG_TARGET_TRIPLET}"
-  -DMOVE_EXISTING_DEPS=ON
-  -P "${CMAKE_SOURCE_DIR}/cmake/CopyRuntimeDependencies.cmake"
-)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+
+  add_custom_command(TARGET OrbbecDevice POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${ORBBEC_PLUGIN_DIR}/deps"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/OrbbecSDK.dll"
+    "${ORBBEC_PLUGIN_DIR}/deps/OrbbecSDK.dll"
+  )
+
+else()
+
+  add_custom_command(TARGET OrbbecDevice POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${ORBBEC_PLUGIN_DIR}/deps"
+    COMMAND ${CMAKE_COMMAND}
+    -DINPUT_EXECUTABLE="$<TARGET_FILE:OrbbecDevice>"
+    -DOUTPUT_DIRECTORY="${ORBBEC_PLUGIN_DIR}/deps"
+    -DVCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR}"
+    -DVCPKG_TARGET_TRIPLET="${VCPKG_TARGET_TRIPLET}"
+    -DMOVE_EXISTING_DEPS=ON
+    -P "${CMAKE_SOURCE_DIR}/cmake/CopyRuntimeDependencies.cmake"
+  )
+
+endif()
 
 install(DIRECTORY
     "${CMAKE_CURRENT_BINARY_DIR}/${ORBBEC_PLUGIN_DIR}/deps/"
