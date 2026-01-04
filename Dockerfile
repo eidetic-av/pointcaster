@@ -1,4 +1,4 @@
-FROM debian:12-slim
+FROM docker.io/zhongruoyu/gcc-ports:15.2-bookworm
 
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV ARCH=x86_64
@@ -40,21 +40,9 @@ RUN set -eux; \
     sh "cmake-${CMAKE_VERSION}-linux-x86_64.sh" --skip-license --prefix=/usr/local; \
     rm -f cmake-${CMAKE_VERSION}-linux-x86_64.sh cmake-${CMAKE_VERSION}-SHA-256.txt cmake.sha256
 
-# LLVM 21 (from apt.llvm.org)
-RUN set -eux; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends gnupg; \
-    rm -rf /var/lib/apt/lists/*; \
-    wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /usr/share/keyrings/llvm-snapshot.gpg; \
-    printf 'deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-21 main\n' > /etc/apt/sources.list.d/llvm21.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-        llvm-21 llvm-21-dev clang-21 clang-tools-21 lld-21; \
-    rm -rf /var/lib/apt/lists/*
-
 # add qt installer (aqt)
 RUN set -eux; \
-    python3 -m pip install --no-input aqtinstall --break-system-packages 
+    python3 -m pip install --no-input aqtinstall --break-system-packages
 
 # set up dev user
 

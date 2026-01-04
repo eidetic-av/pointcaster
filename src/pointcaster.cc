@@ -11,7 +11,7 @@
 
 #include <filesystem>
 
-#include <iostream>
+#include <print>
 
 class CustomTitlebarViewFactory : public KDDockWidgets::QtQuick::ViewFactory {
 public:
@@ -64,7 +64,7 @@ int main(int argc, char *argv[])
 		(_orbbec_plugin_manager->load("OrbbecDevice") & Corrade::PluginManager::LoadState::Loaded);
 
 	if (loaded_orbbec_plugin) {
-		std::cout << "oi!\n";
+		std::println("oi! loaded orbbec!");
 	}
 	
     // if ( &
