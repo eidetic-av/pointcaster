@@ -11,6 +11,7 @@ add_subdirectory(core)
 
 qt_add_executable(pointcaster 
     pointcaster.cc
+    workspace.cc
 )
 
 add_subdirectory(ui)
@@ -19,14 +20,20 @@ add_subdirectory(ui)
 find_package(Corrade CONFIG REQUIRED Main PluginManager)
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
 
+# dynamic runtime loaded dependencies
+add_subdirectory(plugins)
+
+# linked-in dependencies
+
+# - reflectcpp used for de/serialization of workspace configuration
+find_package(reflectcpp CONFIG REQUIRED)
+
 target_link_libraries(pointcaster PRIVATE 
   pointcaster::core
   Corrade::Main 
   Corrade::PluginManager
+  reflectcpp::reflectcpp
 )
-
-# dynamic runtime loaded dependencies
-add_subdirectory(plugins)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
   add_custom_command(TARGET pointcaster POST_BUILD

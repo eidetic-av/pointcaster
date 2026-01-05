@@ -27,6 +27,9 @@ public:
 
   void addOrbbecDeviceAdapter(devices::OrbbecDeviceConfiguration &config);
 
+public slots:
+  void reloadFromWorkspace();
+
 signals:
   void deviceConfigAdaptersChanged();
 

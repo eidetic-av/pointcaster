@@ -50,4 +50,6 @@ void WorkspaceModel::addOrbbecDeviceAdapter(OrbbecDeviceConfiguration &config) {
   _deviceConfigAdapters.append(adapter);
 }
 
+void WorkspaceModel::reloadFromWorkspace() { rebuildAdapters(); }
+
 } // namespace pc::ui

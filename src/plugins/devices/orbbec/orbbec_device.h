@@ -16,11 +16,12 @@ class OrbbecDevice final : public DeviceBase<OrbbecDeviceConfiguration> {
 public:
   explicit OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
                         Corrade::Containers::StringView plugin)
-      : DeviceBase{manager, plugin} {}
+      : DeviceBase{manager, plugin} {
 
-  ~OrbbecDevice() {
-    std::println("Unloading orbbec");
+    std::println("Instantiated orbbec plugin");
   }
+
+  ~OrbbecDevice() { std::println("Unloading orbbec"); }
 
   pc::types::PointCloud point_cloud() override { return {{}, {}}; }
 };

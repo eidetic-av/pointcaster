@@ -14,6 +14,7 @@ struct OrbbecDeviceConfiguration {
 
   using DeviceType = OrbbecDevice;
   static constexpr auto PublishPath = "ob";
+  static constexpr auto PluginName = "OrbbecDevice";
 };
 
 } // namespace pc::devices
