@@ -2,7 +2,7 @@
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
 
 find_package(Qt6 REQUIRED COMPONENTS
-        Core Gui Qml Quick QuickControls2 
+	Core Gui Qml Quick QuickControls2 QuickDialogs2
 	OpenGL Quick3D GuiPrivate QuickPrivate
 )
 
