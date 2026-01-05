@@ -62,6 +62,7 @@ ApplicationWindow {
 
             Action { 
                 text: qsTr("&Save") 
+                onTriggered: workspaceModel.save()
             }
 
             MenuSeparator {}

@@ -19,11 +19,15 @@ struct WorkspaceConfiguration {
   std::vector<devices::DeviceConfigurationVariant> devices{};
 };
 
+void load_workspace_from_file(WorkspaceConfiguration &config,
+                              const std::string &file_path);
+
+void save_workspace_to_file(const WorkspaceConfiguration &config,
+                            const std::string &file_path);
+
 class Workspace {
 public:
   WorkspaceConfiguration config;
-
-  static void load_config_from_file(WorkspaceConfiguration& config, const std::string& file_path);
 
   std::unique_ptr<Corrade::PluginManager::Manager<devices::DevicePlugin>>
       device_plugin_manager;

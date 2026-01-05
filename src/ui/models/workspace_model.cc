@@ -32,9 +32,10 @@ void WorkspaceModel::loadFromFile(const QUrl &file) {
   if (localPath.isEmpty()) return;
   // load the file on a different thread, and after it's loaded we schedule the
   // main thread to apply the config file to the workspace
-  std::jthread([this, path = localPath.toStdString()]() mutable {
+  std::jthread([&, path = localPath.toStdString()]() mutable {
     pc::WorkspaceConfiguration loaded_config;
-    Workspace::load_config_from_file(loaded_config, path);
+    pc::load_workspace_from_file(loaded_config, path);
+    _fileUrl = file;
     QMetaObject::invokeMethod(
         this,
         [this, cfg = std::move(loaded_config)]() mutable {
@@ -45,6 +46,19 @@ void WorkspaceModel::loadFromFile(const QUrl &file) {
   }).detach();
   // TODO: is it healthy to do this?
   // are there cases where the jthread could spin forever?
+}
+
+void WorkspaceModel::save() {
+  if (_fileUrl.isEmpty()) {
+
+  }
+  const QString localPath = _fileUrl.toLocalFile();
+  if (localPath.isEmpty()) return;
+
+  std::jthread([path = localPath.toStdString(),
+                workspace_config = _workspace.config] {
+    save_workspace_to_file(workspace_config, path);
+  }).detach();
 }
 
 QVariant WorkspaceModel::deviceConfigAdapters() const {

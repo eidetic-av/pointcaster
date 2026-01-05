@@ -16,7 +16,8 @@ namespace pc {
 using namespace Corrade::PluginManager;
 using namespace Corrade::Containers;
 
-void Workspace::load_config_from_file(WorkspaceConfiguration& config, const std::string& file_path) {
+void load_workspace_from_file(WorkspaceConfiguration &config,
+                              const std::string &file_path) {
   std::ifstream file(file_path, std::ios::binary);
   if (!file) {
     std::print("Could not open '{}'", file_path);
@@ -33,6 +34,17 @@ void Workspace::load_config_from_file(WorkspaceConfiguration& config, const std:
     config = WorkspaceConfiguration{};
   }
 }
+
+void save_workspace_to_file(const WorkspaceConfiguration &config,
+                            const std::string &file_path) {
+  try {
+    const auto json_string = rfl::json::write(config);
+    std::ofstream(file_path) << json_string;
+  } catch (const std::exception &e) {
+    std::print("Failed to save '{}': {}\n", file_path, e.what());
+  }
+}
+
 Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   // find and initialise device plugins
   device_plugin_manager =
@@ -45,8 +57,9 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
       std::println("Loaded plugin: {}", std::string(plugin_name));
     }
   }
-  // this is where we could also initailise all plugins that need to run their own thread
-  // and then somehow their configuration are synced. we send copies down the pipeline from here though
+  // this is where we could also initailise all plugins that need to run their
+  // own thread and then somehow their configuration are synced. we send copies
+  // down the pipeline from here though
   revert_config();
 }
 

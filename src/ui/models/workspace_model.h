@@ -25,6 +25,7 @@ public:
   Q_INVOKABLE void close();
 
   Q_INVOKABLE void loadFromFile(const QUrl& file);
+  Q_INVOKABLE void save();
 
   QVariant deviceConfigAdapters() const;
 
@@ -39,6 +40,8 @@ signals:
 private:
   pc::Workspace &_workspace;
   QList<QObject *> _deviceConfigAdapters;
+
+  QUrl _fileUrl;
 
   std::function<void()> _quit_callback;
 };

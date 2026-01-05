@@ -52,8 +52,6 @@ int main(int argc, char *argv[]) {
   // workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
   //     .id = "test", .ip = "192.168.1.107"});
 
-  // const auto json_string = rfl::json::write(workspace_config);
-  // std::ofstream("workspace.json") << json_string;
 
   // pc::load_workspace(workspace_config, "workspace.json");
 
