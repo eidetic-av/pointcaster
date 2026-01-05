@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <rfl/Literal.hpp>
 
 namespace pc::devices {
 
@@ -13,6 +14,7 @@ struct OrbbecDeviceConfiguration {
   int acquisition_mode = 0; // @minmax(0, 1)
 
   using DeviceType = OrbbecDevice;
+  using Tag = rfl::Literal<"orbbec">;
   static constexpr auto PublishPath = "ob";
   static constexpr auto PluginName = "OrbbecDevice";
 };

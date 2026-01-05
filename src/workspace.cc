@@ -38,7 +38,7 @@ void load_workspace_from_file(WorkspaceConfiguration &config,
 void save_workspace_to_file(const WorkspaceConfiguration &config,
                             const std::string &file_path) {
   try {
-    const auto json_string = rfl::json::write(config);
+    const auto json_string = rfl::json::write<rfl::AddTagsToVariants>(config);
     std::ofstream(file_path) << json_string;
   } catch (const std::exception &e) {
     std::print("Failed to save '{}': {}\n", file_path, e.what());
