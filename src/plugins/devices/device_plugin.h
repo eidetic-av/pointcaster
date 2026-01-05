@@ -26,7 +26,7 @@ public:
 
   virtual ~DevicePlugin() = default;
 
-  virtual void set_config(DeviceConfigurationVariant& config) = 0;
+  virtual void update_config(const DeviceConfigurationVariant& config) = 0;
 
   virtual pc::types::PointCloud point_cloud() = 0;
   

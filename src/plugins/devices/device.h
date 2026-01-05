@@ -44,13 +44,14 @@ template <ValidDeviceConfig Config> class DeviceBase : public DevicePlugin {
 public:
   explicit DeviceBase(Corrade::PluginManager::AbstractManager &manager,
                       Corrade::Containers::StringView plugin)
-      : DevicePlugin{manager, plugin} { }
+      : DevicePlugin{manager, plugin} {}
 
   // DeviceBase(const DeviceBase &other) : _config(other._config) {
   //   std::lock_guard lock(device_configs_access);
   //   device_configs.push_back(std::ref(_config));
   // }
-  // DeviceBase(DeviceBase &&other) noexcept : _config(std::move(other._config)) {
+  // DeviceBase(DeviceBase &&other) noexcept : _config(std::move(other._config))
+  // {
   //   // remove_config(&other._config);
   //   std::lock_guard lock(device_configs_access);
   //   device_configs.push_back(std::ref(_config));
@@ -77,26 +78,27 @@ public:
 
   // virtual ~DeviceBase() = default;
 
-  void set_config(DeviceConfigurationVariant &config_variant) override {
+  void
+  update_config(const DeviceConfigurationVariant &config_variant) override {
     _config = config_variant;
     // check if we need to generate an id or if one was passed in with the
     // config (taking into consideration different types of ids)
-    if constexpr (std::convertible_to<id_type, std::string_view>) {
-      if (this->config().id.empty()) {
-        this->config().id = pc::uuid::word();
-      }
-    } else if constexpr (std::is_integral_v<id_type>) {
-      if (std::to_string(this->config().id).empty()) {
-        this->config().id = pc::uuid::digit();
-      }
-    }
+    // if constexpr (std::convertible_to<id_type, std::string_view>) {
+    //   if (this->config().id.empty()) {
+    //     this->config().id = pc::uuid::word();
+    //   }
+    // } else if constexpr (std::is_integral_v<id_type>) {
+    //   if (std::to_string(this->config().id).empty()) {
+    //     this->config().id = pc::uuid::digit();
+    //   }
+    // }
 
     // TODO: validate where configurations need to be
 
     // add the reference to our config to our global list of device
     // configurations
-    std::lock_guard lock(device_configs_access);
-    device_configs.push_back(std::ref(_config));
+    // std::lock_guard lock(device_configs_access);
+    // device_configs.push_back(std::ref(_config));
     // detail::declare_device_parameters(_config);
   }
 
@@ -115,7 +117,8 @@ private:
   //   std::lock_guard lock(device_configs_access);
   //   std::erase_if(
   //       device_configs,
-  //       [ptr](const std::reference_wrapper<DeviceConfigurationVariant> &ref) {
+  //       [ptr](const std::reference_wrapper<DeviceConfigurationVariant> &ref)
+  //       {
   //         return &ref.get() == ptr;
   //       });
   //   // detail::unbind_device_parameters(*ptr);
