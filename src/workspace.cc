@@ -9,6 +9,7 @@
 #include <variant>
 
 #include <rfl/json.hpp>
+#include <rfl/AddTagsToVariants.hpp>
 #include <string>
 
 namespace pc {
@@ -27,7 +28,7 @@ void load_workspace_from_file(WorkspaceConfiguration &config,
   const std::string json_string{std::istreambuf_iterator<char>(file),
                                 std::istreambuf_iterator<char>()};
   try {
-    config = rfl::json::read<WorkspaceConfiguration>(json_string).value();
+    config = rfl::json::read<WorkspaceConfiguration, rfl::AddTagsToVariants>(json_string).value();
     std::print("Loaded configuration from '{}'\n", file_path);
   } catch (const std::exception &e) {
     std::print("Failed to parse '{}': {}\n", file_path, e.what());

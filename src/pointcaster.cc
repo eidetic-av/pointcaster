@@ -33,6 +33,13 @@ int main(int argc, char *argv[]) {
   docking_config.setViewFactory(new pc::ui::CustomTitlebarViewFactory());
 
   WorkspaceConfiguration workspace_config;
+
+
+  // workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
+  //     .id = "test", .ip = "192.168.1.107"});
+  //     save_workspace_to_file(workspace_config, "workspace.json");
+
+
   Workspace workspace(workspace_config);
 
   ui::WorkspaceModel workspace_model{workspace, &app,
@@ -48,9 +55,6 @@ int main(int argc, char *argv[]) {
       []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 
   engine.loadFromModule("Pointcaster.Workspace", "MainWindow");
-
-  // workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
-  //     .id = "test", .ip = "192.168.1.107"});
 
 
   // pc::load_workspace(workspace_config, "workspace.json");
