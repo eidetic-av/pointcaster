@@ -1,5 +1,6 @@
 add_library(pointcaster_ui
     models/workspace_model.cc
+    window/custom_titlebar.cc
 )
 add_library(pointcaster::ui ALIAS pointcaster_ui)
 

@@ -20,18 +20,7 @@
 #include <models/workspace_model.h>
 #include <print>
 #include <qcoreapplication.h>
-
-class CustomTitlebarViewFactory : public KDDockWidgets::QtQuick::ViewFactory {
-public:
-  ~CustomTitlebarViewFactory() override;
-
-  QUrl titleBarFilename() const override {
-    return QUrl(QStringLiteral(
-        "qrc:/qt/qml/Pointcaster/Workspace/Window/TitleBar.qml"));
-  }
-};
-
-CustomTitlebarViewFactory::~CustomTitlebarViewFactory() = default;
+#include "ui/window/custom_titlebar.h"
 
 int main(int argc, char *argv[]) {
   QGuiApplication app(argc, argv);
