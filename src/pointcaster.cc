@@ -32,15 +32,10 @@ int main(int argc, char *argv[]) {
 
   pc::WorkspaceConfiguration workspace_config;
 
-  // workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
-  //     .id = "test", .ip = "192.168.1.107"});
-
-  // const auto json_string = rfl::json::write(workspace_config);
-  // std::ofstream("workspace.json") << json_string;
-
-  // pc::load_workspace(workspace_config, "workspace.json");
-
   pc::Workspace workspace{workspace_config};
+
+  // could do _workspace.load_config_from_file here
+  // if its set to load on startup
 
   pc::ui::WorkspaceModel workspace_model{workspace, &app,
                                          [] { QCoreApplication::exit(); }};
@@ -53,24 +48,28 @@ int main(int argc, char *argv[]) {
 
   engine.loadFromModule("Pointcaster.Workspace", "MainWindow");
 
+  // workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
+  //     .id = "test", .ip = "192.168.1.107"});
 
-  std::jthread loader_thread([&]() {
-    using namespace std::chrono_literals;
-    std::this_thread::sleep_for(5s);
+  // const auto json_string = rfl::json::write(workspace_config);
+  // std::ofstream("workspace.json") << json_string;
 
-    pc::WorkspaceConfiguration loaded_config;
-    pc::load_workspace(loaded_config, "workspace.json");
+  // pc::load_workspace(workspace_config, "workspace.json");
 
-    // Push result to GUI thread and move it into the master config
-    QMetaObject::invokeMethod(
-        &workspace_model,
-        [&, cfg = std::move(loaded_config)]() mutable {
-          workspace_config = std::move(cfg);
-          workspace.revert_config();
-          workspace_model.reloadFromWorkspace();
-        },
-        Qt::QueuedConnection);
-  });
+  // std::jthread loader_thread([&]() {
+  //   using namespace std::chrono_literals;
+  //   std::this_thread::sleep_for(5s);
+
+  //   // Push result to GUI thread and move it into the master config
+  //   QMetaObject::invokeMethod(
+  //       &workspace_model,
+  //       [&, cfg = std::move(loaded_config)]() mutable {
+  //         workspace_config = std::move(cfg);
+  //         workspace.revert_config();
+  //         workspace_model.reloadFromWorkspace();
+  //       },
+  //       Qt::QueuedConnection);
+  // });
 
 
   return app.exec();

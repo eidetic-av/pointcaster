@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick3D
 import QtQuick3D.Helpers
@@ -34,14 +35,37 @@ ApplicationWindow {
 
     font.family: regularFont.name
 
+    FileDialog {
+        id: openWorkspaceDialog
+        nameFilters: [
+            qsTr("JSON files (*.json)"),
+            qsTr("All files (*)")
+        ]
+        onAccepted: workspaceModel.loadFromFile(selectedFile)
+    }
+
     menuBar : MenuBar {
         Menu {
             title: qsTr("&File")
 
-            Action { text: qsTr("&Save layout") }
-            Action { text: qsTr("&Restore layout") }
+            Action { text: qsTr("&New Workspace") }
+            Action { text: qsTr("New &Session") }
 
             MenuSeparator {}
+
+            Action { 
+                text: qsTr("&Open") 
+                onTriggered: openWorkspaceDialog.open()
+            }
+
+            MenuSeparator {}
+
+            Action { 
+                text: qsTr("&Save") 
+            }
+
+            MenuSeparator {}
+
             Action {
                 text: qsTr("&Quit")
                 onTriggered: workspaceModel.close()

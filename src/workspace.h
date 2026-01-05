@@ -17,10 +17,11 @@ struct WorkspaceConfiguration {
   std::vector<devices::DeviceConfigurationVariant> devices;
 };
 
-void load_workspace(WorkspaceConfiguration &config, std::string_view path);
-
 class Workspace {
 public:
+  WorkspaceConfiguration &config;
+
+  static void load_config_from_file(WorkspaceConfiguration& config, const std::string& file_path);
 
   std::unique_ptr<Corrade::PluginManager::Manager<devices::DevicePlugin>>
       device_plugin_manager;
@@ -28,12 +29,9 @@ public:
 
   Workspace(WorkspaceConfiguration &config);
 
-  bool loaded_device_plugin(std::string_view plugin_name) const;
-
   void revert_config();
 
-private:
-  WorkspaceConfiguration &_config;
+  bool loaded_device_plugin(std::string_view plugin_name) const;
 };
 
 } // namespace pc

@@ -4,6 +4,7 @@
 #include <QVariant>
 #include <functional>
 #include <workspace.h>
+#include <string_view>
 
 #include "../../plugins/devices/orbbec/orbbec_device.h"
 #include "../../plugins/devices/orbbec/orbbec_device_config.gen.h"
@@ -11,7 +12,6 @@
 
 namespace pc::ui {
 
-using pc::devices::DeviceConfigurationVariant;
 using pc::devices::OrbbecDeviceConfiguration;
 using pc::devices::OrbbecDeviceConfigurationAdapter;
 
@@ -24,6 +24,22 @@ WorkspaceModel::WorkspaceModel(pc::Workspace &workspace, QObject *parent,
 void WorkspaceModel::close() {
   _workspace.devices.clear();
   _quit_callback();
+}
+
+void WorkspaceModel::loadFromFile(const QUrl& file) {
+    const QString localPath = file.toLocalFile();
+    if (localPath.isEmpty()) return;
+
+    pc::WorkspaceConfiguration loaded_config;
+
+    Workspace::load_config_from_file(
+        loaded_config,
+        localPath.toStdString()
+    );
+
+    _workspace.config = std::move(loaded_config);
+    _workspace.revert_config();
+    rebuildAdapters();
 }
 
 QVariant WorkspaceModel::deviceConfigAdapters() const {
@@ -49,7 +65,5 @@ void WorkspaceModel::addOrbbecDeviceAdapter(OrbbecDeviceConfiguration &config) {
   auto *adapter = new OrbbecDeviceConfigurationAdapter(config, this);
   _deviceConfigAdapters.append(adapter);
 }
-
-void WorkspaceModel::reloadFromWorkspace() { rebuildAdapters(); }
 
 } // namespace pc::ui

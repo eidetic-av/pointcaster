@@ -4,6 +4,7 @@
 
 #include <QObject>
 #include <QVariant>
+#include <QUrl>
 #include <functional>
 
 namespace pc {
@@ -23,12 +24,14 @@ public:
 
   Q_INVOKABLE void close();
 
+  Q_INVOKABLE void loadFromFile(const QUrl& file);
+
   QVariant deviceConfigAdapters() const;
 
   void addOrbbecDeviceAdapter(devices::OrbbecDeviceConfiguration &config);
 
 public slots:
-  void reloadFromWorkspace();
+  void rebuildAdapters();
 
 signals:
   void deviceConfigAdaptersChanged();
@@ -38,8 +41,6 @@ private:
   QList<QObject *> _deviceConfigAdapters;
 
   std::function<void()> _quit_callback;
-
-  void rebuildAdapters();
 };
 
 } // namespace pc::ui

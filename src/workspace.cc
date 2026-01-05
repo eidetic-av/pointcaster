@@ -16,7 +16,25 @@ namespace pc {
 using namespace Corrade::PluginManager;
 using namespace Corrade::Containers;
 
-Workspace::Workspace(WorkspaceConfiguration &config) : _config(config) {
+void Workspace::load_config_from_file(WorkspaceConfiguration& config, const std::string& file_path) {
+  std::ifstream file(file_path, std::ios::binary);
+  if (!file) {
+    std::print("Could not open '{}'", file_path);
+    config = WorkspaceConfiguration{};
+    return;
+  }
+  const std::string json_string{std::istreambuf_iterator<char>(file),
+                                std::istreambuf_iterator<char>()};
+  try {
+    config = rfl::json::read<WorkspaceConfiguration>(json_string).value();
+    std::print("Loaded configuration from '{}'\n", file_path);
+  } catch (const std::exception &e) {
+    std::print("Failed to parse '{}': {}\n", file_path, e.what());
+    config = WorkspaceConfiguration{};
+  }
+}
+
+Workspace::Workspace(WorkspaceConfiguration &config) : config(config) {
   // find and initialise device plugins
   device_plugin_manager =
       std::make_unique<Manager<pc::devices::DevicePlugin>>();
@@ -36,44 +54,9 @@ bool Workspace::loaded_device_plugin(std::string_view plugin_name) const {
               LoadState::Loaded);
 }
 
-void load_workspace(WorkspaceConfiguration &config, std::string_view path) {
-  const std::string filename{path};
-
-  std::ifstream file(filename, std::ios::binary);
-  if (!file) {
-    // No file: start with empty config, but log it.
-    std::print("Workspace: could not open '{}', starting with empty "
-               "configuration.\n",
-               filename);
-    config = WorkspaceConfiguration{};
-    return;
-  }
-
-  const std::string json_string{std::istreambuf_iterator<char>(file),
-                                std::istreambuf_iterator<char>()};
-
-  if (json_string.empty()) {
-    std::print("Workspace: '{}' is empty, starting with empty "
-               "configuration.\n",
-               filename);
-    config = WorkspaceConfiguration{};
-    return;
-  }
-
-  try {
-    // rfl::json::read returns expected-like; value() matches your existing
-    // code.
-    config = rfl::json::read<WorkspaceConfiguration>(json_string).value();
-    std::print("Workspace: loaded configuration from '{}'\n", filename);
-  } catch (const std::exception &e) {
-    std::print("Workspace: failed to parse '{}': {}\n", filename, e.what());
-    config = WorkspaceConfiguration{};
-  }
-}
-
 void Workspace::revert_config() {
   devices.clear();
-  for (auto &device_config_variant : _config.devices) {
+  for (auto &device_config_variant : config.devices) {
     std::visit(
         [&](auto &&device_config) {
           using DeviceConfig = std::decay_t<decltype(device_config)>;
