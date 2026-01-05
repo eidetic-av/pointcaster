@@ -1,8 +1,9 @@
 qt_add_qml_module(PointcasterWorkspace 
 	URI Pointcaster.Workspace VERSION 1.0
     QML_FILES
-        Window/MainWindow.qml
-        Window/TitleBar.qml
+        Windows/TitleBar.qml
+        Windows/MainWindow.qml
+        Windows/DevicesWindow.qml
         Controls/TextButton.qml
     RESOURCES
         Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf
