@@ -47,9 +47,9 @@ function(add_qml_adapters)
     )
 
     foreach(target IN LISTS ADAPTER_TARGETS)
-        target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/src)
+        target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/src/ui)
         target_sources(${target} PRIVATE
-            ${CMAKE_SOURCE_DIR}/src/config_adapter.h
+            ${CMAKE_SOURCE_DIR}/src/ui/models/config_adapter.h
             ${CONFIG_OUTPUTS}
         )
         target_link_libraries(${target} PRIVATE Qt6::Core)

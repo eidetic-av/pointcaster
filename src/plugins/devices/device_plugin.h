@@ -1,6 +1,7 @@
 #pragma once
 
 #include "device_variants.h"
+#include <pointcaster/point_cloud.h>
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/String.h>
 #include <Corrade/Containers/StringView.h>
@@ -22,6 +23,12 @@ public:
   explicit DevicePlugin(Corrade::PluginManager::AbstractManager &manager,
                   Corrade::Containers::StringView plugin)
       : Corrade::PluginManager::AbstractPlugin{manager, plugin} {}
+
+  virtual ~DevicePlugin() = default;
+
+  virtual void set_config(DeviceConfigurationVariant& config) = 0;
+
+  virtual pc::types::PointCloud point_cloud() = 0;
   
   // private: 
   // DeviceConfigurationVariant& _config;

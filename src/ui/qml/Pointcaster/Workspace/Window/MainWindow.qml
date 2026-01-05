@@ -251,7 +251,7 @@ ApplicationWindow {
 
                 ListView {
                     id: configList
-                    model: deviceConfigAdapters
+                    model: workspaceModel.deviceConfigAdapters
 
                     anchors.fill: parent
 
@@ -272,6 +272,10 @@ ApplicationWindow {
 
                         Text {
                             text: modelData.displayName()
+                        }
+
+                        Text {
+                            text: modelData.fieldValue(1) ? 'active' : 'inactive'
                         }
 
                         Repeater {

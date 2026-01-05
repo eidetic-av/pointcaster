@@ -270,8 +270,8 @@ def process_cpp_header(input_text, file_path):
     lines.append("#include <QString>")
     lines.append("#include <QMetaType>")
     lines.append("")
-    # base class, lives in src/config_adapter.h; src is on the include path
-    lines.append("#include \"config_adapter.h\"")
+    # base class, lives in ui plugin config_adapter.h (which is on the include path)
+    lines.append("#include \"models/config_adapter.h\"")
     # pull in the original config header so the struct types are visible
     lines.append(f"#include \"{header_basename}\"")
     lines.append("")

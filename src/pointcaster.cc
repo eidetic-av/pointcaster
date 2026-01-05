@@ -1,21 +1,23 @@
+#include "plugins/devices/device_plugin.h"
+
+#include "plugins/devices/device_variants.h"
+#include "plugins/devices/orbbec/orbbec_device_config.gen.h"
+
+#include "plugins/devices/orbbec/orbbec_device_config.h"
+#include "workspace.h"
+#include <Corrade/PluginManager/Manager.h>
 #include <QCoreApplication>
+
 #include <QGuiApplication>
+
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QUrl>
 #include <kddockwidgets/Config.h>
 #include <kddockwidgets/qtquick/Platform.h>
 #include <kddockwidgets/qtquick/ViewFactory.h>
-
-#include "plugins/devices/device_plugin.h"
-
-#include "plugins/devices/device_variants.h"
-
-#include "config_adapter.h"
-#include "plugins/devices/orbbec/orbbec_device_config.gen.h"
-
-#include <Corrade/PluginManager/Manager.h>
-
+#include <models/config_adapter.h>
+#include <models/workspace_model.h>
 #include <print>
 
 class CustomTitlebarViewFactory : public KDDockWidgets::QtQuick::ViewFactory {
@@ -46,6 +48,14 @@ int main(int argc, char *argv[]) {
 
   ////////////
 
+  pc::WorkspaceConfiguration workspace_config;
+  pc::Workspace workspace;
+
+  pc::ui::WorkspaceModel workspace_model{workspace, &app};
+  engine.rootContext()->setContextProperty("workspaceModel", &workspace_model);
+
+  ///////////
+
   using DevicePluginManager =
       Corrade::PluginManager::Manager<pc::devices::DevicePlugin>;
 
@@ -53,154 +63,65 @@ int main(int argc, char *argv[]) {
   device_plugin_manager = std::make_unique<
       Corrade::PluginManager::Manager<pc::devices::DevicePlugin>>();
 
-  std::vector<pc::devices::DeviceConfigurationVariant> device_configs;
-  device_configs.push_back(
+  workspace_config.devices.push_back(
       pc::devices::OrbbecDeviceConfiguration{.id = "test",
                                              .active = true,
                                              .ip = "192.168.1.107",
                                              .depth_mode = 0,
                                              .acquisition_mode = 0});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
+  workspace_config.devices.push_back(
+      pc::devices::OrbbecDeviceConfiguration{.id = "abc",
                                              .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
-  device_configs.push_back(
-      pc::devices::OrbbecDeviceConfiguration{.id = "one2",
-                                             .active = true,
-                                             .ip = "192.168.1.108",
-                                             .depth_mode = 1,
-                                             .acquisition_mode = 1});
+                                             .ip = "192.168.1.109",
+                                             .depth_mode = 0,
+                                             .acquisition_mode = 0});
 
   const auto loaded_orbbec_plugin =
       (device_plugin_manager->load("OrbbecDevice") &
        Corrade::PluginManager::LoadState::Loaded);
 
-  Corrade::Containers::Pointer<pc::devices::DevicePlugin> orbbec_plugin;
-
-  if (loaded_orbbec_plugin) {
-    std::println("oi! loaded orbbec!");
-    orbbec_plugin = device_plugin_manager->instantiate("OrbbecDevice");
-  }
-
   /////////////
 
-   using pc::devices::DeviceConfigurationVariant;
-    using pc::devices::OrbbecDeviceConfiguration;
-    using pc::devices::OrbbecDeviceConfigurationAdapter;
+  workspace.devices.reserve(workspace_config.devices.size());
 
-    // 2) QML-facing adapters (owning QObject side)
-    QList<QObject*> device_config_adapters;
-    device_config_adapters.reserve(static_cast<int>(device_configs.size()));
+  for (auto &device_config_variant : workspace_config.devices) {
+    std::visit(
+        [&](auto &device_config) {
+          using ConfigVariant = std::decay_t<decltype(device_config)>;
 
-    for (auto &variant : device_configs) {
-        std::visit(
-            [&](auto &cfg) {
-                using Cfg = std::decay_t<decltype(cfg)>;
+          if constexpr (std::is_same_v<
+                            ConfigVariant,
+                            pc::devices::OrbbecDeviceConfiguration>) {
 
-                // for now, just handle the types you actually have
-                if constexpr (std::is_same_v<Cfg, OrbbecDeviceConfiguration>) {
-                    auto *adapter =
-                        new OrbbecDeviceConfigurationAdapter(cfg, &app);
-                    device_config_adapters.append(adapter);
-                }
-                // when you add more config types to DeviceConfigurationVariant,
-                // extend this if constexpr chain with their adapters
-            },
-            variant
-        );
-    }
+            // add the config to our workspace model for ui
+            workspace_model.addOrbbecDeviceAdapter(device_config);
 
-    // 3) Expose the list of QObject* adapters to QML
-    engine.rootContext()->setContextProperty(
-        "deviceConfigAdapters", QVariant::fromValue(device_config_adapters));
+            if (loaded_orbbec_plugin) {
+              Corrade::Containers::Pointer<pc::devices::DevicePlugin>
+                  orbbec_plugin;
 
-    ////////////
+              orbbec_plugin =
+                  device_plugin_manager->instantiate("OrbbecDevice");
+              orbbec_plugin->set_config(device_config_variant);
 
-    QObject::connect(
-        &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
-        []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
+              // add it to our workspace
+              workspace.devices.push_back(std::move(orbbec_plugin));
 
-    engine.loadFromModule("Pointcaster.Workspace", "MainWindow");
+            } else {
+              device_config.active = false;
+            }
+          }
+        },
+        device_config_variant);
+  }
 
-    return app.exec();
+  ////////////
+
+  QObject::connect(
+      &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
+      []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
+
+  engine.loadFromModule("Pointcaster.Workspace", "MainWindow");
+
+  return app.exec();
 }

@@ -13,7 +13,6 @@ add_qml_adapters(
         orbbec_device_config.h
 )
 
-
 set_target_properties(OrbbecDevice PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${DEVICES_PLUGIN_DIR}
   LIBRARY_OUTPUT_DIRECTORY ${DEVICES_PLUGIN_DIR}
@@ -23,8 +22,11 @@ set_target_properties(OrbbecDevice PROPERTIES
 )
 
 find_package(OrbbecSDK CONFIG REQUIRED)
-target_link_libraries(OrbbecDevice PRIVATE 
-    Corrade::PluginManager Orbbec::OrbbecSDK
+
+target_link_libraries(OrbbecDevice PRIVATE
+  pointcaster::core 
+  Corrade::PluginManager
+  Orbbec::OrbbecSDK
 )
 
 add_custom_command(TARGET OrbbecDevice POST_BUILD
