@@ -4,6 +4,7 @@ qt_add_qml_module(PointcasterWorkspace
         Windows/TitleBar.qml
         Windows/MainWindow.qml
         Windows/DevicesWindow.qml
+        Windows/SessionViewWindow.qml
         Controls/TextButton.qml
     RESOURCES
         Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf
