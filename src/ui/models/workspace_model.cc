@@ -2,7 +2,7 @@
 #include <QObject>
 #include <QString>
 #include <QVariant>
-#include <variant>
+#include <functional>
 #include <workspace.h>
 
 #include "../../plugins/devices/orbbec/orbbec_device.h"
@@ -15,9 +15,15 @@ using pc::devices::DeviceConfigurationVariant;
 using pc::devices::OrbbecDeviceConfiguration;
 using pc::devices::OrbbecDeviceConfigurationAdapter;
 
-WorkspaceModel::WorkspaceModel(pc::Workspace &workspace, QObject *parent)
-    : QObject(parent), _workspace(workspace) {
+WorkspaceModel::WorkspaceModel(pc::Workspace &workspace, QObject *parent,
+                               std::function<void()> quit_callback)
+    : QObject(parent), _workspace(workspace), _quit_callback(quit_callback) {
   rebuildAdapters();
+}
+
+void WorkspaceModel::close() {
+  _workspace.devices.clear();
+  _quit_callback();
 }
 
 QVariant WorkspaceModel::deviceConfigAdapters() const {
@@ -31,7 +37,7 @@ void WorkspaceModel::rebuildAdapters() {
   for (auto &device_plugin : _workspace.devices) {
     if (auto *device =
             dynamic_cast<devices::OrbbecDevice *>(device_plugin.get())) {
-        addOrbbecDeviceAdapter(device->config());
+      addOrbbecDeviceAdapter(device->config());
     } else {
     }
   }

@@ -4,6 +4,7 @@
 
 #include <QObject>
 #include <QVariant>
+#include <functional>
 
 namespace pc {
 struct Workspace;
@@ -17,7 +18,10 @@ class WorkspaceModel : public QObject {
                  deviceConfigAdaptersChanged)
 
 public:
-  explicit WorkspaceModel(pc::Workspace &workspace, QObject *parent = nullptr);
+  explicit WorkspaceModel(pc::Workspace &workspace, QObject *parent,
+                          std::function<void()> quit_callback);
+
+  Q_INVOKABLE void close();
 
   QVariant deviceConfigAdapters() const;
 
@@ -29,6 +33,8 @@ signals:
 private:
   pc::Workspace &_workspace;
   QList<QObject *> _deviceConfigAdapters;
+
+  std::function<void()> _quit_callback;
 
   void rebuildAdapters();
 };

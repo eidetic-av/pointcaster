@@ -19,6 +19,7 @@
 #include <models/config_adapter.h>
 #include <models/workspace_model.h>
 #include <print>
+#include <qcoreapplication.h>
 
 class CustomTitlebarViewFactory : public KDDockWidgets::QtQuick::ViewFactory {
 public:
@@ -51,7 +52,8 @@ int main(int argc, char *argv[]) {
   pc::WorkspaceConfiguration workspace_config;
   pc::Workspace workspace;
 
-  pc::ui::WorkspaceModel workspace_model{workspace, &app};
+  pc::ui::WorkspaceModel workspace_model{workspace, &app,
+                                         [] { QCoreApplication::exit(); }};
   engine.rootContext()->setContextProperty("workspaceModel", &workspace_model);
 
   ///////////
@@ -62,7 +64,7 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<DevicePluginManager> device_plugin_manager;
   device_plugin_manager = std::make_unique<
       Corrade::PluginManager::Manager<pc::devices::DevicePlugin>>();
-
+  
   workspace_config.devices.push_back(
       pc::devices::OrbbecDeviceConfiguration{.id = "test",
                                              .active = true,

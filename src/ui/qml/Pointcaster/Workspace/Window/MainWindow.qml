@@ -44,7 +44,7 @@ ApplicationWindow {
             MenuSeparator {}
             Action {
                 text: qsTr("&Quit")
-                onTriggered: Qt.quit()
+                onTriggered: workspaceModel.close()
             }
         }
 
@@ -251,7 +251,7 @@ ApplicationWindow {
 
                 ListView {
                     id: configList
-                    model: workspaceModel.deviceConfigAdapters
+                    model: workspaceModel ? workspaceModel.deviceConfigAdapters : []
 
                     anchors.fill: parent
 
