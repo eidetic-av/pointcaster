@@ -16,6 +16,8 @@
 #include <qcoreapplication.h>
 #include "ui/window/custom_titlebar.h"
 
+using namespace pc;
+
 int main(int argc, char *argv[]) {
   QGuiApplication app(argc, argv);
 
@@ -30,15 +32,14 @@ int main(int argc, char *argv[]) {
   auto &docking_config = KDDockWidgets::Config::self();
   docking_config.setViewFactory(new pc::ui::CustomTitlebarViewFactory());
 
-  pc::WorkspaceConfiguration workspace_config;
+  WorkspaceConfiguration workspace_config;
+  Workspace workspace(workspace_config);
 
-  pc::Workspace workspace{workspace_config};
+  ui::WorkspaceModel workspace_model{workspace, &app,
+                                     [] { QCoreApplication::exit(); }};
 
   // could do _workspace.load_config_from_file here
   // if its set to load on startup
-
-  pc::ui::WorkspaceModel workspace_model{workspace, &app,
-                                         [] { QCoreApplication::exit(); }};
 
   engine.rootContext()->setContextProperty("workspaceModel", &workspace_model);
 

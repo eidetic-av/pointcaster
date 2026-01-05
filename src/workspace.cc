@@ -33,8 +33,7 @@ void Workspace::load_config_from_file(WorkspaceConfiguration& config, const std:
     config = WorkspaceConfiguration{};
   }
 }
-
-Workspace::Workspace(WorkspaceConfiguration &config) : config(config) {
+Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   // find and initialise device plugins
   device_plugin_manager =
       std::make_unique<Manager<pc::devices::DevicePlugin>>();
@@ -46,12 +45,19 @@ Workspace::Workspace(WorkspaceConfiguration &config) : config(config) {
       std::println("Loaded plugin: {}", std::string(plugin_name));
     }
   }
+  // this is where we could also initailise all plugins that need to run their own thread
+  // and then somehow their configuration are synced. we send copies down the pipeline from here though
   revert_config();
 }
 
 bool Workspace::loaded_device_plugin(std::string_view plugin_name) const {
   return bool(device_plugin_manager->loadState(plugin_name.data()) &
               LoadState::Loaded);
+}
+
+void Workspace::apply_new_config(const WorkspaceConfiguration &new_config) {
+  config = new_config;
+  revert_config();
 }
 
 void Workspace::revert_config() {
@@ -65,7 +71,7 @@ void Workspace::revert_config() {
           }
           Pointer<pc::devices::DevicePlugin> device_plugin =
               device_plugin_manager->instantiate(DeviceConfig::PluginName);
-          device_plugin->set_config(device_config_variant);
+          device_plugin->update_config(device_config_variant);
           devices.push_back(std::move(device_plugin));
         },
         device_config_variant);
