@@ -1,4 +1,5 @@
 #pragma once
+
 #include "plugins/devices/device_plugin.h"
 #include "plugins/devices/device_variants.h"
 #include <Corrade/Containers/Pointer.h>
