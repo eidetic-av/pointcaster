@@ -1,5 +1,6 @@
 
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
+set(QT_QML_GENERATE_QMLLS_INI ON)
 
 find_package(Qt6 REQUIRED COMPONENTS
 	Core Gui Qml Quick QuickControls2 QuickDialogs2
