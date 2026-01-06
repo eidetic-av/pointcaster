@@ -17,6 +17,7 @@ class WorkspaceModel : public QObject {
   Q_OBJECT
   Q_PROPERTY(QVariant deviceConfigAdapters READ deviceConfigAdapters NOTIFY
                  deviceConfigAdaptersChanged)
+  Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl)
 
 public:
   explicit WorkspaceModel(pc::Workspace &workspace, QObject *parent,
@@ -29,19 +30,23 @@ public:
 
   QVariant deviceConfigAdapters() const;
 
+  QUrl saveFileUrl() const { return _saveFileUrl; };
+  void setSaveFileUrl(const QUrl &url) { _saveFileUrl = url; }
+
   void addOrbbecDeviceAdapter(devices::OrbbecDeviceConfiguration &config);
 
 public slots:
   void rebuildAdapters();
 
 signals:
+  void openSaveAsDialog();
   void deviceConfigAdaptersChanged();
 
 private:
   pc::Workspace &_workspace;
   QList<QObject *> _deviceConfigAdapters;
 
-  QUrl _fileUrl;
+  QUrl _saveFileUrl;
 
   std::function<void()> _quit_callback;
 };

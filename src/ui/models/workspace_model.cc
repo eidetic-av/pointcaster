@@ -3,6 +3,7 @@
 #include <QString>
 #include <QVariant>
 #include <functional>
+#include <qurl.h>
 #include <workspace.h>
 #include <thread>
 #include <string_view>
@@ -35,7 +36,7 @@ void WorkspaceModel::loadFromFile(const QUrl &file) {
   std::jthread([&, path = localPath.toStdString()]() mutable {
     pc::WorkspaceConfiguration loaded_config;
     pc::load_workspace_from_file(loaded_config, path);
-    _fileUrl = file;
+    _saveFileUrl = file;
     QMetaObject::invokeMethod(
         this,
         [this, cfg = std::move(loaded_config)]() mutable {
@@ -49,12 +50,11 @@ void WorkspaceModel::loadFromFile(const QUrl &file) {
 }
 
 void WorkspaceModel::save() {
-  if (_fileUrl.isEmpty()) {
-
+  if (_saveFileUrl.isEmpty()) {
+    emit openSaveAsDialog();
+    return;
   }
-  const QString localPath = _fileUrl.toLocalFile();
-  if (localPath.isEmpty()) return;
-
+  const QString localPath = _saveFileUrl.toLocalFile();
   std::jthread([path = localPath.toStdString(),
                 workspace_config = _workspace.config] {
     save_workspace_to_file(workspace_config, path);
