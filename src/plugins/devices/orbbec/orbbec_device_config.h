@@ -4,7 +4,7 @@
 
 namespace pc::devices {
 
-struct OrbbecDevice;
+class OrbbecDevice;
 
 struct OrbbecDeviceConfiguration {
   std::string id;           // @hidden

@@ -11,11 +11,16 @@ qt_add_qml_module(PointcasterWorkspace
 )
 
 target_link_libraries(PointcasterWorkspace PRIVATE
+    pointcaster::core
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::OpenGL
     Qt6::Quick Qt6::QuickControls2 Qt6::QuickDialogs2
     Qt6::Quick3D
     KDAB::kddockwidgets
 )
+
+# for pointcaster::core headers in public include dir
+target_include_directories(PointcasterWorkspace 
+    PRIVATE "${CMAKE_SOURCE_DIR}/include")
 
 install(DIRECTORY "${QT_QML_OUTPUT_DIRECTORY}/Pointcaster/Workspace"
 	DESTINATION "${CMAKE_INSTALL_QMLDIR}/Pointcaster"

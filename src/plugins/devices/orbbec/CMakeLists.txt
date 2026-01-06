@@ -29,6 +29,9 @@ target_link_libraries(OrbbecDevice PRIVATE
   Orbbec::OrbbecSDK
 )
 
+# for pointcaster::core headers in public include dir
+target_include_directories(OrbbecDevice PRIVATE "${CMAKE_SOURCE_DIR}/include")
+
 add_custom_command(TARGET OrbbecDevice POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different

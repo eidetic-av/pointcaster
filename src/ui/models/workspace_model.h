@@ -33,8 +33,6 @@ public:
   QUrl saveFileUrl() const { return _saveFileUrl; };
   void setSaveFileUrl(const QUrl &url) { _saveFileUrl = url; }
 
-  void addOrbbecDeviceAdapter(devices::OrbbecDeviceConfiguration &config);
-
 public slots:
   void rebuildAdapters();
 

@@ -1,13 +1,16 @@
 #pragma once
 
 #include "device_variants.h"
-#include <pointcaster/point_cloud.h>
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/String.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
+#include <pointcaster/point_cloud.h>
 
 namespace pc::devices {
+
+enum class DeviceStatus { Loaded, Active, Inactive, Missing };
+
 class DevicePlugin : public Corrade::PluginManager::AbstractPlugin {
 public:
   static Corrade::Containers::StringView pluginInterface() {
@@ -21,17 +24,31 @@ public:
   }
 
   explicit DevicePlugin(Corrade::PluginManager::AbstractManager &manager,
-                  Corrade::Containers::StringView plugin)
+                        Corrade::Containers::StringView plugin)
       : Corrade::PluginManager::AbstractPlugin{manager, plugin} {}
 
   virtual ~DevicePlugin() = default;
 
-  virtual void update_config(const DeviceConfigurationVariant& config) = 0;
+  DeviceConfigurationVariant &config() { return _config; }
 
-  virtual pc::types::PointCloud point_cloud() = 0;
-  
-  // private: 
-  // DeviceConfigurationVariant& _config;
+  void update_config(const DeviceConfigurationVariant &config) {
+    _config = config;
+  }
+
+  virtual DeviceStatus status() const = 0;
+
+  virtual pc::types::PointCloud point_cloud() const = 0;
+
+  virtual void start() = 0;
+  virtual void stop() = 0;
+
+  virtual void restart() {
+    stop();
+    start();
+  };
+
+  private:
+    DeviceConfigurationVariant _config;
 };
 
 } // namespace pc::devices
