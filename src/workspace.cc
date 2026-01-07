@@ -12,6 +12,11 @@
 #include <rfl/AddTagsToVariants.hpp>
 #include <string>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <filesystem>
+#endif
+
 namespace pc {
 
 using namespace Corrade::PluginManager;
@@ -47,7 +52,27 @@ void save_workspace_to_file(const WorkspaceConfiguration &config,
 }
 
 Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
+
   // find and initialise device plugins
+
+#ifdef _WIN32
+  // on windows we need to specify the path to search for plugin dependencies
+  SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS |
+                           LOAD_LIBRARY_SEARCH_USER_DIRS);
+
+  wchar_t path[MAX_PATH];
+  DWORD len = GetModuleFileNameW(nullptr, path, MAX_PATH);
+  if (len == 0 || len == MAX_PATH)
+    throw std::runtime_error("GetModuleFileNameW failed");
+
+  auto executable_directory = std::filesystem::path(path).parent_path();
+
+  auto plugin_directory = executable_directory / "../plugins";
+  auto orbbec_dependencies_directory = plugin_directory / "devices/orbbec";
+
+  AddDllDirectory(orbbec_dependencies_directory.wstring().c_str());
+#endif
+
   device_plugin_manager =
       std::make_unique<Manager<pc::devices::DevicePlugin>>();
   std::vector<StringView> loaded_plugin_names{};
