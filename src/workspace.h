@@ -2,19 +2,20 @@
 
 #include "plugins/devices/device_plugin.h"
 #include "plugins/devices/device_variants.h"
+
 #include <Corrade/Containers/Pointer.h>
+#include <Corrade/PluginManager/Manager.h>
 #include <memory>
 #include <string_view>
 #include <vector>
-
 
 namespace pc {
 
 // WorkspaceConfiguration is the config that gets de/serialized and holds all
 // simulation state for the running application.
-
+//
 // Workspace is the application, which can read and write the
-// WorkspaceConfiguration
+// WorkspaceConfiguration.
 
 struct WorkspaceConfiguration {
   std::vector<devices::DeviceConfigurationVariant> devices{};
@@ -34,12 +35,11 @@ public:
       device_plugin_manager;
   std::vector<Corrade::Containers::Pointer<devices::DevicePlugin>> devices;
 
-  Workspace(const WorkspaceConfiguration& initial);
+  explicit Workspace(const WorkspaceConfiguration &initial);
 
-  void apply_new_config(const WorkspaceConfiguration& new_config);
-  void revert_config();
+  void apply_new_config(const WorkspaceConfiguration &new_config);
 
-  bool loaded_device_plugin(std::string_view plugin_name) const;
+  void rebuild_devices();
 };
 
 } // namespace pc

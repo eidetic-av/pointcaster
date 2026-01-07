@@ -1,5 +1,6 @@
 #include "workspace.h"
 #include "plugins/devices/device_plugin.h"
+#include "plugins/plugin_loader.h"
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/Manager.h>
@@ -52,65 +53,24 @@ void save_workspace_to_file(const WorkspaceConfiguration &config,
 }
 
 Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
-
   // find and initialise device plugins
-
-#ifdef _WIN32
-  // on windows we need to specify the path to search for plugin dependencies
-  SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS |
-                           LOAD_LIBRARY_SEARCH_USER_DIRS);
-
-  wchar_t path[MAX_PATH];
-  DWORD len = GetModuleFileNameW(nullptr, path, MAX_PATH);
-  if (len == 0 || len == MAX_PATH)
-    throw std::runtime_error("GetModuleFileNameW failed");
-
-  auto executable_directory = std::filesystem::path(path).parent_path();
-  auto plugin_directory = executable_directory / "../plugins";
-
-  // add paths for devices
-  auto device_plugin_directory = plugin_directory / "devices";
-  for (const auto &entry :
-       std::filesystem::directory_iterator(device_plugin_directory)) {
-    if (entry.is_directory()) {
-      AddDllDirectory(entry.path().wstring().c_str());
-    }
-  }
-#endif
-
-  device_plugin_manager =
-      std::make_unique<Manager<pc::devices::DevicePlugin>>();
-  std::vector<StringView> loaded_plugin_names{};
-  for (auto plugin_name : device_plugin_manager->pluginList()) {
-    const auto plugin_status = device_plugin_manager->load(plugin_name);
-    if (plugin_status & LoadState::Loaded) {
-      loaded_plugin_names.push_back(plugin_name);
-      std::println("Loaded plugin: {}", std::string(plugin_name));
-    }
-  }
-  // this is where we could also initailise all plugins that need to run their
-  // own thread and then somehow their configuration are synced. we send copies
-  // down the pipeline from here though
-  revert_config();
-}
-
-bool Workspace::loaded_device_plugin(std::string_view plugin_name) const {
-  return bool(device_plugin_manager->loadState(plugin_name.data()) &
-              LoadState::Loaded);
+  device_plugin_manager = plugins::load_device_plugins();
+  rebuild_devices();
 }
 
 void Workspace::apply_new_config(const WorkspaceConfiguration &new_config) {
   config = new_config;
-  revert_config();
+  rebuild_devices();
 }
 
-void Workspace::revert_config() {
+void Workspace::rebuild_devices() {
   devices.clear();
   for (auto &device_config_variant : config.devices) {
     std::visit(
         [&](auto &&device_config) {
           using DeviceConfig = std::decay_t<decltype(device_config)>;
-          if (!loaded_device_plugin(DeviceConfig::PluginName)) {
+          if (!plugins::is_loaded(*device_plugin_manager,
+                                  DeviceConfig::PluginName)) {
             return;
           }
           Pointer<pc::devices::DevicePlugin> device_plugin =

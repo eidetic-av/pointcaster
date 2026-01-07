@@ -12,8 +12,9 @@
 #include <variant>
 #include <workspace.h>
 
-#include "../../plugins/devices/orbbec/orbbec_device_config.gen.h"
-#include "plugins/devices/orbbec/orbbec_device_config.h"
+#include <plugins/devices/orbbec/orbbec_device_config.gen.h>
+#include <plugins/devices/orbbec/orbbec_device_config.h>
+#include <plugins/plugin_loader.h>
 
 #include "device_status.h"
 

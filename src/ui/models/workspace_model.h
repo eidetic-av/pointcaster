@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../../plugins/devices/orbbec/orbbec_device_config.h"
 #include "device_status.h"
 #include <QObject>
 #include <QUrl>

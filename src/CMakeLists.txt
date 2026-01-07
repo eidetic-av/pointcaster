@@ -29,7 +29,8 @@ add_subdirectory(plugins)
 find_package(reflectcpp CONFIG REQUIRED)
 
 target_link_libraries(pointcaster PRIVATE 
-  pointcaster::core
+  pointcaster::core 
+  pointcaster::plugins
   Corrade::Main 
   Corrade::PluginManager
   reflectcpp::reflectcpp
