@@ -3,6 +3,8 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <vector>
+#include <string>
 
 namespace ob {
 class Context;
@@ -17,8 +19,19 @@ enum class ObContextState : std::uint8_t {
   Failed
 };
 
-class OrbbecContextSingleton {
+struct ObDeviceInfo {
+  std::string ip;
+  std::string serial_num;
+};
+
+class ObContext {
 public:
+  std::atomic_bool discovering_devices{false};
+  std::vector<ObDeviceInfo> discovered_devices{};
+
+  void discover_devices();
+  void discover_devices_async();
+
   void retain_user();
   void release_user();
 
@@ -26,7 +39,7 @@ public:
 
   std::shared_ptr<ob::Context> get_if_ready() const;
 
-  ~OrbbecContextSingleton();
+  ~ObContext();
 
 private:
   std::atomic<ObContextState> state{ObContextState::Uninitialised};
@@ -37,6 +50,6 @@ private:
 };
 
 // global singleton accessor (one per plugin / shared library).
-OrbbecContextSingleton &orbbec_context();
+ObContext &orbbec_context();
 
 } // namespace pc::devices

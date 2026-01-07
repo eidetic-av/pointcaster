@@ -1,13 +1,23 @@
 #pragma once
 
+#include "../../plugins/devices/device_plugin.h"
+#include "device_status.h"
 #include <QObject>
 #include <QString>
 #include <QVariant>
 
+// TODO maybe this should be a DeviceConfigAdapter...
+
 class ConfigAdapter : public QObject {
   Q_OBJECT
+  Q_PROPERTY(pc::ui::WorkspaceDeviceStatus status READ status NOTIFY statusChanged)
 public:
-  explicit ConfigAdapter(QObject *parent = nullptr) : QObject(parent) {}
+
+  pc::ui::WorkspaceDeviceStatus status() const { return _status; }
+
+  explicit ConfigAdapter(pc::devices::DevicePlugin *plugin,
+                         QObject *parent = nullptr)
+      : QObject(parent), _plugin(plugin) {}
 
   ~ConfigAdapter() override = default;
 
@@ -55,6 +65,19 @@ public:
     return false;
   }
 
+  void setStatusFromCore(pc::devices::DeviceStatus s) {
+    const auto q = pc::ui::toQt(s);
+    if (q == _status)
+      return;
+    _status = q;
+    emit statusChanged();
+  }
+
 signals:
   void fieldChanged(int index);
+  void statusChanged();
+
+protected:
+  pc::devices::DevicePlugin* _plugin = nullptr;
+  pc::ui::WorkspaceDeviceStatus _status = pc::ui::WorkspaceDeviceStatus::Unloaded;
 };

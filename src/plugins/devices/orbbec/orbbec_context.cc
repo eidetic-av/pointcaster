@@ -5,10 +5,9 @@
 #include <print>
 #include <thread>
 
-
 namespace pc::devices {
 
-void OrbbecContextSingleton::init_async() {
+void ObContext::init_async() {
   auto existing_state = state.load(std::memory_order_acquire);
   if (existing_state == ObContextState::Ready ||
       existing_state == ObContextState::Initialising) {
@@ -22,7 +21,7 @@ void OrbbecContextSingleton::init_async() {
     return;
   }
 
-  OrbbecContextSingleton *self = this;
+  ObContext *self = this;
 
   std::thread([self] {
     std::shared_ptr<ob::Context> local;
@@ -52,26 +51,91 @@ void OrbbecContextSingleton::init_async() {
   }).detach();
 }
 
-std::shared_ptr<ob::Context> OrbbecContextSingleton::get_if_ready() const {
+std::shared_ptr<ob::Context> ObContext::get_if_ready() const {
   if (state.load(std::memory_order_acquire) != ObContextState::Ready) {
     return {};
   }
   return ctx.load(std::memory_order_acquire);
 }
 
-void OrbbecContextSingleton::retain_user() {
+void ObContext::discover_devices() {
+  if (discovering_devices.exchange(true, std::memory_order_acq_rel)) {
+    return;
+  }
+
+  discovered_devices.clear();
+
+  auto ctx = orbbec_context().get_if_ready();
+  if (!ctx) {
+    std::println("Orbbec context not initialised; skipping discovery");
+    discovering_devices.store(false, std::memory_order_release);
+    return;
+  }
+
+  std::println("Discovering Orbbec devices...");
+
+  try {
+    auto device_list = ctx->queryDeviceList();
+    const auto count = device_list->deviceCount();
+
+    std::vector<ObDeviceInfo> local_found;
+    local_found.reserve(static_cast<std::size_t>(count));
+
+    for (std::size_t i = 0; i < count; ++i) {
+      auto device = device_list->getDevice(i);
+      auto info = device->getDeviceInfo();
+      if (std::strcmp(info->connectionType(), "Ethernet") == 0) {
+        local_found.push_back({info->ipAddress(), info->serialNumber()});
+      }
+    }
+
+    for (const auto &found_device : local_found) {
+      std::println("found: {} {}", found_device.ip, found_device.serial_num);
+    }
+
+    discovered_devices = std::move(local_found);
+  } catch (const ob::Error &e) {
+    std::println("Failed to discover Orbbec devices: [{}] {}",
+                 e.getName(), e.getMessage());
+  } catch (const std::exception &e) {
+    std::println("Unknown std::exception during Orbbec device discovery: {}",
+                 e.what());
+  } catch (...) {
+    std::println("Unknown error during Orbbec device discovery");
+  }
+
+  std::println("Finished discovering devices.");
+  discovering_devices.store(false, std::memory_order_release);
+}
+
+void ObContext::discover_devices_async() {
+  std::thread([&] {
+    using namespace std::chrono_literals;
+    constexpr auto max_wait_time = 10s;
+    constexpr auto sleep_time = 50ms;
+    auto wait_time = 0ms;
+    while (orbbec_context().get_if_ready() == nullptr &&
+           wait_time < max_wait_time) {
+      wait_time += sleep_time;
+      std::this_thread::sleep_for(sleep_time);
+    }
+    discover_devices();
+  }).detach();
+}
+
+void ObContext::retain_user() {
   users.fetch_add(1, std::memory_order_acq_rel);
   init_async();
 }
 
-void OrbbecContextSingleton::release_user() {
+void ObContext::release_user() {
   if (users.fetch_sub(1, std::memory_order_acq_rel) == 1) {
     // this was the last user
     shutdown();
   }
 }
 
-void OrbbecContextSingleton::shutdown() {
+void ObContext::shutdown() {
   using namespace std::chrono_literals;
 
   // wait out any in-flight initialisation
@@ -97,10 +161,10 @@ void OrbbecContextSingleton::shutdown() {
   }
 }
 
-OrbbecContextSingleton::~OrbbecContextSingleton() { shutdown(); }
+ObContext::~ObContext() { shutdown(); }
 
-OrbbecContextSingleton &orbbec_context() {
-  static OrbbecContextSingleton instance;
+ObContext &orbbec_context() {
+  static ObContext instance;
   return instance;
 }
 

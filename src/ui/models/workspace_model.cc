@@ -2,16 +2,20 @@
 #include <QObject>
 #include <QString>
 #include <QVariant>
+#include <QPointer>
 #include <concepts>
 #include <variant>
 #include <functional>
 #include <qurl.h>
 #include <workspace.h>
 #include <thread>
+#include <print>
 #include <string_view>
 
 #include "../../plugins/devices/orbbec/orbbec_device_config.gen.h"
 #include "plugins/devices/orbbec/orbbec_device_config.h"
+
+#include "device_status.h"
 
 namespace pc::ui {
 
@@ -72,13 +76,32 @@ void WorkspaceModel::rebuildAdapters() {
   _deviceConfigAdapters.clear();
 
   for (auto &device_plugin : _workspace.devices) {
+    auto *plugin = device_plugin.get();
     std::visit(
-        [this](auto &device_config) {
+        [this, plugin](auto &device_config) {
           using ConfigType = std::decay_t<decltype(device_config)>;
           if constexpr (std::same_as<ConfigType, OrbbecDeviceConfiguration>) {
-            auto *adapter =
-                new OrbbecDeviceConfigurationAdapter(device_config, this);
+            auto *adapter = new OrbbecDeviceConfigurationAdapter(device_config,
+                                                                 plugin, this);
             _deviceConfigAdapters.append(adapter);
+
+            // TODO
+            plugin->set_status_callback(
+                [adapter = QPointer<OrbbecDeviceConfigurationAdapter>(adapter)](
+                    pc::devices::DeviceStatus status) {
+                  if (!adapter)
+                    return; // adapter got deleted
+
+                  QMetaObject::invokeMethod(
+                      adapter,
+                      [adapter, status]() {
+                        if (!adapter)
+                          return;
+                        adapter->setStatusFromCore(status);
+                        std::println("set status from qt");
+                      },
+                      Qt::QueuedConnection);
+                });
           }
         },
         device_plugin->config());

@@ -4,6 +4,7 @@ corrade_add_plugin(OrbbecDevice
   OrbbecDevice.conf 
     orbbec_device.cc
     orbbec_context.cc
+    ${CMAKE_SOURCE_DIR}/src/ui/models/device_status.h
 )
 
 add_qml_adapters(

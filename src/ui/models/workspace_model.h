@@ -1,10 +1,10 @@
 #pragma once
 
 #include "../../plugins/devices/orbbec/orbbec_device_config.h"
-
+#include "device_status.h"
 #include <QObject>
-#include <QVariant>
 #include <QUrl>
+#include <QVariant>
 #include <functional>
 
 namespace pc {
@@ -25,7 +25,7 @@ public:
 
   Q_INVOKABLE void close();
 
-  Q_INVOKABLE void loadFromFile(const QUrl& file);
+  Q_INVOKABLE void loadFromFile(const QUrl &file);
   Q_INVOKABLE void save();
 
   QVariant deviceConfigAdapters() const;

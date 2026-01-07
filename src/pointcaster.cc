@@ -15,15 +15,22 @@
 #include <print>
 #include <qcoreapplication.h>
 #include "ui/window/custom_titlebar.h"
+#include "ui/models/device_status.h"
 
 using namespace pc;
 
 int main(int argc, char *argv[]) {
   QGuiApplication app(argc, argv);
 
+  // move these registrations into their own header/source
   qmlRegisterUncreatableType<ConfigAdapter>(
       "Pointcaster", 1, 0, "ConfigAdapter",
       "ConfigAdapter is an abstract base type");
+
+  // ui/models/device_status.h
+  qmlRegisterUncreatableMetaObject(pc::ui::staticMetaObject, "Pointcaster", 1,
+                                   0, "UiEnums",
+                                   "WorkspaceDeviceStatus is enum");
 
   QQmlApplicationEngine engine;
 

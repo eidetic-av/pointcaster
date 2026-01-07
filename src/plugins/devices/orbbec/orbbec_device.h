@@ -21,13 +21,6 @@
 #include <thread>
 
 namespace pc::devices {
-
-// this holds info about discovered but not necessarily initialised devices
-struct OrbbecDeviceInfo {
-  std::string ip;
-  std::string serial_num;
-};
-
 // this device memory structure hides CUDA types, allowing OrbbecDriver to have
 // CUDA members. This prevents issues when this header is included in TUs not
 // compiled with nvcc
@@ -35,12 +28,6 @@ struct OrbbecImplDeviceMemory;
 
 class OrbbecDevice final : public DevicePlugin {
 public:
-  inline static std::atomic_bool discovering_devices{false};
-  inline static std::vector<OrbbecDeviceInfo> discovered_devices{};
-
-  static void discover_devices();
-  static void discover_devices_async();
-
   explicit OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
                         Corrade::Containers::StringView plugin);
 
@@ -51,7 +38,7 @@ public:
   OrbbecDevice(OrbbecDevice &&) = delete;
   OrbbecDevice &operator=(OrbbecDevice &&) = delete;
 
-  // DeviceStatus status() const override;
+  DeviceStatus status() const override;
 
   // TODO: maybe it would better to return a constant reference to the
   // pointcloud here so its decided at the call site if a copy is required
