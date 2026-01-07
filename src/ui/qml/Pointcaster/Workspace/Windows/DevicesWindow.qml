@@ -18,68 +18,76 @@ KDDW.DockWidget {
         // Shared state for the properties pane
         property var currentAdapter: configList.currentItem ? configList.currentItem.modelData : null
 
-            // Top: device selector list
-            ListView {
-                id: configList
-                model: workspaceModel ? workspaceModel.deviceConfigAdapters: []
+        // Controller for the currently selected device (index-aligned with adapters)
+        property var currentController: (workspaceModel
+                                 && configList.currentIndex >= 0
+                                 && configList.currentIndex < workspaceModel.deviceControllers.length)
+                                ? workspaceModel.deviceControllers[configList.currentIndex]
+                                : null
 
-                anchors {
-                    top: parent.top
-                    left: parent.left
-                    right: parent.right
-                }
 
-                // Fixed height "selector" strip
-                height: 160
-                clip: true
+        // Top: device selector list
+        ListView {
+            id: configList
+            model: workspaceModel ? workspaceModel.deviceConfigAdapters : []
 
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AsNeeded
-                }
+            anchors {
+                top: parent.top
+                left: parent.left
+                right: parent.right
+            }
 
-                // Remove kinetic "flick" behaviour
-                boundsBehavior: Flickable.StopAtBounds
-                maximumFlickVelocity: 0
-                flickDeceleration: 1000000
+            // Fixed height "selector" strip
+            height: 160
+            clip: true
 
-                delegate: Rectangle {
-                    id: deviceRow
-                    required property int index
-                    required property ConfigAdapter modelData
+            ScrollBar.vertical: ScrollBar {
+                policy: ScrollBar.AsNeeded
+            }
 
-                    width: ListView.view.width
-                    height: 40
+            // Remove kinetic "flick" behaviour
+            boundsBehavior: Flickable.StopAtBounds
+            maximumFlickVelocity: 0
+            flickDeceleration: 1000000
 
-                    color: ListView.isCurrentItem
-                    ? Qt.rgba(0.2, 0.4, 0.8, 0.25)
-                    : "transparent"
+            delegate: Rectangle {
+                id: deviceRow
+                required property int index
+                required property ConfigAdapter modelData
 
-                    border.color: "#404040"
-                    border.width: 0.5
+                width: ListView.view.width
+                height: 40
 
-                    Row {
-                        anchors.fill: parent
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 8
-                        spacing: 8
+                color: ListView.isCurrentItem
+                       ? Qt.rgba(0.2, 0.4, 0.8, 0.25)
+                       : "transparent"
 
-                        Rectangle {
-                            id: statusDot
-                            width: 16
-                            height: 16
-                            radius: 8
+                border.color: "#404040"
+                border.width: 0.5
 
-                            color: {
-                                switch (modelData.status) {
-                                case UiEnums.WorkspaceDeviceStatus.Unloaded:
+                Row {
+                    anchors.fill: parent
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    spacing: 8
+
+                    Rectangle {
+                        id: statusDot
+                        width: 16
+                        height: 16
+                        radius: 8
+
+                        color: {
+                            switch (modelData.status) {
+                            case UiEnums.WorkspaceDeviceStatus.Unloaded:
                                 return "grey"
-                                case UiEnums.WorkspaceDeviceStatus.Loaded:
+                            case UiEnums.WorkspaceDeviceStatus.Loaded:
                                 return "steelblue"
-                                case UiEnums.WorkspaceDeviceStatus.Active:
+                            case UiEnums.WorkspaceDeviceStatus.Active:
                                 return "limegreen"
-                                case UiEnums.WorkspaceDeviceStatus.Missing:
+                            case UiEnums.WorkspaceDeviceStatus.Missing:
                                 return "orangered"
-                                default:
+                            default:
                                 return "black"
                             }
                         }
@@ -108,11 +116,67 @@ KDDW.DockWidget {
             }
         }
 
+        // *** NEW CONTROL BAR between list and inspector ***
+        Row {
+            id: controlRow
+            anchors {
+                top: configList.bottom
+                left: parent.left
+                right: parent.right
+                leftMargin: 8
+                rightMargin: 8
+                topMargin: 4
+            }
+            height: 40
+            spacing: 8
+
+            enabled: devices.currentController !== null
+
+            Button {
+                id: startStopButton
+                text: {
+                    if (!devices.currentController)
+                        return "Start"
+                    return devices.currentController.status === DevicePluginController.Active
+                           ? "Stop"
+                           : "Start"
+                }
+
+                enabled: {
+                    if (!devices.currentController)
+                        return false
+                    // Disable interaction if the device is "Missing"
+                    return devices.currentController.status !== DevicePluginController.Missing
+                }
+
+                onClicked: {
+                    if (!devices.currentController)
+                        return
+                    if (devices.currentController.status === DevicePluginController.Active)
+                        devices.currentController.stop()
+                    else
+                        devices.currentController.start()
+                }
+            }
+
+            Button {
+                id: restartButton
+                text: "Restart"
+                enabled: devices.currentController
+                         && devices.currentController.status === DevicePluginController.Active
+
+                onClicked: {
+                    if (devices.currentController)
+                        devices.currentController.restart()
+                }
+            }
+        }
+
         // inspector for selected device
         Item {
             id: propertiesPane
             anchors {
-                top: configList.bottom
+                top: controlRow.bottom      // *** was configList.bottom ***
                 left: parent.left
                 right: parent.right
                 bottom: parent.bottom
@@ -122,130 +186,132 @@ KDDW.DockWidget {
             // Shared width of the left "label" column
             property int labelColumnWidth: width * 0.35
 
-                // Title / empty state
-                Text {
-                    id: header
-                    anchors {
-                        top: parent.top
-                        left: parent.left
-                        right: parent.right
-                        leftMargin: 8
-                        rightMargin: 8
-                        topMargin: 4
-                    }
-                    text: devices.currentAdapter
-                    ? "Device properties — " + devices.currentAdapter.displayName()
-                    : "No device selected"
-                    font.bold: true
-                    elide: Text.ElideRight
+            // Title / empty state
+            Text {
+                id: header
+                anchors {
+                    top: parent.top
+                    left: parent.left
+                    right: parent.right
+                    leftMargin: 8
+                    rightMargin: 8
+                    topMargin: 4
+                }
+                text: devices.currentAdapter
+                      ? "Device properties — " + devices.currentAdapter.displayName()
+                      : "No device selected"
+                font.bold: true
+                elide: Text.ElideRight
+            }
+
+            Flickable {
+                id: propertiesFlick
+                anchors {
+                    top: header.bottom
+                    topMargin: 8
+                    left: parent.left
+                    right: parent.right
+                    bottom: parent.bottom
+                    leftMargin: 8
+                    rightMargin: 8
+                    bottomMargin: 8
                 }
 
-                Flickable {
-                    id: propertiesFlick
-                    anchors {
-                        top: header.bottom
-                        topMargin: 8
-                        left: parent.left
-                        right: parent.right
-                        bottom: parent.bottom
-                        leftMargin: 8
-                        rightMargin: 8
-                        bottomMargin: 8
-                    }
+                contentWidth: width
+                contentHeight: propertiesColumn.implicitHeight
+                clip: true
 
-                    contentWidth: width
-                    contentHeight: propertiesColumn.implicitHeight
-                    clip: true
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded
+                }
 
-                    ScrollBar.vertical: ScrollBar {
-                        policy: ScrollBar.AsNeeded
-                    }
+                // Property rows
+                Column {
+                    id: propertiesColumn
+                    width: propertiesFlick.width
+                    spacing: 4
 
-                    // Property rows
-                    Column {
-                        id: propertiesColumn
-                        width: propertiesFlick.width
-                        spacing: 4
+                    Repeater {
+                        model: devices.currentAdapter ? devices.currentAdapter.fieldCount() : 0
 
-                        Repeater {
-                            model: devices.currentAdapter ? devices.currentAdapter.fieldCount() : 0
+                        delegate: Item {
+                            required property int index
 
-                            delegate: Item {
-                                required property int index
+                            width: propertiesColumn.width
+                            height: Math.max(nameText.implicitHeight,
+                                             valueField.implicitHeight) + 6
 
-                                width: propertiesColumn.width
-                                height: Math.max(nameText.implicitHeight, valueField.implicitHeight) + 6
+                            visible: !devices.currentAdapter.isHidden(index)
 
-                                visible: !devices.currentAdapter.isHidden(index)
+                            // Label region (left column)
+                            Item {
+                                id: labelContainer
+                                anchors {
+                                    left: parent.left
+                                    top: parent.top
+                                    bottom: parent.bottom
+                                }
+                                width: propertiesPane.labelColumnWidth
 
-                                // Label region (left column)
-                                Item {
-                                    id: labelContainer
+                                Text {
+                                    id: nameText
                                     anchors {
                                         left: parent.left
-                                        top: parent.top
-                                        bottom: parent.bottom
-                                    }
-                                    width: propertiesPane.labelColumnWidth
-
-                                    Text {
-                                        id: nameText
-                                        anchors {
-                                            left: parent.left
-                                            right: parent.right
-                                            verticalCenter: parent.verticalCenter
-                                        }
-                                        horizontalAlignment: Text.AlignRight
-                                        elide: Text.ElideRight
-                                        text: devices.currentAdapter.fieldName(index)
-                                    }
-                                }
-
-                                // value region (right column)
-                                TextField {
-                                    id: valueField
-                                    anchors {
-                                        left: labelContainer.right
                                         right: parent.right
                                         verticalCenter: parent.verticalCenter
                                     }
-                                    text: devices.currentAdapter.fieldValue(index)
-                                    enabled: !devices.currentAdapter.isDisabled(index)
+                                    horizontalAlignment: Text.AlignRight
+                                    elide: Text.ElideRight
+                                    text: devices.currentAdapter.fieldName(index)
+                                }
+                            }
 
-                                    onEditingFinished: {
-                                        devices.currentAdapter.setFieldValue(index, text)
-                                    }
+                            // value region (right column)
+                            TextField {
+                                id: valueField
+                                anchors {
+                                    left: labelContainer.right
+                                    right: parent.right
+                                    verticalCenter: parent.verticalCenter
+                                }
+                                text: devices.currentAdapter.fieldValue(index)
+                                enabled: !devices.currentAdapter.isDisabled(index)
+
+                                onEditingFinished: {
+                                    devices.currentAdapter.setFieldValue(index, text)
                                 }
                             }
                         }
                     }
+                }
 
-                    // vertical divider handle
-                    Rectangle {
-                        id: dividerHandle
-                        x: propertiesPane.labelColumnWidth - width / 2
-                        width: 4
-                        anchors {
-                            top: parent.top
-                            bottom: parent.bottom
-                        }
-                        color: "#505050"
-                        opacity: 0.6
+                // vertical divider handle
+                Rectangle {
+                    id: dividerHandle
+                    x: propertiesPane.labelColumnWidth - width / 2
+                    width: 4
+                    anchors {
+                        top: parent.top
+                        bottom: parent.bottom
+                    }
+                    color: "#505050"
+                    opacity: 0.6
 
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.SplitHCursor
-                            drag.target: dividerHandle
-                            drag.axis: Drag.XAxis
-                            drag.minimumX: 80
-                            drag.maximumX: propertiesPane.width - 80
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.SplitHCursor
+                        drag.target: dividerHandle
+                        drag.axis: Drag.XAxis
+                        drag.minimumX: 80
+                        drag.maximumX: propertiesPane.width - 80
 
-                            onPositionChanged: {
-                                propertiesPane.labelColumnWidth = dividerHandle.x + dividerHandle.width / 2
-                            }
+                        onPositionChanged: {
+                            propertiesPane.labelColumnWidth =
+                                    dividerHandle.x + dividerHandle.width / 2
                         }
                     }
                 }
             }
         }
     }
+}

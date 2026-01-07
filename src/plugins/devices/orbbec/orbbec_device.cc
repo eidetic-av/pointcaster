@@ -302,10 +302,10 @@ void OrbbecDevice::stop_sync() {
   std::lock_guard lock(orbbec_context().start_stop_device_access);
   std::println("Closing OrbbecDevice {}", config.ip);
   // pc::logger->info("Closing OrbbecDevice {}", config().ip);
-  set_running(false);
-  set_updated_time(steady_clock::time_point{});
   if (_ob_pipeline) _ob_pipeline->stop();
   if (_device_memory_ready.load()) free_device_memory();
+  set_running(false);
+  set_updated_time(steady_clock::time_point{});
 }
 
 void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {

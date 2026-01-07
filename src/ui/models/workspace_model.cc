@@ -6,7 +6,9 @@
 #include <concepts>
 #include <functional>
 #include <print>
+#include <qobject.h>
 #include <qurl.h>
+#include <string>
 #include <string_view>
 #include <thread>
 #include <variant>
@@ -17,6 +19,7 @@
 #include <plugins/plugin_loader.h>
 
 #include "device_status.h"
+#include "device_plugin_controller.h"
 
 namespace pc::ui {
 
@@ -76,6 +79,9 @@ void WorkspaceModel::rebuildAdapters() {
   qDeleteAll(_deviceConfigAdapters);
   _deviceConfigAdapters.clear();
 
+  for (QObject *obj : _deviceControllers) obj->deleteLater();
+  _deviceControllers.clear();
+
   for (auto &device_plugin : _workspace.devices) {
     auto *plugin = device_plugin.get();
     std::visit(
@@ -86,18 +92,38 @@ void WorkspaceModel::rebuildAdapters() {
                                                                  plugin, this);
             _deviceConfigAdapters.append(adapter);
 
+            QString device_id = QString::fromStdString(device_config.id);
+
+            auto *controller =
+                new DevicePluginController(plugin, device_id, this);
+            _deviceControllers.append(controller);
+
             // TODO
+            // perhaps the configuration adapter and controller could be merged?
+
             plugin->set_status_callback(
-                [adapter = QPointer<OrbbecDeviceConfigurationAdapter>(adapter)](
+                [adapter = QPointer<OrbbecDeviceConfigurationAdapter>(adapter),
+                 controller = QPointer<DevicePluginController>(controller)](
                     pc::devices::DeviceStatus status) {
-                  if (!adapter) return; // adapter got deleted
-                  QMetaObject::invokeMethod(
-                      adapter,
-                      [adapter, status]() {
-                        if (!adapter) return;
-                        adapter->setStatusFromCore(status);
-                      },
-                      Qt::QueuedConnection);
+                  if (adapter) {
+                    QMetaObject::invokeMethod(
+                        adapter,
+                        [adapter, status]() {
+                          if (!adapter) return;
+                          adapter->setStatusFromCore(status);
+                        },
+                        Qt::QueuedConnection);
+                  }
+
+                  if (controller) {
+                    QMetaObject::invokeMethod(
+                        controller,
+                        [controller, status]() {
+                          if (!controller) return;
+                          controller->setStatusFromCore(status);
+                        },
+                        Qt::QueuedConnection);
+                  }
                 });
           }
         },
@@ -105,6 +131,7 @@ void WorkspaceModel::rebuildAdapters() {
   }
 
   emit deviceConfigAdaptersChanged();
+  emit deviceControllersChanged();
 }
 
 } // namespace pc::ui

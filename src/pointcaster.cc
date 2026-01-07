@@ -1,3 +1,4 @@
+#include "ui/models/device_plugin_controller.h"
 #include "ui/models/device_status.h"
 #include "ui/window/custom_titlebar.h"
 #include "workspace.h"
@@ -31,6 +32,11 @@ int main(int argc, char *argv[]) {
   qmlRegisterUncreatableMetaObject(pc::ui::staticMetaObject, "Pointcaster", 1,
                                    0, "UiEnums",
                                    "WorkspaceDeviceStatus is enum");
+
+  // ui/models/device_plugin_controller.h
+    qmlRegisterUncreatableType<pc::ui::DevicePluginController>(
+        "Pointcaster", 1, 0, "DevicePluginController",
+        "DevicePluginController is created in C++ only");
 
   QQmlApplicationEngine engine;
 

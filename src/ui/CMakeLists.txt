@@ -1,6 +1,7 @@
 add_library(pointcaster_ui
     models/workspace_model.cc
     models/device_status.h
+    models/device_plugin_controller.h
     window/custom_titlebar.cc
 )
 add_library(pointcaster::ui ALIAS pointcaster_ui)

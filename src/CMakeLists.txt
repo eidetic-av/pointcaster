@@ -36,6 +36,8 @@ target_link_libraries(pointcaster PRIVATE
   reflectcpp::reflectcpp
 )
 
+target_include_directories(pointcaster PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
   add_custom_command(TARGET pointcaster POST_BUILD
     COMMAND ${CMAKE_COMMAND}

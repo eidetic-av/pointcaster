@@ -14,8 +14,11 @@ namespace pc::ui {
 
 class WorkspaceModel : public QObject {
   Q_OBJECT
+
   Q_PROPERTY(QVariant deviceConfigAdapters READ deviceConfigAdapters NOTIFY
                  deviceConfigAdaptersChanged)
+  Q_PROPERTY(QList<QObject *> deviceControllers READ deviceControllers NOTIFY
+                 deviceControllersChanged)
   Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl)
 
 public:
@@ -28,6 +31,9 @@ public:
   Q_INVOKABLE void save();
 
   QVariant deviceConfigAdapters() const;
+  const QList<QObject *> &deviceControllers() const {
+    return _deviceControllers;
+  }
 
   QUrl saveFileUrl() const { return _saveFileUrl; };
   void setSaveFileUrl(const QUrl &url) { _saveFileUrl = url; }
@@ -38,10 +44,12 @@ public slots:
 signals:
   void openSaveAsDialog();
   void deviceConfigAdaptersChanged();
+  void deviceControllersChanged();
 
 private:
   pc::Workspace &_workspace;
   QList<QObject *> _deviceConfigAdapters;
+  QList<QObject *> _deviceControllers;
 
   QUrl _saveFileUrl;
 
