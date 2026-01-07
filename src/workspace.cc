@@ -66,11 +66,16 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
     throw std::runtime_error("GetModuleFileNameW failed");
 
   auto executable_directory = std::filesystem::path(path).parent_path();
-
   auto plugin_directory = executable_directory / "../plugins";
-  auto orbbec_dependencies_directory = plugin_directory / "devices/orbbec";
 
-  AddDllDirectory(orbbec_dependencies_directory.wstring().c_str());
+  // add paths for devices
+  auto device_plugin_directory = plugin_directory / "devices";
+  for (const auto &entry :
+       std::filesystem::directory_iterator(device_plugin_directory)) {
+    if (entry.is_directory()) {
+      AddDllDirectory(entry.path().wstring().c_str());
+    }
+  }
 #endif
 
   device_plugin_manager =
