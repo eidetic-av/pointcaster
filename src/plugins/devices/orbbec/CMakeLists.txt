@@ -2,7 +2,8 @@ corrade_add_plugin(OrbbecDevice
   ${DEVICES_PLUGIN_DIR}
   ${DEVICES_PLUGIN_DIR}
   OrbbecDevice.conf 
-  orbbec_device.cc
+    orbbec_device.cc
+    orbbec_context.cc
 )
 
 add_qml_adapters(

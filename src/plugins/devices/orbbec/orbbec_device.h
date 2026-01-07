@@ -2,11 +2,13 @@
 
 #include "../device_plugin.h"
 #include "orbbec_device_config.h"
+
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/String.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
+
 #include <atomic>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/hpp/Context.hpp>
@@ -20,7 +22,7 @@
 
 namespace pc::devices {
 
-// this hold info about discovered but not yet initialised devices
+// this holds info about discovered but not necessarily initialised devices
 struct OrbbecDeviceInfo {
   std::string ip;
   std::string serial_num;
