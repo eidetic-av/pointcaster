@@ -1,8 +1,3 @@
-
-target_sources(pointcaster PRIVATE
-    devices/device.cc
-)
-
 set(DEVICES_PLUGIN_DIR "plugins/devices")
 
 add_subdirectory(devices/orbbec)
