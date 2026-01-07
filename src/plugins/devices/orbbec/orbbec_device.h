@@ -33,13 +33,10 @@ struct OrbbecImplDeviceMemory;
 
 class OrbbecDevice final : public DevicePlugin {
 public:
-  inline static std::vector<OrbbecDeviceInfo> discovered_devices;
-  inline static std::atomic_bool discovering_devices{false};
+  // inline static std::atomic_bool discovering_devices{false};
+  // inline static std::vector<OrbbecDeviceInfo> discovered_devices{};
 
-  static void init_context();
-  static void destroy_context();
-
-  static void discover_devices();
+  // static void discover_devices();
 
   explicit OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
                         Corrade::Containers::StringView plugin);
@@ -51,21 +48,16 @@ public:
   OrbbecDevice(OrbbecDevice &&) = delete;
   OrbbecDevice &operator=(OrbbecDevice &&) = delete;
 
-  DeviceStatus status() const override;
+  // DeviceStatus status() const override;
 
   // TODO: maybe it would better to return a constant reference to the
   // pointcloud here so its decided at the call site if a copy is required
-  pc::types::PointCloud point_cloud() const override;
+  // pc::types::PointCloud point_cloud() const override;
 
-  void start() override;
-  void stop() override;
+  // void start() override;
+  // void stop() override;
 
 private:
-  inline static std::unique_ptr<ob::Context> _ob_ctx;
-  inline static std::shared_ptr<ob::DeviceList> _ob_device_list;
-  inline static std::mutex _start_stop_access;
-  inline static std::jthread _discovery_thread;
-
   std::shared_ptr<ob::Config> _ob_config;
   std::shared_ptr<ob::Device> _ob_device;
   std::shared_ptr<ob::Pipeline> _ob_pipeline;
@@ -84,10 +76,10 @@ private:
 
   std::vector<OBColorPoint> _point_buffer;
   std::mutex _point_buffer_access;
-  std::atomic_bool _buffer_updated;
+  std::atomic_bool _buffer_updated{false};
 
   std::atomic<std::chrono::steady_clock::time_point> _last_updated_time{};
-  std::atomic_bool _in_error_state = false;
+  std::atomic_bool _in_error_state{false};
 
   PC_PROFILING_MUTEX(_process_current_cloud_access);
   std::uint64_t _last_processed_frame_index{0};
@@ -106,23 +98,3 @@ private:
 };
 
 } // namespace pc::devices
-
-// TODO: TEMP REPLACEMENT FOR  pc::logger
-namespace pc {
-
-class TempLogger {
-public:
-  template <typename... Args>
-  void debug(std::format_string<Args...> fmt, Args &&...args) {
-    std::println("debug: {}", std::format(fmt, std::forward<Args>(args)...));
-  }
-
-  template <typename... Args>
-  void error(std::format_string<Args...> fmt, Args &&...args) {
-    std::println("error: {}", std::format(fmt, std::forward<Args>(args)...));
-  }
-};
-
-std::unique_ptr<TempLogger> logger;
-
-} // namespace pc

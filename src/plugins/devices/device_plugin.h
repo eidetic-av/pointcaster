@@ -35,17 +35,17 @@ public:
     _config = config;
   }
 
-  virtual DeviceStatus status() const = 0;
+  // virtual DeviceStatus status() const = 0;
 
-  virtual pc::types::PointCloud point_cloud() const = 0;
+  // virtual pc::types::PointCloud point_cloud() const = 0;
 
-  virtual void start() = 0;
-  virtual void stop() = 0;
+  // virtual void start() = 0;
+  // virtual void stop() = 0;
 
-  virtual void restart() {
-    stop();
-    start();
-  };
+  // virtual void restart() {
+  //   stop();
+  //   start();
+  // };
 
   private:
     DeviceConfigurationVariant _config;
