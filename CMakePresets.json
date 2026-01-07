@@ -43,6 +43,18 @@
 				"VCPKG_TARGET_TRIPLET": "x64-windows-static-md-custom-release",
 				"CMAKE_PREFIX_PATH": "C:/opt/Qt/6.11.0/msvc2022_64"
 			}
+		},
+		{
+			"name": "windows-debug",
+			"inherits": "windows-release",
+			"displayName": "Pointcaster Debug build for Windows x64",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"VCPKG_TARGET_TRIPLET": "x64-windows-static-md-custom",
+				"CMAKE_PREFIX_PATH": "C:/opt/Qt/6.11.0/msvc2022_64",
+				"CMAKE_PDB_OUTPUT_DIRECTORY": "${sourceDir}/build/${presetName}",
+				"CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "ProgramDatabase"
+			}
 		}
 	]
 }
