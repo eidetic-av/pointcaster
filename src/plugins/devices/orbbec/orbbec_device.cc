@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstring>
 #include <iostream>
+#include <chrono>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/h/ObTypes.h>
 #include <libobsensor/hpp/Context.hpp>
@@ -64,11 +65,27 @@ void OrbbecDevice::discover_devices() {
   discovering_devices.store(false, std::memory_order_release);
 }
 
+void OrbbecDevice::discover_devices_async() {
+  std::thread([&] {
+    using namespace std::chrono_literals;
+    constexpr auto max_wait_time = 10s;
+    constexpr auto sleep_time = 50ms;
+    auto wait_time = 0ms;
+    while (orbbec_context().get_if_ready() == nullptr &&
+           wait_time < max_wait_time) {
+      wait_time += sleep_time;
+      std::this_thread::sleep_for(sleep_time);
+    }
+    discover_devices();
+  }).detach();
+}
+
 OrbbecDevice::OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
                            Corrade::Containers::StringView plugin)
     : DevicePlugin(manager, plugin) {
   try {
     orbbec_context().retain_user();
+    discover_devices_async();
   } catch (...) {
     std::println("Exception during Orbbec context initialisation");
   }

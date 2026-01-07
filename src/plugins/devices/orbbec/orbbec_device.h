@@ -39,6 +39,7 @@ public:
   inline static std::vector<OrbbecDeviceInfo> discovered_devices{};
 
   static void discover_devices();
+  static void discover_devices_async();
 
   explicit OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
                         Corrade::Containers::StringView plugin);
