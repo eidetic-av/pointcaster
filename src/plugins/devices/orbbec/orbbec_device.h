@@ -10,6 +10,7 @@
 #include <Corrade/PluginManager/AbstractPlugin.h>
 
 #include <atomic>
+#include <chrono>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/hpp/Context.hpp>
 #include <memory>
@@ -44,8 +45,9 @@ public:
   // pointcloud here so its decided at the call site if a copy is required
   // pc::types::PointCloud point_cloud() const override;
 
-  // void start() override;
-  // void stop() override;
+  void start() override;
+  void stop() override;
+  void restart() override;
 
 private:
   std::shared_ptr<ob::Config> _ob_config;
@@ -61,15 +63,14 @@ private:
   std::jthread _initialisation_thread;
   std::jthread _timeout_thread;
 
-  bool _running_pipeline = false;
-  bool _initialised_point_cloud_scale = false;
-
   std::vector<OBColorPoint> _point_buffer;
   std::mutex _point_buffer_access;
   std::atomic_bool _buffer_updated{false};
 
+  std::atomic_bool _running_pipeline = false;
   std::atomic<std::chrono::steady_clock::time_point> _last_updated_time{};
   std::atomic_bool _in_error_state{false};
+  bool _initialised_point_cloud_scale = false;
 
   PC_PROFILING_MUTEX(_process_current_cloud_access);
   std::uint64_t _last_processed_frame_index{0};
@@ -85,6 +86,28 @@ private:
   void start_sync();
   void stop_sync();
   void restart_sync();
+
+  void set_running(bool running_pipeline) {
+    _running_pipeline = running_pipeline;
+    notify_status_changed();
+  }
+
+  void set_error_state(bool error_state) {
+    _in_error_state = error_state;
+    notify_status_changed();
+  }
+
+  void set_updated_time(std::chrono::steady_clock::time_point new_time) {
+    const auto old_time =
+        _last_updated_time.exchange(new_time, std::memory_order_acq_rel);
+    const bool new_invalid =
+        (new_time == std::chrono::steady_clock::time_point{});
+    const bool old_invalid =
+        (old_time == std::chrono::steady_clock::time_point{});
+    if (new_invalid != old_invalid) notify_status_changed();
+  }
+
+  void timeout_thread_work(std::stop_token stop_token);
 };
 
 } // namespace pc::devices

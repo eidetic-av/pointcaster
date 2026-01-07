@@ -24,11 +24,13 @@ set_target_properties(OrbbecDevice PROPERTIES
 )
 
 find_package(OrbbecSDK CONFIG REQUIRED)
+find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 
 target_link_libraries(OrbbecDevice PRIVATE
   pointcaster::core 
   Corrade::PluginManager
   Orbbec::OrbbecSDK
+  unofficial::concurrentqueue::concurrentqueue
 )
 
 # for pointcaster::core headers in public include dir

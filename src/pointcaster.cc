@@ -1,3 +1,5 @@
+#include "ui/models/device_status.h"
+#include "ui/window/custom_titlebar.h"
 #include "workspace.h"
 #include <Corrade/PluginManager/Manager.h>
 #include <QCoreApplication>
@@ -6,7 +8,6 @@
 #include <QQmlContext>
 #include <QUrl>
 #include <fstream>
-#include <thread>
 #include <kddockwidgets/Config.h>
 #include <kddockwidgets/qtquick/Platform.h>
 #include <memory>
@@ -14,8 +15,7 @@
 #include <models/workspace_model.h>
 #include <print>
 #include <qcoreapplication.h>
-#include "ui/window/custom_titlebar.h"
-#include "ui/models/device_status.h"
+#include <thread>
 
 using namespace pc;
 
@@ -41,14 +41,15 @@ int main(int argc, char *argv[]) {
 
   WorkspaceConfiguration workspace_config;
 
+  workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
+      .id = "test", .ip = "192.168.1.107"});
 
-  for (int i = 0; i < 6; i++) {
-    workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
-        .id = std::format("test{}", i),
-        .ip = std::format("192.168.1.10{}", 8 + i)});
-  }
+  // for (int i = 0; i < 6; i++) {
+  //   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
+  //       .id = std::format("test{}", i),
+  //       .ip = std::format("192.168.1.10{}", 8 + i)});
+  // }
   // save_workspace_to_file(workspace_config, "workspace.json");
-
 
   Workspace workspace(workspace_config);
 
@@ -66,7 +67,6 @@ int main(int argc, char *argv[]) {
 
   engine.loadFromModule("Pointcaster.Workspace", "MainWindow");
 
-
   // pc::load_workspace(workspace_config, "workspace.json");
 
   // std::jthread loader_thread([&]() {
@@ -83,7 +83,6 @@ int main(int argc, char *argv[]) {
   //       },
   //       Qt::QueuedConnection);
   // });
-
 
   return app.exec();
 }

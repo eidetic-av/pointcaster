@@ -4,6 +4,11 @@
 #include <libobsensor/ObSensor.hpp>
 #include <print>
 #include <thread>
+#include <concurrentqueue/concurrentqueue.h>
+
+namespace {
+  moodycamel::ConcurrentQueue<std::function<void()>> on_ready_callbacks{};
+}
 
 namespace pc::devices {
 
@@ -47,6 +52,12 @@ void ObContext::init_async() {
 
     self->ctx.store(local, std::memory_order_release);
     self->state.store(ObContextState::Ready, std::memory_order_release);
+
+    std::function<void()> cb;
+    while (on_ready_callbacks.try_dequeue(cb)) {
+      cb();
+    }
+
     std::println("Orbbec context initialised");
   }).detach();
 }
@@ -56,6 +67,29 @@ std::shared_ptr<ob::Context> ObContext::get_if_ready() const {
     return {};
   }
   return ctx.load(std::memory_order_acquire);
+}
+
+std::shared_ptr<ob::Context> ObContext::wait_til_ready(int max_wait_seconds) const {
+  using namespace std::chrono_literals;
+  constexpr auto sleep_time = 50ms;
+  auto max_wait_time = std::chrono::seconds(max_wait_seconds);
+  auto wait_time = 0ms;
+  std::shared_ptr<ob::Context> ob_ctx;
+  while (ob_ctx == nullptr && wait_time < max_wait_time) {
+    wait_time += sleep_time;
+    std::this_thread::sleep_for(sleep_time);
+    ob_ctx = orbbec_context().get_if_ready();
+  }
+  return ob_ctx;
+}
+
+void ObContext::run_on_ready(std::function<void()> callback) {
+  auto current_state = state.load(std::memory_order_acquire);
+  if (current_state == ObContextState::Ready) {
+    callback();
+    return;
+  }
+  on_ready_callbacks.enqueue(std::move(callback));
 }
 
 void ObContext::discover_devices() {
@@ -109,18 +143,9 @@ void ObContext::discover_devices() {
 }
 
 void ObContext::discover_devices_async() {
-  std::thread([&] {
-    using namespace std::chrono_literals;
-    constexpr auto max_wait_time = 10s;
-    constexpr auto sleep_time = 50ms;
-    auto wait_time = 0ms;
-    while (orbbec_context().get_if_ready() == nullptr &&
-           wait_time < max_wait_time) {
-      wait_time += sleep_time;
-      std::this_thread::sleep_for(sleep_time);
-    }
-    discover_devices();
-  }).detach();
+  run_on_ready([self = this] {
+    std::thread([self] { self->discover_devices(); }).detach();
+  });
 }
 
 void ObContext::retain_user() {

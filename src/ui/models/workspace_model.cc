@@ -1,16 +1,16 @@
 #include "workspace_model.h"
 #include <QObject>
+#include <QPointer>
 #include <QString>
 #include <QVariant>
-#include <QPointer>
 #include <concepts>
-#include <variant>
 #include <functional>
-#include <qurl.h>
-#include <workspace.h>
-#include <thread>
 #include <print>
+#include <qurl.h>
 #include <string_view>
+#include <thread>
+#include <variant>
+#include <workspace.h>
 
 #include "../../plugins/devices/orbbec/orbbec_device_config.gen.h"
 #include "plugins/devices/orbbec/orbbec_device_config.h"
@@ -89,16 +89,12 @@ void WorkspaceModel::rebuildAdapters() {
             plugin->set_status_callback(
                 [adapter = QPointer<OrbbecDeviceConfigurationAdapter>(adapter)](
                     pc::devices::DeviceStatus status) {
-                  if (!adapter)
-                    return; // adapter got deleted
-
+                  if (!adapter) return; // adapter got deleted
                   QMetaObject::invokeMethod(
                       adapter,
                       [adapter, status]() {
-                        if (!adapter)
-                          return;
+                        if (!adapter) return;
                         adapter->setStatusFromCore(status);
-                        std::println("set status from qt");
                       },
                       Qt::QueuedConnection);
                 });

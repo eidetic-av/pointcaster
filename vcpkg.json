@@ -4,6 +4,7 @@
 	"builtin-baseline": "1dce60b00170a48594cdb9adbcecf03a26066fec",
 	"dependencies": [
 		"corrade",
+		"concurrentqueue",
 		"draco",
 		"kddockwidgets",
 		"orbbecsdk",

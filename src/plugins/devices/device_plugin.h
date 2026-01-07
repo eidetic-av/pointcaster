@@ -43,17 +43,14 @@ public:
 
   // virtual pc::types::PointCloud point_cloud() const = 0;
 
-  // virtual void start() = 0;
-  // virtual void stop() = 0;
-
-  // virtual void restart() {
-  //   stop();
-  //   start();
-  // };
+  virtual void start() = 0;
+  virtual void stop() = 0;
+  virtual void restart() = 0;
 
   void notify_status_changed(DeviceStatus new_status) {
     if (_status_callback) _status_callback(new_status);
   }
+  void notify_status_changed() { notify_status_changed(status()); }
 
 private:
   DeviceConfigurationVariant _config;

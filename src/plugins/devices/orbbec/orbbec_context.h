@@ -2,9 +2,10 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace ob {
 class Context;
@@ -29,6 +30,8 @@ public:
   std::atomic_bool discovering_devices{false};
   std::vector<ObDeviceInfo> discovered_devices{};
 
+  std::mutex start_stop_device_access;
+
   void discover_devices();
   void discover_devices_async();
 
@@ -38,6 +41,8 @@ public:
   void init_async();
 
   std::shared_ptr<ob::Context> get_if_ready() const;
+  std::shared_ptr<ob::Context> wait_til_ready(int max_wait_seconds = 10) const;
+  void run_on_ready(std::function<void()> callback);
 
   ~ObContext();
 
