@@ -1,0 +1,79 @@
+diff --git a/cmake/OrbbecSDKConfig.cmake.in b/cmake/OrbbecSDKConfig.cmake.in
+new file mode 100644
+index 00000000..c9d54ac7
+--- /dev/null
++++ b/cmake/OrbbecSDKConfig.cmake.in
+@@ -0,0 +1,3 @@
++@PACKAGE_INIT@
++
++include("${CMAKE_CURRENT_LIST_DIR}/OrbbecSDKTargets.cmake")
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 75fa22d4..e9af6f3c 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -3,6 +3,8 @@
+ 
+ cmake_minimum_required(VERSION 3.10)
+ 
++include(CMakePackageConfigHelpers)
++
+ set(OB_INTERFACE_DIR "${CMAKE_CURRENT_LIST_DIR}/interface")
+ 
+ if(OB_ENABLE_BOLT_OPENGL_COMPAT)
+@@ -73,7 +75,7 @@ ob_source_group(ob::${OB_SDK_LIB_NAME})
+ if(OB_IS_MAIN_PROJECT)
+     install(
+         TARGETS ${OB_SDK_LIB_NAME}
+-        EXPORT ${OB_SDK_LIB_NAME}Config
++        EXPORT OrbbecSDKTargets
+         RUNTIME DESTINATION bin
+         LIBRARY DESTINATION lib
+         ARCHIVE DESTINATION lib
+@@ -87,23 +89,42 @@ if(OB_IS_MAIN_PROJECT)
+         PATTERN "*.hpp"
+     )
+ 
+-    install(EXPORT ${OB_SDK_LIB_NAME}Config NAMESPACE ob:: DESTINATION lib)
++    set(ORBBECSDK_CMAKE_PACKAGE_DIR "lib/cmake/OrbbecSDK")
++
++    install(
++        EXPORT OrbbecSDKTargets
++        NAMESPACE ob::
++        FILE OrbbecSDKTargets.cmake
++        DESTINATION "${ORBBECSDK_CMAKE_PACKAGE_DIR}"
++    )
++
++    configure_package_config_file(
++        "${CMAKE_CURRENT_LIST_DIR}/../cmake/OrbbecSDKConfig.cmake.in"
++        "${CMAKE_CURRENT_BINARY_DIR}/OrbbecSDKConfig.cmake"
++        INSTALL_DESTINATION "${ORBBECSDK_CMAKE_PACKAGE_DIR}"
++        NO_SET_AND_CHECK_MACRO
++        NO_CHECK_REQUIRED_COMPONENTS_MACRO
++    )
+ 
+-    include(CMakePackageConfigHelpers)
+     write_basic_package_version_file(
+-        "${CMAKE_CURRENT_BINARY_DIR}/${OB_SDK_LIB_NAME}Version.cmake"
++        "${CMAKE_CURRENT_BINARY_DIR}/OrbbecSDKConfigVersion.cmake"
+         VERSION "${PROJECT_VERSION}"
+         COMPATIBILITY SameMajorVersion
+     )
++
+     install(
+-        FILES "${CMAKE_CURRENT_BINARY_DIR}/${OB_SDK_LIB_NAME}Version.cmake"
+-        DESTINATION lib
++        FILES
++            "${CMAKE_CURRENT_BINARY_DIR}/OrbbecSDKConfig.cmake"
++            "${CMAKE_CURRENT_BINARY_DIR}/OrbbecSDKConfigVersion.cmake"
++        DESTINATION "${ORBBECSDK_CMAKE_PACKAGE_DIR}"
+     )
++
+     if(MSVC)
+         install(FILES $<TARGET_PDB_FILE:${OB_SDK_LIB_NAME}> DESTINATION bin OPTIONAL)
+     endif()
+ endif()
+ 
++
+ if(OB_BUILD_SOVERSION)
+     set_target_properties(${PROJECT_NAME} PROPERTIES
+         VERSION ${PROJECT_VERSION}
