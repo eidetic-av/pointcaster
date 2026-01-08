@@ -43,14 +43,16 @@ add_custom_command(TARGET OrbbecDevice POST_BUILD
   "${DEVICES_PLUGIN_DIR}/OrbbecDevice.conf"
 )
 
-add_custom_command(TARGET OrbbecDevice POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-  "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/extensions"
-  "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
-)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_custom_command(TARGET OrbbecDevice POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/extensions"
+    "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
+  )
+
+else()
 
   add_custom_command(TARGET OrbbecDevice POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/orbbec"
@@ -61,6 +63,13 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     -DVCPKG_TARGET_TRIPLET="${VCPKG_TARGET_TRIPLET}"
     -DMOVE_EXISTING_DEPS=ON
     -P "${CMAKE_SOURCE_DIR}/cmake/CopyRuntimeDependencies.cmake"
+  )
+
+  add_custom_command(TARGET OrbbecDevice POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/extensions"
+    "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
   )
 
 endif()

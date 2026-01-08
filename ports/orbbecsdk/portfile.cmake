@@ -5,7 +5,7 @@ vcpkg_from_github(
     SHA512 e8927b211d2d6d01483568d745b21e044f3486e7c1da9bcec1715651cfa8f26d671f2a30e2adfeddc5d54541a0d5c39ee8e01fc5b8c84fe25ff2a90985bf8ee4
     PATCHES
         cmake-package-install.patch
-        allow-maybe-uninitialized.patch
+        ros-initialisation-for-gcc.patch
 )
 
 if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")

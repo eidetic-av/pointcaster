@@ -1,0 +1,13 @@
+diff --git a/3rdparty/rosbag/src/rosbag_storage/include/rosbag/bag.h b/3rdparty/rosbag/src/rosbag_storage/include/rosbag/bag.h
+index bcb11aa6..2cc2518d 100644
+--- a/3rdparty/rosbag/src/rosbag_storage/include/rosbag/bag.h
++++ b/3rdparty/rosbag/src/rosbag_storage/include/rosbag/bag.h
+@@ -371,7 +371,7 @@ template <class T> std::shared_ptr<T> Bag::instantiateBuffer(IndexEntry const &i
+         readMessageDataHeaderFromBuffer(*current_buffer_, index_entry.offset, header, data_size, bytes_read);
+ 
+         // Read the connection id from the header
+-        uint32_t connection_id;
++        uint32_t connection_id{};
+         readField(*header.getValues(), CONNECTION_FIELD_NAME, true, &connection_id);
+ 
+         std::map<uint32_t, ConnectionInfo *>::const_iterator connection_iter = connections_.find(connection_id);

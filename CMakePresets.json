@@ -23,7 +23,7 @@
 			"displayName": "Pointcaster Release build for Linux x64",
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": "Release",
-				"VCPKG_TARGET_TRIPLET": "x64-linux-release",
+				"VCPKG_TARGET_TRIPLET": "x64-linux-custom-release",
 				"CMAKE_INSTALL_PREFIX": "/usr",
 				"CPACK_APPIMAGE_TOOL_EXECUTABLE": "/home/dev/.local/bin/appimagetool/squashfs-root/AppRun",
 				"CMAKE_THREAD_LIBS_INIT": "-lpthread"
