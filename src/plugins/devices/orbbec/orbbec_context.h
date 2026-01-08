@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <mutex>
 
 namespace ob {
 class Context;
