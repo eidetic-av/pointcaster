@@ -9,6 +9,7 @@
 #include <libobsensor/h/ObTypes.h>
 #include <libobsensor/hpp/Context.hpp>
 #include <libobsensor/hpp/Error.hpp>
+#include <libobsensor/hpp/Pipeline.hpp>
 #include <libobsensor/hpp/Utils.hpp>
 #include <memory>
 #include <print>
@@ -16,6 +17,14 @@
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
+
+namespace {
+constexpr int colour_width = 1920;
+constexpr int colour_height = 1080;
+constexpr int depth_width = 640;
+constexpr int depth_height = 576;
+constexpr int fps = 30;
+} // namespace
 
 namespace pc::devices {
 
@@ -34,7 +43,10 @@ OrbbecDevice::OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
   orbbec_context().run_on_ready([this] {
     notify_status_changed();
     start_sync();
-    _timeout_thread = std::jthread(&OrbbecDevice::timeout_thread_work, this);
+    _timeout_thread = std::jthread([this](auto stop_token) {
+      // &OrbbecDevice::timeout_thread_work
+      timeout_thread_work(stop_token);
+    });
   });
 
   std::println("Created OrbbecDevice");
@@ -51,10 +63,15 @@ DeviceStatus OrbbecDevice::status() const {
   auto ctx = orbbec_context().get_if_ready();
   if (!ctx) return DeviceStatus::Unloaded;
   if (_in_error_state) return DeviceStatus::Missing;
-  if (!_running_pipeline) return DeviceStatus::Loaded;
-  if (_last_updated_time.load() == std::chrono::steady_clock::time_point{}) {
+  if (!_running_pipeline) {
+    std::println("returning loaded from pipeline");
     return DeviceStatus::Loaded;
   }
+  if (_last_updated_time.load() == std::chrono::steady_clock::time_point{}) {
+    std::println("returning loaded from clock");
+    return DeviceStatus::Loaded;
+  }
+  std::println("returning active");
   return DeviceStatus::Active;
 }
 
@@ -97,204 +114,84 @@ void OrbbecDevice::start_sync() {
   set_error_state(false);
   set_updated_time(steady_clock::time_point{});
 
-  auto &config = std::get<OrbbecDeviceConfiguration>(this->config());
-  // pc::logger->info("Initialising OrbbecDevice at {}", config.ip);
+  const auto &config = std::get<OrbbecDeviceConfiguration>(this->config());
   std::println("Initialising OrbbecDevice at {}", config.ip);
-
-  constexpr uint16_t net_device_port = 8090; // femto mega default
-
-  bool existing_device = false;
 
   auto ob_ctx = orbbec_context().wait_til_ready();
   if (!ob_ctx) {
     std::println("Orbbec context not ready in time, aborting start_sync()");
+    set_error_state(true);
     return;
   }
 
-  auto ob_device_list = ob_ctx->queryDeviceList();
-  auto count = ob_device_list->deviceCount();
-  for (size_t i = 0; i < count; i++) {
-    auto device = ob_device_list->getDevice(i);
-    auto info = device->getDeviceInfo();
-    if (strcmp(info->ipAddress(), config.ip.c_str()) == 0) {
-      _ob_device = device;
-      existing_device = true;
+  std::shared_ptr<ob::Device> ob_device;
+
+  // TODO maybe try via mac address before trying by ip?
+
+  // try to find existing device in the list by network IP
+  if (auto ob_device_list = ob_ctx->queryDeviceList()) {
+    const size_t device_count = ob_device_list->deviceCount();
+    for (size_t i = 0; i < device_count; ++i) {
+      auto device = ob_device_list->getDevice(i);
+      if (!device) continue;
+
+      auto info = device->getDeviceInfo();
+      if (!info) continue;
+
+      if (!config.ip.empty() && info->ipAddress()) {
+        if (std::strcmp(info->ipAddress(), config.ip.c_str()) == 0) {
+          ob_device = device;
+          break;
+        }
+      }
     }
   }
 
-  if (!existing_device) {
+  if (!ob_device && !config.ip.empty()) {
+    constexpr uint16_t net_device_port = 8090; // Femto Mega default
     try {
-      _ob_device = ob_ctx->createNetDevice(config.ip.data(), net_device_port);
+      ob_device = ob_ctx->createNetDevice(config.ip.c_str(), net_device_port);
     } catch (const ob::Error &e) {
-      // pc::logger->error("Failed to create OrbbecDevice at {}:{}", config.ip,
-      //                   net_device_port);
-      std::println("Failed to create OrbbecDevice at {}:{}", config.ip,
-                   net_device_port);
+      std::println("Failed to create OrbbecDevice at {}:{}: {}", config.ip,
+                   net_device_port, e.what());
+      set_error_state(true);
       return;
     } catch (...) {
-      // pc::logger->error("Unknown error creating Orrbec NetDevice");
-      std::println("Unknown error creating Orrbec NetDevice");
+      std::println("Unknown error creating Orbbec NetDevice at {}:{}",
+                   config.ip, net_device_port);
+      set_error_state(true);
+      return;
     }
   }
 
-  _ob_pipeline = std::make_shared<ob::Pipeline>(_ob_device);
-  _ob_config = std::make_shared<ob::Config>();
-  _ob_point_cloud = std::make_unique<ob::PointCloudFilter>();
-
-  _ob_xy_tables.reset();
-  _xy_table_data.reset();
-  _depth_positions_buffer.reset();
-  _depth_frame_buffer.reset();
-
-  constexpr auto fps = 30;
-  constexpr auto color_width = 1280;
-  constexpr auto color_height = 720;
-
-  // Default to using Narrow FOV
-  auto depth_width = 640;
-  auto depth_height = 576;
-  // Wide FOV depth mode
-  if (config.depth_mode == 1) {
-    depth_width = 512;
-    depth_height = 512;
+  if (!ob_device) {
+    std::println("Warning: Unable to find Orbbec at '{}'", config.ip);
+    set_error_state(true);
+    return;
   }
 
-  // default acquisition mode is RGBD
   if (config.acquisition_mode == 0) {
-
-    _ob_config->setAlignMode(ALIGN_D2C_HW_MODE);
-    _ob_config->setFrameAggregateOutputMode(
-        OB_FRAME_AGGREGATE_OUTPUT_FULL_FRAME_REQUIRE);
-
-    auto color_profiles = _ob_pipeline->getStreamProfileList(OB_SENSOR_COLOR);
-    auto color_profile = color_profiles->getVideoStreamProfile(
-        color_width, color_height, OB_FORMAT_MJPG, fps);
-
-    _ob_config->enableStream(color_profile);
-
-    auto depth_profiles =
-        _ob_pipeline->getD2CDepthProfileList(color_profile, ALIGN_D2C_HW_MODE);
-    auto depth_profile = depth_profiles->getVideoStreamProfile(
-        depth_width, depth_height, OB_FORMAT_Y16, fps);
-
-    _ob_config->enableStream(depth_profile);
-
-    if (!init_device_memory(color_profile->width() * color_profile->height())) {
-      // pc::logger->error("Failed to initialise GPU memory for Orbbec
-      // pipeline");
+    if (!init_device_memory(colour_width * colour_height)) {
       std::println("Failed to initialise GPU memory for Orbbec pipeline");
+      set_error_state(true);
       return;
-    };
-
-    std::println("about to start pipeline");
-
-    _ob_pipeline->start(
-        _ob_config, [&](std::shared_ptr<ob::FrameSet> frame_set) {
-          auto color_frame = frame_set->colorFrame();
-          auto point_count = color_frame->width() * color_frame->height();
-          std::shared_ptr<ob::Frame> point_cloud;
-          try {
-            point_cloud = _ob_point_cloud->process(frame_set);
-          } catch (ob::Error e) {
-            std::println("Failed to process Orbbec frame: {}", e.what());
-            return;
-          }
-          if (point_cloud && point_cloud->data()) {
-            std::lock_guard lock(_point_buffer_access);
-            _point_buffer.resize(point_count);
-            std::memcpy(_point_buffer.data(), point_cloud->data(),
-                        point_count * sizeof(OBColorPoint));
-          }
-          set_updated_time(steady_clock::now());
-          _buffer_updated = true;
-        });
-
-    _ob_point_cloud->setCameraParam(_ob_pipeline->getCameraParam());
-    _ob_point_cloud->setCreatePointFormat(OB_FORMAT_RGB_POINT);
-
-    set_error_state(false);
-    set_running(true);
+    }
   }
-
-  // depth_only acquisition_mode
+  //
   else if (config.acquisition_mode == 1) {
-
-    auto depth_profiles = _ob_pipeline->getStreamProfileList(OB_SENSOR_DEPTH);
-    auto depth_profile = depth_profiles->getVideoStreamProfile(
-        depth_width, depth_height, OB_FORMAT_Y16, fps);
-
-    _ob_config->enableStream(depth_profile);
-    _ob_config->setAlignMode(ALIGN_DISABLE);
-
-    if (!init_device_memory(depth_width * depth_height)) {
-      std::println("Failed to initialise GPU memory for Orbbec pipeline");
-      // pc::logger->error("Failed to initialise GPU memory for Orbbec
-      // pipeline");
-      return;
-    }
-
-    _point_buffer.resize(depth_width * depth_height);
-
-    auto camera_param = _ob_pipeline->getCameraParam();
-    _ob_point_cloud->setCameraParam(camera_param);
-
-    auto calibration_param = _ob_pipeline->getCalibrationParam(_ob_config);
-    auto stream_profile = depth_profile->as<ob::VideoStreamProfile>();
-
-    uint32_t xy_table_size = depth_width * depth_height * 2;
-    _xy_table_data = std::vector<float>(xy_table_size);
-    _ob_xy_tables = OBXYTables{};
-    bool table_init = ob::CoordinateTransformHelper::transformationInitXYTables(
-        calibration_param, OB_SENSOR_DEPTH, (*_xy_table_data).data(),
-        &xy_table_size, &(*_ob_xy_tables));
-
-    if (!table_init) {
-      std::println("Failed to initialise orbbec transformation tables");
-      // pc::logger->error("Failed to initialise orbbec transformation tables");
-      return;
-    }
-
-    const auto frame_size = depth_height * depth_width;
-    _depth_positions_buffer = std::vector<OBPoint3f>(frame_size);
-    _depth_frame_buffer = std::vector<OBColorPoint>(frame_size);
-
-    _ob_pipeline->start(
-        _ob_config,
-        [this, frame_size](std::shared_ptr<ob::FrameSet> frame_set) {
-          if (frame_set == nullptr || frame_set->depthFrame() == nullptr)
-            return;
-
-          auto depth_frame = frame_set->depthFrame();
-          auto *depth_data = static_cast<uint16_t *>(depth_frame->data());
-
-          auto &depth_positions_buffer = (*_depth_positions_buffer);
-          auto &depth_frame_buffer = (*_depth_frame_buffer);
-
-          ob::CoordinateTransformHelper::transformationDepthToPointCloud(
-              &(*_ob_xy_tables), depth_data, depth_positions_buffer.data());
-
-          std::println("this acquisition mode isnt implemented");
-
-          // tbb::parallel_for(
-          //     tbb::blocked_range<size_t>(0, frame_size), [&](auto &r) {
-          //       for (size_t i = r.begin(); i < r.end(); ++i) {
-          //         auto pos = depth_positions_buffer[i];
-          //         depth_frame_buffer[i] =
-          //             OBColorPoint{pos.x, pos.y, pos.z, 255, 255, 255};
-          //       }
-          //     });
-
-          {
-            std::lock_guard lock(_point_buffer_access);
-            std::swap(_point_buffer, depth_frame_buffer);
-            _buffer_updated = true;
-            set_updated_time(steady_clock::now());
-          }
-        });
-
-    set_error_state(false);
-    set_running(true);
+    std::println("acquisition_mode not implemented yet");
+    set_error_state(true);
+    return;
   }
+
+  std::println("about to start pipeline");
+  _pipeline_thread =
+      std::jthread([this, ob_device = std::move(ob_device)](auto stop_token) {
+        pipeline_thread_work(stop_token, ob_device);
+      });
+
+  set_running(true);
+  set_error_state(false);
 }
 
 void OrbbecDevice::stop_sync() {
@@ -302,10 +199,153 @@ void OrbbecDevice::stop_sync() {
   std::lock_guard lock(orbbec_context().start_stop_device_access);
   std::println("Closing OrbbecDevice {}", config.ip);
   // pc::logger->info("Closing OrbbecDevice {}", config().ip);
-  if (_ob_pipeline) _ob_pipeline->stop();
+  _pipeline_thread.request_stop();
+  _pipeline_thread.join();
   if (_device_memory_ready.load()) free_device_memory();
   set_running(false);
   set_updated_time(steady_clock::time_point{});
+}
+
+void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
+                                        std::shared_ptr<ob::Device> ob_device) {
+  try {
+    ob::Pipeline pipeline{ob_device};
+
+    auto ob_config = std::make_shared<ob::Config>();
+
+    auto colour_profile_list = pipeline.getStreamProfileList(OB_SENSOR_COLOR);
+    // TODO enable without colour too
+    if (!colour_profile_list) {
+      std::println("No Orbbec colour profiles available");
+      set_error_state(true);
+      return;
+    }
+    std::shared_ptr<ob::VideoStreamProfile> colour_profile;
+    try {
+      colour_profile = colour_profile_list->getVideoStreamProfile(
+          colour_width, colour_height, OB_FORMAT_MJPG, fps);
+    } catch (const ob::Error &e) {
+      std::println("Failed to get colour profile: {}", e.what());
+      set_error_state(true);
+      return;
+    }
+    ob_config->enableStream(colour_profile);
+
+    std::shared_ptr<ob::VideoStreamProfile> depth_profile;
+
+    // try hardware D2C first
+    std::shared_ptr<ob::StreamProfileList> depth_d2c_list;
+    try {
+      depth_d2c_list =
+          pipeline.getD2CDepthProfileList(colour_profile, ALIGN_D2C_HW_MODE);
+    } catch (const ob::Error &e) {
+      std::println("Failed to get HW D2C depth profile list: {}", e.what());
+    }
+
+    if (depth_d2c_list && depth_d2c_list->count() > 0) {
+      try {
+        depth_profile = depth_d2c_list->getVideoStreamProfile(
+            depth_width, depth_height, OB_FORMAT_Y16, fps);
+        ob_config->setAlignMode(ALIGN_D2C_HW_MODE);
+      } catch (const ob::Error &e) {
+        std::println("Failed to select HW D2C depth profile: {}", e.what());
+      }
+    }
+
+    // fallback to software D2C if HW failed or unsupported for this combo
+    if (!depth_profile) {
+      std::println("Falling back to ALIGN_D2C_SW_MODE");
+      try {
+        auto depth_sw_list =
+            pipeline.getD2CDepthProfileList(colour_profile, ALIGN_D2C_SW_MODE);
+        if (!depth_sw_list || depth_sw_list->count() == 0) {
+          std::println("No SW D2C depth profiles available");
+          set_error_state(true);
+          return;
+        }
+        depth_profile = depth_sw_list->getVideoStreamProfile(
+            depth_width, depth_height, OB_FORMAT_Y16, fps);
+        ob_config->setAlignMode(ALIGN_D2C_SW_MODE);
+      } catch (const ob::Error &e) {
+        std::println("Failed to select SW D2C depth profile: {}", e.what());
+        set_error_state(true);
+        return;
+      }
+    }
+
+    ob_config->enableStream(depth_profile);
+    ob_config->setFrameAggregateOutputMode(
+        OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);
+
+    pipeline.enableFrameSync();
+
+    try {
+      pipeline.start(ob_config);
+    } catch (const ob::Error &e) {
+      std::println("Failed to start Orbbec pipeline: {}", e.what());
+      set_error_state(true);
+      return;
+    }
+
+    ob::PointCloudFilter point_cloud_filter;
+    point_cloud_filter.setCameraParam(pipeline.getCameraParam());
+
+    // TODO: query actual depth unit scale from device
+    constexpr float depth_position_scale = 1.0f;
+    point_cloud_filter.setPositionDataScaled(depth_position_scale);
+
+    point_cloud_filter.setCreatePointFormat(OB_FORMAT_RGB_POINT);
+
+    // processing loop
+    while (!stop_token.stop_requested()) {
+      std::shared_ptr<ob::FrameSet> frame_set;
+      try {
+        frame_set = pipeline.waitForFrameset(100);
+      } catch (const ob::Error &e) {
+        std::println("waitForFrameset error: {}", e.what());
+        continue;
+      }
+
+      if (!frame_set) continue;
+
+      auto colour_frame = frame_set->colorFrame();
+      auto depth_frame = frame_set->depthFrame();
+      if (!colour_frame || !depth_frame) continue;
+
+      const uint32_t width = colour_frame->width();
+      const uint32_t height = colour_frame->height();
+      const size_t point_count = static_cast<size_t>(width) * height;
+
+      std::shared_ptr<ob::Frame> point_cloud_frame;
+      try {
+        point_cloud_frame = point_cloud_filter.process(frame_set);
+      } catch (const ob::Error &e) {
+        std::println("Failed to process Orbbec frame: {}", e.what());
+        continue;
+      } catch (const std::exception &e) {
+        std::println("Failed to process Orbbec frame: {}", e.what());
+        continue;
+      } catch (...) {
+        std::println("Unknown exception in Orbbec process()");
+        continue;
+      }
+
+      if (point_cloud_frame && point_cloud_frame->data()) {
+        std::lock_guard buffer_lock(_point_buffer_access);
+        _point_buffer.resize(point_count);
+        std::memcpy(_point_buffer.data(), point_cloud_frame->data(),
+                    point_count * sizeof(OBColorPoint));
+        _buffer_updated = true;
+        set_updated_time(steady_clock::now());
+      }
+    }
+  } catch (const std::exception &e) {
+    std::println("Exception in Orbbec processing thread: {}", e.what());
+    set_error_state(true);
+  } catch (...) {
+    std::println("Unknown exception in Orbbec processing thread");
+    set_error_state(true);
+  }
 }
 
 void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {

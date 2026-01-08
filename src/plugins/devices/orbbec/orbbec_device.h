@@ -50,19 +50,6 @@ public:
   void restart() override;
 
 private:
-  std::shared_ptr<ob::Config> _ob_config;
-  std::shared_ptr<ob::Device> _ob_device;
-  std::shared_ptr<ob::Pipeline> _ob_pipeline;
-  std::unique_ptr<ob::PointCloudFilter> _ob_point_cloud;
-
-  std::optional<OBXYTables> _ob_xy_tables;
-  std::optional<std::vector<float>> _xy_table_data;
-  std::optional<std::vector<OBPoint3f>> _depth_positions_buffer;
-  std::optional<std::vector<OBColorPoint>> _depth_frame_buffer;
-
-  std::jthread _initialisation_thread;
-  std::jthread _timeout_thread;
-
   std::vector<OBColorPoint> _point_buffer;
   std::mutex _point_buffer_access;
   std::atomic_bool _buffer_updated{false};
@@ -79,6 +66,10 @@ private:
 
   OrbbecImplDeviceMemory *_device_memory;
   std::atomic_bool _device_memory_ready{false};
+
+  std::jthread _initialisation_thread;
+  std::jthread _pipeline_thread;
+  std::jthread _timeout_thread;
 
   bool init_device_memory(std::size_t incoming_point_count);
   void free_device_memory();
@@ -107,6 +98,8 @@ private:
     if (new_invalid != old_invalid) notify_status_changed();
   }
 
+  void pipeline_thread_work(std::stop_token stop_token,
+                              std::shared_ptr<ob::Device> ob_device);
   void timeout_thread_work(std::stop_token stop_token);
 };
 
