@@ -1,53 +1,61 @@
-if("${VCPKG_LIBRARY_LINKAGE}" STREQUAL "static")
-  message(STATUS "Note: ${PORT} only supports dynamic library linkage. Building dynamic library.")
-  set(VCPKG_LIBRARY_LINKAGE dynamic)
-endif()
-
-if(VCPKG_TARGET_IS_LINUX)
-
-  set(LINUX_ARCHIVE_FILE_NAME "OrbbecSDK_v2.6.3_202512231427_4e448f9_linux_x86_64.zip")
-
-  vcpkg_download_distfile(ARCHIVE_FILE
-    URLS "https://github.com/orbbec/OrbbecSDK_v2/releases/download/v${VERSION}/${LINUX_ARCHIVE_FILE_NAME}"
-    FILENAME "${LINUX_ARCHIVE_FILE_NAME}"
-    SHA512 3919f234c373d8ea5cb30e69bc007264f78ece702f3a6b6f648edf727e25e5f1802a8bcebb52ff52be07af9911a438ede1f7eb7379fcf871e14a5d0000a4a1d2
-  )
-
-  vcpkg_extract_source_archive(
-    SOURCE_PATH
-    ARCHIVE "${ARCHIVE_FILE}"
-    SOURCE_BASE ${VERSION}
-  )
-
-elseif(VCPKG_TARGET_IS_WINDOWS)
-
-  set(WINDOWS_ARCHIVE_FILE_NAME "OrbbecSDK_v2.6.3_202512232226_4e448f9_win_x64.zip")
-
-  vcpkg_download_distfile(ARCHIVE_FILE
-    URLS "https://github.com/orbbec/OrbbecSDK_v2/releases/download/v${VERSION}/${WINDOWS_ARCHIVE_FILE_NAME}"
-    FILENAME "${WINDOWS_ARCHIVE_FILE_NAME}"
-    SHA512 2372a22cedc40252babd8f66f0fa84c08218bfa630cde2a39f3d567edfb24877caa775aa855b8d1e98f267c03068a3d3637b1b9e0ac6861b061dda5ae46db357
-  )
-
-  vcpkg_extract_source_archive(
-    SOURCE_PATH
-    ARCHIVE "${ARCHIVE_FILE}"
-    SOURCE_BASE ${VERSION}
-    NO_REMOVE_ONE_LEVEL
-  )
-
-endif()
-
-file(INSTALL "${SOURCE_PATH}/include/" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
-file(INSTALL "${SOURCE_PATH}/lib/" DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
-file(INSTALL "${SOURCE_PATH}/lib/" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/lib")
-file(INSTALL "${SOURCE_PATH}/bin/" DESTINATION "${CURRENT_PACKAGES_DIR}/bin")
-file(INSTALL "${SOURCE_PATH}/bin/" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/bin")
-file(INSTALL "${SOURCE_PATH}/shared/" DESTINATION "${CURRENT_PACKAGES_DIR}/shared")
-
-configure_file(
-  "${CMAKE_CURRENT_LIST_DIR}/OrbbecSDKConfig.cmake.in"
-  "${CURRENT_PACKAGES_DIR}/share/${PORT}/OrbbecSDKConfig.cmake"
-  @ONLY
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO orbbec/OrbbecSDK_v2
+    REF v${VERSION}
+    SHA512 e8927b211d2d6d01483568d745b21e044f3486e7c1da9bcec1715651cfa8f26d671f2a30e2adfeddc5d54541a0d5c39ee8e01fc5b8c84fe25ff2a90985bf8ee4
+    PATCHES
+        cmake-package-install.patch
 )
-file(COPY "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    message(FATAL_ERROR "orbbecsdk_v2 only supports shared builds")
+endif()
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        -DOB_BUILD_MAIN_PROJECT=ON
+        -DOB_BUILD_EXAMPLES=OFF
+        -DOB_BUILD_TESTS=OFF
+        -DOB_BUILD_DOCS=OFF
+        -DOB_BUILD_TOOLS=OFF
+        -DOB_INSTALL_EXAMPLES_SOURCE=OFF
+)
+
+vcpkg_cmake_build()
+vcpkg_cmake_install()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+
+vcpkg_cmake_config_fixup(
+    CONFIG_PATH lib/cmake/OrbbecSDK
+    PACKAGE_NAME OrbbecSDK
+)
+
+if(VCPKG_TARGET_IS_WINDOWS)
+  set(bin_dir "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/win_x64/bin")
+  set(runtime_extensions_dir "${bin_dir}/extensions")
+
+  if(EXISTS "${runtime_extensions_dir}")
+    # copy 'extensions' that orbbec loads at runtime
+    file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/bin")
+    execute_process(
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              "${runtime_extensions_dir}"
+              "${CURRENT_PACKAGES_DIR}/bin/extensions"
+    )
+
+    # copy all DLLs adjacent to OrbbecSDK.dll
+    file(GLOB runtime_dlls "${bin_dir}/*.dll")
+    foreach(dll_path IN LISTS runtime_dlls)
+      get_filename_component(dll_filename "${dll_path}" NAME)
+
+      if(NOT dll_filename MATCHES "^OrbbecSDK.*\\.dll$")
+        file(COPY "${dll_path}" DESTINATION "${CURRENT_PACKAGES_DIR}/bin")
+      endif()
+    endforeach()
+
+  endif()
+endif()
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.txt")

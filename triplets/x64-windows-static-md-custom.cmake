@@ -5,3 +5,7 @@ set(VCPKG_LIBRARY_LINKAGE static)
 if(PORT MATCHES "opencv")
     set(VCPKG_LIBRARY_LINKAGE dynamic)
 endif()
+
+if(PORT MATCHES "orbbecsdk")
+    set(VCPKG_LIBRARY_LINKAGE dynamic)
+endif()

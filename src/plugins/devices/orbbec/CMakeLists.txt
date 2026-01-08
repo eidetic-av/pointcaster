@@ -1,25 +1,25 @@
 corrade_add_plugin(OrbbecDevice
   ${DEVICES_PLUGIN_DIR}
   ${DEVICES_PLUGIN_DIR}
-  OrbbecDevice.conf 
-    orbbec_device.cc
-    orbbec_context.cc
-    ${CMAKE_SOURCE_DIR}/src/ui/models/device_status.h
+  OrbbecDevice.conf
+  orbbec_device.cc
+  orbbec_context.cc
+  ${CMAKE_SOURCE_DIR}/src/ui/models/device_status.h
 )
 
 add_qml_adapters(
-    TARGETS
-        pointcaster
-        OrbbecDevice
-    CONFIG_INPUTS
-        orbbec_device_config.h
+  TARGETS
+  pointcaster
+  OrbbecDevice
+  CONFIG_INPUTS
+  orbbec_device_config.h
 )
 
 set_target_properties(OrbbecDevice PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${DEVICES_PLUGIN_DIR}
   LIBRARY_OUTPUT_DIRECTORY ${DEVICES_PLUGIN_DIR}
   ARCHIVE_OUTPUT_DIRECTORY ${DEVICES_PLUGIN_DIR}
-  BUILD_RPATH   "\$ORIGIN;\$ORIGIN/orbbec"
+  BUILD_RPATH "\$ORIGIN;\$ORIGIN/orbbec"
   INSTALL_RPATH "\$ORIGIN;\$ORIGIN/orbbec"
 )
 
@@ -27,9 +27,9 @@ find_package(OrbbecSDK CONFIG REQUIRED)
 find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 
 target_link_libraries(OrbbecDevice PRIVATE
-  pointcaster::core 
+  pointcaster::core
   Corrade::PluginManager
-  Orbbec::OrbbecSDK
+  ob::OrbbecSDK
   unofficial::concurrentqueue::concurrentqueue
 )
 
@@ -43,16 +43,14 @@ add_custom_command(TARGET OrbbecDevice POST_BUILD
   "${DEVICES_PLUGIN_DIR}/OrbbecDevice.conf"
 )
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+add_custom_command(TARGET OrbbecDevice POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+  "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/extensions"
+  "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
+)
 
-  add_custom_command(TARGET OrbbecDevice POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/orbbec"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/OrbbecSDK.dll"
-    "${DEVICES_PLUGIN_DIR}/orbbec/OrbbecSDK.dll"
-  )
-
-else()
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
   add_custom_command(TARGET OrbbecDevice POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/orbbec"
@@ -68,8 +66,8 @@ else()
 endif()
 
 install(DIRECTORY
-    "${CMAKE_CURRENT_BINARY_DIR}/${DEVICES_PLUGIN_DIR}/orbbec/"
-    DESTINATION "${DEVICES_PLUGIN_DIR}/orbbec"
+  "${CMAKE_CURRENT_BINARY_DIR}/${DEVICES_PLUGIN_DIR}/orbbec/"
+  DESTINATION "${DEVICES_PLUGIN_DIR}/orbbec"
 )
 
 
