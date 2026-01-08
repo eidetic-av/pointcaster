@@ -1,5 +1,7 @@
 find_package(Python REQUIRED)
 
+# this function takes a list of data structs (*Configuration headers) and generates 'adapter' headers
+# that allow them to be read & set through the QML UI layer
 function(add_qml_adapters)
     set(options "")
     set(oneValueArgs "")
