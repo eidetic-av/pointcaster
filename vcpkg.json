@@ -6,9 +6,11 @@
 		"corrade",
 		"concurrentqueue",
 		"draco",
+        "fmt",
 		"kddockwidgets",
 		"orbbecsdk",
 		"reflectcpp",
+        "spdlog",
 		"zpp-bits"
 	]
 }

@@ -1,0 +1,41 @@
+diff --git a/include/spdlog/details/registry-inl.h b/include/spdlog/details/registry-inl.h
+index f447848e..6a2dd82a 100644
+--- a/include/spdlog/details/registry-inl.h
++++ b/include/spdlog/details/registry-inl.h
+@@ -233,6 +233,12 @@ SPDLOG_INLINE void registry::set_levels(log_levels levels, level::level_enum *gl
+     }
+ }
+ 
++SPDLOG_INLINE std::shared_ptr<registry> registry::instance_ptr()
++{
++    static std::shared_ptr<registry> s_instance = std::shared_ptr<registry>(new registry());
++    return s_instance;
++}
++
+ SPDLOG_INLINE registry &registry::instance() {
+     static registry s_instance;
+     return s_instance;
+diff --git a/include/spdlog/details/registry.h b/include/spdlog/details/registry.h
+index 8afcbd6f..7d2e6244 100644
+--- a/include/spdlog/details/registry.h
++++ b/include/spdlog/details/registry.h
+@@ -95,13 +95,18 @@ public:
+     // set levels for all existing/future loggers. global_level can be null if should not set.
+     void set_levels(log_levels levels, level::level_enum *global_level);
+ 
++    // add for handle instance outside spdlog
++    static std::shared_ptr<registry> instance_ptr();
++
+     static registry &instance();
+ 
+     void apply_logger_env_levels(std::shared_ptr<logger> new_logger);
+ 
++    // pretty crap but to make the orrbecsdk patch to spdlog build,
++    // this destructor must be made public
++    ~registry();
+ private:
+     registry();
+-    ~registry();
+ 
+     void throw_if_exists_(const std::string &logger_name);
+     void register_logger_(std::shared_ptr<logger> new_logger);

@@ -13,6 +13,8 @@
 	{
 	    "name": "vcpkg-cmake-config",
 	    "host": true
-	}
+	},
+    "spdlog",
+    "fmt"
     ]
 }

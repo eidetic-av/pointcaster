@@ -1,0 +1,29 @@
+diff --git a/src/shared/CMakeLists.txt b/src/shared/CMakeLists.txt
+index 4c79d255..938b9f31 100644
+--- a/src/shared/CMakeLists.txt
++++ b/src/shared/CMakeLists.txt
+@@ -11,8 +11,9 @@ file(GLOB_RECURSE SOURCE_FILES "*.cpp" EXCLUDE unittest)
+ file(GLOB_RECURSE HEADERS_FILES "*.hpp" EXCLUDE unittest)
+ target_sources(shared PRIVATE ${SOURCE_FILES} ${HEADERS_FILES})
+ 
+-add_subdirectory(${OB_3RDPARTY_DIR}/spdlog spdlog)
+-target_link_libraries(shared PUBLIC spdlog::spdlog)
++find_package(spdlog CONFIG REQUIRED)
++find_package(fmt CONFIG REQUIRED)
++target_link_libraries(shared PUBLIC spdlog::spdlog fmt::fmt)
+ target_include_directories(shared PUBLIC ${OB_PUBLIC_HEADERS_DIR} ${CMAKE_CURRENT_LIST_DIR})
+ 
+ add_subdirectory(${OB_3RDPARTY_DIR}/tinyxml2 tinyxml2)
+diff --git a/src/shared/logger/LoggerTypeHelper.hpp b/src/shared/logger/LoggerTypeHelper.hpp
+index 27ed5bf9..dc62e309 100644
+--- a/src/shared/logger/LoggerTypeHelper.hpp
++++ b/src/shared/logger/LoggerTypeHelper.hpp
+@@ -4,7 +4,7 @@
+ #pragma once
+ 
+ #include <sstream>
+-#include <spdlog/fmt/bundled/format.h>
++#include <fmt/format.h>
+ #include "utils/PublicTypeHelper.hpp"
+ 
+ #define OB_LOG_FORMATTER(type)                                                                                        \

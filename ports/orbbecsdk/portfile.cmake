@@ -6,6 +6,7 @@ vcpkg_from_github(
     PATCHES
         cmake-package-install.patch
         ros-initialisation-for-gcc.patch
+        use-vcpkg-spdlog.patch
 )
 
 if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
