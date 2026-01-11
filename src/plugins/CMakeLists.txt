@@ -1,16 +1,19 @@
 set(DEVICES_PLUGIN_DIR "plugins/devices")
 
-find_package(cpplocate CONFIG REQUIRED)
-
 add_library(pointcaster_plugins
     plugin_loader.cc
 )
 add_library(pointcaster::plugins ALIAS pointcaster_plugins)
 
 target_link_libraries(pointcaster_plugins PRIVATE
-    pointcaster::core cpplocate::cpplocate
+    pointcaster::core 
     Corrade::Main Corrade::PluginManager
 )
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    find_package(cpplocate CONFIG REQUIRED)
+    target_link_libraries(pointcaster_plugins PRIVATE cpplocate::cpplocate)
+endif()
 
 # subdirectories are the dynamic corrade plugins
 add_subdirectory(devices/orbbec)
