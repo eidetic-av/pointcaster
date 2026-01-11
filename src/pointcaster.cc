@@ -10,6 +10,10 @@
 #include <QUrl>
 #include <fstream>
 #include <kddockwidgets/Config.h>
+#include <kddockwidgets/core/DockRegistry.h>
+#include <kddockwidgets/core/FloatingWindow.h>
+#include <kddockwidgets/core/TitleBar.h>
+#include <kddockwidgets/core/views/MainWindowViewInterface.h>
 #include <kddockwidgets/qtquick/Platform.h>
 #include <memory>
 #include <models/config_adapter.h>
@@ -45,10 +49,23 @@ int main(int argc, char *argv[]) {
   auto &docking_config = KDDockWidgets::Config::self();
   docking_config.setViewFactory(new pc::ui::CustomTitlebarViewFactory());
 
+  docking_config.setDragEndedFunc([] {
+    const auto floatingWindows =
+        KDDockWidgets::DockRegistry::self()->floatingWindows();
+    for (auto fw : floatingWindows) {
+      if (fw->affinities().contains("view") && !fw->beingDeleted()) {
+        fw->titleBar()->onFloatClicked();
+      }
+    }
+  });
+
   WorkspaceConfiguration workspace_config;
 
   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
       .id = "test", .ip = "192.168.1.107"});
+
+  workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
+      .id = "test2", .ip = "192.168.1.108"});
 
   // for (int i = 0; i < 6; i++) {
   //   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{

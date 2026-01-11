@@ -1,13 +1,23 @@
+set_source_files_properties(Theme/DarkPalette.qml
+    PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 qt_add_qml_module(PointcasterWorkspace 
 	URI Pointcaster.Workspace VERSION 1.0
     QML_FILES
+        Theme/DarkPalette.qml
         Windows/TitleBar.qml
         Windows/MainWindow.qml
-        Windows/DevicesWindow.qml
-        Windows/SessionViewWindow.qml
+        Windows/Devices/DevicesWindow.qml
+        Windows/Devices/DeviceSelectionList.qml
+        Windows/Sessions/SessionView.qml
+        Windows/Sessions/SessionViewWindow.qml
+        Windows/Sessions/CentralSessionView.qml
         Controls/TextButton.qml
     RESOURCES
+        Resources/Fonts/AtkinsonHyperlegibleNext-Light.otf
         Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf
+        Resources/Fonts/AtkinsonHyperlegibleNext-Medium.otf
+        Resources/Fonts/AtkinsonHyperlegibleNext-Bold.otf
 )
 
 target_link_libraries(PointcasterWorkspace PRIVATE
