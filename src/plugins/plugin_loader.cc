@@ -31,26 +31,19 @@ std::filesystem::path executable_directory_path() {
 }
 
 std::filesystem::path default_plugin_root_directory() {
-  return executable_directory_path() / "../plugins";
+  return executable_directory_path().parent_path() / "plugins";
 }
 
 void configure_search_paths(
     const std::filesystem::path &plugin_root_directory) {
   SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS |
                            LOAD_LIBRARY_SEARCH_USER_DIRS);
-
-  const auto device_plugin_directory = plugin_root_directory / "devices";
-
-  if (!std::filesystem::exists(device_plugin_directory)) {
-    return;
-  }
-
+  AddDllDirectory(plugin_root_directory.wstring().c_str());
   for (const auto &directory_entry :
-       std::filesystem::directory_iterator(device_plugin_directory)) {
+       std::filesystem::recursive_directory_iterator(plugin_root_directory)) {
     if (!directory_entry.is_directory()) {
       continue;
     }
-
     const auto directory_path = directory_entry.path();
     const auto wide_path = directory_path.wstring();
     AddDllDirectory(wide_path.c_str());

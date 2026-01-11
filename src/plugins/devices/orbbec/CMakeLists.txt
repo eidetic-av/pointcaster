@@ -45,11 +45,17 @@ add_custom_command(TARGET OrbbecDevice POST_BUILD
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 
-  add_custom_command(TARGET OrbbecDevice POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
+  # add_custom_command(TARGET OrbbecDevice POST_BUILD
+  #   COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/extensions"
+  #   COMMAND ${CMAKE_COMMAND} -E copy_directory
+  #   "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/extensions"
+  #   "${DEVICES_PLUGIN_DIR}/extensions"
+  # )
+  # message(FATAL_ERROR ${CMAKE_CURRENT_BINARY_DIR})
+
+  install(DIRECTORY
     "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/extensions"
-    "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
+    DESTINATION "${DEVICES_PLUGIN_DIR}"
   )
 
 else()
@@ -72,12 +78,12 @@ else()
     "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
   )
 
-endif()
+  install(DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}/${DEVICES_PLUGIN_DIR}/orbbec/"
+    DESTINATION "${DEVICES_PLUGIN_DIR}/orbbec"
+  )
 
-install(DIRECTORY
-  "${CMAKE_CURRENT_BINARY_DIR}/${DEVICES_PLUGIN_DIR}/orbbec/"
-  DESTINATION "${DEVICES_PLUGIN_DIR}/orbbec"
-)
+endif()
 
 
 set(CORRADE_PLUGINS ${CORRADE_PLUGINS} OrbbecDevice PARENT_SCOPE)

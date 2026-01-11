@@ -8,6 +8,10 @@
 		"draco",
         "fmt",
 		"kddockwidgets",
+		{
+			"name": "libcpplocate",
+			"platform": "windows"
+		},
 		"orbbecsdk",
 		"reflectcpp",
         "spdlog",

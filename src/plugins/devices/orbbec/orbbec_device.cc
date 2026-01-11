@@ -19,8 +19,8 @@ using namespace std::chrono;
 using namespace std::chrono_literals;
 
 namespace {
-constexpr int colour_width = 1920;
-constexpr int colour_height = 1080;
+constexpr int colour_width = 1280;
+constexpr int colour_height = 720;
 constexpr int depth_width = 640;
 constexpr int depth_height = 576;
 constexpr int fps = 30;

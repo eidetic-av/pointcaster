@@ -1,12 +1,14 @@
 set(DEVICES_PLUGIN_DIR "plugins/devices")
 
+find_package(cpplocate CONFIG REQUIRED)
+
 add_library(pointcaster_plugins
     plugin_loader.cc
 )
 add_library(pointcaster::plugins ALIAS pointcaster_plugins)
 
 target_link_libraries(pointcaster_plugins PRIVATE
-    pointcaster::core
+    pointcaster::core cpplocate::cpplocate
     Corrade::Main Corrade::PluginManager
 )
 

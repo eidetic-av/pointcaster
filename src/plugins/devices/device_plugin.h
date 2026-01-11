@@ -9,6 +9,12 @@
 #include <functional>
 #include <pointcaster/point_cloud.h>
 
+#ifdef _WIN32
+#include <cpplocate/cpplocate.h>
+#include <filesystem>
+#include <print>
+#endif
+
 namespace pc::devices {
 
 class DevicePlugin : public Corrade::PluginManager::AbstractPlugin {
@@ -20,7 +26,26 @@ public:
 
   static Corrade::Containers::Array<Corrade::Containers::String>
   pluginSearchPaths() {
+#ifdef _WIN32
+    auto exe_dir_canonical = cpplocate::getModulePath();
+    std::filesystem::path exe_dir(exe_dir_canonical);
+    auto plugin_dir = exe_dir.parent_path() / "plugins";
+
+    // convert C:\style\path into /style/path used by corrade
+    const auto to_posix_path = [](std::filesystem::path path) -> std::string {
+      auto result = path.string();
+      result.erase(0, 2);
+      std::replace(result.begin(), result.end(), '\\', '/');
+      return result;
+    };
+
+    auto devices_plugin_path = to_posix_path(plugin_dir / "devices");
+    auto orbbec_plugin_path = to_posix_path(plugin_dir / "devices" / "orbbec");
+
+    return {Corrade::InPlaceInit, { devices_plugin_path, orbbec_plugin_path }};
+#else
     return {Corrade::InPlaceInit, {"../plugins/devices"}};
+#endif
   }
 
   explicit DevicePlugin(Corrade::PluginManager::AbstractManager &manager,
