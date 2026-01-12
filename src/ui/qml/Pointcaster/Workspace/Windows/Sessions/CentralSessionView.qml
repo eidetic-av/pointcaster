@@ -1,6 +1,7 @@
 import QtQuick
 import com.kdab.dockwidgets as KDDW
 
+import Pointcaster 1.0
 import Pointcaster.Workspace 1.0
 
 // Item {

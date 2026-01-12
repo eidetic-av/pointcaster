@@ -13,6 +13,7 @@
 			"platform": "windows"
 		},
 		"orbbecsdk",
+		"qtawesome",
 		"reflectcpp",
         "spdlog",
 		"zpp-bits"

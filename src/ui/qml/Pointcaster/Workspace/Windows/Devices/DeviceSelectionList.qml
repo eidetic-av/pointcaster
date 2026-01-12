@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 
+import Pointcaster 1.0
 import Pointcaster.Workspace 1.0
 
 Item {
@@ -64,7 +65,7 @@ Item {
                 property bool hovered: mouse.containsMouse
                 property bool selected: ListView.isCurrentItem
 
-                color: selected ? DarkPalette.highlight : hovered ? DarkPalette.midlight : DarkPalette.button
+                color: selected ? DarkPalette.mid : hovered ? DarkPalette.midlight : DarkPalette.middark
 
                 border.color: DarkPalette.midlight
                 border.width: 0.5
@@ -99,10 +100,10 @@ Item {
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - statusCircle.width - deviceTypeText.width - (parent.spacing * 2)
+                        width: Math.max(75, parent.width - statusCircle.width - deviceTypeText.width - (parent.spacing * 2))
                         elide: Text.ElideRight
                         text: modelData.fieldValue(0)
-                        color: selected ? DarkPalette.highlightedText : DarkPalette.text
+                        color: DarkPalette.text
                     }
 
                     Text {
@@ -110,7 +111,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         elide: Text.ElideRight
                         text: modelData.displayName()
-                        color: selected ? DarkPalette.highlightedText : DarkPalette.text
+                        color: DarkPalette.text
                         opacity: .5
                     }
                 }
@@ -119,7 +120,6 @@ Item {
                     id: mouse
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         list.forceActiveFocus();
                         list.currentIndex = index;

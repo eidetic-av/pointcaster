@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQml.Models
 import com.kdab.dockwidgets as KDDW
 
+import Pointcaster 1.0
 import Pointcaster.Workspace 1.0
 
 KDDW.DockWidget {
@@ -165,7 +166,6 @@ KDDW.DockWidget {
                 // Single interaction surface
                 MouseArea {
                     anchors.fill: toggleRow
-                    cursorShape: Qt.PointingHandCursor
 
                     onClicked: {
                         computeToggle.cpuSelected = !computeToggle.cpuSelected;
@@ -199,6 +199,7 @@ KDDW.DockWidget {
 
             Rectangle {
                 id: propertiesGroup
+
                 anchors {
                     top: parent.top
                     left: parent.left
@@ -223,28 +224,44 @@ KDDW.DockWidget {
                         right: parent.right
                     }
                     height: 28
-                    color: DarkPalette.base
+                    color: headerMouseArea.containsMouse ? DarkPalette.mid : propertiesPane.propertiesExpanded ? DarkPalette.middark : DarkPalette.base
                     border.color: DarkPalette.mid
                     border.width: 1
+
+                    Image {
+                        id: groupHeaderArrowIcon
+                        width: 12
+                        height: 12
+                        fillMode: Image.PreserveAspectFit
+                        source: propertiesPane.propertiesExpanded ? FontAwesome.icon('solid/caret-down') : FontAwesome.icon('solid/caret-right')
+                        opacity: 0.75
+                        anchors {
+                            left: parent.left
+                            leftMargin: 3
+                            verticalCenter: parent.verticalCenter
+                        }
+                    }
 
                     Text {
                         id: groupHeaderText
                         anchors {
-                            left: parent.left
+                            left: groupHeaderArrowIcon.left
                             right: parent.right
-                            leftMargin: 10
+                            leftMargin: 15
                             rightMargin: 10
                             verticalCenter: parent.verticalCenter
                         }
-                        text: devices.currentAdapter ? ("Device Properties — " + devices.currentAdapter.displayName()) : "Device Properties"
+                        text: devices.currentAdapter ? (devices.currentAdapter.displayName() + " Properties") : "Device Properties"
+                        elide: Text.ElideRight
                         font.weight: Font.Medium
                         color: DarkPalette.text
                     }
 
                     MouseArea {
+                        id: headerMouseArea
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
                         onClicked: propertiesPane.propertiesExpanded = !propertiesPane.propertiesExpanded
+                        hoverEnabled: true
                     }
                 }
 

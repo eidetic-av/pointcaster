@@ -5,6 +5,7 @@ import QtQuick.Dialogs
 import QtQuick.Layouts
 import com.kdab.dockwidgets as KDDW
 
+import Pointcaster 1.0
 import Pointcaster.Workspace 1.0
 
 ApplicationWindow {
@@ -63,80 +64,14 @@ ApplicationWindow {
         }
     }
 
-    menuBar: MenuBar {
-
-        Menu {
-            title: qsTr("&File")
-            popupType: Popup.Window
-
-            Action {
-                text: qsTr("&New Workspace")
-            }
-            Action {
-                text: qsTr("New &Session")
-            }
-
-            MenuSeparator {}
-
-            Action {
-                text: qsTr("&Open")
-                onTriggered: openWorkspaceDialog.open()
-            }
-
-            MenuSeparator {}
-
-            Action {
-                text: qsTr("&Save")
-                onTriggered: workspaceModel.save()
-            }
-
-            Action {
-                text: qsTr("Save As...")
-                onTriggered: saveAsWorkspaceDialog.open()
-            }
-
-            MenuSeparator {}
-
-            Action {
-                text: qsTr("&Quit")
-                onTriggered: workspaceModel.close()
-            }
-        }
-
-        Menu {
-            title: qsTr("&Window")
-            popupType: Popup.Native
-
-            Action {
-                id: devicesMenuToggle
-                text: qsTr("&Devices")
-                checkable: true
-                onTriggered: {
-                    if (devicesWindow.isOpen)
-                        devicesWindow.forceClose();
-                    else
-                        devicesWindow.open();
-                }
-            }
-        }
-
-        Menu {
-            title: qsTr("&Help")
-            popupType: Popup.Native
-
-            Action {
-                text: qsTr("&About")
-                onTriggered: aboutPopup.open()
-            }
-        }
-    }
+    menuBar: TopMenuBar {}
 
     KDDW.DockingArea {
         id: dockingArea
         anchors.fill: parent
         uniqueName: "MainDockingArea"
 
-        // affinities: ["edit"]
+        affinities: ["edit", "view"]
 
         // persistentCentralItemFileName: ":/qt/qml/Pointcaster/Workspace/Windows/Sessions/CentralSessionView.qml"
 
@@ -146,13 +81,14 @@ ApplicationWindow {
         DevicesWindow {
             id: devicesWindow
             workspace: workspaceModel
+            affinities: ["edit"]
         }
 
         KDDW.DockWidget {
             id: session1
             uniqueName: "session1"
             title: "session_1"
-            // affinities: ["view"]
+            affinities: ["view"]
             SessionView {}
         }
 
@@ -160,7 +96,7 @@ ApplicationWindow {
             id: session2
             uniqueName: "session2"
             title: "session_2"
-            // affinities: ["view"]
+            affinities: ["view"]
             SessionView {}
         }
 

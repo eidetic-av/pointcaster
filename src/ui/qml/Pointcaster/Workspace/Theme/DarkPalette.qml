@@ -23,10 +23,10 @@ QtObject {
         highlightedText: "#00010A"
 
         light: "#E5E9F0"
-        midlight: "#4C566A"
-        mid: "#3B4252"
-        dark: "#00010A"
-        shadow: "#00010A"
+        midlight: "#4C566A"  
+        mid:      "#3B4252"
+        dark:     "#151823"
+        shadow:   "#00010A"
     }
 
     property color success: "#aecf7f"
@@ -49,6 +49,7 @@ QtObject {
     property color light: palette.light
     property color midlight: palette.midlight
     property color mid: palette.mid
+    property color middark: "#2A2F3A"
     property color dark: palette.dark
     property color shadow: palette.shadow
 }

@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick3D
 import QtQuick3D.Helpers
 
+import Pointcaster 1.0
 import Pointcaster.Workspace 1.0
 
 View3D {
