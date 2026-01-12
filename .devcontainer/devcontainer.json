@@ -11,5 +11,14 @@
   "remoteUser": "dev",
   "updateRemoteUserUID": false,
   "workspaceFolder": "/pointcaster",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/pointcaster,type=bind"
+  "workspaceMount": "source=${localWorkspaceFolder},target=/pointcaster,type=bind",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cmake-tools",
+        "llvm-vs-code-extensions.vscode-clangd",
+        "delgan.qml-format"
+      ]
+    }
+  }
 }
