@@ -1,6 +1,6 @@
 #include "ui/models/device_plugin_controller.h"
 #include "ui/models/device_status.h"
-#include "ui/window/custom_titlebar.h"
+#include "ui/window/view_factory.h"
 #include "workspace.h"
 #include <Corrade/PluginManager/Manager.h>
 #include <QCoreApplication>
@@ -47,17 +47,18 @@ int main(int argc, char *argv[]) {
   KDDockWidgets::initFrontend(KDDockWidgets::FrontendType::QtQuick);
   KDDockWidgets::QtQuick::Platform::instance()->setQmlEngine(&engine);
   auto &docking_config = KDDockWidgets::Config::self();
-  docking_config.setViewFactory(new pc::ui::CustomTitlebarViewFactory());
+  docking_config.setViewFactory(new pc::ui::CustomViewFactory());
 
-  docking_config.setDragEndedFunc([] {
-    const auto floatingWindows =
-        KDDockWidgets::DockRegistry::self()->floatingWindows();
-    for (auto fw : floatingWindows) {
-      if (fw->affinities().contains("view") && !fw->beingDeleted()) {
-        fw->titleBar()->onFloatClicked();
-      }
-    }
-  });
+  // intercepting 'drag and drop' to floating window callback
+  // docking_config.setDragEndedFunc([] {
+  //   const auto floatingWindows =
+  //       KDDockWidgets::DockRegistry::self()->floatingWindows();
+  //   for (auto fw : floatingWindows) {
+  //     if (fw->affinities().contains("view") && !fw->beingDeleted()) {
+  //       fw->titleBar()->onFloatClicked();
+  //     }
+  //   }
+  // });
 
   WorkspaceConfiguration workspace_config;
 

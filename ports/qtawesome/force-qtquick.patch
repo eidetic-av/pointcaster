@@ -1,0 +1,23 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d8dc7ec..f251190 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -64,13 +64,11 @@ add_library(QtAwesome
+ 	${QtAwesome_HEADERS}
+ )
+ 
+-if(Qt6Quick_FOUND)
+-  list(APPEND QtAwesome_HEADERS QtAwesome/QtAwesomeQuickImageProvider.h)
+-  target_link_libraries(QtAwesome PUBLIC
+-    Qt${QT_VERSION_MAJOR}::Quick
+-    Qt${QT_VERSION_MAJOR}::Qml
+-  )
+-endif()
++list(APPEND QtAwesome_HEADERS QtAwesome/QtAwesomeQuickImageProvider.h)
++target_link_libraries(QtAwesome PUBLIC
++  Qt${QT_VERSION_MAJOR}::Quick
++  Qt${QT_VERSION_MAJOR}::Qml
++)
+ 
+ include(GNUInstallDirs)
+ 
