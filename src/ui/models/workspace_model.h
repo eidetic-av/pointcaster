@@ -22,7 +22,7 @@ class WorkspaceModel : public QObject {
   Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl)
 
 public:
-  explicit WorkspaceModel(pc::Workspace &workspace, QObject *parent,
+  explicit WorkspaceModel(pc::Workspace *workspace, QObject *parent,
                           std::function<void()> quit_callback);
 
   Q_INVOKABLE void close();

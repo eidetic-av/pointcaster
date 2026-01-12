@@ -31,6 +31,7 @@ find_package(reflectcpp CONFIG REQUIRED)
 target_link_libraries(pointcaster PRIVATE 
   pointcaster::core 
   pointcaster::plugins
+  pointcaster::ui
   Corrade::Main 
   Corrade::PluginManager
   reflectcpp::reflectcpp

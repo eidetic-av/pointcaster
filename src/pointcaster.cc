@@ -1,70 +1,18 @@
-#include "ui/models/device_plugin_controller.h"
-#include "ui/models/device_status.h"
-#include "ui/window/view_factory.h"
 #include "workspace.h"
-#include <Corrade/PluginManager/Manager.h>
 #include <QCoreApplication>
 #include <QGuiApplication>
-#include <QQmlApplicationEngine>
-#include <QQmlContext>
-#include <QUrl>
-#include <fstream>
-#include <kddockwidgets/Config.h>
-#include <kddockwidgets/core/DockRegistry.h>
-#include <kddockwidgets/core/FloatingWindow.h>
-#include <kddockwidgets/core/TitleBar.h>
-#include <kddockwidgets/core/views/MainWindowViewInterface.h>
-#include <kddockwidgets/qtquick/Platform.h>
-#include <memory>
-#include <models/config_adapter.h>
-#include <models/workspace_model.h>
-#include <print>
-#include <qcoreapplication.h>
-#include <thread>
+#include <ui/initialisation.h>
 
 using namespace pc;
 
 int main(int argc, char *argv[]) {
   QGuiApplication app(argc, argv);
 
-  // move these registrations into their own header/source
-  qmlRegisterUncreatableType<ConfigAdapter>(
-      "Pointcaster", 1, 0, "ConfigAdapter",
-      "ConfigAdapter is an abstract base type");
-
-  // ui/models/device_status.h
-  qmlRegisterUncreatableMetaObject(pc::ui::staticMetaObject, "Pointcaster", 1,
-                                   0, "UiEnums",
-                                   "WorkspaceDeviceStatus is enum");
-
-  // ui/models/device_plugin_controller.h
-    qmlRegisterUncreatableType<pc::ui::DevicePluginController>(
-        "Pointcaster", 1, 0, "DevicePluginController",
-        "DevicePluginController is created in C++ only");
-
-  QQmlApplicationEngine engine;
-
-  KDDockWidgets::initFrontend(KDDockWidgets::FrontendType::QtQuick);
-  KDDockWidgets::QtQuick::Platform::instance()->setQmlEngine(&engine);
-  auto &docking_config = KDDockWidgets::Config::self();
-  docking_config.setViewFactory(new pc::ui::CustomViewFactory());
-
-  // intercepting 'drag and drop' to floating window callback
-  // docking_config.setDragEndedFunc([] {
-  //   const auto floatingWindows =
-  //       KDDockWidgets::DockRegistry::self()->floatingWindows();
-  //   for (auto fw : floatingWindows) {
-  //     if (fw->affinities().contains("view") && !fw->beingDeleted()) {
-  //       fw->titleBar()->onFloatClicked();
-  //     }
-  //   }
-  // });
+  auto* gui_engine = pc::ui::initialise(&app);
 
   WorkspaceConfiguration workspace_config;
-
   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
       .id = "test", .ip = "192.168.1.107"});
-
   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
       .id = "test2", .ip = "192.168.1.108"});
 
@@ -77,36 +25,7 @@ int main(int argc, char *argv[]) {
 
   Workspace workspace(workspace_config);
 
-  ui::WorkspaceModel workspace_model{workspace, &app,
-                                     [] { QCoreApplication::exit(); }};
-
-  // could do _workspace.load_config_from_file here
-  // if its set to load on startup
-
-  engine.rootContext()->setContextProperty("workspaceModel", &workspace_model);
-
-  QObject::connect(
-      &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
-      []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
-
-  engine.loadFromModule("Pointcaster.Workspace", "MainWindow");
-
-  // pc::load_workspace(workspace_config, "workspace.json");
-
-  // std::jthread loader_thread([&]() {
-  //   using namespace std::chrono_literals;
-  //   std::this_thread::sleep_for(5s);
-
-  //   // Push result to GUI thread and move it into the master config
-  //   QMetaObject::invokeMethod(
-  //       &workspace_model,
-  //       [&, cfg = std::move(loaded_config)]() mutable {
-  //         workspace_config = std::move(cfg);
-  //         workspace.revert_config();
-  //         workspace_model.reloadFromWorkspace();
-  //       },
-  //       Qt::QueuedConnection);
-  // });
+  pc::ui::load_main_window(&workspace, &app, gui_engine);
 
   return app.exec();
 }

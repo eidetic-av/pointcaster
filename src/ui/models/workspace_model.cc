@@ -26,9 +26,9 @@ namespace pc::ui {
 using pc::devices::OrbbecDeviceConfiguration;
 using pc::devices::OrbbecDeviceConfigurationAdapter;
 
-WorkspaceModel::WorkspaceModel(pc::Workspace &workspace, QObject *parent,
+WorkspaceModel::WorkspaceModel(pc::Workspace* workspace, QObject *parent,
                                std::function<void()> quit_callback)
-    : QObject(parent), _workspace(workspace), _quit_callback(quit_callback) {
+    : QObject(parent), _workspace(*workspace), _quit_callback(quit_callback) {
   rebuildAdapters();
 }
 
