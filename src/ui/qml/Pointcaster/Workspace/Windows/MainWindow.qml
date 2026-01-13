@@ -101,14 +101,27 @@ ApplicationWindow {
         }
 
         Component.onCompleted: {
+            // layoutSaver.restoreFromFile('mylayout.json');
 
-            addDockWidgetAsTab(session1)
-            addDockWidgetAsTab(session2)
-            
+            addDockWidgetAsTab(session1);
+            addDockWidgetAsTab(session2);
+
             addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft);
 
             // addDockWidget(session2, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(800,800), KDDW.DockWidget.NoFloat);
             // addDockWidget(session1, KDDW.KDDockWidgets.Location_OnRight);
+        }
+    }
+
+    KDDW.LayoutSaver {
+        id: layoutSaver
+    }
+
+    Connections {
+        target: Qt.application
+        function onAboutToQuit() {
+            console.log("App is quitting");
+            // layoutSaver.saveToFile('mylayout.json');
         }
     }
 

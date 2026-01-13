@@ -10,9 +10,9 @@
 
 class ConfigAdapter : public QObject {
   Q_OBJECT
-  Q_PROPERTY(pc::ui::WorkspaceDeviceStatus status READ status NOTIFY statusChanged)
+  Q_PROPERTY(
+      pc::ui::WorkspaceDeviceStatus status READ status NOTIFY statusChanged)
 public:
-
   pc::ui::WorkspaceDeviceStatus status() const { return _status; }
 
   explicit ConfigAdapter(pc::devices::DevicePlugin *plugin,
@@ -37,9 +37,7 @@ public:
 
   Q_INVOKABLE virtual QString displayName() const { return {}; }
 
-  // TODO is this needed?
-  // default expression for the field at index as a string, e.g. "{0.5f}"
-  Q_INVOKABLE virtual QString defaultExpression(int index) const {
+  Q_INVOKABLE virtual QVariant defaultValue(int index) const {
     Q_UNUSED(index);
     return {};
   }
@@ -67,8 +65,7 @@ public:
 
   void setStatusFromCore(pc::devices::DeviceStatus s) {
     const auto q = pc::ui::toQt(s);
-    if (q == _status)
-      return;
+    if (q == _status) return;
     _status = q;
     emit statusChanged();
   }
@@ -78,6 +75,7 @@ signals:
   void statusChanged();
 
 protected:
-  pc::devices::DevicePlugin* _plugin = nullptr;
-  pc::ui::WorkspaceDeviceStatus _status = pc::ui::WorkspaceDeviceStatus::Unloaded;
+  pc::devices::DevicePlugin *_plugin = nullptr;
+  pc::ui::WorkspaceDeviceStatus _status =
+      pc::ui::WorkspaceDeviceStatus::Unloaded;
 };

@@ -1,17 +1,18 @@
 #pragma once
-#include <string>
 #include <rfl/Literal.hpp>
+#include <string>
 
 namespace pc::devices {
 
 class OrbbecDevice;
 
 struct OrbbecDeviceConfiguration {
-  std::string id;           // @hidden
-  bool active = true;       // @hidden
-  std::string ip;           // @disabled
-  int depth_mode = 0;       // @minmax(0, 1)
-  int acquisition_mode = 0; // @minmax(0, 1)
+  std::string id;            // @hidden
+  bool active = true;        // @hidden
+  std::string ip;            // @disabled
+  int depth_mode = 0;        // @minmax(0, 1000)
+  int acquisition_mode = 0;  // @minmax(0, 1)
+  float test_decimal = 30.0; // @minmax(-180, 180)
 
   using DeviceType = OrbbecDevice;
   using Tag = rfl::Literal<"orbbec">;

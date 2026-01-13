@@ -8,7 +8,7 @@ from dataclasses import dataclass
 class Member:
     type: str
     name: str
-    default: str
+    default_value: str
     min_max: str
     optional: bool
     disabled: bool
@@ -98,11 +98,20 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("    }")
     out.append("")
 
-    # defaultExpression()
-    out.append("    Q_INVOKABLE QString defaultExpression(int index) const override {")
+    # defaultValue()
+    out.append("    Q_INVOKABLE QVariant defaultValue(int index) const override {")
     out.append("        switch (index) {")
     for i, m in enumerate(members):
-        out.append(f"        case {i}: return QStringLiteral(\"{m.default}\");")
+        v = m.default_value
+        if v is None:
+            out.append(f"        case {i}: return QVariant();")
+        elif isinstance(v, bool):
+            out.append(f"        case {i}: return QVariant({str(v).lower()});")
+        elif isinstance(v, int) or isinstance(v, float):
+            out.append(f"        case {i}: return QVariant({v});")
+        else:
+            s = str(v).replace("\\", "\\\\").replace("\"", "\\\"")
+            out.append(f"        case {i}: return QVariant(QStringLiteral(\"{s}\"));")
     out.append("        default: return {};")
     out.append("        }")
     out.append("    }")
@@ -251,7 +260,7 @@ def process_cpp_header(input_text, file_path):
             members.append(Member(
                 type     = member[0],
                 name     = member[1],
-                default  = f"{{{init_value}}}",
+                default_value  = init_value,
                 min_max  = minmax_match.group(1) if minmax_match else "",
                 optional = bool(optional_pattern.search(comment)),
                 disabled = bool(disabled_pattern.search(comment)),

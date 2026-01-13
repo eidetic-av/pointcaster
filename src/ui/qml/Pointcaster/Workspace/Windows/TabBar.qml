@@ -91,8 +91,12 @@ KDDW.TabBarBase {
         tabBarCpp.addDockWidgetAsTab(newDW)
     }
 
+    function tabItemAt(index) {
+        return tabRepeater.itemAt(index)
+    }
+
     function focusTabItem(index) {
-        var item = tabBarRow.tabItemAt(index)
+        var item = tabItemAt(index)
         if (item) item.forceActiveFocus()
     }
 
@@ -122,23 +126,35 @@ KDDW.TabBarBase {
         }
     }
 
+    /// Required by KDDW C++ for dragging/reordering/floating.
+    function getTabAtIndex(index) {
+        return tabItemAt(index)
+    }
+
+    /// Required by KDDW C++ for hit-testing which tab is under the cursor.
+    function getTabIndexAtPosition(globalPoint) {
+        var count = tabCount()
+        for (var i = 0; i < count; ++i) {
+            var tab = tabItemAt(i)
+            if (!tab) continue
+
+            var localPt = tab.mapFromGlobal(globalPoint.x, globalPoint.y)
+            if (tab.contains(localPt))
+                return i
+        }
+        return -1
+    }
+
     Row {
         id: tabBarRow
 
+        // Keep our visuals above the built-in mouse layer, but do NOT steal left-drag.
         z: root.mouseAreaZ ? (root.mouseAreaZ.z + 1) : 1
         anchors.fill: parent
         spacing: 0
 
         // hover tracking for colour changes
         property int hoveredIndex: -1
-
-        // keep refs to delegate items so we don't rely on Row.children ordering
-        property var tabItemsByIndex: ({})
-        function registerTabItem(index, item) { tabItemsByIndex[index] = item }
-        function unregisterTabItem(index, item) {
-            if (tabItemsByIndex[index] === item) delete tabItemsByIndex[index]
-        }
-        function tabItemAt(index) { return tabItemsByIndex[index] }
 
         Repeater {
             id: tabRepeater
@@ -150,15 +166,11 @@ KDDW.TabBarBase {
                 width: 120
 
                 readonly property int tabIndex: index
+
                 readonly property bool isCurrent: tabIndex === root.groupCpp.currentIndex
                 readonly property bool isHovered: tabIndex === tabBarRow.hoveredIndex
                 readonly property bool isKeyboardFocused: root.keyboardFocusIndex === tabIndex
 
-                Component.onCompleted: tabBarRow.registerTabItem(tabIndex, tab)
-                Component.onDestruction: tabBarRow.unregisterTabItem(tabIndex, tab)
-
-                // "Roving tabindex": only the *keyboard focused* item participates in Tab focus chain
-                // (this lets Tab enter/leave the bar without stepping through every tab)
                 activeFocusOnTab: isKeyboardFocused
                 focus: isKeyboardFocused
 
@@ -166,12 +178,6 @@ KDDW.TabBarBase {
                 Accessible.name: title
                 Accessible.focusable: true
                 Accessible.checked: isCurrent
-
-                function activate() {
-                    root.keyboardFocusIndex = tabIndex
-                    root.selectTab(tabIndex)
-                    forceActiveFocus()
-                }
 
                 Keys.onPressed: (event) => {
                     switch (event.key) {
@@ -242,26 +248,20 @@ KDDW.TabBarBase {
                     z: 30
                 }
 
+                // mouse area for a right click context menu on the tabs
                 MouseArea {
                     anchors.fill: parent
                     hoverEnabled: true
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    z: 100
-
-                    onEntered: tabBarRow.hoveredIndex = tab.tabIndex
-                    onExited:  if (tabBarRow.hoveredIndex === tab.tabIndex) tabBarRow.hoveredIndex = -1
+                    acceptedButtons: Qt.RightButton
+                    z: root.mouseAreaZ ? (root.mouseAreaZ.z + 2) : 100
 
                     onClicked: (mouse) => {
-                        if (mouse.button === Qt.LeftButton) {
-                            tab.activate()
-                        } else if (mouse.button === Qt.RightButton) {
-                            root.keyboardFocusIndex = tab.tabIndex
-                            tab.forceActiveFocus()
+                        root.keyboardFocusIndex = tab.tabIndex
+                        tab.forceActiveFocus()
 
-                            root.contextTabIndex = tab.tabIndex
-                            var p = tab.mapToItem(root, mouse.x, mouse.y)
-                            tabContextMenu.popup(Qt.point(p.x, p.y))
-                        }
+                        root.contextTabIndex = tab.tabIndex
+                        var p = tab.mapToItem(root, mouse.x, mouse.y)
+                        tabContextMenu.popup(Qt.point(p.x, p.y))
                     }
                 }
             }
@@ -370,8 +370,8 @@ KDDW.TabBarBase {
     Connections {
         target: root.groupCpp
         function onCurrentIndexChanged() {
-            // keep keyboard focus following selection when selection changes externally
             root.keyboardFocusIndex = Math.max(0, root.groupCpp.currentIndex)
+            root.focusTabItem(root.keyboardFocusIndex)
         }
     }
 }

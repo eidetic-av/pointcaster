@@ -27,6 +27,15 @@ KDDW.DockWidget {
             return workspace.deviceConfigAdapters[idx];
         }
 
+        property var otherAdapter: {
+            if (!workspace)
+                return null;
+            const idx = deviceSelectionList.currentIndex + 1;
+            if (idx < 0 || idx >= workspace.deviceConfigAdapters.length)
+                return null;
+            return workspace.deviceConfigAdapters[idx];
+        }
+
         // controller for the currently selected device (index-aligned with adapters)
         property var currentController: (workspace && deviceSelectionList.currentIndex >= 0 && deviceSelectionList.currentIndex < workspace.deviceControllers.length) ? workspace.deviceControllers[deviceSelectionList.currentIndex] : null
 
@@ -191,6 +200,18 @@ KDDW.DockWidget {
             anchors.topMargin: 6
 
             model: devices.currentAdapter
+        }
+
+        ConfigurationEditor {
+            id: propertiesPane2
+            anchors {
+                top: propertiesPane.bottom
+                left: parent.left
+                right: parent.right
+            }
+            anchors.topMargin: 6
+
+            model: devices.otherAdapter
         }
     }
 }

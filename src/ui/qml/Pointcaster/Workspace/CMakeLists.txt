@@ -3,6 +3,7 @@
 # configuring the qml module
 
 set(qml_singletons
+    WorkspaceState.qml
     Theme/DarkPalette.qml
     Theme/FontAwesome.qml
 )
@@ -15,6 +16,9 @@ qt_add_qml_module(PointcasterWorkspace
 	URI Pointcaster.Workspace VERSION 1.0
     QML_FILES
         ${qml_singletons}
+        Controls/DragInput.qml
+        Controls/DragInt.qml
+        Controls/DragFloat.qml
         Editors/ConfigurationEditor.qml
         Windows/TitleBar.qml
         Windows/TabBar.qml

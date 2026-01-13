@@ -2,13 +2,18 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <ui/initialisation.h>
+#include <print>
 
 using namespace pc;
 
 int main(int argc, char *argv[]) {
+  std::println("Starting QGuiApplication...");
   QGuiApplication app(argc, argv);
 
+  std::println("Starting QQmlApplicationEngine...");
   auto* gui_engine = pc::ui::initialise(&app);
+
+  std::println("Initialising Workspace...");
 
   WorkspaceConfiguration workspace_config;
   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
@@ -24,8 +29,12 @@ int main(int argc, char *argv[]) {
   // save_workspace_to_file(workspace_config, "workspace.json");
 
   Workspace workspace(workspace_config);
+  
+  std::println("Loading main window...");
 
   pc::ui::load_main_window(&workspace, &app, gui_engine);
+
+  std::println("Application load complete");
 
   return app.exec();
 }
