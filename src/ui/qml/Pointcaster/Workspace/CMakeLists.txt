@@ -15,7 +15,7 @@ qt_add_qml_module(PointcasterWorkspace
 	URI Pointcaster.Workspace VERSION 1.0
     QML_FILES
         ${qml_singletons}
-        Controls/TextButton.qml
+        Editors/ConfigurationEditor.qml
         Windows/TitleBar.qml
         Windows/TabBar.qml
         Windows/TabBarBase.qml
