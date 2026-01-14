@@ -11,25 +11,30 @@ Item {
     property bool enabled: true
     property bool editable: true
 
+    // drag tuning
     property real dragThresholdPx: 6.0
     property real pixelsPerStep: 6.0
     property real accelerateAfterPx: 120.0
 
-    property var numericValue: null     
-    property var setNumericValue: null 
-    property var stepSize: null    
+    property var numericValue: null
+    property var setNumericValue: null
+    property var stepSize: null
 
-    property var modifierMultiplier: null  
-    property var resetToDefault: null    
+    property var modifierMultiplier: null
+    property var resetToDefault: null
+
+    property bool quantiseDeltaToInteger: false
+
+    property real deltaEpsilon: 0.0
 
     signal edited()
     signal committed()
 
     property bool dragModeActive: false
 
-    property real pressX: 0
-    property real pressValue: 0
-    property int lastAppliedDeltaUnits: 0
+    property real pressX: 0.0
+    property real pressValue: 0.0
+    property real lastAppliedDeltaValue: 0.0
     property int lastMods: 0
 
     function _forceFocus() {
@@ -50,7 +55,23 @@ Item {
     }
 
     function _stepSize() {
-        return stepSize ? Number(stepSize()) : 1.0;
+        var s = stepSize ? Number(stepSize()) : 1.0;
+        if (!Number.isFinite(s) || s === 0.0) return 1.0;
+        return s;
+    }
+
+    function _effectiveDeltaEpsilon(mods) {
+        if (root.deltaEpsilon > 0.0)
+            return root.deltaEpsilon;
+        // 1% of a single step with current modifiers
+        var e = Math.abs(root._stepSize() * root._multiplier(mods)) * 0.01;
+        return Math.max(e, 1e-12);
+    }
+
+    function _quantiseDelta(deltaValue) {
+        if (!root.quantiseDeltaToInteger)
+            return deltaValue;
+        return Math.round(deltaValue);
     }
 
     function _selectAllLater() {
@@ -79,7 +100,7 @@ Item {
 
     MouseArea {
         id: gestureArea
-        // attach this mousearea to the TextInput so coords match what user is dragging on
+        // attach to the TextInput so coords match what user is dragging on
         parent: root.targetTextInput
         anchors.fill: parent
 
@@ -111,8 +132,8 @@ Item {
             }
 
             root.pressX = mouse.x; // TextInput-local
-            root.pressValue = root.numericValue ? Number(root.numericValue()) : 0;
-            root.lastAppliedDeltaUnits = 0;
+            root.pressValue = root.numericValue ? Number(root.numericValue()) : 0.0;
+            root.lastAppliedDeltaValue = 0.0;
             root.dragModeActive = false;
             root.lastMods = mouse.modifiers;
 
@@ -136,10 +157,11 @@ Item {
                 }
             }
 
+            // if modifiers change mid-drag, rebase so we don't jump.
             if (mouse.modifiers !== root.lastMods) {
                 root.pressX = mouse.x;
                 root.pressValue = Number(root.numericValue());
-                root.lastAppliedDeltaUnits = 0;
+                root.lastAppliedDeltaValue = 0.0;
                 root.lastMods = mouse.modifiers;
             }
 
@@ -153,16 +175,20 @@ Item {
             }
 
             var mult = root._multiplier(mouse.modifiers);
-            var deltaUnits = Math.round(baseSteps * root._stepSize() * mult);
+            var deltaValue = baseSteps * root._stepSize() * mult;
+            deltaValue = root._quantiseDelta(deltaValue);
 
-            if (deltaUnits === root.lastAppliedDeltaUnits)
+            var eps = root._effectiveDeltaEpsilon(mouse.modifiers);
+            if (Math.abs(deltaValue - root.lastAppliedDeltaValue) < eps)
                 return;
 
-            root.lastAppliedDeltaUnits = deltaUnits;
+            if (root.quantiseDeltaToInteger && deltaValue === root.lastAppliedDeltaValue)
+                return;
 
-            root.setNumericValue(root.pressValue + deltaUnits);
+            root.lastAppliedDeltaValue = deltaValue;
+
+            root.setNumericValue(root.pressValue + deltaValue);
             root.edited();
-
             mouse.accepted = true;
         }
 
@@ -197,19 +223,24 @@ Item {
             }
 
             var notches = wheel.angleDelta.y / 120.0;
-            if (notches === 0) {
+            if (notches === 0.0) {
                 wheel.accepted = true;
                 return;
             }
 
             var mult = root._multiplier(wheel.modifiers);
-            var deltaUnits = Math.round(notches * root._stepSize() * mult);
+            var deltaValue = notches * root._stepSize() * mult;
+            deltaValue = root._quantiseDelta(deltaValue);
 
-            if (deltaUnits !== 0) {
-                var current = Number(root.numericValue());
-                root.setNumericValue(current + deltaUnits);
-                root.edited();
+            // in quantised mode, ignore tiny deltas that round to 0.
+            if (deltaValue === 0.0) {
+                wheel.accepted = true;
+                return;
             }
+
+            var current = Number(root.numericValue());
+            root.setNumericValue(current + deltaValue);
+            root.edited();
 
             wheel.accepted = true;
         }

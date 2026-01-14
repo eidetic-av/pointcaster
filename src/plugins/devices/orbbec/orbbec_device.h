@@ -55,6 +55,7 @@ private:
   std::atomic_bool _buffer_updated{false};
 
   std::atomic_bool _running_pipeline = false;
+  std::atomic_bool _loading_pipeline = false;
   std::atomic<std::chrono::steady_clock::time_point> _last_updated_time{};
   std::atomic_bool _in_error_state{false};
   bool _initialised_point_cloud_scale = false;
@@ -80,6 +81,11 @@ private:
 
   void set_running(bool running_pipeline) {
     _running_pipeline = running_pipeline;
+    notify_status_changed();
+  }
+
+  void set_loading(bool loading_pipeline) {
+    _loading_pipeline = loading_pipeline;
     notify_status_changed();
   }
 

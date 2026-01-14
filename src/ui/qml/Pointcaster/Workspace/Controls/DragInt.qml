@@ -14,7 +14,7 @@ SpinBox {
 
     property color focusBorderColor: DarkPalette.highlight
     property color unfocusBorderColor: "transparent"
-    property color backgroundColor: "transparent"
+    property color backgroundColor: (root.activeFocus || hover.hovered) ? DarkPalette.almostdark : "transparent"
 
     property real dragThresholdPx: 6.0
     property real pixelsPerStep: 6.0
@@ -30,7 +30,7 @@ SpinBox {
     }
     readonly property int effectiveTo: {
         var n = Number(maxValue);
-        return (maxValue === undefined || maxValue === null || isNaN(n)) ? 2147483647 : Math.trunc(n);
+        return (minValue === undefined || minValue === null || isNaN(n)) ?  2147483647 : Math.trunc(n);
     }
 
     from: effectiveFrom
@@ -41,6 +41,28 @@ SpinBox {
         if (isNaN(n))
             n = 0;
         return Math.max(from, Math.min(to, Math.trunc(n)));
+    }
+
+    readonly property real boundedRange: {
+        var r = Number(root.to) - Number(root.from);
+        return (Number.isFinite(r) && r > 0 && r < 4.0e9) ? r : NaN;
+    }
+
+    readonly property real dragTargetPixels: {
+        var frac = Math.max(0.05, Math.min(1.0, WorkspaceState.inputDragSpeed));
+        var w = 15000.0;
+        return Math.max(200.0, w * frac);
+    }
+
+    readonly property real dragStepSize: {
+        if (!Number.isFinite(root.boundedRange))
+            return 1.0;
+
+        var unitsPerPixel = root.boundedRange / root.dragTargetPixels;
+        var step = unitsPerPixel * root.pixelsPerStep;
+
+        // ensure at least 1 unit step after quantisation for reasonable drags
+        return Math.max(step, 1e-6);
     }
 
     function hasValidDefault() {
@@ -57,9 +79,7 @@ SpinBox {
         value = v;
     }
 
-    Component.onCompleted: {
-        value = clampToRange(boundValue);
-    }
+    Component.onCompleted: value = clampToRange(boundValue);
 
     onValueModified: {
         boundValue = value;
@@ -71,6 +91,11 @@ SpinBox {
             boundValue = value;
             commitValue(value);
         }
+    }
+
+    HoverHandler {
+        id: hover
+        acceptedDevices: PointerDevice.Mouse
     }
 
     background: Rectangle {
@@ -98,11 +123,8 @@ SpinBox {
         clip: false
 
         onActiveFocusChanged: {
-            if (activeFocus && !dragBehaviour.dragModeActive) {
-                Qt.callLater(function () {
-                    spinTextInput.selectAll();
-                });
-            }
+            if (activeFocus && !dragBehaviour.dragModeActive)
+                Qt.callLater(function () { spinTextInput.selectAll(); });
         }
 
         DragInput {
@@ -119,19 +141,23 @@ SpinBox {
             pixelsPerStep: root.pixelsPerStep
             accelerateAfterPx: root.accelerateAfterPx
 
-            numericValue: function () {
-                return root.value;
-            }
+            quantiseDeltaToInteger: true
+
+            numericValue: function () { return root.value; }
             setNumericValue: function (v) {
                 var clamped = root.clampToRange(v);
                 if (clamped !== root.value)
                     root.value = clamped;
             }
-            stepSize: function () {
-                return root.stepSize;
-            }
-            resetToDefault: function () {
-                root.resetToDefault();
+
+            stepSize: function () { return root.dragStepSize; }
+
+            resetToDefault: function () { root.resetToDefault(); }
+
+            modifierMultiplier: function (mods) {
+                if (mods & Qt.ShiftModifier)   return 10.0;
+                if (mods & Qt.ControlModifier) return 0.1;
+                return 1.0;
             }
 
             onEdited: {
@@ -146,7 +172,7 @@ SpinBox {
     }
 
     onBoundValueChanged: {
-        if (spinTextInput.activeFocus || spinTextInput.dragBehaviour.dragModeActive)
+        if (spinTextInput.activeFocus || dragBehaviour.dragModeActive)
             return;
 
         var clamped = clampToRange(boundValue);

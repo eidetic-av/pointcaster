@@ -42,6 +42,27 @@ DoubleSpinBox {
         return Math.max(from, Math.min(to, asNumber));
     }
 
+    readonly property real boundedRange: {
+        var r = root.to - root.from;
+        return (Number.isFinite(r) && r > 0.0 && r < 1.0e307) ? r : NaN;
+    }
+
+    readonly property real dragTargetPixels: {
+        var frac = Math.max(0.05, Math.min(1.0, WorkspaceState.inputDragSpeed));
+        var w = 15000.0;
+        return Math.max(200.0, w * frac);
+    }
+
+    // Value delta per "step unit" produced by DragInput.
+    readonly property real dragStepSize: {
+        if (!Number.isFinite(root.boundedRange))
+            return root.stepSize; // fallback: behaves like normal spinbox stepping
+
+        var valuePerPixel = root.boundedRange / root.dragTargetPixels;
+        var step = valuePerPixel * root.pixelsPerStep;
+        return Math.max(step, 1e-12);
+    }
+
     function hasValidDefault() {
         var n = Number(defaultValue);
         return !(defaultValue === undefined || defaultValue === null || isNaN(n));
@@ -56,10 +77,7 @@ DoubleSpinBox {
         value = v;
     }
 
-    // Initialise once; afterwards we update value imperatively like DragInt.
-    Component.onCompleted: {
-        value = clampToRange(boundValue);
-    }
+    Component.onCompleted: value = clampToRange(boundValue);
 
     onValueModified: {
         boundValue = value;
@@ -98,9 +116,8 @@ DoubleSpinBox {
         clip: false
 
         onActiveFocusChanged: {
-            if (activeFocus && !dragBehaviour.dragModeActive) {
+            if (activeFocus && !dragBehaviour.dragModeActive)
                 Qt.callLater(function () { spinTextInput.selectAll(); });
-            }
         }
 
         DragInput {
@@ -117,13 +134,23 @@ DoubleSpinBox {
             pixelsPerStep: root.pixelsPerStep
             accelerateAfterPx: root.accelerateAfterPx
 
+            quantiseDeltaToInteger: false
+
             numericValue: function () { return root.value; }
             setNumericValue: function (v) {
                 var clamped = root.clampToRange(v);
                 if (clamped !== root.value)
                     root.value = clamped;
             }
-            stepSize: function () { return root.stepSize; }
+
+            stepSize: function () { return root.dragStepSize; }
+
+            modifierMultiplier: function (mods) {
+                if (mods & Qt.ShiftModifier)   return 10.0;
+                if (mods & Qt.ControlModifier) return 0.1;
+                return 1.0;
+            }
+
             resetToDefault: function () { root.resetToDefault(); }
 
             onEdited: {
@@ -138,8 +165,7 @@ DoubleSpinBox {
     }
 
     onBoundValueChanged: {
-        // don’t fight user interaction
-        if (spinTextInput.activeFocus || spinTextInput.dragBehaviour.dragModeActive)
+        if (spinTextInput.activeFocus || dragBehaviour.dragModeActive)
             return;
 
         var clamped = clampToRange(boundValue);

@@ -60,6 +60,7 @@ OrbbecDevice::~OrbbecDevice() {
 }
 
 DeviceStatus OrbbecDevice::status() const {
+  if (_loading_pipeline) return DeviceStatus::Loading;
   auto ctx = orbbec_context().get_if_ready();
   if (!ctx) return DeviceStatus::Unloaded;
   if (_in_error_state) return DeviceStatus::Missing;
@@ -110,6 +111,7 @@ void OrbbecDevice::start_sync() {
 
   std::lock_guard lock(orbbec_context().start_stop_device_access);
 
+  set_loading(true);
   set_running(false);
   set_error_state(false);
   set_updated_time(steady_clock::time_point{});
@@ -120,6 +122,7 @@ void OrbbecDevice::start_sync() {
   auto ob_ctx = orbbec_context().wait_til_ready();
   if (!ob_ctx) {
     std::println("Orbbec context not ready in time, aborting start_sync()");
+    set_loading(false);
     set_error_state(true);
     return;
   }
@@ -307,6 +310,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       }
 
       if (!frame_set) continue;
+      if (_loading_pipeline.load(std::memory_order_relaxed)) set_loading(false);
 
       auto colour_frame = frame_set->colorFrame();
       auto depth_frame = frame_set->depthFrame();

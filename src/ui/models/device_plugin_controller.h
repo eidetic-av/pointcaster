@@ -14,7 +14,7 @@ class DevicePluginController : public QObject {
   Q_PROPERTY(Status status READ status NOTIFY statusChanged)
 
 public:
-  enum class Status { Unloaded, Loaded, Active, Missing };
+  enum class Status { Unloaded, Loading, Loaded, Active, Missing };
   Q_ENUM(Status)
 
   explicit DevicePluginController(pc::devices::DevicePlugin *plugin,
@@ -37,6 +37,9 @@ public:
     switch (coreStatus) {
     case pc::devices::DeviceStatus::Unloaded:
       newStatus = Status::Unloaded;
+      break;
+    case pc::devices::DeviceStatus::Loading:
+      newStatus = Status::Loading;
       break;
     case pc::devices::DeviceStatus::Loaded:
       newStatus = Status::Loaded;

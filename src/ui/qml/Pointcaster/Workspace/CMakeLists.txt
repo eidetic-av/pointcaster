@@ -19,6 +19,7 @@ qt_add_qml_module(PointcasterWorkspace
         Controls/DragInput.qml
         Controls/DragInt.qml
         Controls/DragFloat.qml
+        Controls/IconButton.qml
         Editors/ConfigurationEditor.qml
         Windows/TitleBar.qml
         Windows/TabBar.qml

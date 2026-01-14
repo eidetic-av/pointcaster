@@ -8,12 +8,17 @@ Item {
     property var model: null
 
     property string emptyTitle: "Properties"
-    property int maxBodyHeight: 320
-    // shared width of the left 'label' column
+
+    // shared width of the left 'label' column 
     property int labelColumnWidth: WorkspaceState.labelColumnWidth
+
+    // collapse state
     property bool expanded: true
 
-    implicitHeight: inspectorGroup.implicitHeight
+    property int outerHorizontalMargin: 8
+    property int outerTopMargin: 4
+
+    implicitHeight: header.height + (root.expanded ? body.implicitHeight : 0) + root.outerTopMargin
 
     Rectangle {
         id: inspectorGroup
@@ -21,16 +26,15 @@ Item {
             top: parent.top
             left: parent.left
             right: parent.right
-            leftMargin: 8
-            rightMargin: 8
-            topMargin: 4
+            leftMargin: root.outerHorizontalMargin
+            rightMargin: root.outerHorizontalMargin
+            topMargin: root.outerTopMargin
         }
+        height: root.implicitHeight - root.outerTopMargin
         color: DarkPalette.dark
         border.color: DarkPalette.mid
         border.width: 1
         clip: true
-
-        implicitHeight: header.height + (root.expanded ? (body.implicitHeight + body.anchors.topMargin) : 0)
 
         // header row (click to collapse/expand)
         Rectangle {
@@ -41,7 +45,7 @@ Item {
                 right: parent.right
             }
             height: 28
-            color: headerMouseArea.containsMouse ? DarkPalette.mid : root.expanded ? DarkPalette.middark : DarkPalette.base
+            color: headerMouseArea.containsMouse ? DarkPalette.mid : (root.expanded ? DarkPalette.middark : DarkPalette.base)
             border.color: DarkPalette.mid
             border.width: 1
 
@@ -71,7 +75,7 @@ Item {
                 text: root.model ? (root.model.displayName() + " Properties") : root.emptyTitle
                 elide: Text.ElideRight
                 font.weight: Font.Medium
-                font.pixelSize: 15
+                font.pixelSize: 13
                 color: DarkPalette.text
             }
 
@@ -92,22 +96,17 @@ Item {
             }
             visible: root.expanded
 
-            implicitHeight: {
-                if (!root.expanded)
-                    return 0;
-                if (!root.model)
-                    return noSelectionText.implicitHeight + 8;
-                return Math.min(propertiesColumn.implicitHeight, root.maxBodyHeight);
-            }
+            implicitHeight: root.model ? fieldsContainer.implicitHeight : (noSelectionText.implicitHeight + 8)
 
             Text {
                 id: noSelectionText
                 anchors {
                     left: parent.left
                     right: parent.right
+                    top: parent.top
                     leftMargin: 10
                     rightMargin: 10
-                    top: parent.top
+                    topMargin: 3
                 }
                 visible: !root.model
                 text: "No device selected"
@@ -115,26 +114,20 @@ Item {
                 color: DarkPalette.text
             }
 
-            Flickable {
-                id: propertiesFlick
+            Item {
+                id: fieldsArea
                 anchors {
                     top: parent.top
                     left: parent.left
                     right: parent.right
+                    rightMargin: 1
                 }
-                height: Math.min(propertiesColumn.implicitHeight, root.maxBodyHeight)
                 visible: root.model
-                contentWidth: width
-                contentHeight: propertiesColumn.implicitHeight
-                clip: true
-
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AsNeeded
-                }
+                height: fieldsContainer.implicitHeight
 
                 Column {
-                    id: propertiesColumn
-                    width: propertiesFlick.width
+                    id: fieldsContainer
+                    width: fieldsArea.width
                     spacing: 0
 
                     Repeater {
@@ -143,8 +136,8 @@ Item {
                         delegate: Item {
                             required property int index
 
-                            width: propertiesColumn.width
-                            height: Math.max(nameText.implicitHeight, valueEditorLoader.implicitHeight) + 6
+                            width: fieldsContainer.width
+                            height: Math.max(nameText.implicitHeight, valueContainer.implicitHeight) + 6
                             visible: root.model && !root.model.isHidden(index)
 
                             Item {
@@ -168,13 +161,13 @@ Item {
                                     horizontalAlignment: Text.AlignLeft
                                     color: DarkPalette.text
                                     text: root.model ? root.model.fieldName(index) : ""
-                                    font.pixelSize: 15
+                                    font.pixelSize: 13
                                     elide: Text.ElideRight
                                 }
                             }
 
                             Loader {
-                                id: valueEditorLoader
+                                id: valueContainer
                                 anchors {
                                     left: labelContainer.right
                                     leftMargin: -5
@@ -206,7 +199,7 @@ Item {
                                         border.width: 1
                                         radius: 0
                                     }
-                                    font.pixelSize: 15
+                                    font.pixelSize: 13
                                     text: root.model ? String(root.model.fieldValue(index)) : ""
                                     enabled: root.model ? !root.model.isDisabled(index) : false
                                     opacity: enabled ? 1.0 : 0.66
@@ -223,8 +216,6 @@ Item {
                                 id: intEditor
 
                                 DragInt {
-                                    id: valueSpin
-
                                     boundEnabled: root.model ? !root.model.isDisabled(index) : false
 
                                     minValue: root.model ? root.model.minMax(index)[0] : undefined
@@ -250,8 +241,6 @@ Item {
                                 id: floatEditor
 
                                 DragFloat {
-                                    id: valueFloat
-
                                     boundEnabled: root.model ? !root.model.isDisabled(index) : false
 
                                     minValue: root.model ? root.model.minMax(index)[0] : undefined
@@ -268,7 +257,7 @@ Item {
                                     onCommitValue: v => {
                                         if (!root.model)
                                             return;
-                                        root.model.setFieldValue(index);
+                                        root.model.setFieldValue(index, v);
                                     }
                                 }
                             }
@@ -276,10 +265,11 @@ Item {
                     }
                 }
 
+                // draggable divider
                 Rectangle {
                     id: dividerHandle
-                    x: root.labelColumnWidth - width / 2
-                    z: 2
+                    x: (root.labelColumnWidth - width / 2) + 1
+                    z: 99
                     width: 5
                     anchors {
                         top: parent.top
@@ -299,10 +289,10 @@ Item {
                                 easing.type: Easing.InCubic
                             }
                         }
-                        color: dividerMouseArea.drag.active ? DarkPalette.midlight : dividerMouseArea.containsMouse ? DarkPalette.mid : DarkPalette.middark
+                        color: dividerMouseArea.drag.active ? DarkPalette.midlight : (dividerMouseArea.containsMouse ? DarkPalette.mid : DarkPalette.middark)
                         Behavior on color {
                             ColorAnimation {
-                                duration: 120
+                                duration: 90
                                 easing.type: Easing.InCubic
                             }
                         }
@@ -313,12 +303,19 @@ Item {
                         anchors.fill: parent
                         cursorShape: Qt.SplitHCursor
                         hoverEnabled: true
-                        drag.target: dividerHandle
-                        drag.axis: Drag.XAxis
-                        drag.minimumX: 80
-                        drag.maximumX: root.width - 80
+
+                        property bool dragging: false
+
+                        onPressed: dragging = true
+                        onReleased: dragging = false
+                        onCanceled: dragging = false
+
                         onPositionChanged: {
-                            WorkspaceState.labelColumnWidth = dividerHandle.x + dividerHandle.width / 2;
+                            if (!dragging)
+                                return;
+                            var dividerCentreX = dividerHandle.x + mouseX;
+                            var clamped = Math.max(80, Math.min(fieldsArea.width - 80, dividerCentreX));
+                            WorkspaceState.labelColumnWidth = Math.round(clamped);
                         }
                     }
                 }
