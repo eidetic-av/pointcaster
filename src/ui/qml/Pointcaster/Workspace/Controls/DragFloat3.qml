@@ -1,12 +1,14 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Shapes
+
 import Pointcaster.Workspace 1.0
 
 Row {
     id: root
+    spacing: 0
 
     property real componentSpacing: 6
-    spacing: componentSpacing
 
     property bool boundEnabled: true
     property var minValue: undefined
@@ -15,18 +17,20 @@ Row {
 
     property var boundValue: Qt.vector3d(0, 0, 0)
 
-    signal commitValue(var v3)
+    property int labelWidth: 16
+    property int labelHeight: 16
+    property int labelLeftRadius: 3
+    property color labelBackgroundColor: DarkPalette.almostdark
 
-    readonly property real eachWidth: width > 0 ? Math.max(0, (width - 2 * componentSpacing) / 3) : -1
+    signal commitValue(var v3)
 
     function _componentFrom(v, axisIndex, fallback) {
         if (v === undefined || v === null)
             return fallback;
+
         if (v.x !== undefined) {
-            if (axisIndex === 0)
-                return v.x;
-            if (axisIndex === 1)
-                return v.y;
+            if (axisIndex === 0) return v.x;
+            if (axisIndex === 1) return v.y;
             return v.z;
         }
 
@@ -36,52 +40,115 @@ Row {
         return fallback;
     }
 
-    Repeater {
-        model: [
-            {
-                label: "X",
-                index: 0
-            },
-            {
-                label: "Y",
-                index: 1
-            },
-            {
-                label: "Z",
-                index: 2
-            }
-        ]
+    Item {
+        id: leftPadding
+        width: 3
+        height: 1
+    }
 
-        delegate: Row {
-            spacing: 4
-            width: root.eachWidth > 0 ? root.eachWidth : implicitWidth
+    Row {
+        id: contentRow
+        spacing: root.componentSpacing
 
-            Text {
-                text: modelData.label
-                font.pixelSize: 12
-                color: DarkPalette.text
-                verticalAlignment: Text.AlignVCenter
-            }
+        // IMPORTANT: ensure this row has a real width to divide up
+        width: Math.max(0, root.width - leftPadding.width)
 
-            DragFloat {
-                boundEnabled: root.boundEnabled
-                width: parent.width - 12
+        readonly property real eachWidth: width > 0
+            ? Math.max(0, (width - 2 * root.componentSpacing) / 3)
+            : -1
 
-                minValue: root._componentFrom(root.minValue, modelData.index, undefined)
-                maxValue: root._componentFrom(root.maxValue, modelData.index, undefined)
-                defaultValue: root._componentFrom(root.defaultValue, modelData.index, undefined)
+        Repeater {
+            model: [
+                { label: "X", index: 0, color: DarkPalette.red   },
+                { label: "Y", index: 1, color: DarkPalette.green },
+                { label: "Z", index: 2, color: DarkPalette.blue  }
+            ]
 
-                boundValue: modelData.index === 0 ? root.boundValue.x : modelData.index === 1 ? root.boundValue.y : root.boundValue.z
+            delegate: Row {
+                spacing: 0
+                width: contentRow.eachWidth > 0 ? contentRow.eachWidth : implicitWidth
 
-                onCommitValue: {
-                    if (modelData.index === 0)
-                        root.boundValue = Qt.vector3d(boundValue, root.boundValue.y, root.boundValue.z);
-                    else if (modelData.index === 1)
-                        root.boundValue = Qt.vector3d(root.boundValue.x, boundValue, root.boundValue.z);
-                    else
-                        root.boundValue = Qt.vector3d(root.boundValue.x, root.boundValue.y, boundValue);
+                Item {
+                    id: axisLabel
+                    width: root.labelWidth
+                    height: Math.max(root.labelHeight, dragFloat.implicitHeight, dragFloat.height)
 
-                    root.commitValue(root.boundValue);
+                    // rectangle background for the label has the
+                    // left side rounded only (top-left + bottom-left)
+                    Shape {
+                        anchors.fill: parent
+                        antialiasing: true
+
+                        ShapePath {
+                            strokeWidth: 0
+                            fillColor: root.labelBackgroundColor
+
+                            startX: 0
+                            startY: root.labelLeftRadius
+
+                            // top-left corner arc right
+                            PathArc {
+                                x: root.labelLeftRadius
+                                y: 0
+                                radiusX: root.labelLeftRadius
+                                radiusY: root.labelLeftRadius
+                            }
+
+                            // top edge to top-right (square)
+                            PathLine { x: axisLabel.width; y: 0 }
+
+                            // right edge down (square)
+                            PathLine { x: axisLabel.width; y: axisLabel.height }
+
+                            // bottom edge to before bottom-left arc
+                            PathLine { x: root.labelLeftRadius; y: axisLabel.height }
+
+                            // bottom-left corner arc up
+                            PathArc {
+                                x: 0
+                                y: axisLabel.height - root.labelLeftRadius
+                                radiusX: root.labelLeftRadius
+                                radiusY: root.labelLeftRadius
+                            }
+
+                            // left edge back to start
+                            PathLine { x: 0; y: root.labelLeftRadius }
+                        }
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: modelData.label
+                        font.pixelSize: 11
+                        font.weight: Font.Bold
+                        color: modelData.color
+                    }
+                }
+
+                DragFloat {
+                    id: dragFloat
+                    boundEnabled: root.boundEnabled
+                    width: parent.width - axisLabel.width
+
+                    minValue: root._componentFrom(root.minValue, modelData.index, undefined)
+                    maxValue: root._componentFrom(root.maxValue, modelData.index, undefined)
+                    defaultValue: root._componentFrom(root.defaultValue, modelData.index, undefined)
+
+                    boundValue:
+                        modelData.index === 0 ? root.boundValue.x :
+                        modelData.index === 1 ? root.boundValue.y :
+                                                root.boundValue.z
+
+                    onCommitValue: {
+                        if (modelData.index === 0)
+                            root.boundValue = Qt.vector3d(boundValue, root.boundValue.y, root.boundValue.z)
+                        else if (modelData.index === 1)
+                            root.boundValue = Qt.vector3d(root.boundValue.x, boundValue, root.boundValue.z)
+                        else
+                            root.boundValue = Qt.vector3d(root.boundValue.x, root.boundValue.y, boundValue)
+
+                        root.commitValue(root.boundValue)
+                    }
                 }
             }
         }

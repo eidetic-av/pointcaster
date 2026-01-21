@@ -29,9 +29,13 @@ QtObject {
         shadow:   "#00010A"
     }
 
-    property color success: "#aecf7f"
-    property color error: "#ff4151"
-    property color neutralSuccess: "#81a1c1"
+    property color red: "#ff4151"
+    property color green: "#aecf7f"
+    property color blue: "#81a1c1"
+
+    property color success: green
+    property color error: red
+    property color neutralSuccess: blue 
     property color inactive : palette.mid
 
     // Aliases for access
