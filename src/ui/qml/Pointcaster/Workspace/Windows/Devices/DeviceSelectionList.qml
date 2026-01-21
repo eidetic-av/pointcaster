@@ -65,10 +65,9 @@ Item {
                 property bool hovered: mouse.containsMouse
                 property bool selected: ListView.isCurrentItem
 
-                color: selected ? DarkPalette.mid : hovered ? DarkPalette.midlight : DarkPalette.middark
+                color: hovered ? DarkPalette.midlight : selected ? DarkPalette.mid : DarkPalette.almostdark
 
-                border.color: DarkPalette.midlight
-                border.width: 0.5
+                border.width: 0
 
                 Row {
                     anchors.fill: parent

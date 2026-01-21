@@ -35,7 +35,7 @@ KDDW.TitleBarBase {
             anchors.verticalCenter: parent.verticalCenter
             anchors.centerIn: parent
             elide: Text.ElideRight
-            font.pixelSize: 15
+            font.pixelSize: 13
             color: DarkPalette.text
             opacity: 1
         }

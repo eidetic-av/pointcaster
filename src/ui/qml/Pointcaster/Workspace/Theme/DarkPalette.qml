@@ -50,6 +50,7 @@ QtObject {
     property color midlight: palette.midlight
     property color mid: palette.mid
     property color middark: "#2A2F3A"
+    property color almostdark: "#1E2230" 
     property color dark: palette.dark
     property color shadow: palette.shadow
 }

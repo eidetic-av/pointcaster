@@ -3,64 +3,154 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from typing import Any
+
+@dataclass
+class EnumEntry:
+    name: str
+    value: int
 
 @dataclass
 class Member:
     type: str
     name: str
-    default_value: str
+    default_value: Any
     min_max: str
     optional: bool
     disabled: bool
     hidden: bool
+    is_enum: bool
+    enum_qualified_type: str
+    enum_entries: list[EnumEntry]
 
 file_cache = {}
 
-def format_struct_name(name):
+def format_struct_name(name: str) -> str:
     name = name.replace("Configuration", "")
     name = name.replace("Operator", "")
-    result = []
+    result: list[str] = []
     for i, char in enumerate(name):
         if i > 0 and char.isupper() and name[i - 1].islower():
-            result.append(' ')
+            result.append(" ")
         result.append(char)
-    return ''.join(result)
+    return "".join(result)
 
-# still here if you ever want it again for other generators
-def calculate_relative_path(from_file, to_file):
-    from_dir = os.path.dirname(from_file)
-    relative_path = os.path.relpath(to_file, from_dir)
-    return relative_path
+def _try_parse_int(token: str) -> int | None:
+    t = token.strip()
+    if not t:
+        return None
+    try:
+        return int(t, 0)
+    except ValueError:
+        return None
 
-def ensure_headers(file_content, header_paths):
-    lines = file_content.splitlines()
+def _try_parse_float(token: str) -> float | None:
+    t = token.strip()
+    if not t:
+        return None
+    try:
+        if re.fullmatch(r"[+-]?\d+", t):
+            return None
+        return float(t)
+    except ValueError:
+        return None
 
-    # find the index of the last #include
-    last_include_index = next(
-        (i for i, line in reversed(list(enumerate(lines))) if line.startswith('#include')),
-        -1
+def _parse_default_value(raw: str) -> Any:
+    if raw is None:
+        return None
+    s = raw.strip()
+    if not s:
+        return ""
+
+    if s in ("true", "false"):
+        return (s == "true")
+
+    parsed_int = _try_parse_int(s)
+    if parsed_int is not None:
+        return parsed_int
+
+    parsed_float = _try_parse_float(s)
+    if parsed_float is not None:
+        return parsed_float
+
+    if (len(s) >= 2) and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+        return s[1:-1]
+
+    return s
+
+def _parse_enum_entries(enum_body: str) -> list[EnumEntry]:
+    items: list[EnumEntry] = []
+    next_value = 0
+
+    raw_items = enum_body.split(",")
+    for raw_item in raw_items:
+        entry = raw_item.strip()
+        if not entry:
+            continue
+        entry = re.sub(r"//.*$", "", entry).strip()
+        entry = re.sub(r"/\*.*?\*/", "", entry).strip()
+        if not entry:
+            continue
+
+        if "=" in entry:
+            name_part, value_part = entry.split("=", 1)
+            enum_name = name_part.strip()
+            explicit_value = _try_parse_int(value_part)
+            if explicit_value is None:
+                continue
+            items.append(EnumEntry(name=enum_name, value=explicit_value))
+            next_value = explicit_value + 1
+        else:
+            items.append(EnumEntry(name=entry, value=next_value))
+            next_value += 1
+
+    return items
+
+def _extract_nested_enums(struct_body: str) -> tuple[dict[str, list[EnumEntry]], str]:
+    enum_pattern = re.compile(
+        r"^\s*enum\s+class\s+(\w+)(?:\s*:\s*[\w:]+)?\s*\{([^}]*)\}\s*;\s*$",
+        re.MULTILINE,
     )
 
-    # format the header paths into includes
-    headers_to_insert = [
-        f'#include "{header}"'
-        for header in header_paths
-        if f'#include "{header}"' not in file_content
-    ]
+    enum_map: dict[str, list[EnumEntry]] = {}
+    def _strip_and_collect(match: re.Match) -> str:
+        enum_name = match.group(1)
+        enum_body = match.group(2)
+        enum_entries = _parse_enum_entries(enum_body)
+        enum_map[enum_name] = enum_entries
+        return ""
 
-    # insert the headers after the last #include
-    if headers_to_insert:
-        insert_index = last_include_index + 1 if last_include_index != -1 else 0
-        lines[insert_index:insert_index] = headers_to_insert
+    stripped_body = enum_pattern.sub(_strip_and_collect, struct_body)
+    return enum_map, stripped_body
 
-    return '\n'.join(lines)
+def _enum_default_to_int(default_value: Any, enum_simple_name: str, enum_entries: list[EnumEntry]) -> int | None:
+    if default_value is None:
+        return None
+    if isinstance(default_value, int):
+        return default_value
+    s = str(default_value).strip()
+    if not s:
+        return None
+
+    m = re.fullmatch(r"(?:[\w:]+::)*(\w+)(?:::)?(\w+)", s)
+    if m:
+        tail0 = m.group(1)
+        tail1 = m.group(2)
+        enum_name_candidate = tail0
+        enumerator_candidate = tail1
+
+        if enum_name_candidate == enum_simple_name:
+            for e in enum_entries:
+                if e.name == enumerator_candidate:
+                    return e.value
+
+    for e in enum_entries:
+        if e.name == s:
+            return e.value
+
+    return None
 
 def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
-    """
-    Given a single config struct and its members, spit out the corresponding
-    QObject-derived ConfigAdapter class that wraps a reference to that struct.
-    """
-
     adapter_name = f"{struct_name}Adapter"
     display_name = format_struct_name(struct_name)
 
@@ -78,7 +168,6 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append(f"    Q_INVOKABLE int fieldCount() const override {{ return {len(members)}; }}")
     out.append("")
 
-    # fieldName()
     out.append("    Q_INVOKABLE QString fieldName(int index) const override {")
     out.append("        switch (index) {")
     for i, m in enumerate(members):
@@ -88,7 +177,6 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("    }")
     out.append("")
 
-    # fieldTypeName()
     out.append("    Q_INVOKABLE QString fieldTypeName(int index) const override {")
     out.append("        switch (index) {")
     for i, m in enumerate(members):
@@ -98,16 +186,53 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("    }")
     out.append("")
 
-    # defaultValue()
+    any_enums = any(m.is_enum for m in members)
+    if any_enums:
+        out.append("    Q_INVOKABLE bool isEnum(int index) const override {")
+        out.append("        switch (index) {")
+        for i, m in enumerate(members):
+            if m.is_enum:
+                out.append(f"        case {i}: return true;")
+        out.append("        default: return false;")
+        out.append("        }")
+        out.append("    }")
+        out.append("")
+
+        out.append("    Q_INVOKABLE QVariant enumOptions(int index) const override {")
+        out.append("        switch (index) {")
+        for i, m in enumerate(members):
+            if not m.is_enum:
+                continue
+            out.append(f"        case {i}:")
+            out.append("            return QVariantList{")
+            for j, e in enumerate(m.enum_entries):
+                comma = "," if j + 1 < len(m.enum_entries) else ""
+                out.append(f"                QVariantMap{{ {{\"text\", QStringLiteral(\"{e.name}\")}}, {{\"value\", {e.value}}} }}{comma}")
+            out.append("            };")
+        out.append("        default: return {};")
+        out.append("        }")
+        out.append("    }")
+        out.append("")
+
     out.append("    Q_INVOKABLE QVariant defaultValue(int index) const override {")
     out.append("        switch (index) {")
     for i, m in enumerate(members):
         v = m.default_value
         if v is None:
             out.append(f"        case {i}: return QVariant();")
+        elif m.is_enum:
+            enum_default = _enum_default_to_int(v, m.type, m.enum_entries)
+            if enum_default is None and m.enum_entries:
+                enum_default = m.enum_entries[0].value
+            if enum_default is None:
+                out.append(f"        case {i}: return QVariant();")
+            else:
+                out.append(f"        case {i}: return QVariant({enum_default});")
         elif isinstance(v, bool):
             out.append(f"        case {i}: return QVariant({str(v).lower()});")
-        elif isinstance(v, int) or isinstance(v, float):
+        elif isinstance(v, int):
+            out.append(f"        case {i}: return QVariant({v});")
+        elif isinstance(v, float):
             out.append(f"        case {i}: return QVariant({v});")
         else:
             s = str(v).replace("\\", "\\\\").replace("\"", "\\\"")
@@ -117,20 +242,14 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("    }")
     out.append("")
 
-    # minMax() returns a QVariantList of 2 numbers (as QVariants) or an empty QVariant
     out.append("    Q_INVOKABLE QVariant minMax(int index) const override {")
     out.append("        switch (index) {")
     for i, m in enumerate(members):
         if m.min_max:
-            # m.min_max is the raw "0.0, 1.0" or "0, 1" from @minmax(...)
             parts = [p.strip() for p in m.min_max.split(",")]
-            # fallbacks just in case the annotation is weird
             mn = parts[0] if len(parts) >= 1 and parts[0] else "0"
             mx = parts[1] if len(parts) >= 2 and parts[1] else mn
-            # we explicitly wrap in QVariant so the QList<QVariant> initializer-list is valid
-            out.append(
-                f"        case {i}: return QVariantList{{ QVariant({mn}), QVariant({mx}) }};"
-            )
+            out.append(f"        case {i}: return QVariantList{{ QVariant({mn}), QVariant({mx}) }};")
         else:
             out.append(f"        case {i}: return {{}};")
     out.append("        default: return {};")
@@ -138,7 +257,6 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("    }")
     out.append("")
 
-    # optional / disabled / hidden flags
     out.append("    Q_INVOKABLE bool isOptional(int index) const override {")
     out.append("        switch (index) {")
     for i, m in enumerate(members):
@@ -164,37 +282,40 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("    }")
     out.append("")
 
-    # fieldValue()
     out.append("    Q_INVOKABLE QVariant fieldValue(int index) const override {")
     out.append("        switch (index) {")
     for i, m in enumerate(members):
         if m.type == "std::string":
-            # expose as QString to QML
-            out.append(
-                f"        case {i}: return QVariant(QString::fromStdString(m_config.{m.name}));"
-            )
+            out.append(f"        case {i}: return QVariant(QString::fromStdString(m_config.{m.name}));")
+        elif m.is_enum:
+            out.append(f"        case {i}: return QVariant(int(m_config.{m.name}));")
         else:
-            out.append(
-                f"        case {i}: return QVariant::fromValue(m_config.{m.name});"
-            )
+            out.append(f"        case {i}: return QVariant::fromValue(m_config.{m.name});")
     out.append("        default: return {};")
     out.append("        }")
     out.append("    }")
     out.append("")
 
-    # setFieldValue()
     out.append("    Q_INVOKABLE void setFieldValue(int index, const QVariant &value) override {")
     out.append("        switch (index) {")
     for i, m in enumerate(members):
         out.append(f"        case {i}: {{")
         if m.type == "std::string":
-            # QML gives us a string -> QString -> std::string
             out.append("            auto newValue = value.toString().toStdString();")
+            out.append(f"            if (m_config.{m.name} == newValue)")
+            out.append("                return;")
+            out.append(f"            m_config.{m.name} = newValue;")
+        elif m.is_enum:
+            out.append("            const int newValueInt = value.toInt();")
+            out.append(f"            const auto newValue = static_cast<{m.enum_qualified_type}>(newValueInt);")
+            out.append(f"            if (m_config.{m.name} == newValue)")
+            out.append("                return;")
+            out.append(f"            m_config.{m.name} = newValue;")
         else:
             out.append(f"            auto newValue = qvariant_cast<{m.type}>(value);")
-        out.append(f"            if (m_config.{m.name} == newValue)")
-        out.append("                return;")
-        out.append(f"            m_config.{m.name} = newValue;")
+            out.append(f"            if (m_config.{m.name} == newValue)")
+            out.append("                return;")
+            out.append(f"            m_config.{m.name} = newValue;")
         out.append("            emit fieldChanged(index);")
         out.append("            break;")
         out.append("        }")
@@ -210,16 +331,13 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
 
     return "\n".join(out)
 
-def process_cpp_header(input_text, file_path):
-    # TODO: replace this explicit string search with a search for a meta comment
-    # which instructs to serialize the struct
+def process_cpp_header(input_text: str, file_path: str) -> str:
     structs = re.findall(
         r"struct (\w+(?:Configuration|Workspace|Entry|Session|SessionLayout|BindingTarget|putRoute|putMapping|putChangeDetection|ABB)) {([\s\S]*?^\};)",
         input_text,
         re.MULTILINE,
     )
 
-    # define regex components
     type_pattern = r"([\w:]+(?:\:\:)?[\w:]+(?:<[\w\s:,]+>)?)"
     name_pattern = r"(\w+)"
     initial_value_pattern = r"(?:\s*=\s*([^;{]+)|\s*{\s*([^}]+)\s*})?"
@@ -229,7 +347,7 @@ def process_cpp_header(input_text, file_path):
     disabled_pattern = re.compile(r"@disabled")
     hidden_pattern = re.compile(r"@hidden")
     verbatim_pattern = re.compile(
-        r'^\s*((?:static|constexpr|inline|virtual|extern|using)\b.*)$',
+        r"^\s*((?:static|constexpr|inline|virtual|extern|using)\b.*)$",
         re.MULTILINE,
     )
 
@@ -241,31 +359,42 @@ def process_cpp_header(input_text, file_path):
     adapter_classes: list[str] = []
 
     for struct_name, struct_body in structs:
-        # strip out static/constexpr/using/etc – same as before
-        verbatim_members = verbatim_pattern.findall(struct_body)
-        members_body = verbatim_pattern.sub('', struct_body)
+        nested_enums, stripped_struct_body = _extract_nested_enums(struct_body)
 
-        # now find simple member variables
+        members_body = verbatim_pattern.sub("", stripped_struct_body)
+
         unparsed_members = member_pattern.findall(members_body)
         members: list[Member] = []
 
         for member in unparsed_members:
-            # Combine initialization values if present
-            init_value = member[2].strip() or member[3].strip() or ""
-            init_value = init_value.replace("{", "").replace("}", "")
+            raw_type = member[0].strip()
+            raw_name = member[1].strip()
+
+            init_value_raw = (member[2] or "").strip() or (member[3] or "").strip() or ""
+            init_value_raw = init_value_raw.replace("{", "").replace("}", "").strip()
+            init_value = _parse_default_value(init_value_raw)
 
             comment = member[4].strip() if member[4] else ""
             minmax_match = minmax_pattern.search(comment)
 
-            members.append(Member(
-                type     = member[0],
-                name     = member[1],
-                default_value  = init_value,
-                min_max  = minmax_match.group(1) if minmax_match else "",
-                optional = bool(optional_pattern.search(comment)),
-                disabled = bool(disabled_pattern.search(comment)),
-                hidden   = bool(hidden_pattern.search(comment)),
-            ))
+            is_enum = raw_type in nested_enums
+            enum_entries = nested_enums.get(raw_type, [])
+            enum_qualified_type = f"{struct_name}::{raw_type}" if is_enum else ""
+
+            members.append(
+                Member(
+                    type=raw_type,
+                    name=raw_name,
+                    default_value=init_value,
+                    min_max=minmax_match.group(1) if minmax_match else "",
+                    optional=bool(optional_pattern.search(comment)),
+                    disabled=bool(disabled_pattern.search(comment)),
+                    hidden=bool(hidden_pattern.search(comment)),
+                    is_enum=is_enum,
+                    enum_qualified_type=enum_qualified_type,
+                    enum_entries=enum_entries,
+                )
+            )
 
         adapter_classes.append(generate_adapter_class(struct_name, members))
 
@@ -276,17 +405,15 @@ def process_cpp_header(input_text, file_path):
     lines.append("")
     lines.append("#include <QObject>")
     lines.append("#include <QVariant>")
+    lines.append("#include <QVariantMap>")
     lines.append("#include <QString>")
     lines.append("#include <QMetaType>")
     lines.append("")
-    # base class, lives in ui plugin config_adapter.h (which is on the include path)
-    lines.append("#include \"models/config_adapter.h\"")
-    # pull in the original config header so the struct types are visible
-    lines.append(f"#include \"{header_basename}\"")
+    lines.append('#include "models/config_adapter.h"')
+    lines.append(f'#include "{header_basename}"')
     lines.append("")
 
-    # keep the namespace from the input file if there is one
-    ns_match = re.search(r'namespace\s+([A-Za-z_][\w:]*)\s*{', input_text)
+    ns_match = re.search(r"namespace\s+([A-Za-z_][\w:]*)\s*{", input_text)
 
     if adapter_classes:
         if ns_match:
@@ -303,16 +430,16 @@ def process_cpp_header(input_text, file_path):
 
     return "\n".join(lines)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python generate-qt-adapters.py <filename1> <filename2> ...")
         sys.exit(1)
 
     for file_name in sys.argv[1:]:
-        with open(file_name, 'r', encoding='utf-8') as input_file:
+        with open(file_name, "r", encoding="utf-8") as input_file:
             file_content = input_file.read()
             generated_content = process_cpp_header(file_content, file_name)
-            generated_file_name = file_name.replace('.h', '.gen.h')
-            with open(generated_file_name, 'w', encoding='utf-8') as output_file:
+            generated_file_name = file_name.replace(".h", ".gen.h")
+            with open(generated_file_name, "w", encoding="utf-8") as output_file:
                 output_file.write(generated_content)
             print("--", generated_file_name)

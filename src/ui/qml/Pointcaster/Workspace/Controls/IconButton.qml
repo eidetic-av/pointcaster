@@ -9,7 +9,6 @@ AbstractButton {
     property url iconSource
     property int iconSize: 9
     property int iconTextSpacing: 5
-    property int iconLeftPadding: 12
 
     property color backgroundColor: DarkPalette.middark
     property color hoverColor: DarkPalette.mid
@@ -19,24 +18,20 @@ AbstractButton {
     property int borderWidth: 1
     property int radius: 3
 
-    property int contentLeftPadding: 8
-    property int contentRightPadding: 8
-    property int contentTopPadding: 6
-    property int contentBottomPadding: 6
+    property string tooltip
 
-    readonly property bool iconOnly: text.length === 0
-    readonly property bool hasIcon: iconSource !== ""
+    // single source of truth for outer padding
+    padding: 0
+    leftPadding: 8
+    rightPadding: 8
+    topPadding: 6
+    bottomPadding: 6
+
+    readonly property bool hasIcon: iconSource !== "" && iconSource !== undefined && iconSource !== null
+    readonly property bool hasText: text.length > 0
 
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
-
-    implicitWidth: contentLeftPadding
-                   + content.implicitWidth
-                   + contentRightPadding
-    implicitHeight: contentTopPadding
-                    + content.implicitHeight
-                    + contentBottomPadding
-
     opacity: enabled ? 1.0 : 0.66
 
     background: Rectangle {
@@ -63,52 +58,42 @@ AbstractButton {
         }
     }
 
+    // Let AbstractButton size itself from contentItem + paddings.
     contentItem: Item {
-        id: content
+        implicitWidth: row.implicitWidth
+        implicitHeight: row.implicitHeight
 
-        x: root.contentLeftPadding
-        y: root.contentTopPadding
+        Row {
+            id: row
+            anchors.centerIn: parent
+            spacing: (root.hasIcon && root.hasText) ? root.iconTextSpacing : 0
 
-        implicitWidth:
-            (icon.visible ? root.iconLeftPadding + icon.width : 0)
-            + (label.visible
-               ? (icon.visible ? root.iconTextSpacing : 0) + label.implicitWidth
-               : 0)
+            Image {
+                visible: root.hasIcon
+                source: root.iconSource
+                width: root.iconSize
+                height: root.hasText ? contentText.height : root.iconSize
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                mipmap: true
+            }
 
-        implicitHeight: Math.max(
-            icon.visible ? icon.height : 0,
-            label.visible ? label.implicitHeight : 0
-        )
-
-        Image {
-            id: icon
-            visible: root.hasIcon
-            source: root.iconSource
-
-            width: root.iconSize
-            height: root.iconSize
-
-            anchors.left: parent.left
-            anchors.leftMargin: root.iconLeftPadding   // ← applied here
-            anchors.verticalCenter: parent.verticalCenter
-
-            fillMode: Image.PreserveAspectFit
-            smooth: true
-            mipmap: true
-        }
-
-        Text {
-            id: label
-            text: root.text
-            visible: !root.iconOnly
-
-            anchors.left: icon.visible ? icon.right : parent.left
-            anchors.leftMargin: icon.visible ? root.iconTextSpacing : 0
-            anchors.verticalCenter: parent.verticalCenter
-
-            font: root.font
-            color: root.palette.buttonText
-            elide: Text.ElideRight
+            Text {
+                id: contentText
+                visible: root.hasText
+                text: root.text
+                font: root.font
+                color: root.palette.buttonText
+                elide: Text.ElideRight
+                verticalAlignment: Text.AlignVCenter
+            }
         }
     }
+
+    ToolTip {
+        visible: tooltip ? parent.hovered : false
+        text: tooltip
+        delay: 400
+    }
+
 }

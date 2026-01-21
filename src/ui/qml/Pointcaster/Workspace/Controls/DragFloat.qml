@@ -14,7 +14,7 @@ DoubleSpinBox {
 
     property color focusBorderColor: DarkPalette.highlight
     property color unfocusBorderColor: "transparent"
-    property color backgroundColor: "transparent"
+    property color backgroundColor: (root.activeFocus || hover.hovered) ? DarkPalette.almostdark : "transparent"
 
     property real dragThresholdPx: 6.0
     property real pixelsPerStep: 6.0
@@ -53,10 +53,9 @@ DoubleSpinBox {
         return Math.max(200.0, w * frac);
     }
 
-    // Value delta per "step unit" produced by DragInput.
     readonly property real dragStepSize: {
         if (!Number.isFinite(root.boundedRange))
-            return root.stepSize; // fallback: behaves like normal spinbox stepping
+            return root.stepSize;
 
         var valuePerPixel = root.boundedRange / root.dragTargetPixels;
         var step = valuePerPixel * root.pixelsPerStep;
@@ -89,6 +88,11 @@ DoubleSpinBox {
             boundValue = value;
             commitValue(value);
         }
+    }
+
+    HoverHandler {
+        id: hover
+        acceptedDevices: PointerDevice.Mouse
     }
 
     background: Rectangle {

@@ -6,8 +6,6 @@
 #include <QString>
 #include <QVariant>
 
-// TODO maybe this should be a DeviceConfigAdapter...
-
 class ConfigAdapter : public QObject {
   Q_OBJECT
   Q_PROPERTY(
@@ -20,8 +18,6 @@ public:
       : QObject(parent), _plugin(plugin) {}
 
   ~ConfigAdapter() override = default;
-
-  // metadata required for each adapter to generate about its configs members
 
   Q_INVOKABLE virtual QString configType() const = 0;
 
@@ -42,7 +38,6 @@ public:
     return {};
   }
 
-  // min/max range for the field at index.
   Q_INVOKABLE virtual QVariant minMax(int index) const {
     Q_UNUSED(index);
     return {};
@@ -61,6 +56,16 @@ public:
   Q_INVOKABLE virtual bool isHidden(int index) const {
     Q_UNUSED(index);
     return false;
+  }
+
+  Q_INVOKABLE virtual bool isEnum(int index) const {
+    Q_UNUSED(index);
+    return false;
+  }
+
+  Q_INVOKABLE virtual QVariant enumOptions(int index) const {
+    Q_UNUSED(index);
+    return {};
   }
 
   void setStatusFromCore(pc::devices::DeviceStatus s) {

@@ -6,6 +6,7 @@ set(qml_singletons
     WorkspaceState.qml
     Theme/DarkPalette.qml
     Theme/FontAwesome.qml
+    Utils/StringUtils.qml
 )
 foreach(qml_singleton_file IN LISTS qml_singletons)
     set_source_files_properties( ${qml_singleton_file} 
@@ -19,6 +20,7 @@ qt_add_qml_module(PointcasterWorkspace
         Controls/DragInput.qml
         Controls/DragInt.qml
         Controls/DragFloat.qml
+        Controls/EnumSelector.qml
         Controls/IconButton.qml
         Editors/ConfigurationEditor.qml
         Windows/TitleBar.qml

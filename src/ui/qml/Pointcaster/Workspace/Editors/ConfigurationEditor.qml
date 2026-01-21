@@ -8,11 +8,7 @@ Item {
     property var model: null
 
     property string emptyTitle: "Properties"
-
-    // shared width of the left 'label' column 
     property int labelColumnWidth: WorkspaceState.labelColumnWidth
-
-    // collapse state
     property bool expanded: true
 
     property int outerHorizontalMargin: 8
@@ -36,7 +32,6 @@ Item {
         border.width: 1
         clip: true
 
-        // header row (click to collapse/expand)
         Rectangle {
             id: header
             anchors {
@@ -146,7 +141,7 @@ Item {
                                     top: parent.top
                                     bottom: parent.bottom
                                     left: parent.left
-                                    leftMargin: 7
+                                    leftMargin: 6
                                 }
                                 width: root.labelColumnWidth
 
@@ -160,9 +155,22 @@ Item {
                                     }
                                     horizontalAlignment: Text.AlignLeft
                                     color: DarkPalette.text
-                                    text: root.model ? root.model.fieldName(index) : ""
+                                    text: root.model ? StringUtils.titleFromSnake(root.model.fieldName(index)) : ""
                                     font.pixelSize: 13
                                     elide: Text.ElideRight
+                                }
+
+                                ToolTip {
+                                    visible: labelHover.hovered
+                                    text: root.model ? "osc/address/" + qsTr(root.model.fieldName(index)) : ""
+                                    delay: 400
+                                    parent: labelContainer
+                                    x: Math.max((labelContainer.width - implicitWidth) * 0.5, 4)
+                                    y: labelContainer.height + 4
+                                }
+
+                                HoverHandler {
+                                    id: labelHover
                                 }
                             }
 
@@ -172,14 +180,15 @@ Item {
                                     left: labelContainer.right
                                     leftMargin: -5
                                     right: parent.right
-                                    top: parent.top
-                                    bottom: parent.bottom
+                                    verticalCenter: parent.verticalCenter
                                 }
                                 z: 3
 
                                 readonly property string typeName: root.model ? String(root.model.fieldTypeName(index)).toLowerCase() : ""
 
                                 sourceComponent: {
+                                    if (root.model && root.model.isEnum(index))
+                                        return enumEditor;
                                     if (typeName === "int" || typeName === "int32" || typeName === "int32_t" || typeName === "integer")
                                         return intEditor;
                                     if (typeName === "float" || typeName === "float32" || typeName === "float32_t" || typeName === "double" || typeName === "real" || typeName === "number")
@@ -229,7 +238,7 @@ Item {
                                         return isNaN(n) ? 0 : Math.trunc(n);
                                     }
 
-                                    onCommitValue: v => {
+                                    onCommitValue: function (v) {
                                         if (!root.model)
                                             return;
                                         root.model.setFieldValue(index, v);
@@ -254,10 +263,46 @@ Item {
                                         return isNaN(n) ? 0.0 : n;
                                     }
 
-                                    onCommitValue: v => {
+                                    onCommitValue: function (v) {
                                         if (!root.model)
                                             return;
                                         root.model.setFieldValue(index, v);
+                                    }
+                                }
+                            }
+
+                            Component {
+                                id: enumEditor
+
+                                EnumSelector {
+                                    id: enumSelector
+
+                                    enabled: root.model ? !root.model.isDisabled(index) : false
+                                    opacity: enabled ? 1.0 : 0.66
+
+                                    options: root.model ? root.model.enumOptions(index) : []
+                                    boundValue: {
+                                        if (!root.model)
+                                            return 0;
+                                        var n = Number(root.model.fieldValue(index));
+                                        return isNaN(n) ? 0 : Math.trunc(n);
+                                    }
+
+                                    onCommitValue: function (v) {
+                                        if (!root.model)
+                                            return;
+                                        root.model.setFieldValue(index, v);
+                                    }
+
+                                    // keep in sync if the adapter updates from elsewhere
+                                    Connections {
+                                        target: root.model
+                                        function onFieldChanged(changedIndex) {
+                                            if (changedIndex !== index)
+                                                return;
+                                            var n = Number(root.model.fieldValue(index));
+                                            enumSelector.boundValue = isNaN(n) ? 0 : Math.trunc(n);
+                                        }
                                     }
                                 }
                             }
@@ -265,7 +310,6 @@ Item {
                     }
                 }
 
-                // draggable divider
                 Rectangle {
                     id: dividerHandle
                     x: (root.labelColumnWidth - width / 2) + 1
@@ -279,17 +323,22 @@ Item {
                     color: "transparent"
 
                     Rectangle {
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors {
+                            verticalCenter: parent.verticalCenter
+                            horizontalCenter: parent.horizontalCenter
+                        }
                         height: parent.height
                         width: (dividerMouseArea.containsMouse || dividerMouseArea.drag.active) ? 3 : 1
+
                         Behavior on width {
                             NumberAnimation {
                                 duration: 120
                                 easing.type: Easing.InCubic
                             }
                         }
+
                         color: dividerMouseArea.drag.active ? DarkPalette.midlight : (dividerMouseArea.containsMouse ? DarkPalette.mid : DarkPalette.middark)
+
                         Behavior on color {
                             ColorAnimation {
                                 duration: 90

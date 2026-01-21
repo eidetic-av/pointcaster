@@ -29,6 +29,10 @@ QQmlApplicationEngine *initialise(QGuiApplication *app) {
   KDDockWidgets::QtQuick::Platform::instance()->setQmlEngine(&engine);
   auto &docking_config = KDDockWidgets::Config::self();
   docking_config.setViewFactory(new pc::ui::CustomViewFactory());
+  using KDDockWidgets::Config;
+  docking_config.setFlags(
+      Config::Flag_HideTitleBarWhenTabsVisible | Config::Flag_AlwaysShowTabs |
+      Config::Flag_AllowReorderTabs | Config::Flag_DisableDoubleClick);
 
   static fa::QtAwesome awesome(app);
   awesome.initFontAwesome();

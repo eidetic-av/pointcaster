@@ -45,15 +45,47 @@ KDDW.DockWidget {
             color: DarkPalette.base
         }
 
+        Row {
+            id: devicesButtonsRow
+            anchors {
+                top: parent.top
+                left: parent.left
+                right: parent.right
+                topMargin: 10
+                leftMargin: 8
+                rightMargin: 8
+            }
+            spacing: 8
+
+            IconButton {
+                tooltip: "Add new device"
+                iconSource: FontAwesome.icon('solid/plus')
+                onClicked: {
+                    console.log('add device')
+                }
+            }
+
+            IconButton {
+                tooltip: "Delete selected device"
+                iconSource: FontAwesome.icon('solid/trash')
+                onClicked: {
+                    console.log('delete device')
+                }
+            }
+
+        }
+
+
         DeviceSelectionList {
             id: deviceSelectionList
             deviceAdapters: workspace ? workspace.deviceConfigAdapters : null
-            anchors.top: parent.top
+            anchors.top: devicesButtonsRow.bottom
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.topMargin: 10
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
+            anchors.bottomMargin: 10
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
             height: 160
         }
 
@@ -63,29 +95,30 @@ KDDW.DockWidget {
                 top: deviceSelectionList.bottom
                 left: parent.left
                 right: parent.right
+                topMargin: 10
                 leftMargin: 8
                 rightMargin: 8
-                topMargin: 4
             }
-            height: 40
             spacing: 8
 
             enabled: devices.currentController !== null
 
-            Button {
+            IconButton {
                 id: startStopButton
+
                 text: {
                     if (!devices.currentController)
                         return "Start";
                     return devices.currentController.status === DevicePluginController.Active ? "Stop" : "Start";
                 }
 
-                enabled: {
+                iconSource: {
                     if (!devices.currentController)
-                        return false;
-                    // Disable interaction if the device is "Missing"
-                    return devices.currentController.status !== DevicePluginController.Missing;
+                        return FontAwesome.icon("solid/play");
+                    return devices.currentController.status === DevicePluginController.Active ? FontAwesome.icon("solid/stop") : FontAwesome.icon("solid/play");
                 }
+
+                enabled: devices.currentController && devices.currentController.status !== DevicePluginController.Loading
 
                 onClicked: {
                     if (!devices.currentController)
@@ -97,9 +130,11 @@ KDDW.DockWidget {
                 }
             }
 
-            Button {
+            IconButton {
                 id: restartButton
                 text: "Restart"
+                iconSource: FontAwesome.icon("solid/rotate-right") // or "redo" depending on your FA set
+
                 enabled: devices.currentController && devices.currentController.status === DevicePluginController.Active
 
                 onClicked: {
@@ -108,86 +143,79 @@ KDDW.DockWidget {
                 }
             }
 
-            // --- CPU/GPU exclusive toggle ---
-            Item {
-                id: computeToggle
-                height: parent.height
-                width: toggleRow.implicitWidth
+            // Item {
+            //     id: computeToggle
+            //     height: parent.height
+            //     width: toggleRow.implicitWidth
 
-                property bool cpuSelected: true
+            //     property bool cpuSelected: true
 
-                Row {
-                    id: toggleRow
-                    spacing: 0
+            //     Row {
+            //         id: toggleRow
+            //         spacing: 0
 
-                    Rectangle {
-                        id: cpuSeg
-                        width: 40
-                        height: 24
+            //         Rectangle {
+            //             id: cpuSeg
+            //             width: 40
+            //             height: 24
 
-                        border.width: 1
-                        border.color: DarkPalette.mid
+            //             border.width: 1
+            //             border.color: DarkPalette.mid
 
-                        color: DarkPalette.dark
-                        z: computeToggle.cpuSelected ? 2 : 1
+            //             color: DarkPalette.dark
+            //             z: computeToggle.cpuSelected ? 2 : 1
 
-                        Text {
-                            id: cpuLabel
-                            text: "CPU"
-                            anchors.left: parent.left
-                            anchors.leftMargin: 5
-                            anchors.top: parent.top
-                            anchors.topMargin: 2
-                            color: computeToggle.cpuSelected ? DarkPalette.text : DarkPalette.placeholderText
-                            font.pixelSize: 11
-                            font.weight: Font.Medium
-                        }
-                    }
+            //             Text {
+            //                 text: "CPU"
+            //                 anchors.left: parent.left
+            //                 anchors.leftMargin: 5
+            //                 anchors.top: parent.top
+            //                 anchors.topMargin: 2
+            //                 color: computeToggle.cpuSelected ? DarkPalette.text : DarkPalette.placeholderText
+            //                 font.pixelSize: 11
+            //                 font.weight: Font.Medium
+            //             }
+            //         }
 
-                    Rectangle {
-                        id: gpuSeg
-                        width: 40
-                        height: 24
+            //         Rectangle {
+            //             id: gpuSeg
+            //             width: 40
+            //             height: 24
 
-                        border.width: 1
-                        border.color: DarkPalette.mid
+            //             border.width: 1
+            //             border.color: DarkPalette.mid
+            //             x: -1
 
-                        // shift left to overlap CPU button border
-                        x: -1
+            //             color: DarkPalette.dark
+            //             z: computeToggle.cpuSelected ? 1 : 2
 
-                        color: DarkPalette.dark
-                        z: computeToggle.cpuSelected ? 1 : 2
+            //             Text {
+            //                 text: "GPU"
+            //                 anchors.right: parent.right
+            //                 anchors.rightMargin: 5
+            //                 anchors.top: parent.top
+            //                 anchors.topMargin: 2
+            //                 color: computeToggle.cpuSelected ? DarkPalette.placeholderText : DarkPalette.text
+            //                 font.pixelSize: 11
+            //                 font.weight: Font.Medium
+            //             }
+            //         }
+            //     }
 
-                        Text {
-                            id: gpuLabel
-                            text: "GPU"
-                            anchors.right: parent.right
-                            anchors.rightMargin: 5
-                            anchors.top: parent.top
-                            anchors.topMargin: 2
-                            color: computeToggle.cpuSelected ? DarkPalette.placeholderText : DarkPalette.text
-                            font.pixelSize: 11
-                            font.weight: Font.Medium
-                        }
-                    }
-                }
+            //     MouseArea {
+            //         anchors.fill: toggleRow
+            //         onClicked: {
+            //             computeToggle.cpuSelected = !computeToggle.cpuSelected;
 
-                // Single interaction surface
-                MouseArea {
-                    anchors.fill: toggleRow
-
-                    onClicked: {
-                        computeToggle.cpuSelected = !computeToggle.cpuSelected;
-
-                        // if (devices.currentController) {
-                        //     devices.currentController.setComputeBackend(
-                        //         computeToggle.cpuSelected
-                        //             ? DevicePluginController.Cpu
-                        //             : DevicePluginController.Gpu)
-                        // }
-                    }
-                }
-            }
+            //             // if (devices.currentController) {
+            //             //     devices.currentController.setComputeBackend(
+            //             //         computeToggle.cpuSelected
+            //             //             ? DevicePluginController.Cpu
+            //             //             : DevicePluginController.Gpu)
+            //             // }
+            //         }
+            //     }
+            // }
         }
 
         ConfigurationEditor {

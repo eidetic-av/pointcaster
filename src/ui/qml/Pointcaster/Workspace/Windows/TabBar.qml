@@ -17,9 +17,15 @@ KDDW.TabBarBase {
     property int keyboardFocusIndex: 0
 
     // TODO: wire these later to real behaviour
-    function requestRenameTab(index)    { console.log("rename tab", index) }
-    function requestDuplicateTab(index) { console.log("duplicate tab", index) }
-    function requestDeleteTab(index)    { console.log("delete tab", index) }
+    function requestRenameTab(index) {
+        console.log("rename tab", index);
+    }
+    function requestDuplicateTab(index) {
+        console.log("duplicate tab", index);
+    }
+    function requestDeleteTab(index) {
+        console.log("delete tab", index);
+    }
 
     Menu {
         id: tabContextMenu
@@ -36,7 +42,7 @@ KDDW.TabBarBase {
             onTriggered: root.requestDuplicateTab(root.contextTabIndex)
         }
 
-        MenuSeparator { }
+        MenuSeparator {}
 
         Action {
             text: qsTr("Delete")
@@ -47,7 +53,6 @@ KDDW.TabBarBase {
         onAboutToHide: root.contextTabIndex = -1
     }
 
-    // Background: must not sit on top of tabs, or it will eat hover/click.
     Rectangle {
         id: tabBarBackground
         color: DarkPalette.middark
@@ -57,27 +62,28 @@ KDDW.TabBarBase {
     }
 
     function tabCount() {
-        return (tabBarCpp && tabBarCpp.dockWidgetModel) ? tabBarCpp.dockWidgetModel.count : 0
+        return (tabBarCpp && tabBarCpp.dockWidgetModel) ? tabBarCpp.dockWidgetModel.count : 0;
     }
 
     function clampKeyboardFocusIndex(index) {
-        var maxIndexInclusive = tabCount() // tabs + add button
-        return Math.max(0, Math.min(maxIndexInclusive, index))
+        var maxIndexInclusive = tabCount(); // tabs + add button
+        return Math.max(0, Math.min(maxIndexInclusive, index));
     }
 
     function selectTab(index) {
-        if (!tabBarCpp) return
-        var count = tabCount()
-        if (count <= 0) return
-
-        var clamped = Math.max(0, Math.min(count - 1, index))
-        tabBarCpp.setCurrentIndex(clamped)
+        if (!tabBarCpp)
+            return;
+        var count = tabCount();
+        if (count <= 0)
+            return;
+        var clamped = Math.max(0, Math.min(count - 1, index));
+        tabBarCpp.setCurrentIndex(clamped);
     }
 
     function activateAddButton() {
-        if (!tabBarCpp) return
-
-        var uniqueName = Date.now()
+        if (!tabBarCpp)
+            return;
+        var uniqueName = Date.now();
         var code = `import com.kdab.dockwidgets 2.0 as KDDW;
                     import QtQuick 2.6;
                     KDDW.DockWidget {
@@ -85,70 +91,71 @@ KDDW.TabBarBase {
                         title: "dynamic";
                         affinities: ["view"]
                         Rectangle { color: "#85baa1"; anchors.fill: parent; }
-                    }`
+                    }`;
 
-        var newDW = Qt.createQmlObject(code, root)
-        tabBarCpp.addDockWidgetAsTab(newDW)
+        var newDW = Qt.createQmlObject(code, root);
+        tabBarCpp.addDockWidgetAsTab(newDW);
     }
 
     function tabItemAt(index) {
-        return tabRepeater.itemAt(index)
+        return tabRepeater.itemAt(index);
     }
 
     function focusTabItem(index) {
-        var item = tabItemAt(index)
-        if (item) item.forceActiveFocus()
+        var item = tabItemAt(index);
+        if (item)
+            item.forceActiveFocus();
     }
 
     function focusAddButtonItem() {
-        addButtonFocusScope.forceActiveFocus()
+        addButtonFocusScope.forceActiveFocus();
     }
 
     function moveKeyboardFocus(delta) {
-        var next = clampKeyboardFocusIndex(root.keyboardFocusIndex + delta)
-        root.keyboardFocusIndex = next
+        var next = clampKeyboardFocusIndex(root.keyboardFocusIndex + delta);
+        root.keyboardFocusIndex = next;
 
         // 0..tabCount-1 => tab, tabCount => add button
         if (next < tabCount()) {
-            focusTabItem(next)
+            focusTabItem(next);
         } else {
-            focusAddButtonItem()
+            focusAddButtonItem();
         }
     }
 
     function activateKeyboardFocus() {
         if (root.keyboardFocusIndex < tabCount()) {
-            selectTab(root.keyboardFocusIndex)
-            focusTabItem(root.keyboardFocusIndex)
+            selectTab(root.keyboardFocusIndex);
+            focusTabItem(root.keyboardFocusIndex);
         } else {
-            activateAddButton()
-            focusAddButtonItem()
+            activateAddButton();
+            focusAddButtonItem();
         }
     }
 
     /// Required by KDDW C++ for dragging/reordering/floating.
     function getTabAtIndex(index) {
-        return tabItemAt(index)
+        return tabItemAt(index);
     }
 
     /// Required by KDDW C++ for hit-testing which tab is under the cursor.
     function getTabIndexAtPosition(globalPoint) {
-        var count = tabCount()
+        var count = tabCount();
         for (var i = 0; i < count; ++i) {
-            var tab = tabItemAt(i)
-            if (!tab) continue
-
-            var localPt = tab.mapFromGlobal(globalPoint.x, globalPoint.y)
+            var tab = tabItemAt(i);
+            if (!tab)
+                continue;
+            var localPt = tab.mapFromGlobal(globalPoint.x, globalPoint.y);
             if (tab.contains(localPt))
-                return i
+                return i;
         }
-        return -1
+        return -1;
     }
 
     Row {
         id: tabBarRow
 
-        // Keep our visuals above the built-in mouse layer, but do NOT steal left-drag.
+        // keep our visuals above the built-in mouse layer, but dont steal left click/drag
         z: root.mouseAreaZ ? (root.mouseAreaZ.z + 1) : 1
         anchors.fill: parent
         spacing: 0
@@ -179,44 +186,42 @@ KDDW.TabBarBase {
                 Accessible.focusable: true
                 Accessible.checked: isCurrent
 
-                Keys.onPressed: (event) => {
+                Keys.onPressed: event => {
                     switch (event.key) {
                     case Qt.Key_Left:
-                        root.moveKeyboardFocus(-1)
-                        event.accepted = true
-                        break
+                        root.moveKeyboardFocus(-1);
+                        event.accepted = true;
+                        break;
                     case Qt.Key_Right:
-                        root.moveKeyboardFocus(+1)
-                        event.accepted = true
-                        break
+                        root.moveKeyboardFocus(+1);
+                        event.accepted = true;
+                        break;
                     case Qt.Key_Home:
-                        root.keyboardFocusIndex = 0
-                        root.focusTabItem(0)
-                        event.accepted = true
-                        break
+                        root.keyboardFocusIndex = 0;
+                        root.focusTabItem(0);
+                        event.accepted = true;
+                        break;
                     case Qt.Key_End:
                         // End goes to "+" (common in tab strips), not last tab
-                        root.keyboardFocusIndex = root.tabCount()
-                        root.focusAddButtonItem()
-                        event.accepted = true
-                        break
+                        root.keyboardFocusIndex = root.tabCount();
+                        root.focusAddButtonItem();
+                        event.accepted = true;
+                        break;
                     case Qt.Key_Return:
                     case Qt.Key_Enter:
                     case Qt.Key_Space:
-                        root.activateKeyboardFocus()
-                        event.accepted = true
-                        break
+                        root.activateKeyboardFocus();
+                        event.accepted = true;
+                        break;
                     default:
-                        break
+                        break;
                     }
                 }
 
                 // background fill
                 Rectangle {
                     anchors.fill: parent
-                    color: tab.isHovered
-                           ? DarkPalette.midlight
-                           : (tab.isCurrent ? DarkPalette.mid : DarkPalette.middark)
+                    color: tab.isHovered ? DarkPalette.midlight : (tab.isCurrent ? DarkPalette.mid : DarkPalette.middark)
                 }
 
                 // 1px "active" line
@@ -232,7 +237,7 @@ KDDW.TabBarBase {
                 Text {
                     anchors.centerIn: parent
                     text: title
-                    font.pixelSize: 15
+                    font.pixelSize: 13
                     color: DarkPalette.text
                     opacity: tab.isHovered ? 1 : tab.isCurrent ? 1 : 0.5
                     elide: Text.ElideRight
@@ -255,13 +260,19 @@ KDDW.TabBarBase {
                     acceptedButtons: Qt.RightButton
                     z: root.mouseAreaZ ? (root.mouseAreaZ.z + 2) : 100
 
-                    onClicked: (mouse) => {
-                        root.keyboardFocusIndex = tab.tabIndex
-                        tab.forceActiveFocus()
+                    onEntered: tabBarRow.hoveredIndex = tab.tabIndex
+                    onExited: {
+                        if (tabBarRow.hoveredIndex === tab.tabIndex)
+                            tabBarRow.hoveredIndex = -1;
+                    }
 
-                        root.contextTabIndex = tab.tabIndex
-                        var p = tab.mapToItem(root, mouse.x, mouse.y)
-                        tabContextMenu.popup(Qt.point(p.x, p.y))
+                    onClicked: mouse => {
+                        root.keyboardFocusIndex = tab.tabIndex;
+                        tab.forceActiveFocus();
+
+                        root.contextTabIndex = tab.tabIndex;
+                        var p = tab.mapToItem(root, mouse.x, mouse.y);
+                        tabContextMenu.popup(Qt.point(p.x, p.y));
                     }
                 }
             }
@@ -279,10 +290,6 @@ KDDW.TabBarBase {
             activeFocusOnTab: isKeyboardFocused
             focus: isKeyboardFocused
 
-            Accessible.role: Accessible.Button
-            Accessible.name: "Add new session"
-            Accessible.focusable: true
-
             Rectangle {
                 anchors.fill: parent
                 color: DarkPalette.middark
@@ -296,9 +303,11 @@ KDDW.TabBarBase {
                 border.color: DarkPalette.highlight
             }
 
-            ToolTip.visible: addButtonMouseArea.containsMouse
-            ToolTip.text: "Add new session"
-            ToolTip.delay: 500
+            ToolTip {
+                visible: addButtonMouseArea.containsMouse
+                text: "Add new session"
+                delay: 400
+            }
 
             Image {
                 anchors.centerIn: parent
@@ -309,33 +318,33 @@ KDDW.TabBarBase {
                 source: FontAwesome.icon('solid/plus')
             }
 
-            Keys.onPressed: (event) => {
+            Keys.onPressed: event => {
                 switch (event.key) {
                 case Qt.Key_Left:
-                    root.moveKeyboardFocus(-1)
-                    event.accepted = true
-                    break
+                    root.moveKeyboardFocus(-1);
+                    event.accepted = true;
+                    break;
                 case Qt.Key_Right:
-                    root.moveKeyboardFocus(+1)
-                    event.accepted = true
-                    break
+                    root.moveKeyboardFocus(+1);
+                    event.accepted = true;
+                    break;
                 case Qt.Key_Home:
-                    root.keyboardFocusIndex = 0
-                    root.focusTabItem(0)
-                    event.accepted = true
-                    break
+                    root.keyboardFocusIndex = 0;
+                    root.focusTabItem(0);
+                    event.accepted = true;
+                    break;
                 case Qt.Key_End:
                     // stay here
-                    event.accepted = true
-                    break
+                    event.accepted = true;
+                    break;
                 case Qt.Key_Return:
                 case Qt.Key_Enter:
                 case Qt.Key_Space:
-                    root.activateKeyboardFocus()
-                    event.accepted = true
-                    break
+                    root.activateKeyboardFocus();
+                    event.accepted = true;
+                    break;
                 default:
-                    break
+                    break;
                 }
             }
 
@@ -346,9 +355,9 @@ KDDW.TabBarBase {
                 acceptedButtons: Qt.LeftButton
                 onEntered: tabBarRow.hoveredIndex = -1
                 onClicked: {
-                    root.keyboardFocusIndex = root.tabCount()
-                    addButtonFocusScope.forceActiveFocus()
-                    root.activateAddButton()
+                    root.keyboardFocusIndex = root.tabCount();
+                    addButtonFocusScope.forceActiveFocus();
+                    root.activateAddButton();
                 }
             }
         }
@@ -356,22 +365,22 @@ KDDW.TabBarBase {
         Connections {
             target: tabBarCpp
             function onHoveredTabIndexChanged(index) {
-                tabBarRow.hoveredIndex = index
+                tabBarRow.hoveredIndex = index;
             }
         }
     }
 
     // Initialise keyboard focus to current tab when created / when selection changes.
     Component.onCompleted: {
-        root.keyboardFocusIndex = Math.max(0, root.groupCpp ? root.groupCpp.currentIndex : 0)
-        root.focusTabItem(root.keyboardFocusIndex)
+        root.keyboardFocusIndex = Math.max(0, root.groupCpp ? root.groupCpp.currentIndex : 0);
+        root.focusTabItem(root.keyboardFocusIndex);
     }
 
     Connections {
         target: root.groupCpp
         function onCurrentIndexChanged() {
-            root.keyboardFocusIndex = Math.max(0, root.groupCpp.currentIndex)
-            root.focusTabItem(root.keyboardFocusIndex)
+            root.keyboardFocusIndex = Math.max(0, root.groupCpp.currentIndex);
+            root.focusTabItem(root.keyboardFocusIndex);
         }
     }
 }

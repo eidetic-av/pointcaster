@@ -10,7 +10,10 @@ struct OrbbecDeviceConfiguration {
   std::string id;            // @hidden
   bool active = true;        // @hidden
   std::string ip;            // @disabled
-  int depth_mode = 0;        // @minmax(0, 1000)
+
+  enum class DepthMode { Narrow, Wide };
+  DepthMode depth_mode = DepthMode::Narrow;
+
   int acquisition_mode = 0;  // @minmax(0, 1)
   float test_decimal = 30.0; // @minmax(-180, 180)
 
