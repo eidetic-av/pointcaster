@@ -14,7 +14,14 @@ Item {
     property int outerHorizontalMargin: 8
     property int outerTopMargin: 4
 
-    implicitHeight: header.height + (root.expanded ? body.implicitHeight : 0) + root.outerTopMargin
+    readonly property real _viewportWidth: {
+        if (ScrollView.view) return ScrollView.view.width;
+        if (parent) return parent.width;
+        return 0;
+    }
+    width: _viewportWidth
+
+    implicitHeight: root.outerTopMargin + inspectorGroup.implicitHeight
 
     Rectangle {
         id: inspectorGroup
@@ -26,7 +33,9 @@ Item {
             rightMargin: root.outerHorizontalMargin
             topMargin: root.outerTopMargin
         }
-        height: root.implicitHeight - root.outerTopMargin
+
+        implicitHeight: header.height + (root.expanded ? body.implicitHeight : 0)
+
         color: DarkPalette.dark
         border.color: DarkPalette.mid
         border.width: 1
@@ -40,7 +49,8 @@ Item {
                 right: parent.right
             }
             height: 28
-            color: headerMouseArea.containsMouse ? DarkPalette.mid : (root.expanded ? DarkPalette.middark : DarkPalette.base)
+            color: headerMouseArea.containsMouse ? DarkPalette.mid
+                                                 : (root.expanded ? DarkPalette.middark : DarkPalette.base)
             border.color: DarkPalette.mid
             border.width: 1
 
@@ -49,7 +59,8 @@ Item {
                 width: 12
                 height: 12
                 fillMode: Image.PreserveAspectFit
-                source: root.expanded ? FontAwesome.icon("solid/caret-down") : FontAwesome.icon("solid/caret-right")
+                source: root.expanded ? FontAwesome.icon("solid/caret-down")
+                                      : FontAwesome.icon("solid/caret-right")
                 opacity: 0.75
                 anchors {
                     left: parent.left
@@ -169,9 +180,7 @@ Item {
                                     y: labelContainer.height + 4
                                 }
 
-                                HoverHandler {
-                                    id: labelHover
-                                }
+                                HoverHandler { id: labelHover }
                             }
 
                             Loader {
@@ -199,7 +208,6 @@ Item {
 
                             Component {
                                 id: stringEditor
-
                                 TextField {
                                     id: valueField
                                     background: Rectangle {
@@ -223,7 +231,6 @@ Item {
 
                             Component {
                                 id: intEditor
-
                                 DragInt {
                                     boundEnabled: root.model ? !root.model.isDisabled(index) : false
 
@@ -248,7 +255,6 @@ Item {
 
                             Component {
                                 id: floatEditor
-
                                 DragFloat {
                                     boundEnabled: root.model ? !root.model.isDisabled(index) : false
 
@@ -273,7 +279,6 @@ Item {
 
                             Component {
                                 id: enumEditor
-
                                 EnumSelector {
                                     id: enumSelector
 
@@ -294,7 +299,6 @@ Item {
                                         root.model.setFieldValue(index, v);
                                     }
 
-                                    // keep in sync if the adapter updates from elsewhere
                                     Connections {
                                         target: root.model
                                         function onFieldChanged(changedIndex) {
@@ -323,27 +327,21 @@ Item {
                     color: "transparent"
 
                     Rectangle {
-                        anchors {
-                            verticalCenter: parent.verticalCenter
-                            horizontalCenter: parent.horizontalCenter
-                        }
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.horizontalCenter: parent.horizontalCenter
                         height: parent.height
                         width: (dividerMouseArea.containsMouse || dividerMouseArea.drag.active) ? 3 : 1
 
                         Behavior on width {
-                            NumberAnimation {
-                                duration: 120
-                                easing.type: Easing.InCubic
-                            }
+                            NumberAnimation { duration: 120; easing.type: Easing.InCubic }
                         }
 
-                        color: dividerMouseArea.drag.active ? DarkPalette.midlight : (dividerMouseArea.containsMouse ? DarkPalette.mid : DarkPalette.middark)
+                        color: dividerMouseArea.drag.active
+                             ? DarkPalette.midlight
+                             : (dividerMouseArea.containsMouse ? DarkPalette.mid : DarkPalette.middark)
 
                         Behavior on color {
-                            ColorAnimation {
-                                duration: 90
-                                easing.type: Easing.InCubic
-                            }
+                            ColorAnimation { duration: 90; easing.type: Easing.InCubic }
                         }
                     }
 

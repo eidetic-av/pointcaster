@@ -61,7 +61,7 @@ KDDW.DockWidget {
                 tooltip: "Add new device"
                 iconSource: FontAwesome.icon('solid/plus')
                 onClicked: {
-                    console.log('add device')
+                    console.log('add device');
                 }
             }
 
@@ -69,12 +69,10 @@ KDDW.DockWidget {
                 tooltip: "Delete selected device"
                 iconSource: FontAwesome.icon('solid/trash')
                 onClicked: {
-                    console.log('delete device')
+                    console.log('delete device');
                 }
             }
-
         }
-
 
         DeviceSelectionList {
             id: deviceSelectionList
@@ -142,104 +140,42 @@ KDDW.DockWidget {
                         devices.currentController.restart();
                 }
             }
-
-            // Item {
-            //     id: computeToggle
-            //     height: parent.height
-            //     width: toggleRow.implicitWidth
-
-            //     property bool cpuSelected: true
-
-            //     Row {
-            //         id: toggleRow
-            //         spacing: 0
-
-            //         Rectangle {
-            //             id: cpuSeg
-            //             width: 40
-            //             height: 24
-
-            //             border.width: 1
-            //             border.color: DarkPalette.mid
-
-            //             color: DarkPalette.dark
-            //             z: computeToggle.cpuSelected ? 2 : 1
-
-            //             Text {
-            //                 text: "CPU"
-            //                 anchors.left: parent.left
-            //                 anchors.leftMargin: 5
-            //                 anchors.top: parent.top
-            //                 anchors.topMargin: 2
-            //                 color: computeToggle.cpuSelected ? DarkPalette.text : DarkPalette.placeholderText
-            //                 font.pixelSize: 11
-            //                 font.weight: Font.Medium
-            //             }
-            //         }
-
-            //         Rectangle {
-            //             id: gpuSeg
-            //             width: 40
-            //             height: 24
-
-            //             border.width: 1
-            //             border.color: DarkPalette.mid
-            //             x: -1
-
-            //             color: DarkPalette.dark
-            //             z: computeToggle.cpuSelected ? 1 : 2
-
-            //             Text {
-            //                 text: "GPU"
-            //                 anchors.right: parent.right
-            //                 anchors.rightMargin: 5
-            //                 anchors.top: parent.top
-            //                 anchors.topMargin: 2
-            //                 color: computeToggle.cpuSelected ? DarkPalette.placeholderText : DarkPalette.text
-            //                 font.pixelSize: 11
-            //                 font.weight: Font.Medium
-            //             }
-            //         }
-            //     }
-
-            //     MouseArea {
-            //         anchors.fill: toggleRow
-            //         onClicked: {
-            //             computeToggle.cpuSelected = !computeToggle.cpuSelected;
-
-            //             // if (devices.currentController) {
-            //             //     devices.currentController.setComputeBackend(
-            //             //         computeToggle.cpuSelected
-            //             //             ? DevicePluginController.Cpu
-            //             //             : DevicePluginController.Gpu)
-            //             // }
-            //         }
-            //     }
-            // }
         }
 
-        ConfigurationEditor {
-            id: propertiesPane
+        ScrollView {
+            id: deviceConfigScrollView
             anchors {
                 top: controlRow.bottom
+                topMargin: 3
+                bottom: parent.bottom
+                bottomMargin: 3
                 left: parent.left
                 right: parent.right
             }
-            anchors.topMargin: 6
-
-            model: devices.currentAdapter
-        }
-
-        ConfigurationEditor {
-            id: propertiesPane2
-            anchors {
-                top: propertiesPane.bottom
-                left: parent.left
-                right: parent.right
+            Component.onCompleted: function() {
+                contentItem.boundsBehavior = Flickable.StopAtBounds
             }
-            anchors.topMargin: 6
 
-            model: devices.otherAdapter
+            Column {
+                spacing: 6
+                width: deviceConfigScrollView.contentItem.width
+                height: parent.height
+
+                ConfigurationEditor { model: devices.currentAdapter }
+                ConfigurationEditor { model: devices.otherAdapter }
+            }
         }
+
+        // ConfigurationEditor {
+        //     id: propertiesPane2
+        //     anchors {
+        //         top: propertiesPane.bottom
+        //         left: parent.left
+        //         right: parent.right
+        //     }
+        //     anchors.topMargin: 6
+
+        //     model: devices.otherAdapter
+        // }
     }
 }
