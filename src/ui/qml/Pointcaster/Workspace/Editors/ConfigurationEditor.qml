@@ -15,8 +15,10 @@ Item {
     property int outerTopMargin: 4
 
     readonly property real _viewportWidth: {
-        if (ScrollView.view) return ScrollView.view.width;
-        if (parent) return parent.width;
+        if (ScrollView.view)
+            return ScrollView.view.width;
+        if (parent)
+            return parent.width;
         return 0;
     }
     width: _viewportWidth
@@ -49,8 +51,7 @@ Item {
                 right: parent.right
             }
             height: 28
-            color: headerMouseArea.containsMouse ? DarkPalette.mid
-                                                 : (root.expanded ? DarkPalette.middark : DarkPalette.base)
+            color: headerMouseArea.containsMouse ? DarkPalette.mid : (root.expanded ? DarkPalette.middark : DarkPalette.base)
             border.color: DarkPalette.mid
             border.width: 1
 
@@ -59,8 +60,7 @@ Item {
                 width: 12
                 height: 12
                 fillMode: Image.PreserveAspectFit
-                source: root.expanded ? FontAwesome.icon("solid/caret-down")
-                                      : FontAwesome.icon("solid/caret-right")
+                source: root.expanded ? FontAwesome.icon("solid/caret-down") : FontAwesome.icon("solid/caret-right")
                 opacity: 0.75
                 anchors {
                     left: parent.left
@@ -180,7 +180,9 @@ Item {
                                     y: labelContainer.height + 4
                                 }
 
-                                HoverHandler { id: labelHover }
+                                HoverHandler {
+                                    id: labelHover
+                                }
                             }
 
                             Loader {
@@ -202,6 +204,8 @@ Item {
                                         return intEditor;
                                     if (typeName === "float" || typeName === "float32" || typeName === "float32_t" || typeName === "double" || typeName === "real" || typeName === "number")
                                         return floatEditor;
+                                    if (typeName == "pc::float3")
+                                        return float3Editor;
                                     return stringEditor;
                                 }
                             }
@@ -278,6 +282,30 @@ Item {
                             }
 
                             Component {
+                                id: float3Editor
+                                DragFloat3 {
+                                    boundEnabled: root.model ? !root.model.isDisabled(index) : false
+                                    defaultValue: root.model ? root.model.defaultValue(index) : undefined   // QVector3D(0,0,0)
+                                    // TODO
+                                    minValue: undefined
+                                    maxValue: undefined
+
+                                    boundValue: {
+                                        if (!root.model)
+                                            return Qt.vector3d(0, 0, 0);
+                                        var v = root.model.fieldValue(index); // QVector3D
+                                        return Qt.vector3d(Number(v.x) || 0, Number(v.y) || 0, Number(v.z) || 0);
+                                    }
+
+                                    onCommitValue: function (v3) {
+                                        if (!root.model)
+                                            return;
+                                        root.model.setFieldValue(index, Qt.vector3d(v3.x, v3.y, v3.z));
+                                    }
+                                }
+                            }
+
+                            Component {
                                 id: enumEditor
                                 EnumSelector {
                                     id: enumSelector
@@ -333,15 +361,19 @@ Item {
                         width: (dividerMouseArea.containsMouse || dividerMouseArea.drag.active) ? 3 : 1
 
                         Behavior on width {
-                            NumberAnimation { duration: 120; easing.type: Easing.InCubic }
+                            NumberAnimation {
+                                duration: 120
+                                easing.type: Easing.InCubic
+                            }
                         }
 
-                        color: dividerMouseArea.drag.active
-                             ? DarkPalette.midlight
-                             : (dividerMouseArea.containsMouse ? DarkPalette.mid : DarkPalette.middark)
+                        color: dividerMouseArea.drag.active ? DarkPalette.midlight : (dividerMouseArea.containsMouse ? DarkPalette.mid : DarkPalette.middark)
 
                         Behavior on color {
-                            ColorAnimation { duration: 90; easing.type: Easing.InCubic }
+                            ColorAnimation {
+                                duration: 90
+                                easing.type: Easing.InCubic
+                            }
                         }
                     }
 

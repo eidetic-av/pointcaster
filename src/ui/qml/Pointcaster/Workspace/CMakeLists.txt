@@ -20,6 +20,7 @@ qt_add_qml_module(PointcasterWorkspace
         Controls/DragInput.qml
         Controls/DragInt.qml
         Controls/DragFloat.qml
+        Controls/DragFloat3.qml
         Controls/EnumSelector.qml
         Controls/IconButton.qml
         Editors/ConfigurationEditor.qml

@@ -31,6 +31,9 @@ target_link_libraries(OrbbecDevice PRIVATE
   Corrade::PluginManager
   ob::OrbbecSDK
   unofficial::concurrentqueue::concurrentqueue
+  # TODO: this gui inclusion is wierd, it seems to require it for 
+  # deserialization of pc::float3 into QVector3D?
+  Qt6::Gui 
 )
 
 # for pointcaster::core headers in public include dir

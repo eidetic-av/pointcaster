@@ -4,6 +4,28 @@
 #include <cstdint>
 #include <vector>
 
+namespace pc {
+struct float3 {
+  float x = 0;
+  float y = 0;
+  float z = 0;
+
+  constexpr float& operator[](std::size_t index) {
+    return index == 0 ? x : (index == 1 ? y : z);
+  }
+  constexpr const float& operator[](std::size_t index) const {
+    return index == 0 ? x : (index == 1 ? y : z);
+  }
+};
+
+constexpr bool operator==(const float3 &lhs, const float3 &rhs) {
+  return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+constexpr bool operator!=(const float3 &lhs, const float3 &rhs) {
+  return !(rhs == lhs);
+}
+}
+
 namespace pc::types {
 
 struct uint2 {
@@ -23,8 +45,7 @@ struct alignas(4) position {
 };
 
 constexpr bool operator==(const position &lhs, const position &rhs) {
-  return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z &&
-         lhs.__pad == rhs.__pad;
+  return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
 }
 constexpr bool operator!=(const position &lhs, const position &rhs) {
   return !(rhs == lhs);

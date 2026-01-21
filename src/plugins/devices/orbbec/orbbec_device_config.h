@@ -1,6 +1,7 @@
 #pragma once
 #include <rfl/Literal.hpp>
 #include <string>
+#include <pointcaster/point_cloud.h>
 
 namespace pc::devices {
 
@@ -16,6 +17,8 @@ struct OrbbecDeviceConfiguration {
 
   int acquisition_mode = 0;  // @minmax(0, 1)
   float test_decimal = 30.0; // @minmax(-180, 180)
+
+  pc::float3 offset_position;
 
   using DeviceType = OrbbecDevice;
   using Tag = rfl::Literal<"orbbec">;

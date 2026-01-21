@@ -23,7 +23,9 @@ class Member:
     enum_qualified_type: str
     enum_entries: list[EnumEntry]
 
-file_cache = {}
+def is_float3_type(type_name: str) -> bool:
+    t = type_name.strip()
+    return t in ("pc::float3", "float3")
 
 def format_struct_name(name: str) -> str:
     name = name.replace("Configuration", "")
@@ -228,6 +230,8 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
                 out.append(f"        case {i}: return QVariant();")
             else:
                 out.append(f"        case {i}: return QVariant({enum_default});")
+        elif is_float3_type(m.type):
+            out.append(f"        case {i}: return QVariant::fromValue(QVector3D(0.0f, 0.0f, 0.0f));")
         elif isinstance(v, bool):
             out.append(f"        case {i}: return QVariant({str(v).lower()});")
         elif isinstance(v, int):
@@ -289,6 +293,11 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
             out.append(f"        case {i}: return QVariant(QString::fromStdString(m_config.{m.name}));")
         elif m.is_enum:
             out.append(f"        case {i}: return QVariant(int(m_config.{m.name}));")
+        elif is_float3_type(m.type):
+            out.append(f"        case {i}: {{")
+            out.append(f"            const auto &v = m_config.{m.name};")
+            out.append(f"            return QVariant::fromValue(QVector3D(v.x, v.y, v.z));")
+            out.append(f"        }}")
         else:
             out.append(f"        case {i}: return QVariant::fromValue(m_config.{m.name});")
     out.append("        default: return {};")
@@ -308,6 +317,12 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
         elif m.is_enum:
             out.append("            const int newValueInt = value.toInt();")
             out.append(f"            const auto newValue = static_cast<{m.enum_qualified_type}>(newValueInt);")
+            out.append(f"            if (m_config.{m.name} == newValue)")
+            out.append("                return;")
+            out.append(f"            m_config.{m.name} = newValue;")
+        elif is_float3_type(m.type):
+            out.append("            const QVector3D v = value.value<QVector3D>();")
+            out.append(f"            {m.type} newValue{{ v.x(), v.y(), v.z() }};")
             out.append(f"            if (m_config.{m.name} == newValue)")
             out.append("                return;")
             out.append(f"            m_config.{m.name} = newValue;")
@@ -357,6 +372,7 @@ def process_cpp_header(input_text: str, file_path: str) -> str:
     )
 
     adapter_classes: list[str] = []
+    needs_qvector3d = False
 
     for struct_name, struct_body in structs:
         nested_enums, stripped_struct_body = _extract_nested_enums(struct_body)
@@ -369,6 +385,9 @@ def process_cpp_header(input_text: str, file_path: str) -> str:
         for member in unparsed_members:
             raw_type = member[0].strip()
             raw_name = member[1].strip()
+
+            if is_float3_type(raw_type):
+                needs_qvector3d = True
 
             init_value_raw = (member[2] or "").strip() or (member[3] or "").strip() or ""
             init_value_raw = init_value_raw.replace("{", "").replace("}", "").strip()
@@ -408,6 +427,8 @@ def process_cpp_header(input_text: str, file_path: str) -> str:
     lines.append("#include <QVariantMap>")
     lines.append("#include <QString>")
     lines.append("#include <QMetaType>")
+    if needs_qvector3d:
+        lines.append("#include <QVector3D>")
     lines.append("")
     lines.append('#include "models/config_adapter.h"')
     lines.append(f'#include "{header_basename}"')
