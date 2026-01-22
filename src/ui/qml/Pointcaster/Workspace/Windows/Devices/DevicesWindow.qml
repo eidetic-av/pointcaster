@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 import QtQml.Models
 import com.kdab.dockwidgets as KDDW
 
@@ -14,7 +15,6 @@ KDDW.DockWidget {
 
     Item {
         id: devices
-
         anchors.fill: parent
         property var kddockwidgets_min_size: Qt.size(225, 500)
         clip: true
@@ -39,16 +39,20 @@ KDDW.DockWidget {
         }
 
         // controller for the currently selected device (index-aligned with adapters)
-        property var currentController: (workspace && deviceSelectionList.currentIndex >= 0 && deviceSelectionList.currentIndex < workspace.deviceControllers.length) ? workspace.deviceControllers[deviceSelectionList.currentIndex] : null
+        property var currentController:
+            (workspace
+             && deviceSelectionList.currentIndex >= 0
+             && deviceSelectionList.currentIndex < workspace.deviceControllers.length)
+                ? workspace.deviceControllers[deviceSelectionList.currentIndex]
+                : null
 
         Rectangle {
-            id: background
             anchors.fill: parent
             color: DarkPalette.base
         }
 
-        Row {
-            id: devicesButtonsRow
+        ToolBar {
+            id: devicesToolBar
             anchors {
                 top: parent.top
                 left: parent.left
@@ -57,29 +61,54 @@ KDDW.DockWidget {
                 leftMargin: 8
                 rightMargin: 8
             }
-            spacing: 8
 
-            IconButton {
-                tooltip: "Add new device"
-                iconSource: FontAwesome.icon('solid/plus')
-                onClicked: {
-                    console.log('add device');
-                }
+            background: Rectangle {
+                color: "transparent"
+                border.width: 0
+                radius: 4
             }
 
-            IconButton {
-                tooltip: "Delete selected device"
-                iconSource: FontAwesome.icon('solid/trash')
-                onClicked: {
-                    console.log('delete device');
+            contentItem: RowLayout {
+                spacing: 6
+
+                ToolButton {
+                    Layout.preferredWidth: 25
+                    Layout.preferredHeight: 25
+
+                    icon.source: FontAwesome.icon("solid/plus")
+                    icon.width: 18
+                    icon.height: 18
+
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Add new device"
+                    ToolTip.delay: 400
+
+                    onClicked: console.log("add device")
                 }
+
+                ToolButton {
+                    Layout.preferredWidth: 25
+                    Layout.preferredHeight: 25
+
+                    icon.source: FontAwesome.icon("solid/trash")
+                    icon.width: 18
+                    icon.height: 18
+
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Delete selected device"
+                    ToolTip.delay: 400
+
+                    onClicked: console.log("delete device")
+                }
+
+                Item { Layout.fillWidth: true }
             }
         }
 
         DeviceSelectionList {
             id: deviceSelectionList
             deviceAdapters: workspace ? workspace.deviceConfigAdapters : null
-            anchors.top: devicesButtonsRow.bottom
+            anchors.top: devicesToolBar.bottom
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.topMargin: 10
@@ -100,12 +129,12 @@ KDDW.DockWidget {
                 rightMargin: 8
             }
             spacing: 8
-
             enabled: devices.currentController !== null
 
             IconButton {
                 id: startStopButton
 
+                tooltip: "Start/stop selected device"
                 text: {
                     if (!devices.currentController)
                         return "Start";
@@ -115,10 +144,13 @@ KDDW.DockWidget {
                 iconSource: {
                     if (!devices.currentController)
                         return FontAwesome.icon("solid/play");
-                    return devices.currentController.status === DevicePluginController.Active ? FontAwesome.icon("solid/stop") : FontAwesome.icon("solid/play");
+                    return devices.currentController.status === DevicePluginController.Active
+                            ? FontAwesome.icon("solid/stop")
+                            : FontAwesome.icon("solid/play");
                 }
 
-                enabled: devices.currentController && devices.currentController.status !== DevicePluginController.Loading
+                enabled: devices.currentController
+                         && devices.currentController.status !== DevicePluginController.Loading
 
                 onClicked: {
                     if (!devices.currentController)
@@ -132,29 +164,33 @@ KDDW.DockWidget {
 
             IconButton {
                 id: restartButton
+                tooltip: "Restart selected device"
                 text: "Restart"
-                iconSource: FontAwesome.icon("solid/rotate-right") // or "redo" depending on your FA set
+                iconSource: FontAwesome.icon("solid/rotate-right")
 
-                enabled: devices.currentController && devices.currentController.status === DevicePluginController.Active
+                enabled: devices.currentController
+                         && devices.currentController.status === DevicePluginController.Active
 
                 onClicked: {
                     if (devices.currentController)
                         devices.currentController.restart();
                 }
             }
+
+            Item { width: 1; Layout.fillWidth: false }
         }
 
         ScrollView {
             id: deviceConfigScrollView
             anchors {
                 top: controlRow.bottom
-                topMargin: 3
+                topMargin: 6
                 bottom: parent.bottom
                 bottomMargin: 3
                 left: parent.left
                 right: parent.right
             }
-            Component.onCompleted: function() {
+            Component.onCompleted: function () {
                 contentItem.boundsBehavior = Flickable.StopAtBounds
             }
 
@@ -167,17 +203,5 @@ KDDW.DockWidget {
                 ConfigurationEditor { model: devices.otherAdapter }
             }
         }
-
-        // ConfigurationEditor {
-        //     id: propertiesPane2
-        //     anchors {
-        //         top: propertiesPane.bottom
-        //         left: parent.left
-        //         right: parent.right
-        //     }
-        //     anchors.topMargin: 6
-
-        //     model: devices.otherAdapter
-        // }
     }
 }

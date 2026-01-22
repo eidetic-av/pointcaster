@@ -5,7 +5,12 @@ import "qrc:/kddockwidgets/qtquick/views/qml/" as KDDW
 KDDW.TabBarBase {
     id: root
 
-    implicitHeight: 30
+    readonly property int tabBarTextPixelSize: 13
+    readonly property int tabBarVerticalPadding: 7
+    readonly property int tabBarHorizontalPadding: 10
+    height: tabBarTextPixelSize + tabBarVerticalPadding * 2
+    implicitHeight: height
+
     currentTabIndex: 0
 
     // right click on tab context menu state
@@ -170,7 +175,15 @@ KDDW.TabBarBase {
             FocusScope {
                 id: tab
                 height: tabBarRow.height
-                width: 120
+
+                // ---- content-sized width knobs ----
+                readonly property int tabHorizontalPadding: root.tabBarHorizontalPadding
+                readonly property int tabMinWidth: 56
+                readonly property int tabMaxWidth: 220
+
+                implicitWidth: Math.max(tabMinWidth, Math.min(tabMaxWidth, titleText.implicitWidth + tabHorizontalPadding * 2))
+                width: implicitWidth
+                // -----------------------------------
 
                 readonly property int tabIndex: index
 
@@ -234,14 +247,25 @@ KDDW.TabBarBase {
                     z: 10
                 }
 
-                Text {
-                    anchors.centerIn: parent
-                    text: title
-                    font.pixelSize: 13
-                    color: DarkPalette.text
-                    opacity: tab.isHovered ? 1 : tab.isCurrent ? 1 : 0.5
-                    elide: Text.ElideRight
+                Item {
+                    id: textSlot
+                    anchors.fill: parent
+                    anchors.leftMargin: tab.tabHorizontalPadding
+                    anchors.rightMargin: tab.tabHorizontalPadding
                     z: 20
+
+                    Text {
+                        id: titleText
+                        anchors.centerIn: parent
+                        width: textSlot.width
+                        horizontalAlignment: Text.AlignHCenter
+
+                        text: title
+                        font.pixelSize: root.tabBarTextPixelSize
+                        color: DarkPalette.text
+                        opacity: tab.isHovered ? 1 : tab.isCurrent ? 1 : 0.5
+                        elide: Text.ElideRight
+                    }
                 }
 
                 // keyboard focus ring (separate from "active" line)
@@ -255,6 +279,9 @@ KDDW.TabBarBase {
 
                 // mouse area for a right click context menu on the tabs
                 MouseArea {
+                    // only for session tabs though... since the right click context actions
+                    // are all session related for now
+                    enabled: root.groupCpp.isCentralGroup
                     anchors.fill: parent
                     hoverEnabled: true
                     acceptedButtons: Qt.RightButton
@@ -278,86 +305,91 @@ KDDW.TabBarBase {
             }
         }
 
-        // "+" add button as a focusable item in the same arrow-key cycle
-        FocusScope {
-            id: addButtonFocusScope
-            width: 40
-            height: tabBarRow.height
+        // only show the 'add session' button for the central group of session views
+        Loader {
+            active: root.groupCpp.isCentralGroup
 
-            readonly property bool isHovered: addButtonMouseArea.containsMouse
-            readonly property bool isKeyboardFocused: root.keyboardFocusIndex === root.tabCount()
+            // when visible its wrapped in a FocusScope to be tabbable for navigation
+            sourceComponent: FocusScope {
+                id: addButtonFocusScope
+                width: 34
+                height: tabBarRow.height
 
-            activeFocusOnTab: isKeyboardFocused
-            focus: isKeyboardFocused
+                readonly property bool isHovered: addButtonMouseArea.containsMouse
+                readonly property bool isKeyboardFocused: root.keyboardFocusIndex === root.tabCount()
 
-            Rectangle {
-                anchors.fill: parent
-                color: DarkPalette.middark
-            }
+                activeFocusOnTab: isKeyboardFocused
+                focus: isKeyboardFocused
 
-            // mimic hover highlight on keyboard focus as well
-            Rectangle {
-                anchors.fill: parent
-                color: "transparent"
-                border.width: addButtonFocusScope.activeFocus ? 1 : 0
-                border.color: DarkPalette.highlight
-            }
-
-            ToolTip {
-                visible: addButtonMouseArea.containsMouse
-                text: "Add new session"
-                delay: 400
-            }
-
-            Image {
-                anchors.centerIn: parent
-                opacity: (addButtonMouseArea.containsMouse || addButtonFocusScope.activeFocus) ? 1 : 0.5
-                width: 16
-                height: 16
-                fillMode: Image.PreserveAspectFit
-                source: FontAwesome.icon('solid/plus')
-            }
-
-            Keys.onPressed: event => {
-                switch (event.key) {
-                case Qt.Key_Left:
-                    root.moveKeyboardFocus(-1);
-                    event.accepted = true;
-                    break;
-                case Qt.Key_Right:
-                    root.moveKeyboardFocus(+1);
-                    event.accepted = true;
-                    break;
-                case Qt.Key_Home:
-                    root.keyboardFocusIndex = 0;
-                    root.focusTabItem(0);
-                    event.accepted = true;
-                    break;
-                case Qt.Key_End:
-                    // stay here
-                    event.accepted = true;
-                    break;
-                case Qt.Key_Return:
-                case Qt.Key_Enter:
-                case Qt.Key_Space:
-                    root.activateKeyboardFocus();
-                    event.accepted = true;
-                    break;
-                default:
-                    break;
+                Rectangle {
+                    anchors.fill: parent
+                    color: DarkPalette.middark
                 }
-            }
 
-            MouseArea {
-                id: addButtonMouseArea
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.LeftButton
-                onEntered: tabBarRow.hoveredIndex = -1
-                onClicked: {
-                    root.keyboardFocusIndex = root.tabCount();
-                    addButtonFocusScope.forceActiveFocus();
-                    root.activateAddButton();
+                // mimic hover highlight on keyboard focus as well
+                Rectangle {
+                    anchors.fill: parent
+                    color: "transparent"
+                    border.width: addButtonFocusScope.activeFocus ? 1 : 0
+                    border.color: DarkPalette.highlight
+                }
+
+                ToolTip {
+                    visible: addButtonMouseArea.containsMouse
+                    text: "Add new session"
+                    delay: 400
+                }
+
+                Image {
+                    anchors.centerIn: parent
+                    opacity: (addButtonMouseArea.containsMouse || addButtonFocusScope.activeFocus) ? 1 : 0.5
+                    width: 14
+                    height: 14
+                    fillMode: Image.PreserveAspectFit
+                    source: FontAwesome.icon('solid/plus')
+                }
+
+                Keys.onPressed: event => {
+                    switch (event.key) {
+                    case Qt.Key_Left:
+                        root.moveKeyboardFocus(-1);
+                        event.accepted = true;
+                        break;
+                    case Qt.Key_Right:
+                        root.moveKeyboardFocus(+1);
+                        event.accepted = true;
+                        break;
+                    case Qt.Key_Home:
+                        root.keyboardFocusIndex = 0;
+                        root.focusTabItem(0);
+                        event.accepted = true;
+                        break;
+                    case Qt.Key_End:
+                        // stay here
+                        event.accepted = true;
+                        break;
+                    case Qt.Key_Return:
+                    case Qt.Key_Enter:
+                    case Qt.Key_Space:
+                        root.activateKeyboardFocus();
+                        event.accepted = true;
+                        break;
+                    default:
+                        break;
+                    }
+                }
+
+                MouseArea {
+                    id: addButtonMouseArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton
+                    onEntered: tabBarRow.hoveredIndex = -1
+                    onClicked: {
+                        root.keyboardFocusIndex = root.tabCount();
+                        addButtonFocusScope.forceActiveFocus();
+                        root.activateAddButton();
+                    }
                 }
             }
         }
@@ -370,7 +402,7 @@ KDDW.TabBarBase {
         }
     }
 
-    // Initialise keyboard focus to current tab when created / when selection changes.
+    // Initialise keyboard focus to current tab when created or when selection changes.
     Component.onCompleted: {
         root.keyboardFocusIndex = Math.max(0, root.groupCpp ? root.groupCpp.currentIndex : 0);
         root.focusTabItem(root.keyboardFocusIndex);

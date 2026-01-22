@@ -11,7 +11,7 @@ Item {
 
     property int labelColumnWidth: WorkspaceState.labelColumnWidth
 
-    property int minLabelColumnWidth: 80
+    property int minLabelColumnWidth: 40
     property int minValueColumnWidth: 170
 
     property bool expanded: true
