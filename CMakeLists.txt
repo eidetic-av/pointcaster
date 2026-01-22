@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.31.6)
+cmake_minimum_required(VERSION 3.30.5)
 
 project(pointcaster VERSION 0.2 LANGUAGES CXX)
 
