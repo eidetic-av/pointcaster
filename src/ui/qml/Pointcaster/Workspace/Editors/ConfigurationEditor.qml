@@ -8,7 +8,12 @@ Item {
     property var model: null
 
     property string emptyTitle: "Properties"
+
     property int labelColumnWidth: WorkspaceState.labelColumnWidth
+
+    property int minLabelColumnWidth: 80
+    property int minValueColumnWidth: 170
+
     property bool expanded: true
 
     property int outerHorizontalMargin: 8
@@ -131,6 +136,28 @@ Item {
                 visible: root.model
                 height: fieldsContainer.implicitHeight
 
+                readonly property int _labelLeftMargin: 6
+                readonly property int _valueLeftOverlap: 5
+
+                readonly property real availableInnerWidth: Math.max(0, width - _labelLeftMargin + _valueLeftOverlap)
+
+                readonly property int effectiveLabelWidth: {
+                    var preferred = root.labelColumnWidth;
+
+                    var maxLabel = Math.floor(availableInnerWidth - root.minValueColumnWidth);
+
+                    if (!Number.isFinite(maxLabel))
+                        maxLabel = 0;
+
+                    var w = Math.max(root.minLabelColumnWidth, preferred);
+                    w = Math.min(w, maxLabel);
+
+                    return Math.max(0, w);
+                }
+
+                readonly property int dragMinLabel: root.minLabelColumnWidth
+                readonly property int dragMaxLabel: Math.max(root.minLabelColumnWidth, Math.floor(availableInnerWidth - root.minValueColumnWidth))
+
                 Column {
                     id: fieldsContainer
                     width: fieldsArea.width
@@ -152,9 +179,9 @@ Item {
                                     top: parent.top
                                     bottom: parent.bottom
                                     left: parent.left
-                                    leftMargin: 6
+                                    leftMargin: fieldsArea._labelLeftMargin
                                 }
-                                width: root.labelColumnWidth
+                                width: fieldsArea.effectiveLabelWidth
 
                                 Text {
                                     id: nameText
@@ -189,7 +216,7 @@ Item {
                                 id: valueContainer
                                 anchors {
                                     left: labelContainer.right
-                                    leftMargin: -5
+                                    leftMargin: -fieldsArea._valueLeftOverlap
                                     right: parent.right
                                     verticalCenter: parent.verticalCenter
                                 }
@@ -236,8 +263,6 @@ Item {
                             Component {
                                 id: intEditor
                                 DragInt {
-                                    boundEnabled: root.model ? !root.model.isDisabled(index) : false
-
                                     minValue: root.model ? root.model.minMax(index)[0] : undefined
                                     maxValue: root.model ? root.model.minMax(index)[1] : undefined
                                     defaultValue: root.model ? root.model.defaultValue(index) : undefined
@@ -260,8 +285,6 @@ Item {
                             Component {
                                 id: floatEditor
                                 DragFloat {
-                                    boundEnabled: root.model ? !root.model.isDisabled(index) : false
-
                                     minValue: root.model ? root.model.minMax(index)[0] : undefined
                                     maxValue: root.model ? root.model.minMax(index)[1] : undefined
                                     defaultValue: root.model ? root.model.defaultValue(index) : undefined
@@ -284,9 +307,7 @@ Item {
                             Component {
                                 id: float3Editor
                                 DragFloat3 {
-                                    boundEnabled: root.model ? !root.model.isDisabled(index) : false
                                     defaultValue: root.model ? root.model.defaultValue(index) : undefined   // QVector3D(0,0,0)
-                                    // TODO
                                     minValue: undefined
                                     maxValue: undefined
 
@@ -344,7 +365,7 @@ Item {
 
                 Rectangle {
                     id: dividerHandle
-                    x: (root.labelColumnWidth - width / 2) + 1
+                    x: (fieldsArea.effectiveLabelWidth - width / 2) + 1
                     z: 99
                     width: 5
                     anchors {
@@ -393,7 +414,8 @@ Item {
                             if (!dragging)
                                 return;
                             var dividerCentreX = dividerHandle.x + mouseX;
-                            var clamped = Math.max(80, Math.min(fieldsArea.width - 80, dividerCentreX));
+                            var desiredLabelWidth = dividerCentreX - fieldsArea._labelLeftMargin;
+                            var clamped = Math.max(fieldsArea.dragMinLabel, Math.min(fieldsArea.dragMaxLabel, desiredLabelWidth));
                             WorkspaceState.labelColumnWidth = Math.round(clamped);
                         }
                     }

@@ -5,7 +5,6 @@ DoubleSpinBox {
     id: root
 
     property real boundValue: 0.0
-    property bool boundEnabled: true
     signal commitValue(real value)
 
     property var minValue: undefined
@@ -16,33 +15,67 @@ DoubleSpinBox {
     property color unfocusBorderColor: "transparent"
     property color backgroundColor: (root.activeFocus || hover.hovered) ? DarkPalette.almostdark : "transparent"
 
+    editable: true
+    decimals: width >= 58 ? 3 : 2
+
+    readonly property bool showArrowButtons: width >= 48
+    rightPadding: showArrowButtons ? 12 : 0
+    up.indicator.visible: showArrowButtons
+    down.indicator.visible: showArrowButtons
+    up.indicator.enabled: showArrowButtons
+    down.indicator.enabled: showArrowButtons
+
     property real dragThresholdPx: 6.0
     property real pixelsPerStep: 6.0
     property real accelerateAfterPx: 120.0
 
-    editable: true
-    enabled: boundEnabled
+    readonly property real defaultFromValue: -10.0
+    readonly property real defaultToValue: 10.0
+    readonly property real defaultResetValue: 0.0
 
-    readonly property real effectiveFrom: {
+    readonly property bool hasMin: {
         var n = Number(minValue);
-        return (minValue === undefined || minValue === null || isNaN(n)) ? -1.0e308 : n;
+        return !(minValue === undefined || minValue === null || isNaN(n));
     }
-    readonly property real effectiveTo: {
+    readonly property bool hasMax: {
         var n = Number(maxValue);
-        return (maxValue === undefined || maxValue === null || isNaN(n)) ?  1.0e308 : n;
+        return !(maxValue === undefined || maxValue === null || isNaN(n));
     }
+    readonly property bool hasDefault: {
+        var n = Number(defaultValue);
+        return !(defaultValue === undefined || defaultValue === null || isNaN(n));
+    }
+
+    // only clamp when both bounds are specified
+    readonly property bool clampEnabled: hasMin && hasMax
+
+    readonly property real uiFrom: hasMin ? Number(minValue) : defaultFromValue
+    readonly property real uiTo: hasMax ? Number(maxValue) : defaultToValue
+
+    readonly property real effectiveDefault: hasDefault ? Number(defaultValue) : defaultResetValue
+
+    // what the spinbox itself clamps to...
+    readonly property real effectiveFrom: clampEnabled ? Number(minValue) : -1e308
+    readonly property real effectiveTo: clampEnabled ? Number(maxValue) : 1e308
 
     from: effectiveFrom
     to: effectiveTo
 
     function clampToRange(v) {
-        var asNumber = Number(v);
-        if (isNaN(asNumber))
-            asNumber = 0.0;
-        return Math.max(from, Math.min(to, asNumber));
+        var x = Number(v);
+        if (isNaN(x))
+            x = defaultResetValue;
+
+        if (!clampEnabled)
+            return x;
+
+        return Math.max(root.from, Math.min(root.to, x));
     }
 
     readonly property real boundedRange: {
+        if (!clampEnabled)
+            return 5;
+
         var r = root.to - root.from;
         return (Number.isFinite(r) && r > 0.0 && r < 1.0e307) ? r : NaN;
     }
@@ -62,21 +95,14 @@ DoubleSpinBox {
         return Math.max(step, 1e-12);
     }
 
-    function hasValidDefault() {
-        var n = Number(defaultValue);
-        return !(defaultValue === undefined || defaultValue === null || isNaN(n));
-    }
-
     function resetToDefault() {
-        if (!hasValidDefault())
-            return;
-        var v = clampToRange(Number(defaultValue));
+        var v = clampToRange(effectiveDefault);
         if (v === value)
             return;
         value = v;
     }
 
-    Component.onCompleted: value = clampToRange(boundValue);
+    Component.onCompleted: value = clampToRange(boundValue)
 
     onValueModified: {
         boundValue = value;
@@ -121,7 +147,9 @@ DoubleSpinBox {
 
         onActiveFocusChanged: {
             if (activeFocus && !dragBehaviour.dragModeActive)
-                Qt.callLater(function () { spinTextInput.selectAll(); });
+                Qt.callLater(function () {
+                    spinTextInput.selectAll();
+                });
         }
 
         DragInput {
@@ -140,22 +168,30 @@ DoubleSpinBox {
 
             quantiseDeltaToInteger: false
 
-            numericValue: function () { return root.value; }
+            numericValue: function () {
+                return root.value;
+            }
             setNumericValue: function (v) {
                 var clamped = root.clampToRange(v);
                 if (clamped !== root.value)
                     root.value = clamped;
             }
 
-            stepSize: function () { return root.dragStepSize; }
+            stepSize: function () {
+                return root.dragStepSize;
+            }
 
             modifierMultiplier: function (mods) {
-                if (mods & Qt.ShiftModifier)   return 10.0;
-                if (mods & Qt.ControlModifier) return 0.1;
+                if (mods & Qt.ShiftModifier)
+                    return 10.0;
+                if (mods & Qt.ControlModifier)
+                    return 0.1;
                 return 1.0;
             }
 
-            resetToDefault: function () { root.resetToDefault(); }
+            resetToDefault: function () {
+                root.resetToDefault();
+            }
 
             onEdited: {
                 root.boundValue = root.value;
@@ -177,7 +213,7 @@ DoubleSpinBox {
             root.value = clamped;
     }
 
-    onEffectiveFromChanged: {
+    onClampEnabledChanged: {
         var clamped = clampToRange(root.value);
         if (clamped !== root.value) {
             root.value = clamped;
@@ -185,8 +221,19 @@ DoubleSpinBox {
             commitValue(clamped);
         }
     }
-
-    onEffectiveToChanged: {
+    onMinValueChanged: {
+        if (!clampEnabled)
+            return;
+        var clamped = clampToRange(root.value);
+        if (clamped !== root.value) {
+            root.value = clamped;
+            boundValue = clamped;
+            commitValue(clamped);
+        }
+    }
+    onMaxValueChanged: {
+        if (!clampEnabled)
+            return;
         var clamped = clampToRange(root.value);
         if (clamped !== root.value) {
             root.value = clamped;

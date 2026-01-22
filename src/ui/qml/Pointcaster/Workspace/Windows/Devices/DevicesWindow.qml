@@ -14,7 +14,9 @@ KDDW.DockWidget {
 
     Item {
         id: devices
+
         anchors.fill: parent
+        property var kddockwidgets_min_size: Qt.size(225, 500)
         clip: true
 
         // Shared state for the properties pane

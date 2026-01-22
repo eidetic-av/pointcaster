@@ -8,9 +8,10 @@ Row {
     id: root
     spacing: 0
 
+    Layout.minimumWidth: 260
+
     property real componentSpacing: 6
 
-    property bool boundEnabled: true
     property var minValue: undefined
     property var maxValue: undefined
     property var defaultValue: undefined
@@ -24,22 +25,6 @@ Row {
 
     signal commitValue(var v3)
 
-    function _componentFrom(v, axisIndex, fallback) {
-        if (v === undefined || v === null)
-            return fallback;
-
-        if (v.x !== undefined) {
-            if (axisIndex === 0) return v.x;
-            if (axisIndex === 1) return v.y;
-            return v.z;
-        }
-
-        if (Array.isArray(v) && v.length > axisIndex)
-            return v[axisIndex];
-
-        return fallback;
-    }
-
     Item {
         id: leftPadding
         width: 3
@@ -50,18 +35,27 @@ Row {
         id: contentRow
         spacing: root.componentSpacing
 
-        // IMPORTANT: ensure this row has a real width to divide up
         width: Math.max(0, root.width - leftPadding.width)
 
-        readonly property real eachWidth: width > 0
-            ? Math.max(0, (width - 2 * root.componentSpacing) / 3)
-            : -1
+        readonly property real eachWidth: width > 0 ? Math.max(0, (width - 2 * root.componentSpacing) / 3) : -1
 
         Repeater {
             model: [
-                { label: "X", index: 0, color: DarkPalette.red   },
-                { label: "Y", index: 1, color: DarkPalette.green },
-                { label: "Z", index: 2, color: DarkPalette.blue  }
+                {
+                    label: "X",
+                    index: 0,
+                    color: DarkPalette.red
+                },
+                {
+                    label: "Y",
+                    index: 1,
+                    color: DarkPalette.green
+                },
+                {
+                    label: "Z",
+                    index: 2,
+                    color: DarkPalette.blue
+                }
             ]
 
             delegate: Row {
@@ -95,13 +89,22 @@ Row {
                             }
 
                             // top edge to top-right (square)
-                            PathLine { x: axisLabel.width; y: 0 }
+                            PathLine {
+                                x: axisLabel.width
+                                y: 0
+                            }
 
                             // right edge down (square)
-                            PathLine { x: axisLabel.width; y: axisLabel.height }
+                            PathLine {
+                                x: axisLabel.width
+                                y: axisLabel.height
+                            }
 
                             // bottom edge to before bottom-left arc
-                            PathLine { x: root.labelLeftRadius; y: axisLabel.height }
+                            PathLine {
+                                x: root.labelLeftRadius
+                                y: axisLabel.height
+                            }
 
                             // bottom-left corner arc up
                             PathArc {
@@ -112,7 +115,10 @@ Row {
                             }
 
                             // left edge back to start
-                            PathLine { x: 0; y: root.labelLeftRadius }
+                            PathLine {
+                                x: 0
+                                y: root.labelLeftRadius
+                            }
                         }
                     }
 
@@ -127,27 +133,23 @@ Row {
 
                 DragFloat {
                     id: dragFloat
-                    boundEnabled: root.boundEnabled
                     width: parent.width - axisLabel.width
 
-                    minValue: root._componentFrom(root.minValue, modelData.index, undefined)
-                    maxValue: root._componentFrom(root.maxValue, modelData.index, undefined)
-                    defaultValue: root._componentFrom(root.defaultValue, modelData.index, undefined)
+                    minValue: root.minValue
+                    maxValue: root.maxValue
+                    defaultValue: root.defaultValue
 
-                    boundValue:
-                        modelData.index === 0 ? root.boundValue.x :
-                        modelData.index === 1 ? root.boundValue.y :
-                                                root.boundValue.z
+                    boundValue: modelData.index === 0 ? root.boundValue.x : modelData.index === 1 ? root.boundValue.y : root.boundValue.z
 
                     onCommitValue: {
                         if (modelData.index === 0)
-                            root.boundValue = Qt.vector3d(boundValue, root.boundValue.y, root.boundValue.z)
+                            root.boundValue = Qt.vector3d(boundValue, root.boundValue.y, root.boundValue.z);
                         else if (modelData.index === 1)
-                            root.boundValue = Qt.vector3d(root.boundValue.x, boundValue, root.boundValue.z)
+                            root.boundValue = Qt.vector3d(root.boundValue.x, boundValue, root.boundValue.z);
                         else
-                            root.boundValue = Qt.vector3d(root.boundValue.x, root.boundValue.y, boundValue)
+                            root.boundValue = Qt.vector3d(root.boundValue.x, root.boundValue.y, boundValue);
 
-                        root.commitValue(root.boundValue)
+                        root.commitValue(root.boundValue);
                     }
                 }
             }
