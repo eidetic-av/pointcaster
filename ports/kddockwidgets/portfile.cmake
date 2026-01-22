@@ -7,6 +7,7 @@ vcpkg_from_github(
     PATCHES
     	dependencies.diff
 	    guiprivate.diff
+        expose-central-group-property.diff
 )
 file(REMOVE_RECURSE
     "${SOURCE_PATH}/src/3rdparty"

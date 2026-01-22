@@ -1,0 +1,33 @@
+diff --git a/src/qtquick/views/Group.cpp b/src/qtquick/views/Group.cpp
+index 5e553e690..af0fc57b2 100644
+--- a/src/qtquick/views/Group.cpp
++++ b/src/qtquick/views/Group.cpp
+@@ -290,3 +290,8 @@ bool Group::tabsAtBottom() const
+ {
+     return Config::self().tabsAtBottom();
+ }
++
++bool Group::isCentralGroup() const
++{
++    return m_group->isCentralGroup();
++}
+diff --git a/src/qtquick/views/Group.h b/src/qtquick/views/Group.h
+index b70ba28eb..4f8fff856 100644
+--- a/src/qtquick/views/Group.h
++++ b/src/qtquick/views/Group.h
+@@ -47,6 +47,7 @@ class DOCKS_EXPORT Group : public QtQuick::View, public Core::GroupViewInterface
+     Q_PROPERTY(int currentIndex READ currentIndex NOTIFY currentDockWidgetChanged)
+     Q_PROPERTY(bool isMDI READ isMDI NOTIFY isMDIChanged)
+     Q_PROPERTY(bool tabsAtBottom READ tabsAtBottom CONSTANT)
++    Q_PROPERTY(bool isCentralGroup READ isCentralGroup CONSTANT)
+ 
+ public:
+     explicit Group(Core::Group *controller, QQuickItem *parent = nullptr);
+@@ -63,6 +64,7 @@ public:
+ 
+     int currentIndex() const;
+     bool tabsAtBottom() const;
++    bool isCentralGroup() const;
+ 
+     // QML interface:
+     KDDockWidgets::QtQuick::TitleBar *titleBar() const;
