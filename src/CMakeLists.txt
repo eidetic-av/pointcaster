@@ -23,10 +23,14 @@ set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
 # dynamic runtime loaded dependencies
 add_subdirectory(plugins)
 
-# linked-in dependencies
+#----- Dependencies
 
-# - reflectcpp used for de/serialization of workspace configuration
+# - reflectcpp is used for de/serialization of workspace configuration
 find_package(reflectcpp CONFIG REQUIRED)
+
+# - prometheus gathers metrics pointcaster sessions can expose 
+# (e.g. connected devices, health, framerate, scene density)
+find_package(prometheus-cpp CONFIG REQUIRED)
 
 target_link_libraries(pointcaster PRIVATE 
   pointcaster::core 
@@ -35,6 +39,7 @@ target_link_libraries(pointcaster PRIVATE
   Corrade::Main 
   Corrade::PluginManager
   reflectcpp::reflectcpp
+  prometheus-cpp::core
 )
 
 target_include_directories(pointcaster PRIVATE "${CMAKE_SOURCE_DIR}/src")

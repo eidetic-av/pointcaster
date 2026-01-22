@@ -6,16 +6,17 @@
 		"corrade",
 		"concurrentqueue",
 		"draco",
-        "fmt",
+		"fmt",
 		"kddockwidgets",
 		{
 			"name": "libcpplocate",
 			"platform": "windows"
 		},
 		"orbbecsdk",
+		"prometheus-cpp",
 		"qtawesome",
 		"reflectcpp",
-        "spdlog",
+		"spdlog",
 		"zpp-bits"
 	]
 }
