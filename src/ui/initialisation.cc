@@ -21,10 +21,14 @@
 namespace pc::ui {
 
 QQmlApplicationEngine *initialise(QGuiApplication *app) {
+
+  // qml boilerplate
   pc::ui::register_qml_uncreatable_types();
 
+  // create single ApplicationEngine instance
   static QQmlApplicationEngine engine;
 
+  // initialise kddw
   KDDockWidgets::initFrontend(KDDockWidgets::FrontendType::QtQuick);
   KDDockWidgets::QtQuick::Platform::instance()->setQmlEngine(&engine);
   auto &docking_config = KDDockWidgets::Config::self();
@@ -34,6 +38,7 @@ QQmlApplicationEngine *initialise(QGuiApplication *app) {
       Config::Flag_HideTitleBarWhenTabsVisible | Config::Flag_AlwaysShowTabs |
       Config::Flag_AllowReorderTabs | Config::Flag_DisableDoubleClick);
 
+  // initialise our font awesome singleton
   static fa::QtAwesome awesome(app);
   awesome.initFontAwesome();
   engine.addImageProvider("fa", new QtAwesomeQuickImageProvider(&awesome));

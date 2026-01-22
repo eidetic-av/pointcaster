@@ -106,7 +106,7 @@ ApplicationWindow {
             addDockWidgetAsTab(session1);
             addDockWidgetAsTab(session2);
 
-            addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(400,400));
+            addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(400, 400));
 
             // addDockWidget(session2, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(800,800), KDDW.DockWidget.NoFloat);
             // addDockWidget(session1, KDDW.KDDockWidgets.Location_OnRight);
@@ -158,5 +158,12 @@ ApplicationWindow {
                 onClicked: aboutPopup.close()
             }
         }
+    }
+
+    SettingsWindow {
+        id: settingsWindow
+        x: root.x + (root.width - width) / 2
+        y: root.y + (root.height - height) / 2
+        // workspace: workspaceModel
     }
 }

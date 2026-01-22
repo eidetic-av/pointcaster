@@ -33,6 +33,9 @@ qt_add_qml_module(PointcasterWorkspace
         Windows/ResizeHandlerHelper.qml
         Windows/TopMenuBar.qml
         Windows/MainWindow.qml
+        Windows/Settings/SettingsWindow.qml
+        Windows/Settings/GeneralSettingsPage.qml
+        Windows/Settings/UserInterfaceSettingsPage.qml
         Windows/Devices/DevicesWindow.qml
         Windows/Devices/DeviceSelectionList.qml
         Windows/Sessions/SessionView.qml

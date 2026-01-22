@@ -1,6 +1,8 @@
 #include "workspace.h"
+#include "app_settings.h"
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <QQmlApplicationEngine>
 #include <ui/initialisation.h>
 #include <print>
 
@@ -9,6 +11,11 @@ using namespace pc;
 int main(int argc, char *argv[]) {
   std::println("Starting QGuiApplication...");
   QGuiApplication app(argc, argv);
+
+  std::println("Loading application preferences...");
+  QCoreApplication::setOrganizationName("matth");
+  QCoreApplication::setApplicationName("pointcaster");
+  qmlRegisterSingletonInstance("Pointcaster", 1, 0, "AppSettings", AppSettings::instance());
 
   std::println("Starting QQmlApplicationEngine...");
   auto* gui_engine = pc::ui::initialise(&app);

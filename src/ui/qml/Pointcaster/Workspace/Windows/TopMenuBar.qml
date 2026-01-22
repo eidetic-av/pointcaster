@@ -56,6 +56,14 @@ MenuBar {
                         devicesWindow.open();
                 }
             }
+
+            MenuSeparator {}
+
+            Action {
+                id: settingsWindowEntry
+                text: qsTr("&Preferences")
+                onTriggered: settingsWindow.open();
+            }
         }
 
         Menu {

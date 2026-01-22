@@ -2,6 +2,7 @@
 #include "config_adapter.h"
 #include "device_plugin_controller.h"
 #include "device_status.h"
+#include "settings_page_registry.h"
 
 namespace pc::ui {
 
@@ -22,6 +23,13 @@ void register_qml_uncreatable_types() {
   qmlRegisterUncreatableType<pc::ui::DevicePluginController>(
       "Pointcaster", 1, 0, "DevicePluginController",
       "DevicePluginController is created in C++ only");
+
+  // ui/models/settings_page_registry.h
+  qmlRegisterSingletonInstance(
+      "Pointcaster", 1, 0,
+      "SettingsPageRegistry",
+      SettingsPageRegistry::instance());
+
 }
 
 } // namespace pc::ui

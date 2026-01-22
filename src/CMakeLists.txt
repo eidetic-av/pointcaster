@@ -12,6 +12,7 @@ add_subdirectory(core)
 qt_add_executable(pointcaster 
     pointcaster.cc
     workspace.cc
+    app_settings.cc
 )
 
 add_subdirectory(ui)
@@ -32,6 +33,9 @@ find_package(reflectcpp CONFIG REQUIRED)
 # (e.g. connected devices, health, framerate, scene density)
 find_package(prometheus-cpp CONFIG REQUIRED)
 
+# - application settings initialisation requires Qml dependency linked in the main application
+find_package(Qt6 REQUIRED COMPONENTS Qml)
+
 target_link_libraries(pointcaster PRIVATE 
   pointcaster::core 
   pointcaster::plugins
@@ -40,6 +44,7 @@ target_link_libraries(pointcaster PRIVATE
   Corrade::PluginManager
   reflectcpp::reflectcpp
   prometheus-cpp::core
+  Qt6::Qml
 )
 
 target_include_directories(pointcaster PRIVATE "${CMAKE_SOURCE_DIR}/src")
