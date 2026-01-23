@@ -9,6 +9,7 @@
 #include <Corrade/PluginManager/Manager.h>
 #include <memory>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace pc {
@@ -20,6 +21,7 @@ namespace pc {
 // WorkspaceConfiguration.
 
 struct WorkspaceConfiguration {
+  std::string id;
   std::vector<devices::DeviceConfigurationVariant> devices{};
 };
 
@@ -33,9 +35,15 @@ class Workspace {
 public:
   WorkspaceConfiguration config;
 
+  bool auto_loaded_config = false;
+
   std::unique_ptr<Corrade::PluginManager::Manager<devices::DevicePlugin>>
       device_plugin_manager;
+  std::vector<std::string> loaded_device_plugin_names;
   std::vector<Corrade::Containers::Pointer<devices::DevicePlugin>> devices;
+  std::unordered_map<std::string,
+                     Corrade::Containers::Pointer<pc::devices::DevicePlugin>>
+      discovery_plugins;
 
   std::unique_ptr<metrics::PrometheusServer> prometheus_server;
 

@@ -24,12 +24,14 @@ enum class ObContextState : std::uint8_t {
 struct ObDeviceInfo {
   std::string ip;
   std::string serial_num;
+  std::string name;
 };
 
 class ObContext {
 public:
   std::atomic_bool discovering_devices{false};
   std::vector<ObDeviceInfo> discovered_devices{};
+  std::mutex discovered_devices_access;
 
   std::mutex start_stop_device_access;
 
@@ -45,12 +47,17 @@ public:
   std::shared_ptr<ob::Context> wait_til_ready(int max_wait_seconds = 10) const;
   void run_on_ready(std::function<void()> callback);
 
+  void add_discovery_change_callback(std::function<void()> callback);
+
   ~ObContext();
 
 private:
   std::atomic<ObContextState> state{ObContextState::Uninitialised};
   std::atomic<std::shared_ptr<ob::Context>> ctx{};
   std::atomic_size_t users{0};
+
+  std::mutex discovery_callbacks_access;
+  std::vector<std::function<void()>> discovery_callbacks;
 
   void shutdown();
 };

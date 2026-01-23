@@ -11,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <variant>
+#include <core/uuid/uuid.h>
 
 #include <rfl/AddTagsToVariants.hpp>
 #include <rfl/json.hpp>
@@ -58,13 +59,20 @@ void save_workspace_to_file(const WorkspaceConfiguration &config,
 }
 
 Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
-  auto &app_settings = *AppSettings::instance();
+
+  if (initial.id.empty()) {
+    config.id = pc::uuid::word();
+  } else {
+    // if an id was already assigned at workspace initialisation time, 
+    // we loaded it from disk
+    auto_loaded_config = true;
+  }
 
   // start recording metrics
   metrics::PrometheusServer::initialise();
 
   // find and initialise device plugins
-  device_plugin_manager = plugins::load_device_plugins();
+  device_plugin_manager = plugins::load_device_plugins(*this);
   rebuild_devices();
 }
 

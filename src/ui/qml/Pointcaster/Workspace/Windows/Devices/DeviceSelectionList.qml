@@ -7,7 +7,7 @@ import Pointcaster.Workspace 1.0
 Item {
     id: root
 
-    property var deviceAdapters: null
+    property var workspace: null
     property int currentIndex: list.currentIndex
     property var currentItem: list.currentItem
 
@@ -30,7 +30,7 @@ Item {
             anchors.fill: parent
             anchors.margins: 1
 
-            model: root.deviceAdapters
+            model: root.workspace.deviceConfigAdapters
             focus: true
             activeFocusOnTab: true
             keyNavigationEnabled: true
@@ -51,8 +51,10 @@ Item {
                     list.positionViewAtIndex(list.currentIndex, ListView.Contain);
                     event.accepted = true;
                 } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
-                    if (list.currentIndex >= 0)
+                    if (list.currentIndex >= 0) {
                         root.activated(list.currentIndex);
+                        root.workspace.setSelectedDeviceIndex(list.currentItem);
+                    }
                     event.accepted = true;
                 }
             }
@@ -123,6 +125,7 @@ Item {
                         list.forceActiveFocus();
                         list.currentIndex = index;
                         root.activated(index);
+                        root.workspace.setSelectedDeviceIndex(list.currentItem);
                     }
                 }
             }

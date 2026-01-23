@@ -53,7 +53,8 @@ void configure_search_paths(
 } // namespace
 #endif // _WIN32
 
-std::unique_ptr<Manager<devices::DevicePlugin>> load_device_plugins() {
+std::unique_ptr<Manager<devices::DevicePlugin>>
+load_device_plugins(pc::Workspace &workspace) {
 #ifdef _WIN32
   const auto plugin_root_directory = default_plugin_root_directory();
   configure_search_paths(plugin_root_directory);
@@ -62,13 +63,27 @@ std::unique_ptr<Manager<devices::DevicePlugin>> load_device_plugins() {
   auto device_plugin_manager =
       std::make_unique<Manager<devices::DevicePlugin>>();
 
-  std::vector<StringView> loaded_plugin_names;
+  workspace.loaded_device_plugin_names.clear();
 
   for (StringView plugin_name : device_plugin_manager->pluginList()) {
     const auto plugin_status = device_plugin_manager->load(plugin_name);
     if (plugin_status & LoadState::Loaded) {
-      loaded_plugin_names.push_back(plugin_name);
+      workspace.loaded_device_plugin_names.push_back(plugin_name);
       std::println("Loaded plugin: {}", std::string(plugin_name));
+      // create an instance of the plugin that handles device discovery and
+      // other static single plugin context things...
+      if (!workspace.discovery_plugins.contains(plugin_name)) {
+        auto discovery_instance =
+            device_plugin_manager->instantiate(plugin_name);
+        if (discovery_instance) {
+          // start discovery
+          discovery_instance->set_is_discovery_instance(true);
+          // and pass it over to the workspace that from now on owns the plugin
+          // instance
+          workspace.discovery_plugins.emplace(std::string(plugin_name),
+                                              std::move(discovery_instance));
+        }
+      }
     }
   }
 

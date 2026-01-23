@@ -8,6 +8,7 @@
 #include <Corrade/PluginManager/AbstractPlugin.h>
 #include <functional>
 #include <pointcaster/point_cloud.h>
+#include <string>
 
 #ifdef _WIN32
 #include <cpplocate/cpplocate.h>
@@ -16,6 +17,12 @@
 #endif
 
 namespace pc::devices {
+
+struct DiscoveredDevice {
+  std::string display_name;
+  std::string ip;
+  std::string id;
+};
 
 class DevicePlugin : public Corrade::PluginManager::AbstractPlugin {
 public:
@@ -50,9 +57,24 @@ public:
 
   explicit DevicePlugin(Corrade::PluginManager::AbstractManager &manager,
                         Corrade::Containers::StringView plugin)
-      : Corrade::PluginManager::AbstractPlugin{manager, plugin} {}
+      : Corrade::PluginManager::AbstractPlugin{manager, plugin} {
+    static bool loaded_discovery_instance = false;
+    if (!loaded_discovery_instance) {
+      _is_discovery_instance = true;
+      loaded_discovery_instance = true;
+    }
+  }
 
   virtual ~DevicePlugin() = default;
+
+  void set_is_discovery_instance(bool v) { _is_discovery_instance = v; }
+  bool is_discovery_instance() { return _is_discovery_instance; };
+
+  virtual std::vector<DiscoveredDevice> discovered_devices() const = 0;
+  virtual void refresh_discovery() = 0;
+
+  virtual void add_discovery_change_callback(std::function<void()> cb) = 0;
+  virtual bool has_discovery_change_callback() const = 0;
 
   virtual DeviceStatus status() const = 0;
 
@@ -77,9 +99,10 @@ public:
   }
   void notify_status_changed() { notify_status_changed(status()); }
 
-private:
+protected:
   DeviceConfigurationVariant _config;
   std::function<void(DeviceStatus)> _status_callback;
+  bool _is_discovery_instance = false;
 };
 
 } // namespace pc::devices

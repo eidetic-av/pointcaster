@@ -1,13 +1,14 @@
 #include "orbbec_context.h"
 
 #include <chrono>
+#include <concurrentqueue/concurrentqueue.h>
 #include <libobsensor/ObSensor.hpp>
+#include <mutex>
 #include <print>
 #include <thread>
-#include <concurrentqueue/concurrentqueue.h>
 
 namespace {
-  moodycamel::ConcurrentQueue<std::function<void()>> on_ready_callbacks{};
+moodycamel::ConcurrentQueue<std::function<void()>> on_ready_callbacks{};
 }
 
 namespace pc::devices {
@@ -69,7 +70,8 @@ std::shared_ptr<ob::Context> ObContext::get_if_ready() const {
   return ctx.load(std::memory_order_acquire);
 }
 
-std::shared_ptr<ob::Context> ObContext::wait_til_ready(int max_wait_seconds) const {
+std::shared_ptr<ob::Context>
+ObContext::wait_til_ready(int max_wait_seconds) const {
   using namespace std::chrono_literals;
   constexpr auto sleep_time = 50ms;
   auto max_wait_time = std::chrono::seconds(max_wait_seconds);
@@ -90,6 +92,11 @@ void ObContext::run_on_ready(std::function<void()> callback) {
     return;
   }
   on_ready_callbacks.enqueue(std::move(callback));
+}
+
+void ObContext::add_discovery_change_callback(std::function<void()> callback) {
+  std::scoped_lock lock(discovery_callbacks_access);
+  discovery_callbacks.push_back(std::move(callback));
 }
 
 void ObContext::discover_devices() {
@@ -119,24 +126,33 @@ void ObContext::discover_devices() {
       auto device = device_list->getDevice(i);
       auto info = device->getDeviceInfo();
       if (std::strcmp(info->connectionType(), "Ethernet") == 0) {
-        local_found.push_back({info->ipAddress(), info->serialNumber()});
+        local_found.push_back(
+            {info->ipAddress(), info->serialNumber(), info->name()});
       }
     }
 
     for (const auto &found_device : local_found) {
-      std::println("found: {} {}", found_device.ip, found_device.serial_num);
+      std::println("found: {} {} {}", found_device.name, found_device.ip,
+                   found_device.serial_num);
     }
 
     discovered_devices = std::move(local_found);
   } catch (const ob::Error &e) {
-    std::println("Failed to discover Orbbec devices: [{}] {}",
-                 e.getName(), e.getMessage());
+    std::println("Failed to discover Orbbec devices: [{}] {}", e.getName(),
+                 e.getMessage());
   } catch (const std::exception &e) {
     std::println("Unknown std::exception during Orbbec device discovery: {}",
                  e.what());
   } catch (...) {
     std::println("Unknown error during Orbbec device discovery");
   }
+
+  std::vector<std::function<void()>> post_discovery_callbacks;
+  {
+    std::lock_guard lock(discovery_callbacks_access);
+    post_discovery_callbacks = discovery_callbacks;
+  }
+  for (auto &cb : post_discovery_callbacks) cb();
 
   std::println("Finished discovering devices.");
   discovering_devices.store(false, std::memory_order_release);
@@ -186,7 +202,9 @@ void ObContext::shutdown() {
   }
 }
 
-ObContext::~ObContext() { shutdown(); }
+ObContext::~ObContext() {
+  shutdown();
+}
 
 ObContext &orbbec_context() {
   static ObContext instance;

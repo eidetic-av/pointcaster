@@ -13,6 +13,7 @@
 #include <libobsensor/hpp/Pipeline.hpp>
 #include <libobsensor/hpp/Utils.hpp>
 #include <memory>
+#include <mutex>
 #include <print>
 #include <thread>
 
@@ -27,6 +28,8 @@ constexpr int colour_height = 720;
 constexpr int depth_width = 640;
 constexpr int depth_height = 576;
 constexpr int fps = 30;
+
+std::atomic_bool does_have_discovery_change_callback = false;
 } // namespace
 
 namespace pc::devices {
@@ -60,6 +63,33 @@ OrbbecDevice::~OrbbecDevice() {
   _timeout_thread.request_stop();
   orbbec_context().release_user();
   std::println("Destroyed OrbbecDevice");
+}
+
+std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
+  std::vector<DiscoveredDevice> out;
+
+  auto &ctx = orbbec_context();
+  std::lock_guard lock(ctx.discovered_devices_access);
+
+  out.reserve(ctx.discovered_devices.size());
+  for (const auto &d : ctx.discovered_devices) {
+    out.push_back(DiscoveredDevice{
+        .display_name = d.name, .ip = d.ip, .id = d.serial_num});
+  }
+  return out;
+}
+
+void OrbbecDevice::refresh_discovery() {
+  orbbec_context().discover_devices_async();
+}
+
+void OrbbecDevice::add_discovery_change_callback(std::function<void()> cb) {
+  orbbec_context().add_discovery_change_callback(std::move(cb));
+  does_have_discovery_change_callback = true;
+}
+
+bool OrbbecDevice::has_discovery_change_callback() const {
+  return does_have_discovery_change_callback.load();
 }
 
 DeviceStatus OrbbecDevice::status() const {
@@ -110,7 +140,7 @@ void OrbbecDevice::restart_sync() {
 }
 
 void OrbbecDevice::start_sync() {
-  std::println("attempting to start an orrbec driver");
+  std::println("Attempting to start an Orrbec driver");
 
   std::lock_guard lock(orbbec_context().start_stop_device_access);
 
@@ -119,9 +149,6 @@ void OrbbecDevice::start_sync() {
   set_error_state(false);
   set_updated_time(steady_clock::time_point{});
 
-  const auto &config = std::get<OrbbecDeviceConfiguration>(this->config());
-  std::println("Initialising OrbbecDevice at {}", config.ip);
-
   auto ob_ctx = orbbec_context().wait_til_ready();
   if (!ob_ctx) {
     std::println("Orbbec context not ready in time, aborting start_sync()");
@@ -129,6 +156,13 @@ void OrbbecDevice::start_sync() {
     set_error_state(true);
     return;
   }
+
+  // if this plugin instance is only for context initialisation and device
+  // discovery, dont bother trying to attach to a device
+  if (is_discovery_instance()) return;
+
+  const auto &config = std::get<OrbbecDeviceConfiguration>(this->config());
+  std::println("Initialising OrbbecDevice at {}", config.ip);
 
   std::shared_ptr<ob::Device> ob_device;
 

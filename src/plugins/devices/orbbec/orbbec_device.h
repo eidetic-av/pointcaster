@@ -39,6 +39,11 @@ public:
   OrbbecDevice(OrbbecDevice &&) = delete;
   OrbbecDevice &operator=(OrbbecDevice &&) = delete;
 
+  std::vector<DiscoveredDevice> discovered_devices() const override;
+  void refresh_discovery() override;
+  void add_discovery_change_callback(std::function<void()> cb) override;
+  bool has_discovery_change_callback() const override;
+
   DeviceStatus status() const override;
 
   // TODO: maybe it would better to return a constant reference to the
