@@ -28,7 +28,7 @@ public:
   Q_INVOKABLE void close();
 
   Q_INVOKABLE void loadFromFile(const QUrl &file);
-  Q_INVOKABLE void save();
+  Q_INVOKABLE void save(bool update_last_session_path = true);
 
   QVariant deviceConfigAdapters() const;
   const QList<QObject *> &deviceControllers() const {

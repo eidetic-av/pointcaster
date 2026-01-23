@@ -20,7 +20,9 @@ find_package(Corrade CONFIG REQUIRED REQUIRED Main Utility)
 find_package(QtAwesome CONFIG REQUIRED)
 
 target_link_libraries(pointcaster_ui PRIVATE
-    pointcaster::core Corrade::Main Corrade::Utility
+    pointcaster::core 
+    pointcaster::app_settings
+    Corrade::Main Corrade::Utility
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::OpenGL
     Qt6::Quick Qt6::QuickControls2 Qt6::Quick3D
     KDAB::kddockwidgets 

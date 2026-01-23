@@ -4,6 +4,7 @@
 #include <QMetaObject>
 #include <QThread>
 #include <QtGlobal>
+#include <qcoreapplication.h>
 
 namespace pc {
 
@@ -12,6 +13,8 @@ static bool onObjectThread(QObject *obj) {
 }
 
 AppSettings *AppSettings::instance() {
+  QCoreApplication::setOrganizationName("matth");
+  QCoreApplication::setApplicationName("pointcaster");
   static AppSettings *s_instance = new AppSettings(qApp);
   return s_instance;
 }
@@ -22,7 +25,9 @@ AppSettings::AppSettings(QObject *parent)
                                   QCoreApplication::applicationName()) {
   // Load initial cache
   m_restoreLastSession =
-      m_settings.value("general/restoreLastSession", true).toBool();
+      m_settings.value("restoreLastSession", true).toBool();
+  m_lastSessionPath =
+      m_settings.value("lastSessionPath", "").toString();
 
   m_uiScale = m_settings.value("ui/scale", 1.0).toDouble();
 
@@ -68,9 +73,29 @@ void AppSettings::setRestoreLastSession(bool value) {
   }
 
   m_restoreLastSession = value;
-  write("app/restoreLastSession", m_restoreLastSession);
+  write("restoreLastSession", m_restoreLastSession);
   emit restoreLastSessionChanged();
 }
+
+QString AppSettings::lastSessionPath() const {
+  return m_lastSessionPath;
+}
+
+void AppSettings::setLastSessionPath(const QString &value) {
+  if (value == m_lastSessionPath) return;
+
+  if (!onObjectThread(this)) {
+    QMetaObject::invokeMethod(
+        this, [this, value] { setLastSessionPath(value); },
+        Qt::QueuedConnection);
+    return;
+  }
+
+  m_lastSessionPath = value;
+  write("lastSessionPath", m_lastSessionPath);
+  emit lastSessionPathChanged();
+}
+
 
 bool AppSettings::enablePrometheusMetrics() const {
   return m_enablePrometheusMetrics;

@@ -11,6 +11,8 @@ class AppSettings final : public QObject {
 
   Q_PROPERTY(bool restoreLastSession READ restoreLastSession WRITE
                  setRestoreLastSession NOTIFY restoreLastSessionChanged)
+  Q_PROPERTY(QString lastSessionPath READ lastSessionPath WRITE
+                 setLastSessionPath NOTIFY lastSessionPathChanged)
 
   Q_PROPERTY(double uiScale READ uiScale WRITE setUiScale NOTIFY uiScaleChanged)
 
@@ -30,6 +32,9 @@ public:
 
   bool restoreLastSession() const;
   void setRestoreLastSession(bool value);
+
+  QString lastSessionPath() const;
+  void setLastSessionPath(const QString &value);
 
   // -- User interface
 
@@ -52,8 +57,10 @@ public:
   Q_INVOKABLE void sync();
 
 signals:
-  void uiScaleChanged();
   void restoreLastSessionChanged();
+  void lastSessionPathChanged();
+
+  void uiScaleChanged();
 
   void enablePrometheusMetricsChanged();
   void prometheusAddressChanged();
@@ -69,8 +76,10 @@ private:
 
   QSettings m_settings;
 
-  double m_uiScale = 1.0;
   bool m_restoreLastSession = true;
+  QString m_lastSessionPath;
+
+  double m_uiScale = 1.0;
 
   bool m_enablePrometheusMetrics = true;
   QString m_prometheusAddress;

@@ -18,15 +18,16 @@
 #include <plugins/devices/orbbec/orbbec_device_config.h>
 #include <plugins/plugin_loader.h>
 
-#include "device_status.h"
+#include "app_settings/app_settings.h"
 #include "device_plugin_controller.h"
+#include "device_status.h"
 
 namespace pc::ui {
 
 using pc::devices::OrbbecDeviceConfiguration;
 using pc::devices::OrbbecDeviceConfigurationAdapter;
 
-WorkspaceModel::WorkspaceModel(pc::Workspace* workspace, QObject *parent,
+WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent,
                                std::function<void()> quit_callback)
     : QObject(parent), _workspace(*workspace), _quit_callback(quit_callback) {
   rebuildAdapters();
@@ -58,15 +59,21 @@ void WorkspaceModel::loadFromFile(const QUrl &file) {
   // are there cases where the jthread could spin forever?
 }
 
-void WorkspaceModel::save() {
+void WorkspaceModel::save(bool update_last_session_path) {
   if (_saveFileUrl.isEmpty()) {
     emit openSaveAsDialog();
     return;
   }
   const QString localPath = _saveFileUrl.toLocalFile();
   std::jthread([path = localPath.toStdString(),
-                workspace_config = _workspace.config] {
+                workspace_config = _workspace.config,
+                update_last_session_path] {
     save_workspace_to_file(workspace_config, path);
+    if (update_last_session_path) {
+      std::println("need to update path");
+      auto last_session_path = QString::fromStdString(path);
+      AppSettings::instance()->setLastSessionPath(last_session_path);
+    }
   }).detach();
 }
 

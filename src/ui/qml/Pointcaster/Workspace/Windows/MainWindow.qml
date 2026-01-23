@@ -44,14 +44,18 @@ ApplicationWindow {
         fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("JSON files (*.json)"), qsTr("All files (*)")]
         onAccepted: {
+            const hasSavePath = workspaceModel && workspaceModel.saveFileUrl.toString() !== "";
             workspaceModel.saveFileUrl = selectedFile;
-            workspaceModel.save();
+            // if there was no existing save path, we allow the 'save as' dialog to set the 
+            // current save path because it hasnt been set yet
+            workspaceModel.save(!hasSavePath);
         }
     }
 
     Connections {
         target: workspaceModel
-        function openSaveAsDialog() {
+        function onOpenSaveAsDialog() {
+            console.log("should have raised");
             saveAsWorkspaceDialog.open();
         }
     }

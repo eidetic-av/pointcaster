@@ -1,6 +1,8 @@
 include(GenerateExportHeader)
 
-add_library(pointcaster_app_settings
+# since plugins can get access to application settings, this module must be a shared lib
+
+add_library(pointcaster_app_settings SHARED
     app_settings.cc
 )
 

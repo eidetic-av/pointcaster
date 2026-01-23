@@ -13,9 +13,8 @@ int main(int argc, char *argv[]) {
   QGuiApplication app(argc, argv);
 
   std::println("Loading application preferences...");
-  QCoreApplication::setOrganizationName("matth");
-  QCoreApplication::setApplicationName("pointcaster");
-  qmlRegisterSingletonInstance("Pointcaster", 1, 0, "AppSettings", AppSettings::instance());
+  auto* app_settings = AppSettings::instance();
+  qmlRegisterSingletonInstance("Pointcaster", 1, 0, "AppSettings", app_settings);
 
   std::println("Starting QQmlApplicationEngine...");
   auto* gui_engine = pc::ui::initialise(&app);
@@ -23,10 +22,14 @@ int main(int argc, char *argv[]) {
   std::println("Initialising Workspace...");
 
   WorkspaceConfiguration workspace_config;
-  workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
-      .id = "test", .ip = "192.168.1.107"});
-  workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
-      .id = "test2", .ip = "192.168.1.108"});
+  if (app_settings->restoreLastSession() && !app_settings->lastSessionPath().isEmpty()) {
+    load_workspace_from_file(workspace_config,
+                             app_settings->lastSessionPath().toStdString());
+  }
+//   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
+//       .id = "test", .ip = "192.168.1.107"});
+//   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
+//       .id = "test2", .ip = "192.168.1.108"});
 
   // for (int i = 0; i < 6; i++) {
   //   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{

@@ -25,7 +25,7 @@ MenuBar {
 
             Action {
                 text: qsTr("&Save")
-                onTriggered: workspaceModel.save()
+                onTriggered: workspaceModel.save(true)
             }
 
             Action {
