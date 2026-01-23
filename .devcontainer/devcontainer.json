@@ -4,8 +4,8 @@
     "dockerfile": "../Dockerfile",
     "context": "..",
     "args": {
-      "USER_UID": "1001",
-      "USER_GID": "1001"
+      "USER_UID": "1000",
+      "USER_GID": "1000"
     }
   },
   "remoteUser": "dev",
@@ -19,6 +19,13 @@
         "llvm-vs-code-extensions.vscode-clangd",
         "delgan.qml-format"
       ]
+    },
+    "qt-creator": {
+      "device": {
+        "auto-detect-kits": true,
+        "copy-cmd-bridge": true,
+         "mount-libexec": false
+      }
     }
   }
 }
