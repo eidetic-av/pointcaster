@@ -36,6 +36,7 @@ qt_add_qml_module(PointcasterWorkspace
         Windows/Settings/SettingsWindow.qml
         Windows/Settings/GeneralSettingsPage.qml
         Windows/Settings/UserInterfaceSettingsPage.qml
+        Windows/Settings/NetworkSettingsPage.qml
         Windows/Devices/DevicesWindow.qml
         Windows/Devices/DeviceSelectionList.qml
         Windows/Sessions/SessionView.qml
@@ -46,6 +47,11 @@ qt_add_qml_module(PointcasterWorkspace
         Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf
         Resources/Fonts/AtkinsonHyperlegibleNext-Medium.otf
         Resources/Fonts/AtkinsonHyperlegibleNext-Bold.otf
+    SOURCES
+        # TODO this is really annoying, but MOC fails when cpp
+        # headers aren't right beside this CMakeLists.txt...
+        net_utils.h
+        net_utils.cc
 )
 
 find_package(QtAwesome CONFIG REQUIRED)

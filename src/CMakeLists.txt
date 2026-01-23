@@ -12,10 +12,11 @@ add_subdirectory(core)
 qt_add_executable(pointcaster 
     pointcaster.cc
     workspace.cc
-    app_settings.cc
 )
 
 add_subdirectory(ui)
+add_subdirectory(app_settings)
+add_subdirectory(metrics)
 
 # corrade lib used for dynamic plugin / lib loading
 find_package(Corrade CONFIG REQUIRED Main PluginManager)
@@ -29,21 +30,19 @@ add_subdirectory(plugins)
 # - reflectcpp is used for de/serialization of workspace configuration
 find_package(reflectcpp CONFIG REQUIRED)
 
-# - prometheus gathers metrics pointcaster sessions can expose 
-# (e.g. connected devices, health, framerate, scene density)
-find_package(prometheus-cpp CONFIG REQUIRED)
-
+# TODO this is probably not what we want re: qml?
 # - application settings initialisation requires Qml dependency linked in the main application
 find_package(Qt6 REQUIRED COMPONENTS Qml)
 
 target_link_libraries(pointcaster PRIVATE 
   pointcaster::core 
   pointcaster::plugins
+  pointcaster::metrics
+  pointcaster::app_settings
   pointcaster::ui
   Corrade::Main 
   Corrade::PluginManager
   reflectcpp::reflectcpp
-  prometheus-cpp::core
   Qt6::Qml
 )
 

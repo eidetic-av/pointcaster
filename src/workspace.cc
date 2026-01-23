@@ -1,21 +1,24 @@
 #include "workspace.h"
-#include "plugins/devices/device_plugin.h"
-#include "plugins/plugin_loader.h"
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/Manager.h>
+#include <app_settings/app_settings.h>
+#include <memory>
+#include <metrics/prometheus_server.h>
+#include <plugins/devices/device_plugin.h>
+#include <plugins/plugin_loader.h>
 #include <print>
 #include <string>
 #include <string_view>
 #include <variant>
 
-#include <rfl/json.hpp>
 #include <rfl/AddTagsToVariants.hpp>
+#include <rfl/json.hpp>
 #include <string>
 
 #ifdef _WIN32
-#include <windows.h>
 #include <filesystem>
+#include <windows.h>
 #endif
 
 namespace pc {
@@ -34,7 +37,9 @@ void load_workspace_from_file(WorkspaceConfiguration &config,
   const std::string json_string{std::istreambuf_iterator<char>(file),
                                 std::istreambuf_iterator<char>()};
   try {
-    config = rfl::json::read<WorkspaceConfiguration, rfl::AddTagsToVariants>(json_string).value();
+    config = rfl::json::read<WorkspaceConfiguration, rfl::AddTagsToVariants>(
+                 json_string)
+                 .value();
     std::print("Loaded configuration from '{}'\n", file_path);
   } catch (const std::exception &e) {
     std::print("Failed to parse '{}': {}\n", file_path, e.what());
@@ -53,6 +58,11 @@ void save_workspace_to_file(const WorkspaceConfiguration &config,
 }
 
 Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
+  auto &app_settings = *AppSettings::instance();
+
+  // start recording metrics
+  metrics::PrometheusServer::initialise();
+
   // find and initialise device plugins
   device_plugin_manager = plugins::load_device_plugins();
   rebuild_devices();

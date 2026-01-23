@@ -47,8 +47,8 @@ Item {
 
                         CheckBox { 
                             text: "Restore previous session on startup" 
-                            checked: AppSettings.restoreSession
-                            onToggled: AppSettings.restoreSession = checked
+                            checked: AppSettings.restoreLastSession
+                            onToggled: AppSettings.restoreLastSession = checked
                         }
                         CheckBox { text: "Check for updates automatically" }
 

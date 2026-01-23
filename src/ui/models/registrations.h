@@ -3,6 +3,7 @@
 #include "device_plugin_controller.h"
 #include "device_status.h"
 #include "settings_page_registry.h"
+// #include "../qml/Pointcaster/Workspace/net_utils.h"
 
 namespace pc::ui {
 
@@ -30,6 +31,12 @@ void register_qml_uncreatable_types() {
       "SettingsPageRegistry",
       SettingsPageRegistry::instance());
 
+//   // ui/qml/Pointcaster/Workspace/net_utils.h
+//   qmlRegisterSingletonType<pc::ui::qml::NetUtils>(
+//       "Pointcaster.Workspace", 1, 0, "NetUtils",
+//       [](QQmlEngine *, QJSEngine *) -> QObject * {
+//         return new pc::ui::qml::NetUtils;
+//       });
 }
 
 } // namespace pc::ui

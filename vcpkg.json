@@ -12,6 +12,7 @@
 			"name": "libcpplocate",
 			"platform": "windows"
 		},
+		"concurrentqueue",
 		"orbbecsdk",
 		"prometheus-cpp",
 		"qtawesome",

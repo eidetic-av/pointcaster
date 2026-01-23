@@ -1,22 +1,24 @@
 #pragma once
+#include <pointcaster/point_cloud.h>
 #include <rfl/Literal.hpp>
 #include <string>
-#include <pointcaster/point_cloud.h>
 
 namespace pc::devices {
 
 class OrbbecDevice;
 
 struct OrbbecDeviceConfiguration {
-  std::string id;            // @hidden
-  bool active = true;        // @hidden
-  std::string ip;            // @disabled
+  std::string id;     // @hidden
+  bool active = true; // @hidden
+  std::string ip;     // @disabled
 
   enum class DepthMode { Narrow, Wide };
   DepthMode depth_mode = DepthMode::Narrow;
 
-  int acquisition_mode = 0;  // @minmax(0, 1)
-  float test_decimal = 30.0; // @minmax(-180, 180)
+  enum class AcquisitionMode { XYZRGB, XYZ };
+  AcquisitionMode acquisition_mode = AcquisitionMode::XYZRGB;
+
+  int decimation = 1; // @minmax(1, 8)
 
   pc::float3 offset_position;
 

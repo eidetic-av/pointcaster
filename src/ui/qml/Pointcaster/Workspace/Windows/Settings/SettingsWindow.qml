@@ -87,6 +87,7 @@ Dialog {
         // core pages are added initially, other pages loaded via plugins are added using the same api
         SettingsPageRegistry.addPage("general", "General", "qrc:/qt/qml/Pointcaster/Workspace/Windows/Settings/GeneralSettingsPage.qml");
         SettingsPageRegistry.addPage("user_interface", "User Interface", "qrc:/qt/qml/Pointcaster/Workspace/Windows/Settings/UserInterfaceSettingsPage.qml");
+        SettingsPageRegistry.addPage("network", "Network", "qrc:/qt/qml/Pointcaster/Workspace/Windows/Settings/NetworkSettingsPage.qml");
 
         // initialilly set the stack view to show the first page
         sidebar.currentIndex = 0;

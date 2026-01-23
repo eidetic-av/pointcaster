@@ -1,5 +1,5 @@
 #include "workspace.h"
-#include "app_settings.h"
+#include <app_settings/app_settings.h>
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>

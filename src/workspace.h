@@ -3,6 +3,8 @@
 #include "plugins/devices/device_plugin.h"
 #include "plugins/devices/device_variants.h"
 
+#include "metrics/prometheus_server.h"
+
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/PluginManager/Manager.h>
 #include <memory>
@@ -34,6 +36,8 @@ public:
   std::unique_ptr<Corrade::PluginManager::Manager<devices::DevicePlugin>>
       device_plugin_manager;
   std::vector<Corrade::Containers::Pointer<devices::DevicePlugin>> devices;
+
+  std::unique_ptr<metrics::PrometheusServer> prometheus_server;
 
   explicit Workspace(const WorkspaceConfiguration &initial);
 

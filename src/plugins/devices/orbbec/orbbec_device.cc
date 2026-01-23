@@ -1,5 +1,6 @@
 #include "orbbec_device.h"
 #include "orbbec_context.h"
+#include "orbbec_device_config.h"
 
 #include <atomic>
 #include <chrono>
@@ -14,6 +15,8 @@
 #include <memory>
 #include <print>
 #include <thread>
+
+#include <metrics/metrics.h>
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -173,7 +176,8 @@ void OrbbecDevice::start_sync() {
     return;
   }
 
-  if (config.acquisition_mode == 0) {
+  if (config.acquisition_mode ==
+      OrbbecDeviceConfiguration::AcquisitionMode::XYZRGB) {
     if (!init_device_memory(colour_width * colour_height)) {
       std::println("Failed to initialise GPU memory for Orbbec pipeline");
       set_error_state(true);
@@ -181,7 +185,8 @@ void OrbbecDevice::start_sync() {
     }
   }
   //
-  else if (config.acquisition_mode == 1) {
+  else if (config.acquisition_mode ==
+           OrbbecDeviceConfiguration::AcquisitionMode::XYZ) {
     std::println("acquisition_mode not implemented yet");
     set_error_state(true);
     return;
@@ -207,6 +212,40 @@ void OrbbecDevice::stop_sync() {
   if (_device_memory_ready.load()) free_device_memory();
   set_running(false);
   set_updated_time(steady_clock::time_point{});
+}
+
+void OrbbecDevice::set_updated_time(
+    std::chrono::steady_clock::time_point new_time) {
+  const auto old_time = _last_updated_time.exchange(new_time);
+
+  const bool new_invalid =
+      (new_time == std::chrono::steady_clock::time_point{});
+  const bool old_invalid =
+      (old_time == std::chrono::steady_clock::time_point{});
+
+  if (!new_invalid) {
+    const auto prev_tick = _pipeline_last_tick.exchange(new_time);
+
+    if (prev_tick != std::chrono::steady_clock::time_point{}) {
+      const std::chrono::duration<float> dt = new_time - prev_tick;
+      if (dt.count() > 0.0f) {
+        static constexpr float pipeline_fps_ema_alpha = 0.10f;
+
+        const float inst_fps = 1.0f / dt.count();
+        const float old_ema = _pipeline_fps_ema.load();
+        const float new_ema = (old_ema == 0.0f)
+                                  ? inst_fps
+                                  : (pipeline_fps_ema_alpha * inst_fps +
+                                     (1.0f - pipeline_fps_ema_alpha) * old_ema);
+        _pipeline_fps_ema.store(new_ema);
+      }
+    }
+  } else {
+    _pipeline_last_tick.store(std::chrono::steady_clock::time_point{});
+    _pipeline_fps_ema.store(0.0f);
+  }
+
+  if (new_invalid != old_invalid) notify_status_changed();
 }
 
 void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
@@ -357,6 +396,8 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
   constexpr auto recovery_window = 500ms;
   constexpr auto check_interval = 1s;
 
+  auto &config = std::get<OrbbecDeviceConfiguration>(this->config());
+
   while (!stop_token.stop_requested()) {
 
     const auto now = steady_clock::now();
@@ -365,6 +406,11 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
 
     const bool has_seen_a_frame = last_frame_time != steady_clock::time_point{};
 
+    // we can update metrics on this thread too
+    pc::metrics::set_gauge("pointcaster_orbbec_pipeline_hertz",
+                           _pipeline_fps_ema.load(),
+                           {{"device_id", config.id}});
+
     if (_running_pipeline && !_in_error_state) {
       if (!has_seen_a_frame) {
         std::this_thread::sleep_for(check_interval);
@@ -372,7 +418,6 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
       }
       if (now - last_frame_time >= error_timeout) {
         set_error_state(true);
-        auto &config = std::get<OrbbecDeviceConfiguration>(this->config());
         std::println(
             "Orbbec device '{}' entered error state. Attempting restart...",
             config.id);

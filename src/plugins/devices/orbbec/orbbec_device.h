@@ -56,9 +56,13 @@ private:
 
   std::atomic_bool _running_pipeline = false;
   std::atomic_bool _loading_pipeline = false;
-  std::atomic<std::chrono::steady_clock::time_point> _last_updated_time{};
   std::atomic_bool _in_error_state{false};
   bool _initialised_point_cloud_scale = false;
+
+  std::atomic<std::chrono::steady_clock::time_point> _last_updated_time{};
+  std::atomic<float> _pipeline_fps_ema{0.0f};
+  std::atomic<std::chrono::steady_clock::time_point> _pipeline_last_tick{
+      std::chrono::steady_clock::time_point{}};
 
   PC_PROFILING_MUTEX(_process_current_cloud_access);
   std::uint64_t _last_processed_frame_index{0};
@@ -94,15 +98,7 @@ private:
     notify_status_changed();
   }
 
-  void set_updated_time(std::chrono::steady_clock::time_point new_time) {
-    const auto old_time =
-        _last_updated_time.exchange(new_time, std::memory_order_acq_rel);
-    const bool new_invalid =
-        (new_time == std::chrono::steady_clock::time_point{});
-    const bool old_invalid =
-        (old_time == std::chrono::steady_clock::time_point{});
-    if (new_invalid != old_invalid) notify_status_changed();
-  }
+  void set_updated_time(std::chrono::steady_clock::time_point new_time);
 
   void pipeline_thread_work(std::stop_token stop_token,
                               std::shared_ptr<ob::Device> ob_device);
