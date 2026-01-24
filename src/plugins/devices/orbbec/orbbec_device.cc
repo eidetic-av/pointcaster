@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <core/logger/logger.h>
 #include <cstring>
 #include <iostream>
 #include <libobsensor/ObSensor.hpp>
@@ -41,7 +42,7 @@ OrbbecDevice::OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
     orbbec_context().retain_user();
     orbbec_context().discover_devices_async();
   } catch (...) {
-    std::println("Exception during Orbbec context initialisation");
+    pc::logger->error("Exception during Orbbec context initialisation");
   }
 
   // do our device initialisation / start procedure when
@@ -55,14 +56,14 @@ OrbbecDevice::OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
     });
   });
 
-  std::println("Created OrbbecDevice");
+  pc::logger->trace("Created OrbbecDevice");
 }
 
 OrbbecDevice::~OrbbecDevice() {
   stop_sync();
   _timeout_thread.request_stop();
   orbbec_context().release_user();
-  std::println("Destroyed OrbbecDevice");
+  pc::logger->trace("Destroyed OrbbecDevice");
 }
 
 std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
@@ -98,14 +99,11 @@ DeviceStatus OrbbecDevice::status() const {
   if (!ctx) return DeviceStatus::Unloaded;
   if (_in_error_state) return DeviceStatus::Missing;
   if (!_running_pipeline) {
-    std::println("returning loaded from pipeline");
     return DeviceStatus::Loaded;
   }
   if (_last_updated_time.load() == std::chrono::steady_clock::time_point{}) {
-    std::println("returning loaded from clock");
     return DeviceStatus::Loaded;
   }
-  std::println("returning active");
   return DeviceStatus::Active;
 }
 
@@ -140,7 +138,7 @@ void OrbbecDevice::restart_sync() {
 }
 
 void OrbbecDevice::start_sync() {
-  std::println("Attempting to start an Orrbec driver");
+  pc::logger->trace("Attempting to start an Orrbec driver");
 
   std::lock_guard lock(orbbec_context().start_stop_device_access);
 
@@ -151,7 +149,8 @@ void OrbbecDevice::start_sync() {
 
   auto ob_ctx = orbbec_context().wait_til_ready();
   if (!ob_ctx) {
-    std::println("Orbbec context not ready in time, aborting start_sync()");
+    pc::logger->trace(
+        "Orbbec context not ready in time, aborting start_sync()");
     set_loading(false);
     set_error_state(true);
     return;
@@ -162,7 +161,7 @@ void OrbbecDevice::start_sync() {
   if (is_discovery_instance()) return;
 
   const auto config = std::get<OrbbecDeviceConfiguration>(this->config());
-  std::println("Initialising OrbbecDevice at {}", config.ip);
+  pc::logger->info("Initialising OrbbecDevice at {}", config.ip);
 
   std::shared_ptr<ob::Device> ob_device;
 
@@ -192,20 +191,20 @@ void OrbbecDevice::start_sync() {
     try {
       ob_device = ob_ctx->createNetDevice(config.ip.c_str(), net_device_port);
     } catch (const ob::Error &e) {
-      std::println("Failed to create OrbbecDevice at {}:{}: {}", config.ip,
-                   net_device_port, e.what());
+      pc::logger->error("Failed to create OrbbecDevice at {}:{}: {}", config.ip,
+                        net_device_port, e.what());
       set_error_state(true);
       return;
     } catch (...) {
-      std::println("Unknown error creating Orbbec NetDevice at {}:{}",
-                   config.ip, net_device_port);
+      pc::logger->error("Unknown error creating Orbbec NetDevice at {}:{}",
+                        config.ip, net_device_port);
       set_error_state(true);
       return;
     }
   }
 
   if (!ob_device) {
-    std::println("Warning: Unable to find Orbbec at '{}'", config.ip);
+    pc::logger->warn("Unable to find Orbbec at '{}'", config.ip);
     set_error_state(true);
     return;
   }
@@ -213,7 +212,7 @@ void OrbbecDevice::start_sync() {
   if (config.acquisition_mode ==
       OrbbecDeviceConfiguration::AcquisitionMode::XYZRGB) {
     if (!init_device_memory(colour_width * colour_height)) {
-      std::println("Failed to initialise GPU memory for Orbbec pipeline");
+      pc::logger->error("Failed to initialise GPU memory for Orbbec pipeline");
       set_error_state(true);
       return;
     }
@@ -221,12 +220,11 @@ void OrbbecDevice::start_sync() {
   //
   else if (config.acquisition_mode ==
            OrbbecDeviceConfiguration::AcquisitionMode::XYZ) {
-    std::println("acquisition_mode not implemented yet");
+    pc::logger->warn("acquisition_mode not implemented yet");
     set_error_state(true);
     return;
   }
 
-  std::println("about to start pipeline");
   _pipeline_thread =
       std::jthread([this, ob_device = std::move(ob_device)](auto stop_token) {
         pipeline_thread_work(stop_token, ob_device);
@@ -239,8 +237,7 @@ void OrbbecDevice::start_sync() {
 void OrbbecDevice::stop_sync() {
   auto config = std::get<OrbbecDeviceConfiguration>(this->config());
   std::lock_guard lock(orbbec_context().start_stop_device_access);
-  std::println("Closing OrbbecDevice {}", config.ip);
-  // pc::logger->info("Closing OrbbecDevice {}", config().ip);
+  pc::logger->info("Closing OrbbecDevice {}", config.ip);
   _pipeline_thread.request_stop();
   _pipeline_thread.join();
   if (_device_memory_ready.load()) free_device_memory();
@@ -292,7 +289,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     auto colour_profile_list = pipeline.getStreamProfileList(OB_SENSOR_COLOR);
     // TODO enable without colour too
     if (!colour_profile_list) {
-      std::println("No Orbbec colour profiles available");
+      pc::logger->error("No Orbbec colour profiles available");
       set_error_state(true);
       return;
     }
@@ -301,7 +298,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       colour_profile = colour_profile_list->getVideoStreamProfile(
           colour_width, colour_height, OB_FORMAT_MJPG, fps);
     } catch (const ob::Error &e) {
-      std::println("Failed to get colour profile: {}", e.what());
+      pc::logger->error("Failed to get colour profile: {}", e.what());
       set_error_state(true);
       return;
     }
@@ -315,7 +312,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       depth_d2c_list =
           pipeline.getD2CDepthProfileList(colour_profile, ALIGN_D2C_HW_MODE);
     } catch (const ob::Error &e) {
-      std::println("Failed to get HW D2C depth profile list: {}", e.what());
+      pc::logger->warn("Failed to get HW D2C depth profile list: {}", e.what());
     }
 
     if (depth_d2c_list && depth_d2c_list->count() > 0) {
@@ -324,18 +321,19 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             depth_width, depth_height, OB_FORMAT_Y16, fps);
         ob_config->setAlignMode(ALIGN_D2C_HW_MODE);
       } catch (const ob::Error &e) {
-        std::println("Failed to select HW D2C depth profile: {}", e.what());
+        pc::logger->error("Failed to select HW D2C depth profile: {}",
+                          e.what());
       }
     }
 
     // fallback to software D2C if HW failed or unsupported for this combo
     if (!depth_profile) {
-      std::println("Falling back to ALIGN_D2C_SW_MODE");
+      pc::logger->warn("Falling back to ALIGN_D2C_SW_MODE");
       try {
         auto depth_sw_list =
             pipeline.getD2CDepthProfileList(colour_profile, ALIGN_D2C_SW_MODE);
         if (!depth_sw_list || depth_sw_list->count() == 0) {
-          std::println("No SW D2C depth profiles available");
+          pc::logger->error("No SW D2C depth profiles available");
           set_error_state(true);
           return;
         }
@@ -343,7 +341,8 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             depth_width, depth_height, OB_FORMAT_Y16, fps);
         ob_config->setAlignMode(ALIGN_D2C_SW_MODE);
       } catch (const ob::Error &e) {
-        std::println("Failed to select SW D2C depth profile: {}", e.what());
+        pc::logger->error("Failed to select SW D2C depth profile: {}",
+                          e.what());
         set_error_state(true);
         return;
       }
@@ -358,7 +357,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     try {
       pipeline.start(ob_config);
     } catch (const ob::Error &e) {
-      std::println("Failed to start Orbbec pipeline: {}", e.what());
+      pc::logger->error("Failed to start Orbbec pipeline: {}", e.what());
       set_error_state(true);
       return;
     }
@@ -378,7 +377,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       try {
         frame_set = pipeline.waitForFrameset(100);
       } catch (const ob::Error &e) {
-        std::println("waitForFrameset error: {}", e.what());
+        pc::logger->error("waitForFrameset error: {}", e.what());
         continue;
       }
 
@@ -397,13 +396,13 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       try {
         point_cloud_frame = point_cloud_filter.process(frame_set);
       } catch (const ob::Error &e) {
-        std::println("Failed to process Orbbec frame: {}", e.what());
+        pc::logger->error("Failed to process Orbbec frame: {}", e.what());
         continue;
       } catch (const std::exception &e) {
-        std::println("Failed to process Orbbec frame: {}", e.what());
+        pc::logger->error("Failed to process Orbbec frame: {}", e.what());
         continue;
       } catch (...) {
-        std::println("Unknown exception in Orbbec process()");
+        pc::logger->error("Unknown exception in Orbbec process()");
         continue;
       }
 
@@ -417,10 +416,10 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       }
     }
   } catch (const std::exception &e) {
-    std::println("Exception in Orbbec processing thread: {}", e.what());
+    pc::logger->error("Exception in Orbbec processing thread: {}", e.what());
     set_error_state(true);
   } catch (...) {
-    std::println("Unknown exception in Orbbec processing thread");
+    pc::logger->error("Unknown exception in Orbbec processing thread");
     set_error_state(true);
   }
 }
@@ -453,7 +452,7 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
       if (now - last_frame_time >= error_timeout) {
         set_error_state(true);
         auto config = std::get<OrbbecDeviceConfiguration>(this->config());
-        std::println(
+        pc::logger->error(
             "Orbbec device '{}' entered error state. Attempting restart...",
             config.id);
         restart();

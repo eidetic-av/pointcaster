@@ -4,6 +4,7 @@
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/Manager.h>
+#include <core/logger/logger.h>
 #include <print>
 #include <string>
 #include <vector>
@@ -69,7 +70,7 @@ load_device_plugins(pc::Workspace &workspace) {
     const auto plugin_status = device_plugin_manager->load(plugin_name);
     if (plugin_status & LoadState::Loaded) {
       workspace.loaded_device_plugin_names.push_back(plugin_name);
-      std::println("Loaded plugin: {}", std::string(plugin_name));
+      pc::logger->info("Loaded plugin: {}", std::string(plugin_name));
       // create an instance of the plugin that handles device discovery and
       // other static single plugin context things...
       if (!workspace.discovery_plugins.contains(plugin_name)) {

@@ -24,10 +24,10 @@ int main(int argc, char *argv[]) {
   pc::logger->debug("Starting QGuiApplication...");
   QGuiApplication app(argc, argv);
 
-  std::println("Starting QQmlApplicationEngine...");
+  pc::logger->trace("Starting QQmlApplicationEngine...");
   auto* gui_engine = pc::ui::initialise(&app);
 
-  std::println("Initialising Workspace...");
+  pc::logger->trace("Initialising Workspace...");
 
   WorkspaceConfiguration workspace_config;
   if (app_settings->restoreLastSession() && !app_settings->lastSessionPath().isEmpty()) {
@@ -42,11 +42,11 @@ int main(int argc, char *argv[]) {
   // to the one thats been altered by the gui if its been marked dirty?
   // or maybe we mark individual parameters as dirty, yeah...
   
-  std::println("Loading main window...");
+  pc::logger->trace("Loading main window...");
 
   pc::ui::load_main_window(&workspace, &app, gui_engine);
 
-  std::println("Application load complete");
+  pc::logger->trace("Application load complete");
 
   return app.exec();
 }

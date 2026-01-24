@@ -17,7 +17,8 @@ find_package(draco CONFIG REQUIRED)
 target_link_libraries(pointcaster_core PRIVATE draco::draco)
 
 find_package(spdlog CONFIG REQUIRED)
-target_link_libraries(pointcaster_core PRIVATE spdlog::spdlog)
+find_package(fmt CONFIG REQUIRED)
+target_link_libraries(pointcaster_core PUBLIC spdlog::spdlog fmt::fmt)
 
 target_include_directories(pointcaster_core
     ${WARNING_GUARD}

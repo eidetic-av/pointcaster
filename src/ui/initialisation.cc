@@ -10,6 +10,7 @@
 #include <QUrl>
 #include <QtAwesome/QtAwesome.h>
 #include <QtAwesome/QtAwesomeQuickImageProvider.h>
+#include <core/logger/logger.h>
 #include <kddockwidgets/Config.h>
 #include <kddockwidgets/core/DockRegistry.h>
 #include <kddockwidgets/core/FloatingWindow.h>
@@ -78,8 +79,8 @@ void load_main_window(Workspace *workspace, QGuiApplication *app,
       engine->addImportPath(mainQmlInfo.dir().absolutePath());
       engine->load(QUrl::fromLocalFile(mainQmlInfo.absoluteFilePath()));
     } else {
-      std::println("POINTCASTER_MAIN_QML points to missing file: {}",
-                   dev_main_qml.toStdString());
+      pc::logger->error("POINTCASTER_MAIN_QML points to missing file: {}",
+                        dev_main_qml.toStdString());
       QCoreApplication::exit(-1);
     }
   } else {
