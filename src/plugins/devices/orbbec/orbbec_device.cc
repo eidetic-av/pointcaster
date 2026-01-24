@@ -161,7 +161,7 @@ void OrbbecDevice::start_sync() {
   // discovery, dont bother trying to attach to a device
   if (is_discovery_instance()) return;
 
-  const auto &config = std::get<OrbbecDeviceConfiguration>(this->config());
+  const auto config = std::get<OrbbecDeviceConfiguration>(this->config());
   std::println("Initialising OrbbecDevice at {}", config.ip);
 
   std::shared_ptr<ob::Device> ob_device;
@@ -237,7 +237,7 @@ void OrbbecDevice::start_sync() {
 }
 
 void OrbbecDevice::stop_sync() {
-  auto &config = std::get<OrbbecDeviceConfiguration>(this->config());
+  auto config = std::get<OrbbecDeviceConfiguration>(this->config());
   std::lock_guard lock(orbbec_context().start_stop_device_access);
   std::println("Closing OrbbecDevice {}", config.ip);
   // pc::logger->info("Closing OrbbecDevice {}", config().ip);
@@ -452,6 +452,7 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
       }
       if (now - last_frame_time >= error_timeout) {
         set_error_state(true);
+        auto config = std::get<OrbbecDeviceConfiguration>(this->config());
         std::println(
             "Orbbec device '{}' entered error state. Attempting restart...",
             config.id);
