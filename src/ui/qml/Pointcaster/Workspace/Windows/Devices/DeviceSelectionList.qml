@@ -53,7 +53,7 @@ Item {
                 } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
                     if (list.currentIndex >= 0) {
                         root.activated(list.currentIndex);
-                        root.workspace.setSelectedDeviceIndex(list.currentItem);
+                        root.workspace.setSelectedDeviceIndex(list.currentIndex);
                     }
                     event.accepted = true;
                 }
@@ -125,7 +125,7 @@ Item {
                         list.forceActiveFocus();
                         list.currentIndex = index;
                         root.activated(index);
-                        root.workspace.setSelectedDeviceIndex(list.currentItem);
+                        root.workspace.setSelectedDeviceIndex(list.currentIndex);
                     }
                 }
             }
