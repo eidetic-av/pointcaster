@@ -5,6 +5,7 @@ add_library(pointcaster_core
     codec/draco.cc
     uuid/uuid.cc
     uuid/wtf/wtf.cc
+    logger/logger.cc
 )
 
 add_library(pointcaster::core ALIAS pointcaster_core)
@@ -14,6 +15,9 @@ target_include_directories(pointcaster_core PRIVATE ${ZPP_BITS_INCLUDE_DIRS})
 
 find_package(draco CONFIG REQUIRED)
 target_link_libraries(pointcaster_core PRIVATE draco::draco)
+
+find_package(spdlog CONFIG REQUIRED)
+target_link_libraries(pointcaster_core PRIVATE spdlog::spdlog)
 
 target_include_directories(pointcaster_core
     ${WARNING_GUARD}

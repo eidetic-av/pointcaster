@@ -28,7 +28,10 @@ Item {
                     Layout.fillWidth: true
                     spacing: 4
 
-                    Label { text: "General"; font.pixelSize: 18 }
+                    Label {
+                        text: "General"
+                        font.pixelSize: 18
+                    }
 
                     Label {
                         text: "Application-wide preferences"
@@ -45,114 +48,84 @@ Item {
                     ColumnLayout {
                         spacing: 10
 
-                        CheckBox { 
-                            text: "Restore previous session on startup" 
+                        CheckBox {
+                            text: "Restore previous session on startup"
                             checked: AppSettings.restoreLastSession
                             onToggled: AppSettings.restoreLastSession = checked
                         }
-                        CheckBox { text: "Check for updates automatically" }
 
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 10
-
-                            Label { text: "Language"; Layout.preferredWidth: 120; opacity: 0.9 }
-
-                            ComboBox {
-                                Layout.fillWidth: true
-                                model: ["System Default", "English", "Deutsch", "Français"]
-                                currentIndex: 0
-                            }
-                        }
-                    }
-                }
-
-                GroupBox {
-                    title: "UI"
-                    Layout.fillWidth: true
-
-                    ColumnLayout {
-                        spacing: 10
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 10
-
-                            Label { text: "Theme"; Layout.preferredWidth: 120; opacity: 0.9 }
-
-                            ComboBox {
-                                Layout.fillWidth: true
-                                model: ["Dark", "Light", "System"]
-                                currentIndex: 0
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 10
-
-                            Label { text: "UI scale"; Layout.preferredWidth: 120; opacity: 0.9 }
-
-                            Slider {
-                                id: uiScaleSlider
-                                Layout.fillWidth: true
-                                from: 0.75
-                                to: 1.5
-                                stepSize: 0.05
-                                value: 1.0
-                            }
 
                             Label {
-                                text: Number(uiScaleSlider.value).toFixed(2) + "×"
-                                horizontalAlignment: Text.AlignRight
-                                Layout.preferredWidth: 56
+                                text: "Log level"
+                                Layout.preferredWidth: 120
                                 opacity: 0.9
                             }
 
-                            Button { text: "Reset"; onClicked: uiScaleSlider.value = 1.0 }
-                        }
-
-                        CheckBox { text: "Show tooltips"; checked: true }
-                    }
-                }
-
-                GroupBox {
-                    title: "Files"
-                    Layout.fillWidth: true
-
-                    ColumnLayout {
-                        spacing: 10
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 10
-
-                            Label { text: "Default workspace location"; Layout.preferredWidth: 180; opacity: 0.9 }
-
-                            TextField {
+                            ComboBox {
+                                id: logLevelCombo
                                 Layout.fillWidth: true
-                                placeholderText: "/path/to/workspaces"
-                            }
+                                textRole: "text"
+                                valueRole: "value"
 
-                            Button { text: "Browse…"; onClicked: {} }
+                                model: [
+                                    {
+                                        text: "Trace",
+                                        value: AppSettings.Trace
+                                    },
+                                    {
+                                        text: "Debug",
+                                        value: AppSettings.Debug
+                                    },
+                                    {
+                                        text: "Info",
+                                        value: AppSettings.Info
+                                    },
+                                    {
+                                        text: "Warn",
+                                        value: AppSettings.Warn
+                                    },
+                                    {
+                                        text: "Error",
+                                        value: AppSettings.Error
+                                    },
+                                    {
+                                        text: "Critical",
+                                        value: AppSettings.Critical
+                                    },
+                                    {
+                                        text: "Off",
+                                        value: AppSettings.Off
+                                    }
+                                ]
+
+                                Component.onCompleted: {
+                                    currentIndex = indexOfValue(AppSettings.logLevel);
+                                }
+
+                                onActivated: {
+                                    const v = currentValue;
+                                    if (v !== undefined && v !== null)
+                                        AppSettings.logLevel = v;
+                                }
+
+                                Connections {
+                                    target: AppSettings
+                                    function onLogLevelChanged() {
+                                        const idx = logLevelCombo.indexOfValue(AppSettings.logLevel);
+                                        if (idx >= 0 && idx !== logLevelCombo.currentIndex)
+                                            logLevelCombo.currentIndex = idx;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                Item { Layout.fillHeight: true }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-
-                    Item { Layout.fillWidth: true }
-
-                    Button {
-                        text: "Reset all"
-                        onClicked: {
-                            // WorkspaceState.resetGeneralSettings()
-                        }
-                    }
+                Item {
+                    Layout.fillHeight: true
                 }
             }
         }

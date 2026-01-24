@@ -3,19 +3,18 @@
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/Manager.h>
 #include <app_settings/app_settings.h>
+#include <core/logger/logger.h>
+#include <core/uuid/uuid.h>
 #include <memory>
 #include <metrics/prometheus_server.h>
 #include <plugins/devices/device_plugin.h>
 #include <plugins/plugin_loader.h>
 #include <print>
-#include <string>
-#include <string_view>
-#include <variant>
-#include <core/uuid/uuid.h>
-
 #include <rfl/AddTagsToVariants.hpp>
 #include <rfl/json.hpp>
 #include <string>
+#include <string_view>
+#include <variant>
 
 #ifdef _WIN32
 #include <filesystem>
@@ -46,6 +45,7 @@ void load_workspace_from_file(WorkspaceConfiguration &config,
     std::print("Failed to parse '{}': {}\n", file_path, e.what());
     config = WorkspaceConfiguration{};
   }
+  pc::logger->debug("");
 }
 
 void save_workspace_to_file(const WorkspaceConfiguration &config,
@@ -63,7 +63,7 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   if (initial.id.empty()) {
     config.id = pc::uuid::word();
   } else {
-    // if an id was already assigned at workspace initialisation time, 
+    // if an id was already assigned at workspace initialisation time,
     // we loaded it from disk
     auto_loaded_config = true;
   }

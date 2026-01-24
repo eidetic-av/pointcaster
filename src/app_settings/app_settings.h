@@ -1,8 +1,11 @@
+// app_settings.h
 #pragma once
 
 #include <QObject>
 #include <QSettings>
+#include <QString>
 #include <QVariant>
+#include <spdlog/common.h>
 
 namespace pc {
 
@@ -13,6 +16,9 @@ class AppSettings final : public QObject {
                  setRestoreLastSession NOTIFY restoreLastSessionChanged)
   Q_PROPERTY(QString lastSessionPath READ lastSessionPath WRITE
                  setLastSessionPath NOTIFY lastSessionPathChanged)
+
+  Q_PROPERTY(
+      LogLevel logLevel READ logLevel WRITE setLogLevel NOTIFY logLevelChanged)
 
   Q_PROPERTY(double uiScale READ uiScale WRITE setUiScale NOTIFY uiScaleChanged)
 
@@ -35,6 +41,21 @@ public:
 
   QString lastSessionPath() const;
   void setLastSessionPath(const QString &value);
+
+  enum class LogLevel : int {
+    Trace = static_cast<int>(spdlog::level::trace),
+    Debug = static_cast<int>(spdlog::level::debug),
+    Info = static_cast<int>(spdlog::level::info),
+    Warn = static_cast<int>(spdlog::level::warn),
+    Error = static_cast<int>(spdlog::level::err),
+    Critical = static_cast<int>(spdlog::level::critical),
+    Off = static_cast<int>(spdlog::level::off),
+  };
+  Q_ENUM(LogLevel)
+
+  LogLevel logLevel() const;
+  void setLogLevel(LogLevel level);
+  spdlog::level::level_enum spdlogLogLevel() const;
 
   // -- User interface
 
@@ -60,6 +81,8 @@ signals:
   void restoreLastSessionChanged();
   void lastSessionPathChanged();
 
+  void logLevelChanged();
+
   void uiScaleChanged();
 
   void enablePrometheusMetricsChanged();
@@ -74,10 +97,15 @@ private:
 
   void write(const QString &key, const QVariant &v);
 
+  static LogLevel logLevelFromString(QStringView levelText);
+  static QString logLevelToString(LogLevel level);
+
   QSettings m_settings;
 
   bool m_restoreLastSession = true;
   QString m_lastSessionPath;
+
+  LogLevel m_logLevel = LogLevel::Info;
 
   double m_uiScale = 1.0;
 

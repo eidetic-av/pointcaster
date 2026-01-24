@@ -24,10 +24,13 @@ AppSettings::AppSettings(QObject *parent)
                                   QCoreApplication::organizationName(),
                                   QCoreApplication::applicationName()) {
   // Load initial cache
-  m_restoreLastSession =
-      m_settings.value("restoreLastSession", true).toBool();
-  m_lastSessionPath =
-      m_settings.value("lastSessionPath", "").toString();
+  m_restoreLastSession = m_settings.value("restoreLastSession", true).toBool();
+  m_lastSessionPath = m_settings.value("lastSessionPath", "").toString();
+
+  // Store as string in QSettings, e.g. "debug", "info", ...
+  const auto logLevelText =
+      m_settings.value("logLevel", QStringLiteral("info")).toString();
+  m_logLevel = logLevelFromString(logLevelText);
 
   m_uiScale = m_settings.value("ui/scale", 1.0).toDouble();
 
@@ -37,6 +40,67 @@ AppSettings::AppSettings(QObject *parent)
       m_settings
           .value("metrics/prometheusAddress", QStringLiteral("0.0.0.0:8080"))
           .toString();
+}
+
+AppSettings::LogLevel AppSettings::logLevel() const {
+  return m_logLevel;
+}
+
+void AppSettings::setLogLevel(LogLevel level) {
+  if (level == m_logLevel) return;
+  if (!onObjectThread(this)) {
+    QMetaObject::invokeMethod(
+        this, [this, level] { setLogLevel(level); }, Qt::QueuedConnection);
+    return;
+  }
+  m_logLevel = level;
+  write("logLevel", logLevelToString(m_logLevel));
+  emit logLevelChanged();
+}
+
+AppSettings::LogLevel AppSettings::logLevelFromString(QStringView levelText) {
+  const QString s = levelText.trimmed().toString().toLower();
+
+  if (s == QLatin1String("trace")) return LogLevel::Trace;
+  if (s == QLatin1String("debug")) return LogLevel::Debug;
+  if (s == QLatin1String("info")) return LogLevel::Info;
+
+  if (s == QLatin1String("warn") || s == QLatin1String("warning"))
+    return LogLevel::Warn;
+
+  if (s == QLatin1String("error") || s == QLatin1String("err"))
+    return LogLevel::Error;
+
+  if (s == QLatin1String("critical") || s == QLatin1String("crit"))
+    return LogLevel::Critical;
+
+  if (s == QLatin1String("off")) return LogLevel::Off;
+
+  return LogLevel::Info;
+}
+
+QString AppSettings::logLevelToString(LogLevel level) {
+  switch (level) {
+  case LogLevel::Trace:
+    return QStringLiteral("trace");
+  case LogLevel::Debug:
+    return QStringLiteral("debug");
+  case LogLevel::Info:
+    return QStringLiteral("info");
+  case LogLevel::Warn:
+    return QStringLiteral("warn");
+  case LogLevel::Error:
+    return QStringLiteral("error");
+  case LogLevel::Critical:
+    return QStringLiteral("critical");
+  case LogLevel::Off:
+    return QStringLiteral("off");
+  }
+  return QStringLiteral("info");
+}
+
+spdlog::level::level_enum AppSettings::spdlogLogLevel() const {
+  return static_cast<spdlog::level::level_enum>(static_cast<int>(m_logLevel));
 }
 
 double AppSettings::uiScale() const {
@@ -96,7 +160,6 @@ void AppSettings::setLastSessionPath(const QString &value) {
   emit lastSessionPathChanged();
 }
 
-
 bool AppSettings::enablePrometheusMetrics() const {
   return m_enablePrometheusMetrics;
 }
@@ -112,7 +175,7 @@ void AppSettings::setEnablePrometheusMetrics(bool value) {
   }
 
   m_enablePrometheusMetrics = value;
-  write("metrics", m_enablePrometheusMetrics);
+  write("metrics/enabled", m_enablePrometheusMetrics);
   emit enablePrometheusMetricsChanged();
 }
 

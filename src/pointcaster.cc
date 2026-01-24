@@ -5,16 +5,24 @@
 #include <QQmlApplicationEngine>
 #include <ui/initialisation.h>
 #include <print>
+#include <core/logger/logger.h>
 
 using namespace pc;
 
 int main(int argc, char *argv[]) {
-  std::println("Starting QGuiApplication...");
-  QGuiApplication app(argc, argv);
 
-  std::println("Loading application preferences...");
+  pc::logger->trace("Loading application preferences...");
+
   auto* app_settings = AppSettings::instance();
   qmlRegisterSingletonInstance("Pointcaster", 1, 0, "AppSettings", app_settings);
+
+  pc::set_log_level(app_settings->spdlogLogLevel());
+  QObject::connect(
+      app_settings, &pc::AppSettings::logLevelChanged, app_settings,
+      [] { pc::set_log_level(pc::AppSettings::instance()->spdlogLogLevel()); });
+
+  pc::logger->debug("Starting QGuiApplication...");
+  QGuiApplication app(argc, argv);
 
   std::println("Starting QQmlApplicationEngine...");
   auto* gui_engine = pc::ui::initialise(&app);
@@ -26,19 +34,13 @@ int main(int argc, char *argv[]) {
     load_workspace_from_file(workspace_config,
                              app_settings->lastSessionPath().toStdString());
   }
-//   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
-//       .id = "test", .ip = "192.168.1.107"});
-//   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
-//       .id = "test2", .ip = "192.168.1.108"});
-
-  // for (int i = 0; i < 6; i++) {
-  //   workspace_config.devices.push_back(pc::devices::OrbbecDeviceConfiguration{
-  //       .id = std::format("test{}", i),
-  //       .ip = std::format("192.168.1.10{}", 8 + i)});
-  // }
-  // save_workspace_to_file(workspace_config, "workspace.json");
 
   Workspace workspace(workspace_config);
+
+  // TODO
+  // quick: every 1 second, update workspace->set config
+  // to the one thats been altered by the gui if its been marked dirty?
+  // or maybe we mark individual parameters as dirty, yeah...
   
   std::println("Loading main window...");
 
