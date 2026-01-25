@@ -5,6 +5,7 @@ add_library(pointcaster_ui
     models/device_plugin_controller.h
     models/settings_page_registry.h
     models/settings_page_registry.cc
+    models/commands/device_config_commands.cc
     window/view_factory.cc
 )
 add_library(pointcaster::ui ALIAS pointcaster_ui)

@@ -69,6 +69,9 @@ public:
 
   void notifyFieldChanged(int index) { emit fieldChanged(index); }
 
+  virtual void
+  setConfigFromCore(const pc::devices::DeviceConfigurationVariant &v) = 0;
+
   void setStatusFromCore(pc::devices::DeviceStatus s) {
     const auto q = pc::ui::toQt(s);
     if (q == _status) return;

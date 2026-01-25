@@ -257,12 +257,23 @@ Item {
                                             return;
                                         root.model.setFieldValue(index, text);
                                     }
+
+                                    Connections {
+                                        target: root.model
+                                        function onFieldChanged(changedIndex) {
+                                            if (changedIndex !== index)
+                                                return;
+                                            valueField.text = root.model ? String(root.model.fieldValue(index)) : "";
+                                        }
+                                    }
                                 }
                             }
 
                             Component {
                                 id: intEditor
                                 DragInt {
+                                    id: intEditorControl
+
                                     minValue: root.model ? root.model.minMax(index)[0] : undefined
                                     maxValue: root.model ? root.model.minMax(index)[1] : undefined
                                     defaultValue: root.model ? root.model.defaultValue(index) : undefined
@@ -279,12 +290,24 @@ Item {
                                             return;
                                         root.model.setFieldValue(index, v);
                                     }
+
+                                    Connections {
+                                        target: root.model
+                                        function onFieldChanged(changedIndex) {
+                                            if (changedIndex !== index)
+                                                return;
+                                            var n = Number(root.model.fieldValue(index));
+                                            intEditorControl.boundValue = isNaN(n) ? 0 : Math.trunc(n);
+                                        }
+                                    }
                                 }
                             }
 
                             Component {
                                 id: floatEditor
                                 DragFloat {
+                                    id: floatEditorControl
+
                                     minValue: root.model ? root.model.minMax(index)[0] : undefined
                                     maxValue: root.model ? root.model.minMax(index)[1] : undefined
                                     defaultValue: root.model ? root.model.defaultValue(index) : undefined
@@ -300,6 +323,16 @@ Item {
                                         if (!root.model)
                                             return;
                                         root.model.setFieldValue(index, v);
+                                    }
+
+                                    Connections {
+                                        target: root.model
+                                        function onFieldChanged(changedIndex) {
+                                            if (changedIndex !== index)
+                                                return;
+                                            var n = Number(root.model.fieldValue(index));
+                                            floatEditorControl.boundValue = isNaN(n) ? 0.0 : n;
+                                        }
                                     }
                                 }
                             }

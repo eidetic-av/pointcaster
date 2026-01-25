@@ -3,6 +3,7 @@
 #include "config_adapter.h"
 #include "device_status.h"
 #include <QObject>
+#include <QUndoStack>
 #include <QUrl>
 #include <QVariant>
 #include <functional>
@@ -15,6 +16,8 @@ namespace pc::ui {
 
 class WorkspaceModel : public QObject {
   Q_OBJECT
+
+  Q_PROPERTY(QUndoStack* undoStack READ undoStack CONSTANT)
 
   Q_PROPERTY(QVariant deviceConfigAdapters READ deviceConfigAdapters NOTIFY
                  deviceConfigAdaptersChanged)
@@ -35,6 +38,8 @@ public:
   Q_INVOKABLE void close();
   Q_INVOKABLE void loadFromFile(const QUrl &file);
   Q_INVOKABLE void save(bool update_last_session_path = true);
+
+  QUndoStack* undoStack() const { return _undoStack; }
 
   Q_INVOKABLE void triggerDeviceDiscovery();
   Q_INVOKABLE void addNewDevice(const QString &plugin_name,
@@ -60,6 +65,7 @@ public:
 
 public slots:
   void rebuildAdapters();
+  void refreshDeviceAdapterFromCore(int deviceIndex);
 
 signals:
   void openSaveAsDialog();
@@ -72,6 +78,8 @@ signals:
 
 private:
   pc::Workspace &_workspace;
+
+  QUndoStack* _undoStack = new QUndoStack(this);
 
   QList<QObject *> _deviceConfigAdapters;
   QList<QObject *> _deviceControllers;

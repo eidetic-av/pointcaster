@@ -51,6 +51,7 @@ def _try_parse_float(token: str) -> float | None:
     if not t:
         return None
     try:
+        # avoid treating plain ints as floats
         if re.fullmatch(r"[+-]?\d+", t):
             return None
         return float(t)
@@ -75,7 +76,9 @@ def _parse_default_value(raw: str) -> Any:
     if parsed_float is not None:
         return parsed_float
 
-    if (len(s) >= 2) and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+    if (len(s) >= 2) and (
+        (s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")
+    ):
         return s[1:-1]
 
     return s
@@ -125,7 +128,10 @@ def _extract_nested_enums(struct_body: str) -> tuple[dict[str, list[EnumEntry]],
     stripped_body = enum_pattern.sub(_strip_and_collect, struct_body)
     return enum_map, stripped_body
 
-def _enum_default_to_int(default_value: Any, enum_simple_name: str, enum_entries: list[EnumEntry]) -> int | None:
+
+def _enum_default_to_int(
+    default_value: Any, enum_simple_name: str, enum_entries: list[EnumEntry]
+) -> int | None:
     if default_value is None:
         return None
     if isinstance(default_value, int):
@@ -134,6 +140,10 @@ def _enum_default_to_int(default_value: Any, enum_simple_name: str, enum_entries
     if not s:
         return None
 
+    # Accept:
+    #   EnumType::Value
+    #   Namespace::EnumType::Value
+    #   ...and also just "Value"
     m = re.fullmatch(r"(?:[\w:]+::)*(\w+)(?:::)?(\w+)", s)
     if m:
         tail0 = m.group(1)
@@ -176,7 +186,18 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append(f"    Q_INVOKABLE int fieldCount() const override {{ return {len(members)}; }}")
     out.append("")
 
-    # float3 setters (request-only, no mutation)
+    out.append("    void setConfigFromCore(const pc::devices::DeviceConfigurationVariant &v) override {")
+    out.append(f"        const auto *cfg = std::get_if<{struct_name}>(&v);")
+    out.append("        if (!cfg) return;")
+    out.append("        m_config = *cfg;")
+    out.append("        // Cheap + safe: notify all fields. Optimise later if needed.")
+    out.append("        for (int i = 0; i < fieldCount(); ++i) {")
+    out.append("            notifyFieldChanged(i);")
+    out.append("        }")
+    out.append("    }")
+    out.append("")
+
+    # float3 setters
     if any_float3:
         out.append("    // Dedicated setters for float3 fields (avoids QVariant conversion ambiguity from QML).")
         for i in float3_indices:
@@ -234,8 +255,8 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
             out.append("            };")
         out.append("        default: return {};")
         out.append("        }")
-        out.append("    }")
-        out.append("")
+    out.append("    }")
+    out.append("")
 
     out.append("    Q_INVOKABLE QVariant defaultValue(int index) const override {")
     out.append("        switch (index) {")
@@ -326,7 +347,7 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("    }")
     out.append("")
 
-    # ---- NEW: generated applyFieldValue(...) switch (type-specific mutation), no signals ----
+    # generated applyFieldValue(...) switch (type-specific mutation), no signals
     if any_float3:
         out.append("private:")
         out.append("    static QVector3D toQVector3DLoose(const QVariant &value) {")
@@ -386,7 +407,7 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("    }")
     out.append("")
 
-    # request-only setFieldValue (keeps UI -> command path)
+    # request-only setFieldValue
     out.append("    Q_INVOKABLE void setFieldValue(int index, const QVariant &value) override {")
     out.append("        emit fieldEditRequested(index, value);")
     out.append("    }")
@@ -397,6 +418,7 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("};")
 
     return "\n".join(out)
+
 
 def process_cpp_header(input_text: str, file_path: str) -> str:
     structs = re.findall(
@@ -481,8 +503,10 @@ def process_cpp_header(input_text: str, file_path: str) -> str:
     lines.append("#include <QMetaType>")
     if needs_qvector3d:
         lines.append("#include <QVector3D>")
+    lines.append("#include <variant>")
     lines.append("")
     lines.append('#include "models/config_adapter.h"')
+    lines.append("#include <plugins/devices/device_variants.h>")
     lines.append(f'#include "{header_basename}"')
     lines.append("")
 
@@ -502,6 +526,7 @@ def process_cpp_header(input_text: str, file_path: str) -> str:
         lines.append("// no matching config structs found in this header")
 
     return "\n".join(lines)
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

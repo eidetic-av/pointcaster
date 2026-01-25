@@ -1,26 +1,26 @@
 #include "workspace_model.h"
 
+#include "app_settings/app_settings.h"
+#include "commands/device_config_commands.h"
+#include "device_plugin_controller.h"
 #include <QMetaType>
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QUndoCommand>
 #include <QVariant>
 #include <concepts>
+#include <core/logger/logger.h>
+#include <core/uuid/uuid.h>
 #include <functional>
+#include <plugins/devices/device_variants.h>
+#include <plugins/devices/orbbec/orbbec_device_config.gen.h>
+#include <plugins/devices/orbbec/orbbec_device_config.h>
 #include <print>
 #include <string>
 #include <thread>
 #include <variant>
-
 #include <workspace.h>
-
-#include <plugins/devices/device_variants.h>
-#include <plugins/devices/orbbec/orbbec_device_config.gen.h>
-#include <plugins/devices/orbbec/orbbec_device_config.h>
-
-#include "app_settings/app_settings.h"
-#include "device_plugin_controller.h"
-#include <core/uuid/uuid.h>
 
 namespace pc::ui {
 
@@ -220,6 +220,27 @@ void WorkspaceModel::rebuildAdapters() {
   emit addDeviceMenuEntriesChanged();
 }
 
+void WorkspaceModel::refreshDeviceAdapterFromCore(int deviceIndex) {
+  if (deviceIndex < 0) return;
+
+  pc::devices::DeviceConfigurationVariant variant;
+  {
+    std::scoped_lock lock(_workspace.config_access);
+    const std::size_t i = static_cast<std::size_t>(deviceIndex);
+    if (i >= _workspace.config.devices.size()) return;
+    variant = _workspace.config.devices[i];
+  }
+
+  for (QObject *obj : _deviceConfigAdapters) {
+    auto *adapter = qobject_cast<ConfigAdapter *>(obj);
+    if (!adapter) continue;
+    if (adapter->deviceIndex() != deviceIndex) continue;
+
+    adapter->setConfigFromCore(variant);
+    return;
+  }
+}
+
 void WorkspaceModel::triggerDeviceDiscovery() {
   for (const auto &plugin_name : _workspace.loaded_device_plugin_names) {
     auto it = _workspace.discovery_plugins.find(plugin_name);
@@ -242,30 +263,53 @@ void WorkspaceModel::onAdapterFieldEditRequested(ConfigAdapter *adapter,
                                                  const QVariant &value) {
   if (!adapter) return;
 
-  const int deviceIndex = adapter->deviceIndex();
-  if (deviceIndex < 0) return;
+  const int device_index = adapter->deviceIndex();
+  if (device_index < 0) return;
 
-  std::scoped_lock lock(_workspace.config_access);
-  if (size_t(deviceIndex) >= _workspace.config.devices.size()) return;
+  pc::devices::DeviceConfigurationVariant before;
+  pc::devices::DeviceConfigurationVariant after;
+  QString command_text;
 
-  const QVariant oldValue = adapter->fieldValue(fieldIndex);
+  {
+    std::scoped_lock lock(_workspace.config_access);
+    if (std::size_t(device_index) >= _workspace.config.devices.size()) return;
 
-  const bool changed = adapter->applyFieldValue(fieldIndex, value);
-  if (!changed) return;
+    auto *plugin = adapter->plugin();
+    if (!plugin) return;
 
-  const QVariant newValue = adapter->fieldValue(fieldIndex);
+    const QVariant old_value = adapter->fieldValue(fieldIndex);
 
-  std::println("[UI->Config] deviceIndex={} field={} old='{}' new='{}'",
-               deviceIndex, adapter->fieldName(fieldIndex).toStdString(),
-               oldValue.toString().toStdString(),
-               newValue.toString().toStdString());
+    before = _workspace.config.devices[std::size_t(device_index)];
 
-  adapter->notifyFieldChanged(fieldIndex);
+    const bool changed = adapter->applyFieldValue(fieldIndex, value);
+    if (!changed) return;
 
-  if (auto *p = adapter->plugin()) {
-    _workspace.config.devices[size_t(deviceIndex)] = p->config();
-    p->on_config_field_changed(deviceIndex, fieldIndex);
+    const QVariant new_value = adapter->fieldValue(fieldIndex);
+
+    pc::logger->trace(
+        "[UI changed DeviceConfig] deviceIndex={} field={} old='{}' new='{}'",
+        device_index, adapter->fieldName(fieldIndex).toStdString(),
+        old_value.toString().toStdString(), new_value.toString().toStdString());
+
+    adapter->notifyFieldChanged(fieldIndex);
+
+    after = plugin->config();
+
+    // revert plugin cache so command redo() is the mutator, and thats what
+    // undoStack->push does
+    plugin->update_config(before);
+
+    command_text =
+        QStringLiteral("Edit %1").arg(adapter->fieldName(fieldIndex));
   }
+
+  _undoStack->push(new SetDeviceConfigCommand(
+      _workspace, device_index, fieldIndex, std::move(before), std::move(after),
+      std::move(command_text), [this](int idx) {
+        QMetaObject::invokeMethod(
+            this, [this, idx] { refreshDeviceAdapterFromCore(idx); },
+            Qt::QueuedConnection);
+      }));
 }
 
 } // namespace pc::ui
