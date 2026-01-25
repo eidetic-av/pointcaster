@@ -21,7 +21,7 @@ MenuBar {
 
     Menu {
         title: qsTr("&File")
-        popupType: Popup.Item
+        popupType: Popup.Native
 
         delegate: MenuItem {
             font: Scaling.uiFont
@@ -71,7 +71,7 @@ MenuBar {
 
     Menu {
         title: qsTr("&Edit")
-        popupType: Popup.Item
+        popupType: Popup.Native
 
         delegate: MenuItem {
             id: item
@@ -108,7 +108,7 @@ MenuBar {
 
     Menu {
         title: qsTr("&Window")
-        popupType: Popup.Item
+        popupType: Popup.Native
 
         delegate: MenuItem {
             font: Scaling.uiFont
@@ -119,21 +119,40 @@ MenuBar {
             id: devicesMenuToggle
             text: qsTr("&Devices")
             checkable: true
-            checked: devicesWindow !== null && devicesWindow.isOpen
-            onToggled: {
+            checked: false
+
+            onTriggered: {
                 if (!devicesWindow)
                     return;
-                if (checked)
-                    devicesWindow.open();
+
+                if (devicesWindow.isOpen)
+                    devicesWindow.forceClose();
                 else
-                    devicesWindow.forceClose(); // or close()
+                    devicesWindow.open();
             }
+        }
+
+        Connections {
+            target: devicesWindow
+            function onIsOpenChanged() {
+                devicesMenuToggle.checked = devicesWindow.isOpen;
+            }
+        }
+
+        onAboutToShow: {
+            if (devicesWindow)
+                devicesMenuToggle.checked = devicesWindow.isOpen;
+        }
+
+        Component.onCompleted: {
+            if (devicesWindow)
+                devicesMenuToggle.checked = devicesWindow.isOpen;
         }
     }
 
     Menu {
         title: qsTr("&Help")
-        popupType: Popup.Item
+        popupType: Popup.Native
 
         delegate: MenuItem {
             font: Scaling.uiFont

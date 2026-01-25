@@ -46,7 +46,7 @@ ApplicationWindow {
         onAccepted: {
             const hasSavePath = workspaceModel && workspaceModel.saveFileUrl.toString() !== "";
             workspaceModel.saveFileUrl = selectedFile;
-            // if there was no existing save path, we allow the 'save as' dialog to set the 
+            // if there was no existing save path, we allow the 'save as' dialog to set the
             // current save path because it hasnt been set yet
             workspaceModel.save(!hasSavePath);
         }
@@ -131,30 +131,31 @@ ApplicationWindow {
 
     Popup {
         id: aboutPopup
-        // popupType: Popup.Window
+        popupType: Popup.Native
         modal: true
         dim: true
         focus: true
-        width: 360
-        height: 200
+        implicitWidth: 520 * Scaling.uiScale
+        implicitHeight: 360 * Scaling.uiScale
 
         x: (parent.width - width) / 2
         y: (parent.height - height) / 2
 
         background: Rectangle {
-            color: "#181825"
-            radius: 8
-            border.color: "#89b4fa"
+            color: DarkPalette.alternateBase
+            border.color: DarkPalette.middark
+            radius: 3
         }
 
         Column {
             anchors.centerIn: parent
-            spacing: 12
+            spacing: 12 * Scaling.uiScale
 
             Label {
                 text: "Pointcaster\n\nAbout dialog placeholder"
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
+                color: DarkPalette.text
             }
 
             Button {

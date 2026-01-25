@@ -310,7 +310,7 @@ KDDW.TabBarBase {
 
         // only show the 'add session' button for the central group of session views
         Loader {
-            active: root.groupCpp.isCentralGroup
+            active: root.groupCpp !== null ? root.groupCpp.isCentralGroup : false
 
             // when visible its wrapped in a FocusScope to be tabbable for navigation
             sourceComponent: FocusScope {
