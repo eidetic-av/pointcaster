@@ -13,7 +13,7 @@ Item {
 
     signal activated(int index)
 
-    height: 160
+    height: Math.round(160 * Scaling.uiScale)
     anchors.left: parent.left
     anchors.right: parent.right
 
@@ -62,26 +62,25 @@ Item {
             delegate: Rectangle {
                 id: row
                 width: list.width
-                height: 30
+                height: Math.max(Math.round(30 * Scaling.uiScale), Math.ceil(Scaling.pointSize * 2.1))
 
                 property bool hovered: mouse.containsMouse
                 property bool selected: ListView.isCurrentItem
 
                 color: hovered ? DarkPalette.midlight : selected ? DarkPalette.mid : DarkPalette.almostdark
-
                 border.width: 0
 
                 Row {
                     anchors.fill: parent
-                    anchors.leftMargin: 8
-                    anchors.rightMargin: 8
-                    spacing: 8
+                    anchors.leftMargin: Math.round(8 * Scaling.uiScale)
+                    anchors.rightMargin: Math.round(8 * Scaling.uiScale)
+                    spacing: Math.round(8 * Scaling.uiScale)
 
                     Rectangle {
                         id: statusCircle
-                        width: 10
-                        height: 10
-                        radius: 5
+                        width: Math.round(10 * Scaling.uiScale)
+                        height: Math.round(10 * Scaling.uiScale)
+                        radius: Math.round(5 * Scaling.uiScale)
                         anchors.verticalCenter: parent.verticalCenter
                         color: {
                             if (!modelData || modelData.status === undefined)
@@ -101,10 +100,11 @@ Item {
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        width: Math.max(75, parent.width - statusCircle.width - deviceTypeText.width - (parent.spacing * 2))
+                        width: Math.max(Math.round(75 * Scaling.uiScale), parent.width - statusCircle.width - deviceTypeText.width - (parent.spacing * 2))
                         elide: Text.ElideRight
                         text: modelData.fieldValue(0)
                         color: DarkPalette.text
+                        font: Scaling.uiFont
                     }
 
                     Text {
@@ -114,6 +114,7 @@ Item {
                         text: modelData.displayName()
                         color: DarkPalette.text
                         opacity: .5
+                        font: Scaling.uiFont
                     }
                 }
 
@@ -137,7 +138,7 @@ Item {
             anchors.margins: 1
             radius: frame.radius
             color: "transparent"
-            border.width: list.activeFocus ? 1 : 0
+            border.width: list.activeFocus ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
             border.color: DarkPalette.highlight
             visible: border.width > 0
         }

@@ -20,7 +20,6 @@ AbstractButton {
 
     property string tooltip
 
-    // single source of truth for outer padding
     padding: 0
     leftPadding: 8
     rightPadding: 8
@@ -58,7 +57,6 @@ AbstractButton {
         }
     }
 
-    // Let AbstractButton size itself from contentItem + paddings.
     contentItem: Item {
         implicitWidth: row.implicitWidth
         implicitHeight: row.implicitHeight
@@ -94,6 +92,6 @@ AbstractButton {
         visible: tooltip ? parent.hovered : false
         text: tooltip
         delay: 400
+        font: root.font
     }
-
 }

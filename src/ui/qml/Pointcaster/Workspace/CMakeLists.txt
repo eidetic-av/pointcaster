@@ -6,6 +6,7 @@ set(qml_singletons
     WorkspaceState.qml
     Theme/DarkPalette.qml
     Theme/FontAwesome.qml
+    Theme/Scaling.qml
     Utils/StringUtils.qml
 )
 foreach(qml_singleton_file IN LISTS qml_singletons)
@@ -24,7 +25,6 @@ qt_add_qml_module(PointcasterWorkspace
         Controls/EnumSelector.qml
         Controls/IconButton.qml
         Editors/ConfigurationEditor.qml
-        Windows/TitleBar.qml
         Windows/TabBar.qml
         Windows/TabBarBase.qml
         Windows/Separator.qml
@@ -35,7 +35,6 @@ qt_add_qml_module(PointcasterWorkspace
         Windows/MainWindow.qml
         Windows/Settings/SettingsWindow.qml
         Windows/Settings/GeneralSettingsPage.qml
-        Windows/Settings/UserInterfaceSettingsPage.qml
         Windows/Settings/NetworkSettingsPage.qml
         Windows/Devices/DeviceSelectionList.qml
         Windows/Devices/DevicesToolBar.qml

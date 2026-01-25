@@ -5,17 +5,15 @@ import Pointcaster 1.0
 
 Item {
     id: root
-    property var model: null
 
+    property var model: null
     property string emptyTitle: "Properties"
 
+    // ---- Layout
     property int labelColumnWidth: WorkspaceState.labelColumnWidth
-
     property int minLabelColumnWidth: 40
     property int minValueColumnWidth: 170
-
     property bool expanded: true
-
     property int outerHorizontalMargin: 8
     property int outerTopMargin: 4
 
@@ -85,8 +83,7 @@ Item {
                 }
                 text: root.model ? (root.model.displayName() + " Properties") : root.emptyTitle
                 elide: Text.ElideRight
-                font.weight: Font.Medium
-                font.pixelSize: 13
+                font: Scaling.uiFont
                 color: DarkPalette.text
             }
 
@@ -121,7 +118,7 @@ Item {
                 }
                 visible: !root.model
                 text: "No device selected"
-                font.weight: Font.Medium
+                font: Scaling.uiFont
                 color: DarkPalette.text
             }
 
@@ -145,13 +142,11 @@ Item {
                     var preferred = root.labelColumnWidth;
 
                     var maxLabel = Math.floor(availableInnerWidth - root.minValueColumnWidth);
-
                     if (!Number.isFinite(maxLabel))
                         maxLabel = 0;
 
                     var w = Math.max(root.minLabelColumnWidth, preferred);
                     w = Math.min(w, maxLabel);
-
                     return Math.max(0, w);
                 }
 
@@ -194,7 +189,7 @@ Item {
                                     horizontalAlignment: Text.AlignLeft
                                     color: DarkPalette.text
                                     text: root.model ? StringUtils.titleFromSnake(root.model.fieldName(index)) : ""
-                                    font.pixelSize: 13
+                                    font: Scaling.uiFont
                                     elide: Text.ElideRight
                                 }
 
@@ -231,7 +226,7 @@ Item {
                                         return intEditor;
                                     if (typeName === "float" || typeName === "float32" || typeName === "float32_t" || typeName === "double" || typeName === "real" || typeName === "number")
                                         return floatEditor;
-                                    if (typeName == "pc::float3")
+                                    if (typeName === "pc::float3")
                                         return float3Editor;
                                     return stringEditor;
                                 }
@@ -241,13 +236,15 @@ Item {
                                 id: stringEditor
                                 TextField {
                                     id: valueField
+                                    font: Scaling.uiFont
+
                                     background: Rectangle {
                                         color: "transparent"
                                         border.color: valueField.focus ? DarkPalette.highlight : "transparent"
                                         border.width: 1
                                         radius: 0
                                     }
-                                    font.pixelSize: 13
+
                                     text: root.model ? String(root.model.fieldValue(index)) : ""
                                     enabled: root.model ? !root.model.isDisabled(index) : false
                                     opacity: enabled ? 1.0 : 0.66
@@ -273,6 +270,7 @@ Item {
                                 id: intEditor
                                 DragInt {
                                     id: intEditorControl
+                                    font: Scaling.uiFont
 
                                     minValue: root.model ? root.model.minMax(index)[0] : undefined
                                     maxValue: root.model ? root.model.minMax(index)[1] : undefined
@@ -307,6 +305,7 @@ Item {
                                 id: floatEditor
                                 DragFloat {
                                     id: floatEditorControl
+                                    font: Scaling.uiFont
 
                                     minValue: root.model ? root.model.minMax(index)[0] : undefined
                                     maxValue: root.model ? root.model.minMax(index)[1] : undefined
@@ -342,6 +341,13 @@ Item {
                                 DragFloat3 {
                                     id: float3
 
+                                    font: Scaling.uiFont
+                                    axisFont: Scaling.uiSmallFont
+
+                                    minValue: root.model ? root.model.minMax(index)[0] : undefined
+                                    maxValue: root.model ? root.model.minMax(index)[1] : undefined
+                                    defaultValue: root.model ? root.model.defaultValue(index) : undefined
+
                                     boundValue: {
                                         if (!root.model)
                                             return Qt.vector3d(0, 0, 0);
@@ -360,7 +366,6 @@ Item {
                                         function onFieldChanged(changedIndex) {
                                             if (changedIndex !== index)
                                                 return;
-
                                             const v = root.model.fieldValue(index);
                                             float3.boundValue = Qt.vector3d(Number(v.x) || 0, Number(v.y) || 0, Number(v.z) || 0);
                                         }
@@ -372,6 +377,7 @@ Item {
                                 id: enumEditor
                                 EnumSelector {
                                     id: enumSelector
+                                    font: Scaling.uiFont
 
                                     enabled: root.model ? !root.model.isDisabled(index) : false
                                     opacity: enabled ? 1.0 : 0.66

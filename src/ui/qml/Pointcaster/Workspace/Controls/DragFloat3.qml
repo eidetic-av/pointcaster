@@ -2,15 +2,19 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Shapes
 
+import Pointcaster 1.0
 import Pointcaster.Workspace 1.0
 
 Row {
     id: root
     spacing: 0
 
-    Layout.minimumWidth: 260
+    Layout.minimumWidth: Math.round(260 * Scaling.uiScale)
 
-    property real componentSpacing: 6
+    property font font: Scaling.uiFont
+    property font axisFont: Scaling.uiSmallFont
+
+    property real componentSpacing: Math.round(6 * Scaling.uiScale)
 
     property var minValue: undefined
     property var maxValue: undefined
@@ -18,9 +22,9 @@ Row {
 
     property var boundValue: Qt.vector3d(0, 0, 0)
 
-    property int labelWidth: 16
-    property int labelHeight: 16
-    property int labelLeftRadius: 3
+    property int labelWidth: Math.round(16 * Scaling.uiScale)
+    property int labelHeight: Math.round(16 * Scaling.uiScale)
+    property int labelLeftRadius: Math.round(3 * Scaling.uiScale)
     property color labelBackgroundColor: DarkPalette.almostdark
 
     signal commitValue(var v3)
@@ -42,7 +46,7 @@ Row {
 
     Item {
         id: leftPadding
-        width: 3
+        width: Math.round(3 * Scaling.uiScale)
         height: 1
     }
 
@@ -115,7 +119,6 @@ Row {
                                 radiusX: root.labelLeftRadius
                                 radiusY: root.labelLeftRadius
                             }
-
                             PathLine {
                                 x: axisLabel.width
                                 y: 0
@@ -128,14 +131,12 @@ Row {
                                 x: root.labelLeftRadius
                                 y: axisLabel.height
                             }
-
                             PathArc {
                                 x: 0
                                 y: axisLabel.height - root.labelLeftRadius
                                 radiusX: root.labelLeftRadius
                                 radiusY: root.labelLeftRadius
                             }
-
                             PathLine {
                                 x: 0
                                 y: root.labelLeftRadius
@@ -146,8 +147,7 @@ Row {
                     Text {
                         anchors.centerIn: parent
                         text: modelData.label
-                        font.pixelSize: 11
-                        font.weight: Font.Bold
+                        font: root.axisFont
                         color: modelData.color
                     }
                 }
@@ -155,6 +155,7 @@ Row {
                 DragFloat {
                     id: dragFloat
                     width: parent.width - axisLabel.width
+                    font: root.font
 
                     minValue: root.minValue
                     maxValue: root.maxValue

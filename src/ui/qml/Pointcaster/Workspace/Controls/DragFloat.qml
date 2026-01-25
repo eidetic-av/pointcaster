@@ -51,7 +51,6 @@ DoubleSpinBox {
 
     readonly property real uiFrom: hasMin ? Number(minValue) : defaultFromValue
     readonly property real uiTo: hasMax ? Number(maxValue) : defaultToValue
-
     readonly property real effectiveDefault: hasDefault ? Number(defaultValue) : defaultResetValue
 
     // what the spinbox itself clamps to...
@@ -147,14 +146,15 @@ DoubleSpinBox {
 
         onActiveFocusChanged: {
             if (activeFocus && !dragBehaviour.dragModeActive)
-                Qt.callLater(function () {
-                    spinTextInput.selectAll();
-                });
+                Qt.callLater(function () { spinTextInput.selectAll(); });
         }
 
         DragInput {
             id: dragBehaviour
             anchors.fill: parent
+
+            // forward font to DragInput so its edit menu matches
+            font: root.font
 
             targetTextInput: spinTextInput
             focusTarget: root
@@ -168,30 +168,22 @@ DoubleSpinBox {
 
             quantiseDeltaToInteger: false
 
-            numericValue: function () {
-                return root.value;
-            }
+            numericValue: function () { return root.value; }
             setNumericValue: function (v) {
                 var clamped = root.clampToRange(v);
                 if (clamped !== root.value)
                     root.value = clamped;
             }
 
-            stepSize: function () {
-                return root.dragStepSize;
-            }
+            stepSize: function () { return root.dragStepSize; }
 
             modifierMultiplier: function (mods) {
-                if (mods & Qt.ShiftModifier)
-                    return 10.0;
-                if (mods & Qt.ControlModifier)
-                    return 0.1;
+                if (mods & Qt.ShiftModifier)   return 10.0;
+                if (mods & Qt.ControlModifier) return 0.1;
                 return 1.0;
             }
 
-            resetToDefault: function () {
-                root.resetToDefault();
-            }
+            resetToDefault: function () { root.resetToDefault(); }
 
             onEdited: {
                 root.boundValue = root.value;

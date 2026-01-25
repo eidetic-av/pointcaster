@@ -131,6 +131,9 @@ SpinBox {
             id: dragBehaviour
             anchors.fill: parent
 
+            // forward font to DragInput so its edit menu matches
+            font: root.font
+
             targetTextInput: spinTextInput
             focusTarget: root
 

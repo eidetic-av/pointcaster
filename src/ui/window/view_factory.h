@@ -8,7 +8,6 @@ namespace pc::ui {
 class CustomViewFactory : public KDDockWidgets::QtQuick::ViewFactory {
 public:
   ~CustomViewFactory() override;
-  QUrl titleBarFilename() const override;
   QUrl tabbarFilename() const override;
   QUrl separatorFilename() const override;
   QUrl floatingWindowFilename() const override;

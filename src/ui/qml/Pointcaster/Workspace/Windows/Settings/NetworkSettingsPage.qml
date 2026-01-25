@@ -8,8 +8,8 @@ import Pointcaster.Workspace 1.0
 Item {
     id: root
 
-    implicitWidth: 520
-    implicitHeight: 360
+    implicitWidth: 520 * Scaling.uiScale
+    implicitHeight: 360 * Scaling.uiScale
 
     ScrollView {
         id: scroll
@@ -25,22 +25,22 @@ Item {
         Pane {
             // Use contentWidth (locked) rather than availableWidth (can differ in some styles)
             width: scroll.contentWidth
-            padding: 16
+            padding: 16 * Scaling.uiScale
 
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
-                spacing: 14
+                spacing: 14 * Scaling.uiScale
 
                 // Page header
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                    spacing: 4
+                    spacing: 4 * Scaling.uiScale
 
                     Label {
                         text: "Network"
-                        font.pixelSize: 18
+                        font: Scaling.uiHeaderFont
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
                         elide: Text.ElideNone
@@ -48,6 +48,7 @@ Item {
 
                     Label {
                         text: "Network-related preferences"
+                        font: Scaling.uiFont
                         opacity: 0.7
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
@@ -60,14 +61,16 @@ Item {
                     title: "Prometheus"
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
+                    font: Scaling.uiFont
 
                     ColumnLayout {
-                        spacing: 10
+                        spacing: 10 * Scaling.uiScale
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
 
                         Label {
                             text: "Prometheus can be used to gather long-term scene and system data from running installations."
+                            font: Scaling.uiFont
                             opacity: 0.7
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
@@ -77,6 +80,7 @@ Item {
                         CheckBox {
                             id: enablePrometheusCheckbox
                             text: "Enable metrics endpoint"
+                            font: Scaling.uiFont
                             checked: !!AppSettings.enablePrometheusMetrics
                             onToggled: AppSettings.enablePrometheusMetrics = checked
 
@@ -87,25 +91,27 @@ Item {
                         ColumnLayout {
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0
-                            spacing: 8
+                            spacing: 8 * Scaling.uiScale
                             enabled: enablePrometheusCheckbox.checked
                             opacity: enabled ? 1.0 : 0.55
 
                             RowLayout {
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 0
-                                spacing: 10
+                                spacing: 10 * Scaling.uiScale
 
                                 Label {
                                     text: "Address"
+                                    font: Scaling.uiFont
                                     opacity: 0.9
-                                    Layout.preferredWidth: 120
+                                    Layout.preferredWidth: 120 * Scaling.uiScale
                                     Layout.minimumWidth: 0
                                     elide: Text.ElideRight
                                 }
 
                                 TextField {
                                     id: addressField
+                                    font: Scaling.uiFont
 
                                     Component.onCompleted: {
                                         text = String(AppSettings.prometheusAddress ?? "127.0.0.1:8080");

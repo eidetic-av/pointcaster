@@ -17,7 +17,7 @@ KDDW.DockWidget {
     Item {
         id: devices
         anchors.fill: parent
-        property var kddockwidgets_min_size: Qt.size(225, 500)
+        property var kddockwidgets_min_size: Qt.size(Math.round(225 * Scaling.uiScale), Math.round(500 * Scaling.uiScale))
         clip: true
 
         // Shared state for the properties pane
@@ -48,8 +48,8 @@ KDDW.DockWidget {
         }
 
         DevicesToolBar {
-            workspace: root.workspace
             id: devicesToolBar
+            workspace: root.workspace
         }
 
         DeviceSelectionList {
@@ -58,11 +58,11 @@ KDDW.DockWidget {
             anchors.top: devicesToolBar.bottom
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.topMargin: 10
-            anchors.bottomMargin: 10
-            anchors.leftMargin: 8
-            anchors.rightMargin: 8
-            height: 160
+            anchors.topMargin: Math.round(10 * Scaling.uiScale)
+            anchors.bottomMargin: Math.round(10 * Scaling.uiScale)
+            anchors.leftMargin: Math.round(8 * Scaling.uiScale)
+            anchors.rightMargin: Math.round(8 * Scaling.uiScale)
+            height: Math.round(160 * Scaling.uiScale)
         }
 
         Row {
@@ -71,15 +71,17 @@ KDDW.DockWidget {
                 top: deviceSelectionList.bottom
                 left: parent.left
                 right: parent.right
-                topMargin: 10
-                leftMargin: 8
-                rightMargin: 8
+                topMargin: Math.round(10 * Scaling.uiScale)
+                leftMargin: Math.round(8 * Scaling.uiScale)
+                rightMargin: Math.round(8 * Scaling.uiScale)
             }
-            spacing: 8
+            spacing: Math.round(8 * Scaling.uiScale)
             enabled: devices.currentController !== null
 
             IconButton {
                 id: startStopButton
+
+                font: Scaling.uiFont
 
                 tooltip: "Start/stop selected device"
                 text: {
@@ -108,6 +110,9 @@ KDDW.DockWidget {
 
             IconButton {
                 id: restartButton
+
+                font: Scaling.uiFont
+
                 tooltip: "Restart selected device"
                 text: "Restart"
                 iconSource: FontAwesome.icon("solid/rotate-right")
@@ -130,9 +135,9 @@ KDDW.DockWidget {
             id: deviceConfigScrollView
             anchors {
                 top: controlRow.bottom
-                topMargin: 6
+                topMargin: Math.round(6 * Scaling.uiScale)
                 bottom: parent.bottom
-                bottomMargin: 3
+                bottomMargin: Math.round(3 * Scaling.uiScale)
                 left: parent.left
                 right: parent.right
             }
@@ -141,7 +146,7 @@ KDDW.DockWidget {
             }
 
             Column {
-                spacing: 6
+                spacing: Math.round(6 * Scaling.uiScale)
                 width: deviceConfigScrollView.contentItem.width
                 height: parent.height
 

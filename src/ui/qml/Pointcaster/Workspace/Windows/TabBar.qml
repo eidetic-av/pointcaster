@@ -2,12 +2,14 @@ import QtQuick 2.6
 import QtQuick.Controls 2.6
 import "qrc:/kddockwidgets/qtquick/views/qml/" as KDDW
 
+import Pointcaster 1.0
+
 KDDW.TabBarBase {
     id: root
 
-    readonly property int tabBarTextPixelSize: 13
-    readonly property int tabBarVerticalPadding: 7
-    readonly property int tabBarHorizontalPadding: 10
+    readonly property real tabBarTextPixelSize: Math.round(14 * Scaling.uiScale)
+    readonly property real tabBarVerticalPadding: Math.round(7 * Scaling.uiScale)
+    readonly property real tabBarHorizontalPadding: Math.round(10 * Scaling.uiScale)
     height: tabBarTextPixelSize + tabBarVerticalPadding * 2
     implicitHeight: height
 
@@ -34,6 +36,7 @@ KDDW.TabBarBase {
 
     Menu {
         id: tabContextMenu
+        font: Scaling.uiFont
 
         Action {
             text: qsTr("Rename")
@@ -178,8 +181,8 @@ KDDW.TabBarBase {
 
                 // ---- content-sized width knobs ----
                 readonly property int tabHorizontalPadding: root.tabBarHorizontalPadding
-                readonly property int tabMinWidth: 56
-                readonly property int tabMaxWidth: 220
+                readonly property int tabMinWidth: Math.round(56 * Scaling.uiScale)
+                readonly property int tabMaxWidth: Math.round(220 * Scaling.uiScale)
 
                 implicitWidth: Math.max(tabMinWidth, Math.min(tabMaxWidth, titleText.implicitWidth + tabHorizontalPadding * 2))
                 width: implicitWidth
@@ -242,7 +245,7 @@ KDDW.TabBarBase {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
-                    height: tab.isCurrent ? 1 : 0
+                    height: tab.isCurrent ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
                     color: DarkPalette.highlight
                     z: 10
                 }
@@ -261,7 +264,7 @@ KDDW.TabBarBase {
                         horizontalAlignment: Text.AlignHCenter
 
                         text: title
-                        font.pixelSize: root.tabBarTextPixelSize
+                        font: Scaling.uiFont
                         color: DarkPalette.text
                         opacity: tab.isHovered ? 1 : tab.isCurrent ? 1 : 0.5
                         elide: Text.ElideRight
@@ -272,7 +275,7 @@ KDDW.TabBarBase {
                 Rectangle {
                     anchors.fill: parent
                     color: "transparent"
-                    border.width: tab.activeFocus ? 1 : 0
+                    border.width: tab.activeFocus ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
                     border.color: DarkPalette.highlight
                     z: 30
                 }
@@ -312,7 +315,7 @@ KDDW.TabBarBase {
             // when visible its wrapped in a FocusScope to be tabbable for navigation
             sourceComponent: FocusScope {
                 id: addButtonFocusScope
-                width: 34
+                width: Math.round(34 * Scaling.uiScale)
                 height: tabBarRow.height
 
                 readonly property bool isHovered: addButtonMouseArea.containsMouse
@@ -330,7 +333,7 @@ KDDW.TabBarBase {
                 Rectangle {
                     anchors.fill: parent
                     color: "transparent"
-                    border.width: addButtonFocusScope.activeFocus ? 1 : 0
+                    border.width: addButtonFocusScope.activeFocus ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
                     border.color: DarkPalette.highlight
                 }
 
@@ -338,13 +341,14 @@ KDDW.TabBarBase {
                     visible: addButtonMouseArea.containsMouse
                     text: "Add new session"
                     delay: 400
+                    font: Scaling.uiFont
                 }
 
                 Image {
                     anchors.centerIn: parent
                     opacity: (addButtonMouseArea.containsMouse || addButtonFocusScope.activeFocus) ? 1 : 0.5
-                    width: 14
-                    height: 14
+                    width: Math.round(14 * Scaling.uiScale)
+                    height: Math.round(14 * Scaling.uiScale)
                     fillMode: Image.PreserveAspectFit
                     source: FontAwesome.icon('solid/plus')
                 }

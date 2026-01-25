@@ -11,6 +11,8 @@ Item {
     property bool enabled: true
     property bool editable: true
 
+    property font font: Qt.font({ pointSize: 12 })
+
     // drag tuning
     property real dragThresholdPx: 6.0
     property real pixelsPerStep: 6.0
@@ -80,6 +82,7 @@ Item {
 
     Menu {
         id: editMenu
+        font: root.font
 
         Action {
             text: qsTr("Cut")

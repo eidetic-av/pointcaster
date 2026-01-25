@@ -1,3 +1,4 @@
+// EnumSelector.qml
 import QtQuick
 import QtQuick.Controls
 
@@ -7,7 +8,6 @@ ComboBox {
     id: root
 
     required property var options
-    // backing enum int
     property int boundValue: 0
 
     flat: true
@@ -34,9 +34,10 @@ ComboBox {
         opacity: root.enabled ? 1.0 : 0.66
     }
 
+    popup.font: root.font
+
     signal commitValue(int value)
 
-    // prevents some feedback loops with config -> ui -> config -> ui when a value is set
     property bool _syncGuard: false
 
     model: options || []

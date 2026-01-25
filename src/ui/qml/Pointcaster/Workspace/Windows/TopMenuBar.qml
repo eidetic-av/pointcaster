@@ -1,23 +1,41 @@
 import QtQuick
 import QtQuick.Controls
 
+import Pointcaster 1.0
+
 MenuBar {
     id: root
 
+    height: Math.ceil(Scaling.pointSize * 2 * Scaling.uiScale)
+    implicitHeight: height
+
+    background: Rectangle {
+        color: DarkPalette.base
+    }
+
+    delegate: MenuBarItem {
+        font: Scaling.uiFont
+        height: root.height
+        padding: Math.round(6 * Scaling.uiScale)
+    }
+
     Menu {
         title: qsTr("&File")
-        popupType: Popup.Window
+        popupType: Popup.Item
+
+        delegate: MenuItem {
+            font: Scaling.uiFont
+            padding: Math.round(6 * Scaling.uiScale)
+        }
 
         Action {
             text: qsTr("&New Workspace")
             shortcut: StandardKey.New
-            // onTriggered: workspaceModel.newWorkspace()
         }
 
         Action {
             text: qsTr("New &Session")
             shortcut: StandardKey.AddTab
-            // onTriggered: workspaceModel.newWorkspace()
         }
 
         MenuSeparator {}
@@ -37,7 +55,7 @@ MenuBar {
         }
 
         Action {
-            text: qsTr("Save &As...")
+            text: qsTr("Save &As…")
             shortcut: StandardKey.SaveAs
             onTriggered: saveAsWorkspaceDialog.open()
         }
@@ -53,13 +71,13 @@ MenuBar {
 
     Menu {
         title: qsTr("&Edit")
-        popupType: Popup.Window
+        popupType: Popup.Item
 
         delegate: MenuItem {
             id: item
-            text: (model && model.text) ? model.text : ""
-            enabled: (model && model.enabled) !== undefined ? model.enabled : true
-            opacity: item.enabled ? 1.0 : 0.4
+            font: Scaling.uiFont
+            padding: Math.round(6 * Scaling.uiScale)
+            opacity: enabled ? 1.0 : 0.4
         }
 
         Action {
@@ -77,23 +95,6 @@ MenuBar {
             enabled: workspaceModel && workspaceModel.undoStack && workspaceModel.undoStack.canRedo
             onTriggered: workspaceModel.undoStack.redo()
         }
-    }
-
-    Menu {
-        title: qsTr("&Window")
-        popupType: Popup.Native
-
-        Action {
-            id: devicesMenuToggle
-            text: qsTr("&Devices")
-            checkable: true
-            onTriggered: {
-                if (devicesWindow.isOpen)
-                    devicesWindow.forceClose();
-                else
-                    devicesWindow.open();
-            }
-        }
 
         MenuSeparator {}
 
@@ -106,8 +107,38 @@ MenuBar {
     }
 
     Menu {
+        title: qsTr("&Window")
+        popupType: Popup.Item
+
+        delegate: MenuItem {
+            font: Scaling.uiFont
+            padding: Math.round(6 * Scaling.uiScale)
+        }
+
+        Action {
+            id: devicesMenuToggle
+            text: qsTr("&Devices")
+            checkable: true
+            checked: devicesWindow !== null && devicesWindow.isOpen
+            onToggled: {
+                if (!devicesWindow)
+                    return;
+                if (checked)
+                    devicesWindow.open();
+                else
+                    devicesWindow.forceClose(); // or close()
+            }
+        }
+    }
+
+    Menu {
         title: qsTr("&Help")
-        popupType: Popup.Native
+        popupType: Popup.Item
+
+        delegate: MenuItem {
+            font: Scaling.uiFont
+            padding: Math.round(6 * Scaling.uiScale)
+        }
 
         Action {
             text: qsTr("&About")

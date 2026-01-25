@@ -14,8 +14,8 @@ Dialog {
     dim: true
     visible: false
 
-    implicitWidth: 720
-    implicitHeight: 480
+    implicitWidth: 720 * Scaling.uiScale
+    implicitHeight: 480 * Scaling.uiScale
 
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     standardButtons: Dialog.Close
@@ -25,7 +25,7 @@ Dialog {
 
         ListView {
             id: sidebar
-            Layout.preferredWidth: 180
+            Layout.preferredWidth: 180 * Scaling.uiScale
             Layout.fillHeight: true
             clip: true
 
@@ -35,16 +35,16 @@ Dialog {
             delegate: ItemDelegate {
                 width: ListView.view.width
                 text: model.title
+                font: Scaling.uiFont
                 highlighted: ListView.isCurrentItem
+                padding: Math.round(8 * Scaling.uiScale)
 
-                onClicked: {
-                    root.setPageIndex(index);
-                }
+                onClicked: root.setPageIndex(index)
             }
         }
 
         Rectangle {
-            width: 1
+            width: Math.max(1, Math.round(1 * Scaling.uiScale))
             Layout.fillHeight: true
             color: Qt.darker(palette.window, 1.15)
         }
@@ -55,17 +55,17 @@ Dialog {
             Layout.fillHeight: true
             clip: true
 
-            // transitions between pages happen by default,
-            // just disable them for now
-            replaceEnter: Transition { }
-            replaceExit: Transition { }
+            replaceEnter: Transition {}
+            replaceExit: Transition {}
         }
     }
 
     function setPageIndex(newIndex) {
         if (newIndex < 0 || newIndex >= SettingsPageRegistry.count)
             return;
+
         sidebar.currentIndex = newIndex;
+
         const url = SettingsPageRegistry.pageUrlAt(newIndex);
         if (url && url.toString().length > 0)
             stack.replace(url);
@@ -84,12 +84,9 @@ Dialog {
     }
 
     Component.onCompleted: {
-        // core pages are added initially, other pages loaded via plugins are added using the same api
         SettingsPageRegistry.addPage("general", "General", "qrc:/qt/qml/Pointcaster/Workspace/Windows/Settings/GeneralSettingsPage.qml");
-        SettingsPageRegistry.addPage("user_interface", "User Interface", "qrc:/qt/qml/Pointcaster/Workspace/Windows/Settings/UserInterfaceSettingsPage.qml");
         SettingsPageRegistry.addPage("network", "Network", "qrc:/qt/qml/Pointcaster/Workspace/Windows/Settings/NetworkSettingsPage.qml");
 
-        // initialilly set the stack view to show the first page
         sidebar.currentIndex = 0;
         const initialUrl = SettingsPageRegistry.pageUrlAt(0);
         stack.replace(initialUrl);

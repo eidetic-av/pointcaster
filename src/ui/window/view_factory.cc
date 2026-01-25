@@ -10,11 +10,6 @@ QUrl CustomViewFactory::separatorFilename() const {
       QStringLiteral("qrc:/qt/qml/Pointcaster/Workspace/Windows/Separator.qml"));
 }
 
-QUrl CustomViewFactory::titleBarFilename() const {
-  return QUrl(
-      QStringLiteral("qrc:/qt/qml/Pointcaster/Workspace/Windows/TitleBar.qml"));
-}
-
 QUrl CustomViewFactory::tabbarFilename() const {
   return QUrl(
       QStringLiteral("qrc:/qt/qml/Pointcaster/Workspace/Windows/TabBar.qml"));
