@@ -473,6 +473,7 @@ bool OrbbecDevice::init_device_memory(std::size_t incoming_point_count) {
 
 void OrbbecDevice::free_device_memory() {}
 
+
 } // namespace pc::devices
 
 CORRADE_PLUGIN_REGISTER(OrbbecDevice, pc::devices::OrbbecDevice,

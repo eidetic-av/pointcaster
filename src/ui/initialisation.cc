@@ -49,19 +49,7 @@ QQmlApplicationEngine *initialise(QGuiApplication *app) {
 
 void load_main_window(Workspace *workspace, QGuiApplication *app,
                       QQmlApplicationEngine *engine) {
-
-  static ui::WorkspaceModel workspace_model{workspace, app,
-                                            [] { QCoreApplication::exit(); }};
-
-  // could do _workspace.load_config_from_file here
-  // if its set to load on startup
-
-  engine->rootContext()->setContextProperty("workspaceModel", &workspace_model);
-
-  QObject::connect(
-      engine, &QQmlApplicationEngine::objectCreationFailed, app,
-      []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
-
+  pc::logger->trace("Loading main window...");
   // ---- QML dev override: load a local file from disk if provided ----
   const QString dev_main_qml = qEnvironmentVariable("POINTCASTER_MAIN_QML");
   const QString dev_qml_import_root =
@@ -72,6 +60,7 @@ void load_main_window(Workspace *workspace, QGuiApplication *app,
   }
 
   if (!dev_main_qml.isEmpty()) {
+    pc::logger->trace("Loading QML from source...");
     // ensure imports work even if only POINTCASTER_MAIN_QML is set
     // by also adding the directory containing the file as an import path.
     const QFileInfo mainQmlInfo(dev_main_qml);
@@ -84,6 +73,7 @@ void load_main_window(Workspace *workspace, QGuiApplication *app,
       QCoreApplication::exit(-1);
     }
   } else {
+    pc::logger->trace("Loading compiled QML...");
     // normal packaged/built module path
     engine->loadFromModule("Pointcaster.Workspace", "MainWindow");
   }

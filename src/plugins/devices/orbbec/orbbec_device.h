@@ -8,9 +8,9 @@
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
-
 #include <atomic>
 #include <chrono>
+#include <core/logger/logger.h>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/hpp/Context.hpp>
 #include <memory>
@@ -53,6 +53,11 @@ public:
   void start() override;
   void stop() override;
   void restart() override;
+
+  void on_config_field_changed(int deviceIndex, int fieldIndex) override {
+    pc::logger->trace("Orbbec config changed deviceIndex={} fieldIndex={}",
+                      deviceIndex, fieldIndex);
+  }
 
 private:
   std::vector<OBColorPoint> _point_buffer;
@@ -106,7 +111,7 @@ private:
   void set_updated_time(std::chrono::steady_clock::time_point new_time);
 
   void pipeline_thread_work(std::stop_token stop_token,
-                              std::shared_ptr<ob::Device> ob_device);
+                            std::shared_ptr<ob::Device> ob_device);
   void timeout_thread_work(std::stop_token stop_token);
 };
 

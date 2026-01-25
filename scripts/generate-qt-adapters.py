@@ -158,7 +158,6 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
 
     any_enums = any(m.is_enum for m in members)
     any_float3 = any(is_float3_type(m.type) for m in members)
-
     float3_indices: list[int] = [i for i, m in enumerate(members) if is_float3_type(m.type)]
 
     out: list[str] = []
@@ -177,32 +176,17 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append(f"    Q_INVOKABLE int fieldCount() const override {{ return {len(members)}; }}")
     out.append("")
 
-    # Dedicated float3 setter(s)
-    # These are additive; you can call them from QML to avoid QVariant conversion ambiguity.
+    # float3 setters (request-only, no mutation)
     if any_float3:
         out.append("    // Dedicated setters for float3 fields (avoids QVariant conversion ambiguity from QML).")
         for i in float3_indices:
             member = members[i]
-            # per-field named setter (most ergonomic)
             out.append(
-                f"    Q_INVOKABLE void set_{member.name}(float x, float y, float z) {{ setFloat3Field({i}, x, y, z); }}"
+                f"    Q_INVOKABLE void set_{member.name}(float x, float y, float z) {{"
+                f" emit fieldEditRequested({i}, QVariant::fromValue(QVector3D(x, y, z))); }}"
             )
-        # generic float3 setter by index (handy when editor only knows index)
         out.append("    Q_INVOKABLE void setFloat3Field(int index, float x, float y, float z) {")
-        out.append("        switch (index) {")
-        for i in float3_indices:
-            member = members[i]
-            out.append(f"        case {i}: {{")
-            out.append(f"            {member.type} newValue{{ x, y, z }};")
-            out.append(f"            if (m_config.{member.name} == newValue)")
-            out.append("                return;")
-            out.append(f"            m_config.{member.name} = newValue;")
-            out.append("            emit fieldChanged(index);")
-            out.append("            break;")
-            out.append("        }")
-        out.append("        default:")
-        out.append("            break;")
-        out.append("        }")
+        out.append("        emit fieldEditRequested(index, QVariant::fromValue(QVector3D(x, y, z)));")
         out.append("    }")
         out.append("")
 
@@ -342,7 +326,7 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("    }")
     out.append("")
 
-    # Helper for loose float3 conversion from QML-ish variants
+    # ---- NEW: generated applyFieldValue(...) switch (type-specific mutation), no signals ----
     if any_float3:
         out.append("private:")
         out.append("    static QVector3D toQVector3DLoose(const QVariant &value) {")
@@ -364,39 +348,47 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
         out.append("    }")
         out.append("")
         out.append("public:")
-    # setFieldValue after helper to keep file diff smaller? (We re-open public: if we emitted private: above)
-    out.append("    Q_INVOKABLE void setFieldValue(int index, const QVariant &value) override {")
+
+    out.append("    bool applyFieldValue(int index, const QVariant &value) override {")
     out.append("        switch (index) {")
     for i, m in enumerate(members):
         out.append(f"        case {i}: {{")
         if m.type == "std::string":
-            out.append("            auto newValue = value.toString().toStdString();")
+            out.append("            const std::string newValue = value.toString().toStdString();")
             out.append(f"            if (m_config.{m.name} == newValue)")
-            out.append("                return;")
+            out.append("                return false;")
             out.append(f"            m_config.{m.name} = newValue;")
+            out.append("            return true;")
         elif m.is_enum:
             out.append("            const int newValueInt = value.toInt();")
             out.append(f"            const auto newValue = static_cast<{m.enum_qualified_type}>(newValueInt);")
             out.append(f"            if (m_config.{m.name} == newValue)")
-            out.append("                return;")
+            out.append("                return false;")
             out.append(f"            m_config.{m.name} = newValue;")
+            out.append("            return true;")
         elif is_float3_type(m.type):
             out.append("            const QVector3D v = toQVector3DLoose(value);")
             out.append(f"            {m.type} newValue{{ v.x(), v.y(), v.z() }};")
             out.append(f"            if (m_config.{m.name} == newValue)")
-            out.append("                return;")
+            out.append("                return false;")
             out.append(f"            m_config.{m.name} = newValue;")
+            out.append("            return true;")
         else:
-            out.append(f"            auto newValue = qvariant_cast<{m.type}>(value);")
+            out.append(f"            const auto newValue = qvariant_cast<{m.type}>(value);")
             out.append(f"            if (m_config.{m.name} == newValue)")
-            out.append("                return;")
+            out.append("                return false;")
             out.append(f"            m_config.{m.name} = newValue;")
-        out.append("            emit fieldChanged(index);")
-        out.append("            break;")
+            out.append("            return true;")
         out.append("        }")
     out.append("        default:")
-    out.append("            break;")
+    out.append("            return false;")
     out.append("        }")
+    out.append("    }")
+    out.append("")
+
+    # request-only setFieldValue (keeps UI -> command path)
+    out.append("    Q_INVOKABLE void setFieldValue(int index, const QVariant &value) override {")
+    out.append("        emit fieldEditRequested(index, value);")
     out.append("    }")
     out.append("")
 
@@ -405,7 +397,6 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("};")
 
     return "\n".join(out)
-
 
 def process_cpp_header(input_text: str, file_path: str) -> str:
     structs = re.findall(
@@ -511,7 +502,6 @@ def process_cpp_header(input_text: str, file_path: str) -> str:
         lines.append("// no matching config structs found in this header")
 
     return "\n".join(lines)
-
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

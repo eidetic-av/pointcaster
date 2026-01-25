@@ -1,7 +1,9 @@
+#include "models/workspace_model.h"
 #include "workspace.h"
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <app_settings/app_settings.h>
 #include <core/logger/logger.h>
 #include <print>
@@ -41,14 +43,19 @@ int main(int argc, char *argv[]) {
                              app_settings->lastSessionPath().toStdString());
   }
 
+  // create a pointcaster workspace using this initial configuration, either
+  // auto-loaded or empty
   Workspace workspace(workspace_config);
 
-  // TODO
-  // quick: every 1 second, update workspace->set config
-  // to the one thats been altered by the gui if its been marked dirty?
-  // or maybe we mark individual parameters as dirty, yeah...
-
-  pc::logger->trace("Loading main window...");
+  // initialise the model that allows the ui and network connectors to
+  // manipulate the workspace
+  pc::ui::WorkspaceModel workspace_model{&workspace, &app,
+                                         [] { QCoreApplication::exit(); }};
+  gui_engine->rootContext()->setContextProperty("workspaceModel",
+                                                &workspace_model);
+  QObject::connect(
+      gui_engine, &QQmlApplicationEngine::objectCreationFailed, &app,
+      []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 
   pc::ui::load_main_window(&workspace, &app, gui_engine);
 

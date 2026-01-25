@@ -1,4 +1,6 @@
 #include "workspace_model.h"
+
+#include <QMetaType>
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -6,23 +8,18 @@
 #include <concepts>
 #include <functional>
 #include <print>
-#include <qobject.h>
-#include <qstringview.h>
-#include <qurl.h>
 #include <string>
-#include <string_view>
 #include <thread>
 #include <variant>
+
 #include <workspace.h>
 
 #include <plugins/devices/device_variants.h>
 #include <plugins/devices/orbbec/orbbec_device_config.gen.h>
 #include <plugins/devices/orbbec/orbbec_device_config.h>
-#include <plugins/plugin_loader.h>
 
 #include "app_settings/app_settings.h"
 #include "device_plugin_controller.h"
-#include "device_status.h"
 #include <core/uuid/uuid.h>
 
 namespace pc::ui {
@@ -32,7 +29,8 @@ using pc::devices::OrbbecDeviceConfigurationAdapter;
 
 WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent,
                                std::function<void()> quit_callback)
-    : QObject(parent), _workspace(*workspace), _quit_callback(quit_callback) {
+    : QObject(parent), _workspace(*workspace),
+      _quit_callback(std::move(quit_callback)) {
   if (workspace->auto_loaded_config) {
     const auto path = AppSettings::instance()->lastSessionPath();
     setSaveFileUrl(QUrl::fromLocalFile(path));
@@ -48,37 +46,42 @@ void WorkspaceModel::close() {
 void WorkspaceModel::loadFromFile(const QUrl &file) {
   const QString local_path = file.toLocalFile();
   if (local_path.isEmpty()) return;
-  // load the file on a different thread, and after it's loaded we schedule the
-  // main thread to apply the config file to the workspace
+
   std::jthread([&, local_path]() mutable {
     pc::WorkspaceConfiguration loaded_config;
     pc::load_workspace_from_file(loaded_config, local_path.toStdString());
-    QMetaObject::invokeMethod(this, [this, file, local_path,
-                                      cfg = std::move(loaded_config)]() mutable {
-      setSaveFileUrl(file);
-      _workspace.apply_new_config(std::move(cfg));
-      rebuildAdapters();
-      AppSettings::instance()->setLastSessionPath(local_path);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        this,
+        [this, file, local_path, cfg = std::move(loaded_config)]() mutable {
+          setSaveFileUrl(file);
+          _workspace.apply_new_config(std::move(cfg));
+          rebuildAdapters();
+          AppSettings::instance()->setLastSessionPath(local_path);
+        },
+        Qt::QueuedConnection);
   }).detach();
-  // TODO: is it healthy to do this?
-  // are there cases where the jthread could spin forever?
 }
 
 void WorkspaceModel::save(bool update_last_session_path) {
-  if (saveFileUrl().isEmpty()) { emit openSaveAsDialog(); return; }
+  if (saveFileUrl().isEmpty()) {
+    emit openSaveAsDialog();
+    return;
+  }
 
   const QString local_path = saveFileUrl().toLocalFile();
-  if (local_path.isEmpty()) { emit openSaveAsDialog(); return; }
+  if (local_path.isEmpty()) {
+    emit openSaveAsDialog();
+    return;
+  }
 
-  std::jthread([workspace_config = _workspace.config, local_path, update_last_session_path] {
+  std::jthread([workspace_config = _workspace.config, local_path,
+                update_last_session_path] {
     save_workspace_to_file(workspace_config, local_path.toStdString());
     if (update_last_session_path) {
       AppSettings::instance()->setLastSessionPath(local_path);
     }
   }).detach();
 }
-
 
 QVariant WorkspaceModel::deviceConfigAdapters() const {
   return QVariant::fromValue(_deviceConfigAdapters);
@@ -99,7 +102,6 @@ QVariantList WorkspaceModel::addDeviceMenuEntries() const {
   QVariantList entries;
 
   for (auto plugin_name : _workspace.loaded_device_plugin_names) {
-
     auto it = _workspace.discovery_plugins.find(plugin_name);
     if (it == _workspace.discovery_plugins.end() || !it->second) continue;
     auto discovered_devices = it->second->discovered_devices();
@@ -118,13 +120,13 @@ QVariantList WorkspaceModel::addDeviceMenuEntries() const {
   return entries;
 }
 
-void WorkspaceModel::addNewDevice(const QString& plugin_name, const QString& target_ip) {
+void WorkspaceModel::addNewDevice(const QString &plugin_name,
+                                  const QString &target_ip) {
   if (plugin_name == OrbbecDeviceConfiguration::PluginName) {
     auto config =
         pc::devices::OrbbecDeviceConfiguration{.id = pc::uuid::word()};
-    if (!target_ip.isEmpty()) {
-      config.ip = target_ip.toStdString();
-    }
+    if (!target_ip.isEmpty()) config.ip = target_ip.toStdString();
+
     auto new_config = _workspace.config;
     new_config.devices.push_back(std::move(config));
     _workspace.apply_new_config(new_config);
@@ -133,38 +135,56 @@ void WorkspaceModel::addNewDevice(const QString& plugin_name, const QString& tar
 }
 
 void WorkspaceModel::deleteSelectedDevice() {
-    auto new_config = _workspace.config;
-    new_config.devices.erase(new_config.devices.begin() +
-                             selectedDeviceIndex());
-    _workspace.apply_new_config(new_config);
+  auto new_config = _workspace.config;
+  new_config.devices.erase(new_config.devices.begin() + selectedDeviceIndex());
+  _workspace.apply_new_config(new_config);
+  rebuildAdapters();
 }
 
 void WorkspaceModel::rebuildAdapters() {
-
   qDeleteAll(_deviceConfigAdapters);
   _deviceConfigAdapters.clear();
 
   for (QObject *obj : _deviceControllers) obj->deleteLater();
   _deviceControllers.clear();
 
+  std::scoped_lock lock(_workspace.config_access);
+
+  auto find_device_index = [this](const std::string &id) -> int {
+    for (int i = 0; i < int(_workspace.config.devices.size()); ++i) {
+      const auto &variant = _workspace.config.devices[size_t(i)];
+      const bool match = std::visit(
+          [&](const auto &cfg) -> bool { return cfg.id == id; }, variant);
+      if (match) return i;
+    }
+    return -1;
+  };
+
   for (auto &device_plugin : _workspace.devices) {
     auto *plugin = device_plugin.get();
+
     std::visit(
-        [this, plugin](auto &device_config) {
+        [this, plugin, &find_device_index](auto &device_config) {
           using ConfigType = std::decay_t<decltype(device_config)>;
+
           if constexpr (std::same_as<ConfigType, OrbbecDeviceConfiguration>) {
             auto *adapter = new OrbbecDeviceConfigurationAdapter(device_config,
                                                                  plugin, this);
+
+            const int deviceIndex = find_device_index(device_config.id);
+            adapter->setDeviceIndex(deviceIndex);
+
+            connect(adapter, &ConfigAdapter::fieldEditRequested, this,
+                    [this, adapter](int fieldIndex, const QVariant &v) {
+                      onAdapterFieldEditRequested(adapter, fieldIndex, v);
+                    });
+
             _deviceConfigAdapters.append(adapter);
 
-            QString device_id = QString::fromStdString(device_config.id);
-
+            const QString device_id = QString::fromStdString(device_config.id);
             auto *controller =
                 new DevicePluginController(plugin, device_id, this);
             _deviceControllers.append(controller);
-
-            // TODO
-            // perhaps the configuration adapter and controller could be merged?
 
             plugin->set_status_callback(
                 [adapter = QPointer<OrbbecDeviceConfigurationAdapter>(adapter),
@@ -179,7 +199,6 @@ void WorkspaceModel::rebuildAdapters() {
                         },
                         Qt::QueuedConnection);
                   }
-
                   if (controller) {
                     QMetaObject::invokeMethod(
                         controller,
@@ -205,6 +224,7 @@ void WorkspaceModel::triggerDeviceDiscovery() {
   for (const auto &plugin_name : _workspace.loaded_device_plugin_names) {
     auto it = _workspace.discovery_plugins.find(plugin_name);
     if (it == _workspace.discovery_plugins.end() || !it->second) continue;
+
     auto &discovery_device = it->second;
     if (!discovery_device->has_discovery_change_callback()) {
       discovery_device->add_discovery_change_callback([this] {
@@ -214,6 +234,37 @@ void WorkspaceModel::triggerDeviceDiscovery() {
       });
     }
     discovery_device->refresh_discovery();
+  }
+}
+
+void WorkspaceModel::onAdapterFieldEditRequested(ConfigAdapter *adapter,
+                                                 int fieldIndex,
+                                                 const QVariant &value) {
+  if (!adapter) return;
+
+  const int deviceIndex = adapter->deviceIndex();
+  if (deviceIndex < 0) return;
+
+  std::scoped_lock lock(_workspace.config_access);
+  if (size_t(deviceIndex) >= _workspace.config.devices.size()) return;
+
+  const QVariant oldValue = adapter->fieldValue(fieldIndex);
+
+  const bool changed = adapter->applyFieldValue(fieldIndex, value);
+  if (!changed) return;
+
+  const QVariant newValue = adapter->fieldValue(fieldIndex);
+
+  std::println("[UI->Config] deviceIndex={} field={} old='{}' new='{}'",
+               deviceIndex, adapter->fieldName(fieldIndex).toStdString(),
+               oldValue.toString().toStdString(),
+               newValue.toString().toStdString());
+
+  adapter->notifyFieldChanged(fieldIndex);
+
+  if (auto *p = adapter->plugin()) {
+    _workspace.config.devices[size_t(deviceIndex)] = p->config();
+    p->on_config_field_changed(deviceIndex, fieldIndex);
   }
 }
 

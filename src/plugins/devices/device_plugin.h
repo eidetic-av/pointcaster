@@ -88,6 +88,8 @@ public:
     _config = config;
   }
 
+  virtual void on_config_field_changed(int deviceIndex, int fieldIndex) { }
+
   // virtual pc::types::PointCloud point_cloud() const = 0;
 
   virtual void start() = 0;

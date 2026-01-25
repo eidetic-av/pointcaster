@@ -34,6 +34,7 @@ void save_workspace_to_file(const WorkspaceConfiguration &config,
 class Workspace {
 public:
   WorkspaceConfiguration config;
+  std::mutex config_access;
 
   bool auto_loaded_config = false;
 

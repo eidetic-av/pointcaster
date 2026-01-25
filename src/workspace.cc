@@ -1,4 +1,5 @@
 #include "workspace.h"
+#include "plugins/devices/device_variants.h"
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/Manager.h>
@@ -7,6 +8,7 @@
 #include <core/uuid/uuid.h>
 #include <memory>
 #include <metrics/prometheus_server.h>
+#include <mutex>
 #include <plugins/devices/device_plugin.h>
 #include <plugins/plugin_loader.h>
 #include <print>
@@ -14,6 +16,7 @@
 #include <rfl/json.hpp>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <variant>
 
 #ifdef _WIN32
@@ -77,16 +80,46 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   // find and initialise device plugins
   device_plugin_manager = plugins::load_device_plugins(*this);
   rebuild_devices();
+
+  // TODO
+  // ** for debugging
+  // print out the current workspace configuration that we have in memory of the
+  // workspace simulation
+  std::thread([this]() {
+    using namespace std::chrono;
+    using namespace std::chrono_literals;
+    WorkspaceConfiguration thread_config;
+    while (true) {
+      std::this_thread::sleep_for(5s);
+      {
+        {
+          std::scoped_lock lock(config_access);
+          thread_config = config;
+        }
+        const auto json_string =
+            rfl::json::write<rfl::AddTagsToVariants>(thread_config);
+        pc::logger->debug("Workspace configuration: \n{}\n", json_string);
+      }
+    }
+  }).detach();
 }
 
 void Workspace::apply_new_config(const WorkspaceConfiguration &new_config) {
-  config = new_config;
+  {
+    std::scoped_lock lock(config_access);
+    config = new_config;
+  }
   rebuild_devices();
 }
 
 void Workspace::rebuild_devices() {
   devices.clear();
-  for (auto &device_config_variant : config.devices) {
+  std::vector<devices::DeviceConfigurationVariant> device_configs;
+  {
+    std::scoped_lock lock(config_access);
+    device_configs = config.devices;
+  }
+  for (auto &device_config_variant : device_configs) {
     std::visit(
         [&](auto &&device_config) {
           using DeviceConfig = std::decay_t<decltype(device_config)>;
