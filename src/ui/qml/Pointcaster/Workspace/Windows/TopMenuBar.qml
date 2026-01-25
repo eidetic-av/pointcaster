@@ -55,6 +55,13 @@ MenuBar {
         title: qsTr("&Edit")
         popupType: Popup.Window
 
+        delegate: MenuItem {
+            id: item
+            text: (model && model.text) ? model.text : ""
+            enabled: (model && model.enabled) !== undefined ? model.enabled : true
+            opacity: item.enabled ? 1.0 : 0.4
+        }
+
         Action {
             id: undoAction
             text: qsTr("&Undo")
