@@ -156,19 +156,55 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     adapter_name = f"{struct_name}Adapter"
     display_name = format_struct_name(struct_name)
 
+    any_enums = any(m.is_enum for m in members)
+    any_float3 = any(is_float3_type(m.type) for m in members)
+
+    float3_indices: list[int] = [i for i, m in enumerate(members) if is_float3_type(m.type)]
+
     out: list[str] = []
 
     out.append(f"class {adapter_name} : public ConfigAdapter {{")
     out.append("    Q_OBJECT")
     out.append("public:")
-    out.append(f"    explicit {adapter_name}({struct_name} &config, pc::devices::DevicePlugin* plugin, QObject *parent = nullptr)")
-    out.append(f"        : ConfigAdapter(plugin, parent), m_config(config) {{}}")
+    out.append(
+        f"    explicit {adapter_name}({struct_name} &config, pc::devices::DevicePlugin* plugin, QObject *parent = nullptr)"
+    )
+    out.append("        : ConfigAdapter(plugin, parent), m_config(config) {}")
     out.append("")
     out.append(f"    QString configType() const override {{ return QStringLiteral(\"{struct_name}\"); }}")
     out.append(f"    Q_INVOKABLE QString displayName() const override {{ return QStringLiteral(\"{display_name}\"); }}")
     out.append("")
     out.append(f"    Q_INVOKABLE int fieldCount() const override {{ return {len(members)}; }}")
     out.append("")
+
+    # Dedicated float3 setter(s)
+    # These are additive; you can call them from QML to avoid QVariant conversion ambiguity.
+    if any_float3:
+        out.append("    // Dedicated setters for float3 fields (avoids QVariant conversion ambiguity from QML).")
+        for i in float3_indices:
+            member = members[i]
+            # per-field named setter (most ergonomic)
+            out.append(
+                f"    Q_INVOKABLE void set_{member.name}(float x, float y, float z) {{ setFloat3Field({i}, x, y, z); }}"
+            )
+        # generic float3 setter by index (handy when editor only knows index)
+        out.append("    Q_INVOKABLE void setFloat3Field(int index, float x, float y, float z) {")
+        out.append("        switch (index) {")
+        for i in float3_indices:
+            member = members[i]
+            out.append(f"        case {i}: {{")
+            out.append(f"            {member.type} newValue{{ x, y, z }};")
+            out.append(f"            if (m_config.{member.name} == newValue)")
+            out.append("                return;")
+            out.append(f"            m_config.{member.name} = newValue;")
+            out.append("            emit fieldChanged(index);")
+            out.append("            break;")
+            out.append("        }")
+        out.append("        default:")
+        out.append("            break;")
+        out.append("        }")
+        out.append("    }")
+        out.append("")
 
     out.append("    Q_INVOKABLE QString fieldName(int index) const override {")
     out.append("        switch (index) {")
@@ -188,7 +224,6 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("    }")
     out.append("")
 
-    any_enums = any(m.is_enum for m in members)
     if any_enums:
         out.append("    Q_INVOKABLE bool isEnum(int index) const override {")
         out.append("        switch (index) {")
@@ -209,7 +244,9 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
             out.append("            return QVariantList{")
             for j, e in enumerate(m.enum_entries):
                 comma = "," if j + 1 < len(m.enum_entries) else ""
-                out.append(f"                QVariantMap{{ {{\"text\", QStringLiteral(\"{e.name}\")}}, {{\"value\", {e.value}}} }}{comma}")
+                out.append(
+                    f"                QVariantMap{{ {{\"text\", QStringLiteral(\"{e.name}\")}}, {{\"value\", {e.value}}} }}{comma}"
+                )
             out.append("            };")
         out.append("        default: return {};")
         out.append("        }")
@@ -296,8 +333,8 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
         elif is_float3_type(m.type):
             out.append(f"        case {i}: {{")
             out.append(f"            const auto &v = m_config.{m.name};")
-            out.append(f"            return QVariant::fromValue(QVector3D(v.x, v.y, v.z));")
-            out.append(f"        }}")
+            out.append("            return QVariant::fromValue(QVector3D(v.x, v.y, v.z));")
+            out.append("        }")
         else:
             out.append(f"        case {i}: return QVariant::fromValue(m_config.{m.name});")
     out.append("        default: return {};")
@@ -305,6 +342,29 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("    }")
     out.append("")
 
+    # Helper for loose float3 conversion from QML-ish variants
+    if any_float3:
+        out.append("private:")
+        out.append("    static QVector3D toQVector3DLoose(const QVariant &value) {")
+        out.append("        if (value.canConvert<QVector3D>())")
+        out.append("            return value.value<QVector3D>();")
+        out.append("        if (value.metaType().id() == QMetaType::QVariantMap) {")
+        out.append("            const auto m = value.toMap();")
+        out.append("            return QVector3D(")
+        out.append("                m.value(QStringLiteral(\"x\")).toFloat(),")
+        out.append("                m.value(QStringLiteral(\"y\")).toFloat(),")
+        out.append("                m.value(QStringLiteral(\"z\")).toFloat());")
+        out.append("        }")
+        out.append("        if (value.metaType().id() == QMetaType::QVariantList) {")
+        out.append("            const auto l = value.toList();")
+        out.append("            if (l.size() >= 3)")
+        out.append("                return QVector3D(l[0].toFloat(), l[1].toFloat(), l[2].toFloat());")
+        out.append("        }")
+        out.append("        return QVector3D();")
+        out.append("    }")
+        out.append("")
+        out.append("public:")
+    # setFieldValue after helper to keep file diff smaller? (We re-open public: if we emitted private: above)
     out.append("    Q_INVOKABLE void setFieldValue(int index, const QVariant &value) override {")
     out.append("        switch (index) {")
     for i, m in enumerate(members):
@@ -321,7 +381,7 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
             out.append("                return;")
             out.append(f"            m_config.{m.name} = newValue;")
         elif is_float3_type(m.type):
-            out.append("            const QVector3D v = value.value<QVector3D>();")
+            out.append("            const QVector3D v = toQVector3DLoose(value);")
             out.append(f"            {m.type} newValue{{ v.x(), v.y(), v.z() }};")
             out.append(f"            if (m_config.{m.name} == newValue)")
             out.append("                return;")
@@ -345,6 +405,7 @@ def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
     out.append("};")
 
     return "\n".join(out)
+
 
 def process_cpp_header(input_text: str, file_path: str) -> str:
     structs = re.findall(
@@ -450,6 +511,7 @@ def process_cpp_header(input_text: str, file_path: str) -> str:
         lines.append("// no matching config structs found in this header")
 
     return "\n".join(lines)
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

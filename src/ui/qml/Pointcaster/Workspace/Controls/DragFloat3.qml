@@ -25,6 +25,21 @@ Row {
 
     signal commitValue(var v3)
 
+    function _axisValue(v3, axisIndex) {
+        if (axisIndex === 0)
+            return Number(v3.x) || 0;
+        if (axisIndex === 1)
+            return Number(v3.y) || 0;
+        return Number(v3.z) || 0;
+    }
+
+    function _withAxis(v3, axisIndex, newComponentValue) {
+        const x = (axisIndex === 0) ? newComponentValue : (Number(v3.x) || 0);
+        const y = (axisIndex === 1) ? newComponentValue : (Number(v3.y) || 0);
+        const z = (axisIndex === 2) ? newComponentValue : (Number(v3.z) || 0);
+        return Qt.vector3d(x, y, z);
+    }
+
     Item {
         id: leftPadding
         width: 3
@@ -59,16 +74,30 @@ Row {
             ]
 
             delegate: Row {
+                id: axisRow
                 spacing: 0
                 width: contentRow.eachWidth > 0 ? contentRow.eachWidth : implicitWidth
+
+                readonly property int axisIndex: modelData.index
+
+                function syncFromRoot() {
+                    dragFloat.boundValue = root._axisValue(root.boundValue, axisIndex);
+                }
+
+                Component.onCompleted: syncFromRoot()
+
+                Connections {
+                    target: root
+                    function onBoundValueChanged() {
+                        axisRow.syncFromRoot();
+                    }
+                }
 
                 Item {
                     id: axisLabel
                     width: root.labelWidth
                     height: Math.max(root.labelHeight, dragFloat.implicitHeight, dragFloat.height)
 
-                    // rectangle background for the label has the
-                    // left side rounded only (top-left + bottom-left)
                     Shape {
                         anchors.fill: parent
                         antialiasing: true
@@ -80,7 +109,6 @@ Row {
                             startX: 0
                             startY: root.labelLeftRadius
 
-                            // top-left corner arc right
                             PathArc {
                                 x: root.labelLeftRadius
                                 y: 0
@@ -88,25 +116,19 @@ Row {
                                 radiusY: root.labelLeftRadius
                             }
 
-                            // top edge to top-right (square)
                             PathLine {
                                 x: axisLabel.width
                                 y: 0
                             }
-
-                            // right edge down (square)
                             PathLine {
                                 x: axisLabel.width
                                 y: axisLabel.height
                             }
-
-                            // bottom edge to before bottom-left arc
                             PathLine {
                                 x: root.labelLeftRadius
                                 y: axisLabel.height
                             }
 
-                            // bottom-left corner arc up
                             PathArc {
                                 x: 0
                                 y: axisLabel.height - root.labelLeftRadius
@@ -114,7 +136,6 @@ Row {
                                 radiusY: root.labelLeftRadius
                             }
 
-                            // left edge back to start
                             PathLine {
                                 x: 0
                                 y: root.labelLeftRadius
@@ -139,17 +160,15 @@ Row {
                     maxValue: root.maxValue
                     defaultValue: root.defaultValue
 
-                    boundValue: modelData.index === 0 ? root.boundValue.x : modelData.index === 1 ? root.boundValue.y : root.boundValue.z
+                    boundValue: 0.0
 
-                    onCommitValue: {
-                        if (modelData.index === 0)
-                            root.boundValue = Qt.vector3d(boundValue, root.boundValue.y, root.boundValue.z);
-                        else if (modelData.index === 1)
-                            root.boundValue = Qt.vector3d(root.boundValue.x, boundValue, root.boundValue.z);
-                        else
-                            root.boundValue = Qt.vector3d(root.boundValue.x, root.boundValue.y, boundValue);
+                    onCommitValue: function (v) {
+                        const next = root._withAxis(root.boundValue, axisIndex, v);
+                        if (next.x === root.boundValue.x && next.y === root.boundValue.y && next.z === root.boundValue.z)
+                            return;
 
-                        root.commitValue(root.boundValue);
+                        root.boundValue = next;
+                        root.commitValue(next);
                     }
                 }
             }

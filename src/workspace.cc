@@ -26,13 +26,13 @@ namespace pc {
 using namespace Corrade::PluginManager;
 using namespace Corrade::Containers;
 
-void load_workspace_from_file(WorkspaceConfiguration &config,
+bool load_workspace_from_file(WorkspaceConfiguration &config,
                               const std::string &file_path) {
   std::ifstream file(file_path, std::ios::binary);
   if (!file) {
-    std::print("Could not open '{}'", file_path);
+    pc::logger->error("Could not open '{}'", file_path);
     config = WorkspaceConfiguration{};
-    return;
+    return false;
   }
   const std::string json_string{std::istreambuf_iterator<char>(file),
                                 std::istreambuf_iterator<char>()};
@@ -40,12 +40,15 @@ void load_workspace_from_file(WorkspaceConfiguration &config,
     config = rfl::json::read<WorkspaceConfiguration, rfl::AddTagsToVariants>(
                  json_string)
                  .value();
-    std::print("Loaded configuration from '{}'\n", file_path);
+    pc::logger->info("Loaded configuration from '{}'", file_path);
+    pc::logger->trace("Loaded Workspace:\n{}",
+                      rfl::json::write<rfl::AddTagsToVariants>(config));
   } catch (const std::exception &e) {
-    std::print("Failed to parse '{}': {}\n", file_path, e.what());
+    pc::logger->error("Failed to parse '{}': {}", file_path, e.what());
     config = WorkspaceConfiguration{};
+    return false;
   }
-  pc::logger->debug("");
+  return true;
 }
 
 void save_workspace_to_file(const WorkspaceConfiguration &config,
@@ -53,13 +56,13 @@ void save_workspace_to_file(const WorkspaceConfiguration &config,
   try {
     const auto json_string = rfl::json::write<rfl::AddTagsToVariants>(config);
     std::ofstream(file_path) << json_string;
+    pc::logger->info("Saved workspace file to '{}'", file_path);
   } catch (const std::exception &e) {
-    std::print("Failed to save '{}': {}\n", file_path, e.what());
+    pc::logger->error("Failed to save '{}': {}", file_path, e.what());
   }
 }
 
 Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
-
   if (initial.id.empty()) {
     config.id = pc::uuid::word();
   } else {
@@ -93,6 +96,7 @@ void Workspace::rebuild_devices() {
           }
           Pointer<pc::devices::DevicePlugin> device_plugin =
               device_plugin_manager->instantiate(DeviceConfig::PluginName);
+          pc::logger->debug("Updating device plugin config");
           device_plugin->update_config(device_config_variant);
           devices.push_back(std::move(device_plugin));
         },

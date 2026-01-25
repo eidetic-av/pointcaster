@@ -307,21 +307,30 @@ Item {
                             Component {
                                 id: float3Editor
                                 DragFloat3 {
-                                    defaultValue: root.model ? root.model.defaultValue(index) : undefined   // QVector3D(0,0,0)
-                                    minValue: undefined
-                                    maxValue: undefined
+                                    id: float3
 
                                     boundValue: {
                                         if (!root.model)
                                             return Qt.vector3d(0, 0, 0);
-                                        var v = root.model.fieldValue(index); // QVector3D
+                                        const v = root.model.fieldValue(index); // expected QVector3D
                                         return Qt.vector3d(Number(v.x) || 0, Number(v.y) || 0, Number(v.z) || 0);
                                     }
 
                                     onCommitValue: function (v3) {
                                         if (!root.model)
                                             return;
-                                        root.model.setFieldValue(index, Qt.vector3d(v3.x, v3.y, v3.z));
+                                        root.model.setFloat3Field(index, v3.x, v3.y, v3.z);
+                                    }
+
+                                    Connections {
+                                        target: root.model
+                                        function onFieldChanged(changedIndex) {
+                                            if (changedIndex !== index)
+                                                return;
+
+                                            const v = root.model.fieldValue(index);
+                                            float3.boundValue = Qt.vector3d(Number(v.x) || 0, Number(v.y) || 0, Number(v.z) || 0);
+                                        }
                                     }
                                 }
                             }

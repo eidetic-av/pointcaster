@@ -25,7 +25,7 @@ struct WorkspaceConfiguration {
   std::vector<devices::DeviceConfigurationVariant> devices{};
 };
 
-void load_workspace_from_file(WorkspaceConfiguration &config,
+bool load_workspace_from_file(WorkspaceConfiguration &config,
                               const std::string &file_path);
 
 void save_workspace_to_file(const WorkspaceConfiguration &config,

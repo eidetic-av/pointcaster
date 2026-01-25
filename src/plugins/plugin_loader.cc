@@ -71,6 +71,7 @@ load_device_plugins(pc::Workspace &workspace) {
     if (plugin_status & LoadState::Loaded) {
       workspace.loaded_device_plugin_names.push_back(plugin_name);
       pc::logger->info("Loaded plugin: {}", std::string(plugin_name));
+
       // create an instance of the plugin that handles device discovery and
       // other static single plugin context things...
       if (!workspace.discovery_plugins.contains(plugin_name)) {
@@ -85,6 +86,7 @@ load_device_plugins(pc::Workspace &workspace) {
                                               std::move(discovery_instance));
         }
       }
+
     }
   }
 

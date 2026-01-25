@@ -13,14 +13,11 @@ ComboBox {
     flat: true
 
     background: Rectangle {
-        implicitWidth: parent.width
-        implicitHeight: parent.height
+        anchors.fill: parent
         color: (root.activeFocus || rootHover.hovered) ? DarkPalette.almostdark : "transparent"
         radius: 0
-        border {
-            width: (root.activeFocus || root.visualFocus) ? 1 : 0
-            color: DarkPalette.highlight
-        }
+        border.width: (root.activeFocus || root.visualFocus) ? 1 : 0
+        border.color: DarkPalette.highlight
     }
 
     contentItem: Text {
