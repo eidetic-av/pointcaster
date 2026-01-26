@@ -46,7 +46,7 @@ Row {
 
     Item {
         id: leftPadding
-        width: Math.round(3 * Scaling.uiScale)
+        width: Math.round(componentSpacing / 2)
         height: 1
     }
 

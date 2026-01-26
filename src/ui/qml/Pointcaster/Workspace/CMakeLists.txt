@@ -24,6 +24,7 @@ qt_add_qml_module(PointcasterWorkspace
         Controls/DragFloat3.qml
         Controls/EnumSelector.qml
         Controls/IconButton.qml
+        Controls/InfoToolTip.qml
         Editors/ConfigurationEditor.qml
         Windows/TabBar.qml
         Windows/TabBarBase.qml

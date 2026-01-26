@@ -11,50 +11,53 @@ ToolBar {
 
     property var workspace: null
 
+    font: Scaling.uiFont
+
     anchors {
         top: parent.top
         left: parent.left
         right: parent.right
-        topMargin: 10
-        leftMargin: 8
-        rightMargin: 8
+        topMargin: Math.round(10 * Scaling.uiScale)
+        leftMargin: Math.round(8 * Scaling.uiScale)
+        rightMargin: Math.round(8 * Scaling.uiScale)
     }
 
     background: Rectangle {
         color: "transparent"
         border.width: 0
-        radius: 4
+        radius: Math.round(4 * Scaling.uiScale)
     }
 
     contentItem: RowLayout {
-        spacing: 6
+        spacing: Math.round(6 * Scaling.uiScale)
 
         ToolButton {
             id: addButton
 
-            Layout.preferredWidth: 25
-            Layout.preferredHeight: 25
+            Layout.preferredWidth: Math.round(25 * Scaling.uiScale)
+            Layout.preferredHeight: Math.round(25 * Scaling.uiScale)
 
             icon.source: FontAwesome.icon("solid/plus")
-            icon.width: 18
-            icon.height: 18
+            icon.width: Math.round(18 * Scaling.uiScale)
+            icon.height: Math.round(18 * Scaling.uiScale)
 
-            ToolTip.visible: hovered && !checked
-            ToolTip.text: "Add new device"
-            ToolTip.delay: 400
+            InfoToolTip {
+                visible: parent.hovered && !addDeviceMenu.visible
+                textValue: "Add new device"
+            }
 
             checkable: true
             checked: addDeviceMenu.visible
 
             onClicked: {
-                addDeviceMenu.popup(addButton.x, addButton.y + 23);
+                addDeviceMenu.popup(addButton.x, addButton.y + Math.round(23 * Scaling.uiScale));
                 if (root.workspace)
                     root.workspace.triggerDeviceDiscovery();
             }
 
             Menu {
                 id: addDeviceMenu
-                width: 220
+                width: Math.round(220 * Scaling.uiScale)
 
                 Instantiator {
                     model: root.workspace ? root.workspace.addDeviceMenuEntries : []
@@ -63,6 +66,7 @@ ToolBar {
                         required property var modelData
 
                         text: modelData.display_name + " (" + modelData.ip + ")"
+                        font: root.font
 
                         contentItem: Text {
                             text: parent.text
@@ -95,16 +99,17 @@ ToolBar {
         }
 
         ToolButton {
-            Layout.preferredWidth: 25
-            Layout.preferredHeight: 25
+            Layout.preferredWidth: Math.round(25 * Scaling.uiScale)
+            Layout.preferredHeight: Math.round(25 * Scaling.uiScale)
 
             icon.source: FontAwesome.icon("solid/trash")
-            icon.width: 18
-            icon.height: 18
+            icon.width: Math.round(18 * Scaling.uiScale)
+            icon.height: Math.round(18 * Scaling.uiScale)
 
-            ToolTip.visible: hovered
-            ToolTip.text: "Delete selected device"
-            ToolTip.delay: 400
+            InfoToolTip {
+                visible: tooltip ? parent.hovered : false
+                textValue: tooltip
+            }
 
             onClicked: {
                 root.workspace.deleteSelectedDevice();

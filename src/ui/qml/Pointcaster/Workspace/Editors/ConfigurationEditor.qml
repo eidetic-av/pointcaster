@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 
 import Pointcaster 1.0
+import Pointcaster.Workspace 1.0
 
 Item {
     id: root
@@ -11,11 +12,11 @@ Item {
 
     // ---- Layout
     property int labelColumnWidth: WorkspaceState.labelColumnWidth
-    property int minLabelColumnWidth: 40
-    property int minValueColumnWidth: 170
+    property int minLabelColumnWidth: Math.round(40 * Scaling.uiScale)
+    property int minValueColumnWidth: Math.round(170 * Scaling.uiScale)
     property bool expanded: true
-    property int outerHorizontalMargin: 8
-    property int outerTopMargin: 4
+    property int outerHorizontalMargin: Math.round(8 * Scaling.uiScale)
+    property int outerTopMargin: Math.round(4 * Scaling.uiScale)
 
     readonly property real _viewportWidth: {
         if (ScrollView.view)
@@ -43,7 +44,7 @@ Item {
 
         color: DarkPalette.dark
         border.color: DarkPalette.mid
-        border.width: 1
+        border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
         clip: true
 
         Rectangle {
@@ -53,21 +54,21 @@ Item {
                 left: parent.left
                 right: parent.right
             }
-            height: 28
+            height: Math.round(28 * Scaling.uiScale)
             color: headerMouseArea.containsMouse ? DarkPalette.mid : (root.expanded ? DarkPalette.middark : DarkPalette.base)
             border.color: DarkPalette.mid
-            border.width: 1
+            border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
 
             Image {
                 id: headerArrowIcon
-                width: 12
-                height: 12
+                width: Math.round(12 * Scaling.uiScale)
+                height: Math.round(12 * Scaling.uiScale)
                 fillMode: Image.PreserveAspectFit
                 source: root.expanded ? FontAwesome.icon("solid/caret-down") : FontAwesome.icon("solid/caret-right")
                 opacity: 0.75
                 anchors {
                     left: parent.left
-                    leftMargin: 3
+                    leftMargin: Math.round(3 * Scaling.uiScale)
                     verticalCenter: parent.verticalCenter
                 }
             }
@@ -77,8 +78,8 @@ Item {
                 anchors {
                     left: headerArrowIcon.left
                     right: parent.right
-                    leftMargin: 15
-                    rightMargin: 10
+                    leftMargin: Math.round(15 * Scaling.uiScale)
+                    rightMargin: Math.round(10 * Scaling.uiScale)
                     verticalCenter: parent.verticalCenter
                 }
                 text: root.model ? (root.model.displayName() + " Properties") : root.emptyTitle
@@ -104,7 +105,7 @@ Item {
             }
             visible: root.expanded
 
-            implicitHeight: root.model ? fieldsContainer.implicitHeight : (noSelectionText.implicitHeight + 8)
+            implicitHeight: root.model ? fieldsContainer.implicitHeight : (noSelectionText.implicitHeight + Math.round(8 * Scaling.uiScale))
 
             Text {
                 id: noSelectionText
@@ -112,9 +113,9 @@ Item {
                     left: parent.left
                     right: parent.right
                     top: parent.top
-                    leftMargin: 10
-                    rightMargin: 10
-                    topMargin: 3
+                    leftMargin: Math.round(10 * Scaling.uiScale)
+                    rightMargin: Math.round(10 * Scaling.uiScale)
+                    topMargin: Math.round(3 * Scaling.uiScale)
                 }
                 visible: !root.model
                 text: "No device selected"
@@ -128,13 +129,13 @@ Item {
                     top: parent.top
                     left: parent.left
                     right: parent.right
-                    rightMargin: 1
+                    rightMargin: Math.max(1, Math.round(1 * Scaling.uiScale))
                 }
                 visible: root.model
                 height: fieldsContainer.implicitHeight
 
-                readonly property int _labelLeftMargin: 6
-                readonly property int _valueLeftOverlap: 5
+                readonly property int _labelLeftMargin: Math.round(6 * Scaling.uiScale)
+                readonly property int _valueLeftOverlap: Math.round(5 * Scaling.uiScale)
 
                 readonly property real availableInnerWidth: Math.max(0, width - _labelLeftMargin + _valueLeftOverlap)
 
@@ -165,7 +166,7 @@ Item {
                             required property int index
 
                             width: fieldsContainer.width
-                            height: Math.max(nameText.implicitHeight, valueContainer.implicitHeight) + 6
+                            height: Math.max(nameText.implicitHeight, valueContainer.implicitHeight) + Math.round(6 * Scaling.uiScale)
                             visible: root.model && !root.model.isHidden(index)
 
                             Item {
@@ -183,7 +184,7 @@ Item {
                                     anchors {
                                         left: parent.left
                                         right: parent.right
-                                        rightMargin: 10
+                                        rightMargin: Math.round(10 * Scaling.uiScale)
                                         verticalCenter: parent.verticalCenter
                                     }
                                     horizontalAlignment: Text.AlignLeft
@@ -193,13 +194,11 @@ Item {
                                     elide: Text.ElideRight
                                 }
 
-                                ToolTip {
+                                InfoToolTip {
                                     visible: labelHover.hovered
-                                    text: root.model ? "osc/address/" + qsTr(root.model.fieldName(index)) : ""
-                                    delay: 400
-                                    parent: labelContainer
-                                    x: Math.max((labelContainer.width - implicitWidth) * 0.5, 4)
-                                    y: labelContainer.height + 4
+                                    textValue: root.model ? "osc/address/" + qsTr(root.model.fieldName(index)) : ""
+                                    x: Math.max((labelContainer.width - implicitWidth) * 0.5, Math.round(4 * Scaling.uiScale))
+                                    y: labelContainer.height + Math.round(4 * Scaling.uiScale)
                                 }
 
                                 HoverHandler {
@@ -241,7 +240,7 @@ Item {
                                     background: Rectangle {
                                         color: "transparent"
                                         border.color: valueField.focus ? DarkPalette.highlight : "transparent"
-                                        border.width: 1
+                                        border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
                                         radius: 0
                                     }
 
@@ -413,13 +412,13 @@ Item {
 
                 Rectangle {
                     id: dividerHandle
-                    x: (fieldsArea.effectiveLabelWidth - width / 2) + 1
+                    x: (fieldsArea.effectiveLabelWidth - width / 2) + Math.max(1, Math.round(1 * Scaling.uiScale))
                     z: 99
-                    width: 5
+                    width: Math.round(5 * Scaling.uiScale)
                     anchors {
                         top: parent.top
                         bottom: parent.bottom
-                        bottomMargin: 1
+                        bottomMargin: Math.max(1, Math.round(1 * Scaling.uiScale))
                     }
                     color: "transparent"
 
@@ -427,11 +426,11 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.horizontalCenter: parent.horizontalCenter
                         height: parent.height
-                        width: (dividerMouseArea.containsMouse || dividerMouseArea.drag.active) ? 3 : 1
+                        width: (dividerMouseArea.containsMouse || dividerMouseArea.drag.active) ? Math.round(3 * Scaling.uiScale) : Math.max(1, Math.round(1 * Scaling.uiScale))
 
                         Behavior on width {
                             NumberAnimation {
-                                duration: 120
+                                duration: Math.round(120 * Scaling.uiScale)
                                 easing.type: Easing.InCubic
                             }
                         }
@@ -440,7 +439,7 @@ Item {
 
                         Behavior on color {
                             ColorAnimation {
-                                duration: 90
+                                duration: Math.round(90 * Scaling.uiScale)
                                 easing.type: Easing.InCubic
                             }
                         }

@@ -9,7 +9,7 @@ QtObject {
 
     property real uiScale: AppSettings.uiScale
 
-    property real basePointSize: 11.5
+    property real basePointSize: 10.5
 
     readonly property real pointSize: basePointSize * uiScale
     readonly property real smallPointSize: basePointSize * 0.80 * uiScale

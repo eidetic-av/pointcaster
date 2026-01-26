@@ -337,11 +337,9 @@ KDDW.TabBarBase {
                     border.color: DarkPalette.highlight
                 }
 
-                ToolTip {
-                    visible: addButtonMouseArea.containsMouse
-                    text: "Add new session"
-                    delay: 400
-                    font: Scaling.uiFont
+                InfoToolTip {
+                    visible: labelHover.hovered
+                    textValue: "Add new session"
                 }
 
                 Image {

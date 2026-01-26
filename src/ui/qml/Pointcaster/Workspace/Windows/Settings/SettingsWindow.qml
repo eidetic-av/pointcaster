@@ -14,18 +14,37 @@ Dialog {
     dim: true
     visible: false
 
-    implicitWidth: 720 * Scaling.uiScale
-    implicitHeight: 480 * Scaling.uiScale
+    font: Scaling.uiFont
+
+    implicitWidth: Math.round(720 * Scaling.uiScale)
+    implicitHeight: Math.round(480 * Scaling.uiScale)
 
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-    standardButtons: Dialog.Close
+
+    footer: Item {
+        implicitHeight: footerLayout.implicitHeight
+        width: parent.width
+
+        RowLayout {
+            id: footerLayout
+            anchors.right: parent.right
+            anchors.rightMargin: Math.round(12 * Scaling.uiScale)
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Math.round(8 * Scaling.uiScale)
+
+            IconButton {
+                text: qsTr("Close")
+                onClicked: root.close()
+            }
+        }
+    }
 
     contentItem: RowLayout {
         spacing: 0
 
         ListView {
             id: sidebar
-            Layout.preferredWidth: 180 * Scaling.uiScale
+            Layout.preferredWidth: Math.round(180 * Scaling.uiScale)
             Layout.fillHeight: true
             clip: true
 

@@ -7,24 +7,24 @@ AbstractButton {
     id: root
 
     property url iconSource
-    property int iconSize: 9
-    property int iconTextSpacing: 5
+    property int iconSize: Math.round(9 * Scaling.uiScale)
+    property int iconTextSpacing: Math.round(5 * Scaling.uiScale)
 
     property color backgroundColor: DarkPalette.middark
     property color hoverColor: DarkPalette.mid
     property color pressedColor: DarkPalette.midlight
 
     property color borderColor: DarkPalette.mid
-    property int borderWidth: 1
-    property int radius: 3
 
     property string tooltip
 
+    font: Scaling.uiFont
+
     padding: 0
-    leftPadding: 8
-    rightPadding: 8
-    topPadding: 6
-    bottomPadding: 6
+    leftPadding: Math.round(8 * Scaling.uiScale)
+    rightPadding: Math.round(8 * Scaling.uiScale)
+    topPadding: Math.round(6 * Scaling.uiScale)
+    bottomPadding: Math.round(6 * Scaling.uiScale)
 
     readonly property bool hasIcon: iconSource !== "" && iconSource !== undefined && iconSource !== null
     readonly property bool hasText: text.length > 0
@@ -35,16 +35,19 @@ AbstractButton {
 
     background: Rectangle {
         anchors.fill: parent
-        radius: root.radius
+        radius: Math.round(3 * Scaling.uiScale)
 
         color: {
-            if (!root.enabled) return DarkPalette.middark
-            if (root.pressed) return root.pressedColor
-            if (root.hovered) return root.hoverColor
-            return root.backgroundColor
+            if (!root.enabled)
+                return DarkPalette.middark;
+            if (root.pressed)
+                return root.pressedColor;
+            if (root.hovered)
+                return root.hoverColor;
+            return root.backgroundColor;
         }
 
-        border.width: root.borderWidth
+        border.width: 1
         border.color: root.borderColor
 
         Rectangle {
@@ -88,10 +91,7 @@ AbstractButton {
         }
     }
 
-    ToolTip {
-        visible: tooltip ? parent.hovered : false
-        text: tooltip
-        delay: 400
-        font: root.font
+    InfoToolTip {
+        textValue: tooltip
     }
 }
