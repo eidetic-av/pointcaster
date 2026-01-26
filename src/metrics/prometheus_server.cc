@@ -34,7 +34,7 @@ struct PrometheusServerHost {
       : registry(std::make_shared<prometheus::Registry>()), bind_address(addr),
         exposer(std::make_unique<prometheus::Exposer>(bind_address)) {
     exposer->RegisterCollectable(registry);
-    pc::logger->info("Serving prometheus metrics on http://{}", bind_address);
+    pc::logger()->info("Serving prometheus metrics on http://{}", bind_address);
 
     // // to test pulling metrics:
     // std::thread([]() {
@@ -265,7 +265,7 @@ void PrometheusServer::set_enabled(bool enabled,
 
   if (!enabled) {
     server_host.reset();
-    pc::logger->info("Disabled prometheus endpoint");
+    pc::logger()->info("Disabled prometheus endpoint");
     return;
   }
 
@@ -275,7 +275,7 @@ void PrometheusServer::set_enabled(bool enabled,
   try {
     server_host.emplace(bind_address);
   } catch (const CivetException &e) {
-    pc::logger->error("Failed to create prometheus server: {}", e.what());
+    pc::logger()->error("Failed to create prometheus server: {}", e.what());
   }
 }
 

@@ -28,13 +28,13 @@ int main(int argc, char *argv[]) {
       app_settings, &pc::AppSettings::logLevelChanged, app_settings,
       [] { pc::set_log_level(pc::AppSettings::instance()->spdlogLogLevel()); });
 
-  pc::logger->debug("Starting QGuiApplication...");
+  pc::logger()->debug("Starting QGuiApplication...");
   QGuiApplication app(argc, argv);
 
-  pc::logger->trace("Starting QQmlApplicationEngine...");
+  pc::logger()->trace("Starting QQmlApplicationEngine...");
   auto *gui_engine = pc::ui::initialise(&app);
 
-  pc::logger->trace("Initialising Workspace...");
+  pc::logger()->trace("Initialising Workspace...");
 
   WorkspaceConfiguration workspace_config;
   if (app_settings->restoreLastSession() &&
@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
 
   pc::ui::load_main_window(&workspace, &app, gui_engine);
 
-  pc::logger->trace("Application load complete");
+  pc::logger()->trace("Application load complete");
 
   return app.exec();
 }

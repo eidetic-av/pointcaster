@@ -55,7 +55,7 @@ public:
   void restart() override;
 
   void on_config_field_changed(int deviceIndex, int fieldIndex) override {
-    pc::logger->trace("Orbbec config changed deviceIndex={} fieldIndex={}",
+    pc::logger()->trace("Orbbec config changed deviceIndex={} fieldIndex={}",
                       deviceIndex, fieldIndex);
   }
 

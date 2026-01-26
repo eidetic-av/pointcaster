@@ -33,7 +33,7 @@ bool load_workspace_from_file(WorkspaceConfiguration &config,
                               const std::string &file_path) {
   std::ifstream file(file_path, std::ios::binary);
   if (!file) {
-    pc::logger->error("Could not open '{}'", file_path);
+    pc::logger()->error("Could not open '{}'", file_path);
     config = WorkspaceConfiguration{};
     return false;
   }
@@ -43,11 +43,11 @@ bool load_workspace_from_file(WorkspaceConfiguration &config,
     config = rfl::json::read<WorkspaceConfiguration, rfl::AddTagsToVariants>(
                  json_string)
                  .value();
-    pc::logger->info("Loaded configuration from '{}'", file_path);
-    pc::logger->trace("Loaded Workspace:\n{}",
+    pc::logger()->info("Loaded configuration from '{}'", file_path);
+    pc::logger()->trace("Loaded Workspace:\n{}",
                       rfl::json::write<rfl::AddTagsToVariants>(config));
   } catch (const std::exception &e) {
-    pc::logger->error("Failed to parse '{}': {}", file_path, e.what());
+    pc::logger()->error("Failed to parse '{}': {}", file_path, e.what());
     config = WorkspaceConfiguration{};
     return false;
   }
@@ -59,9 +59,9 @@ void save_workspace_to_file(const WorkspaceConfiguration &config,
   try {
     const auto json_string = rfl::json::write<rfl::AddTagsToVariants>(config);
     std::ofstream(file_path) << json_string;
-    pc::logger->info("Saved workspace file to '{}'", file_path);
+    pc::logger()->info("Saved workspace file to '{}'", file_path);
   } catch (const std::exception &e) {
-    pc::logger->error("Failed to save '{}': {}", file_path, e.what());
+    pc::logger()->error("Failed to save '{}': {}", file_path, e.what());
   }
 }
 
@@ -98,7 +98,7 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
         }
         const auto json_string =
             rfl::json::write<rfl::AddTagsToVariants>(thread_config);
-        pc::logger->debug("Workspace configuration: \n{}\n", json_string);
+        pc::logger()->debug("Workspace configuration: \n{}\n", json_string);
       }
     }
   }).detach();
@@ -129,7 +129,7 @@ void Workspace::rebuild_devices() {
           }
           Pointer<pc::devices::DevicePlugin> device_plugin =
               device_plugin_manager->instantiate(DeviceConfig::PluginName);
-          pc::logger->debug("Updating device plugin config");
+          pc::logger()->debug("Updating device plugin config");
           device_plugin->update_config(device_config_variant);
           devices.push_back(std::move(device_plugin));
         },

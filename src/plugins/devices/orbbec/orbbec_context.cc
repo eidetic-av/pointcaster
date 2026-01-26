@@ -37,18 +37,18 @@ void ObContext::init_async() {
       local = std::make_shared<ob::Context>();
       local->enableNetDeviceEnumeration(true);
     } catch (const ob::Error &e) {
-      pc::logger->error(
+      pc::logger()->error(
           "Failed to initialise Orbbec context (ob::Error): [{}] {}",
           e.getName(), e.getMessage());
       self->state.store(ObContextState::Failed, std::memory_order_release);
       return;
     } catch (const std::exception &e) {
-      pc::logger->error(
+      pc::logger()->error(
           "Failed to initialise Orbbec context (std::exception): {}", e.what());
       self->state.store(ObContextState::Failed, std::memory_order_release);
       return;
     } catch (...) {
-      pc::logger->error(
+      pc::logger()->error(
           "Failed to initialise Orbbec context: unknown exception");
       self->state.store(ObContextState::Failed, std::memory_order_release);
       return;
@@ -62,7 +62,7 @@ void ObContext::init_async() {
       cb();
     }
 
-    pc::logger->trace("Orbbec context initialised");
+    pc::logger()->trace("Orbbec context initialised");
   }).detach();
 }
 
@@ -111,12 +111,12 @@ void ObContext::discover_devices() {
 
   auto ctx = orbbec_context().get_if_ready();
   if (!ctx) {
-    pc::logger->trace("Orbbec context not initialised; skipping discovery");
+    pc::logger()->trace("Orbbec context not initialised; skipping discovery");
     discovering_devices.store(false, std::memory_order_release);
     return;
   }
 
-  pc::logger->trace("Discovering Orbbec devices...");
+  pc::logger()->trace("Discovering Orbbec devices...");
 
   try {
     auto device_list = ctx->queryDeviceList();
@@ -135,19 +135,19 @@ void ObContext::discover_devices() {
     }
 
     for (const auto &found_device : local_found) {
-      pc::logger->trace("found: {} {} {}", found_device.name, found_device.ip,
+      pc::logger()->trace("found: {} {} {}", found_device.name, found_device.ip,
                         found_device.serial_num);
     }
 
     discovered_devices = std::move(local_found);
   } catch (const ob::Error &e) {
-    pc::logger->error("Failed to discover Orbbec devices: [{}] {}", e.getName(),
+    pc::logger()->error("Failed to discover Orbbec devices: [{}] {}", e.getName(),
                       e.getMessage());
   } catch (const std::exception &e) {
-    pc::logger->error(
+    pc::logger()->error(
         "Unknown std::exception during Orbbec device discovery: {}", e.what());
   } catch (...) {
-    pc::logger->error("Unknown error during Orbbec device discovery");
+    pc::logger()->error("Unknown error during Orbbec device discovery");
   }
 
   std::vector<std::function<void()>> post_discovery_callbacks;
@@ -157,7 +157,7 @@ void ObContext::discover_devices() {
   }
   for (auto &cb : post_discovery_callbacks) cb();
 
-  pc::logger->trace("Finished discovering devices.");
+  pc::logger()->trace("Finished discovering devices.");
   discovering_devices.store(false, std::memory_order_release);
 }
 
@@ -198,7 +198,7 @@ void ObContext::shutdown() {
         local->enableNetDeviceEnumeration(false);
       } catch (...) {
       }
-      pc::logger->trace("Orbbec context destroyed");
+      pc::logger()->trace("Orbbec context destroyed");
     }
 
     state.store(ObContextState::Uninitialised, std::memory_order_release);

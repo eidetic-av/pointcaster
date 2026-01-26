@@ -83,12 +83,16 @@ ToolBar {
                         }
 
                         onTriggered: {
+                            console.log("triggered")
                             addDeviceMenu.close();
+                            console.log("after close")
+                            console.log("addNewDevice")
                             if (modelData.kind === "discovered") {
                                 workspace.addNewDevice(modelData.plugin_name, modelData.ip);
                             } else {
                                 workspace.addNewDevice(modelData.plugin_name);
                             }
+                            console.log("add new device complete")
                         }
                     }
 

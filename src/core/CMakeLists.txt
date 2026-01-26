@@ -1,6 +1,6 @@
 include(GenerateExportHeader)
 
-add_library(pointcaster_core
+add_library(pointcaster_core SHARED
     point_cloud.cc
     codec/draco.cc
     uuid/uuid.cc

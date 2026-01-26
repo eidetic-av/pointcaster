@@ -18,6 +18,7 @@ find_package(prometheus-cpp CONFIG REQUIRED)
 find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 
 target_link_libraries(pointcaster_metrics PRIVATE
+  pointcaster::core
   pointcaster::app_settings
   prometheus-cpp::core 
   prometheus-cpp::pull

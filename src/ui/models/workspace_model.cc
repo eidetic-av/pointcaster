@@ -286,7 +286,7 @@ void WorkspaceModel::onAdapterFieldEditRequested(ConfigAdapter *adapter,
 
     const QVariant new_value = adapter->fieldValue(fieldIndex);
 
-    pc::logger->trace(
+    pc::logger()->trace(
         "[UI changed DeviceConfig] deviceIndex={} field={} old='{}' new='{}'",
         device_index, adapter->fieldName(fieldIndex).toStdString(),
         old_value.toString().toStdString(), new_value.toString().toStdString());
