@@ -174,6 +174,7 @@ void ObContext::retain_user() {
 
 void ObContext::release_user() {
   if (users.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+    pc::logger()->trace("release ObContext user");
     // this was the last user
     shutdown();
   }
@@ -181,6 +182,8 @@ void ObContext::release_user() {
 
 void ObContext::shutdown() {
   using namespace std::chrono_literals;
+    
+  pc::logger()->trace("Shutting down ObContext...");
 
   // wait out any in-flight initialisation
   while (state.load(std::memory_order_acquire) ==

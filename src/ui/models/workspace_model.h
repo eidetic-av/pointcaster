@@ -84,7 +84,7 @@ private:
   QList<QObject *> _deviceConfigAdapters;
   QList<QObject *> _deviceControllers;
 
-  int _selectedDeviceIndex = -1;
+  int _selectedDeviceIndex = 0;
   QUrl _saveFileUrl;
 
   std::function<void()> _quit_callback;

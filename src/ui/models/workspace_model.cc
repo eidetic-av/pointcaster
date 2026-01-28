@@ -136,12 +136,20 @@ void WorkspaceModel::addNewDevice(const QString &plugin_name,
 
 void WorkspaceModel::deleteSelectedDevice() {
   auto new_config = _workspace.config;
-  new_config.devices.erase(new_config.devices.begin() + selectedDeviceIndex());
-  _workspace.apply_new_config(new_config);
+  const auto index = selectedDeviceIndex();
+  if (index < 0 || index >= new_config.devices.size()) {
+    pc::logger()->warn("deleteSelectedDevice: invalid index={} size={}", index,
+                       new_config.devices.size());
+    return;
+  }
+  pc::logger()->trace("Deleting selected device index: {}", index);
+  new_config.devices.erase(new_config.devices.begin() + index);
+  _workspace.apply_new_config(std::move(new_config));
   rebuildAdapters();
 }
 
 void WorkspaceModel::rebuildAdapters() {
+  pc::logger()->trace("Rebuilding device configuration adapters");
   qDeleteAll(_deviceConfigAdapters);
   _deviceConfigAdapters.clear();
 
@@ -150,7 +158,7 @@ void WorkspaceModel::rebuildAdapters() {
 
   std::scoped_lock lock(_workspace.config_access);
 
-  auto find_device_index = [this](const std::string &id) -> int {
+  const auto find_device_index = [this](const std::string &id) -> int {
     for (int i = 0; i < int(_workspace.config.devices.size()); ++i) {
       const auto &variant = _workspace.config.devices[size_t(i)];
       const bool match = std::visit(
@@ -160,6 +168,7 @@ void WorkspaceModel::rebuildAdapters() {
     return -1;
   };
 
+  pc::logger()->trace("Device count: {}", _workspace.devices.size());
   for (auto &device_plugin : _workspace.devices) {
     auto *plugin = device_plugin.get();
 
@@ -218,6 +227,8 @@ void WorkspaceModel::rebuildAdapters() {
   emit deviceControllersChanged();
   emit deviceVariantNamesChanged();
   emit addDeviceMenuEntriesChanged();
+
+  pc::logger()->trace("Finished rebuilding device configuration adapters");
 }
 
 void WorkspaceModel::refreshDeviceAdapterFromCore(int deviceIndex) {
