@@ -11,9 +11,9 @@ DoubleSpinBox {
     property var maxValue: undefined
     property var defaultValue: undefined
 
-    property color focusBorderColor: DarkPalette.highlight
+    property color focusBorderColor: ThemeColors.highlight
     property color unfocusBorderColor: "transparent"
-    property color backgroundColor: (root.activeFocus || hover.hovered) ? DarkPalette.almostdark : "transparent"
+    property color backgroundColor: (root.activeFocus || hover.hovered) ? ThemeColors.almostdark : "transparent"
 
     editable: true
     decimals: width >= 58 ? 3 : 2
@@ -133,9 +133,9 @@ DoubleSpinBox {
         text: root.displayText
 
         font: root.font
-        color: DarkPalette.text
-        selectionColor: DarkPalette.highlight
-        selectedTextColor: DarkPalette.highlightedText
+        color: ThemeColors.text
+        selectionColor: ThemeColors.highlight
+        selectedTextColor: ThemeColors.highlightedText
         horizontalAlignment: Qt.AlignHLeft
         verticalAlignment: Qt.AlignVCenter
 

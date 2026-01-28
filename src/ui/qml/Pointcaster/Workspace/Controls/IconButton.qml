@@ -10,11 +10,19 @@ AbstractButton {
     property int iconSize: Math.round(9 * Scaling.uiScale)
     property int iconTextSpacing: Math.round(5 * Scaling.uiScale)
 
-    property color backgroundColor: DarkPalette.middark
-    property color hoverColor: DarkPalette.mid
-    property color pressedColor: DarkPalette.midlight
+    property color backgroundColor: ThemeColors.middark
+    property color hoverColor: ThemeColors.mid
+    property color pressedColor: ThemeColors.midlight
 
-    property color borderColor: DarkPalette.mid
+    property color borderColor: ThemeColors.mid
+    property int borderWidth: 1
+
+    property int radius: Math.round(3 * Scaling.uiScale)
+
+    property real topLeftRadius: -1
+    property real topRightRadius: -1
+    property real bottomLeftRadius: -1
+    property real bottomRightRadius: -1
 
     property string tooltip
 
@@ -33,13 +41,23 @@ AbstractButton {
     focusPolicy: Qt.StrongFocus
     opacity: enabled ? 1.0 : 0.66
 
+    readonly property real effectiveTopLeftRadius: (root.topLeftRadius >= 0) ? root.topLeftRadius : root.radius
+    readonly property real effectiveTopRightRadius: (root.topRightRadius >= 0) ? root.topRightRadius : root.radius
+    readonly property real effectiveBottomLeftRadius: (root.bottomLeftRadius >= 0) ? root.bottomLeftRadius : root.radius
+    readonly property real effectiveBottomRightRadius: (root.bottomRightRadius >= 0) ? root.bottomRightRadius : root.radius
+
     background: Rectangle {
         anchors.fill: parent
-        radius: Math.round(3 * Scaling.uiScale)
+
+        radius: root.radius
+        topLeftRadius: root.effectiveTopLeftRadius
+        topRightRadius: root.effectiveTopRightRadius
+        bottomLeftRadius: root.effectiveBottomLeftRadius
+        bottomRightRadius: root.effectiveBottomRightRadius
 
         color: {
             if (!root.enabled)
-                return DarkPalette.middark;
+                return ThemeColors.middark;
             if (root.pressed)
                 return root.pressedColor;
             if (root.hovered)
@@ -47,16 +65,22 @@ AbstractButton {
             return root.backgroundColor;
         }
 
-        border.width: 1
+        border.width: root.borderWidth
         border.color: root.borderColor
 
         Rectangle {
             visible: root.activeFocus
             anchors.fill: parent
             color: "transparent"
-            radius: parent.radius
-            border.width: 1
-            border.color: DarkPalette.highlight
+
+            radius: root.radius
+            topLeftRadius: root.effectiveTopLeftRadius
+            topRightRadius: root.effectiveTopRightRadius
+            bottomLeftRadius: root.effectiveBottomLeftRadius
+            bottomRightRadius: root.effectiveBottomRightRadius
+
+            border.width: root.borderWidth
+            border.color: ThemeColors.highlight
         }
     }
 

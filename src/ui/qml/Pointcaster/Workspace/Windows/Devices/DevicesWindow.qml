@@ -44,7 +44,7 @@ KDDW.DockWidget {
 
         Rectangle {
             anchors.fill: parent
-            color: DarkPalette.base
+            color: ThemeColors.base
         }
 
         DevicesToolBar {

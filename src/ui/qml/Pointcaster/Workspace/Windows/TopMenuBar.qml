@@ -6,11 +6,11 @@ import Pointcaster 1.0
 MenuBar {
     id: root
 
-    height: Math.ceil(Scaling.pointSize * 2 * Scaling.uiScale)
+    height: Math.ceil(Scaling.pointSize * Scaling.uiScale + 16 * Scaling.uiScale)
     implicitHeight: height
 
     background: Rectangle {
-        color: DarkPalette.base
+        color: ThemeColors.base
     }
 
     delegate: MenuBarItem {
@@ -101,7 +101,7 @@ MenuBar {
         Action {
             id: settingsWindowEntry
             text: qsTr("&Preferences")
-            shortcut: StandardKey.Preferences
+            shortcut: "Ctrl+,"
             onTriggered: settingsWindow.open()
         }
     }

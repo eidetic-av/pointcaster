@@ -30,8 +30,11 @@ QtObject {
     }
 
     property color red: "#ff4151"
-    property color green: "#aecf7f"
-    property color blue: "#81a1c1"
+    // property color green: "#aecf7f"
+    property color green: "#91d76f"
+    // property color blue: "#81a1c1"
+    property color blue: "#00b0ff"
+    property color yellow: "#E6D38A"
 
     property color success: green
     property color error: red
@@ -57,4 +60,9 @@ QtObject {
     property color almostdark: "#1E2230" 
     property color dark: palette.dark
     property color shadow: palette.shadow
+
+    function withAlpha(c, a) {
+        const col = Qt.colorEqual(c, c) ? c : Qt.rgba(0, 0, 0, 1); // forces color coercion
+        return Qt.rgba(col.r, col.g, col.b, a);
+    }
 }

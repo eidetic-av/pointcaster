@@ -14,10 +14,10 @@ ComboBox {
 
     background: Rectangle {
         anchors.fill: parent
-        color: (root.activeFocus || rootHover.hovered) ? DarkPalette.almostdark : "transparent"
+        color: (root.activeFocus || rootHover.hovered) ? ThemeColors.almostdark : "transparent"
         radius: 0
         border.width: (root.activeFocus || root.visualFocus) ? 1 : 0
-        border.color: DarkPalette.highlight
+        border.color: ThemeColors.highlight
     }
 
     contentItem: Text {
@@ -29,7 +29,7 @@ ComboBox {
         elide: Text.ElideRight
 
         text: root.displayText
-        color: DarkPalette.text
+        color: ThemeColors.text
         font: root.font
         opacity: root.enabled ? 1.0 : 0.66
     }

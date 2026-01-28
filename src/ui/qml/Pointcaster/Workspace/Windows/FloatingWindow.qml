@@ -24,7 +24,7 @@ Rectangle {
 
     anchors.fill: parent
 
-    color: DarkPalette.middark
+    color: ThemeColors.middark
     border {
         color: "transparent"
         width: 1

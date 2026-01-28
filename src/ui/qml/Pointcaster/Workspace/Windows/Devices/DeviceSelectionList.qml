@@ -20,8 +20,8 @@ Item {
     Rectangle {
         id: frame
         anchors.fill: parent
-        color: DarkPalette.alternateBase
-        border.color: DarkPalette.mid
+        color: ThemeColors.alternateBase
+        border.color: ThemeColors.mid
         border.width: 1
         clip: true
 
@@ -67,7 +67,7 @@ Item {
                 property bool hovered: mouse.containsMouse
                 property bool selected: ListView.isCurrentItem
 
-                color: hovered ? DarkPalette.midlight : selected ? DarkPalette.mid : DarkPalette.almostdark
+                color: hovered ? ThemeColors.midlight : selected ? ThemeColors.mid : ThemeColors.almostdark
                 border.width: 0
 
                 Row {
@@ -84,16 +84,16 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         color: {
                             if (!modelData || modelData.status === undefined)
-                                return DarkPalette.inactive;
+                                return ThemeColors.inactive;
                             switch (modelData.status) {
                             case UiEnums.WorkspaceDeviceStatus.Loaded:
-                                return DarkPalette.neutralSuccess;
+                                return ThemeColors.neutralSuccess;
                             case UiEnums.WorkspaceDeviceStatus.Active:
-                                return DarkPalette.success;
+                                return ThemeColors.success;
                             case UiEnums.WorkspaceDeviceStatus.Missing:
-                                return DarkPalette.error;
+                                return ThemeColors.error;
                             default:
-                                return DarkPalette.inactive;
+                                return ThemeColors.inactive;
                             }
                         }
                     }
@@ -103,7 +103,7 @@ Item {
                         width: Math.max(Math.round(75 * Scaling.uiScale), parent.width - statusCircle.width - deviceTypeText.width - (parent.spacing * 2))
                         elide: Text.ElideRight
                         text: modelData.fieldValue(0)
-                        color: DarkPalette.text
+                        color: ThemeColors.text
                         font: Scaling.uiFont
                     }
 
@@ -112,7 +112,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         elide: Text.ElideRight
                         text: modelData.displayName()
-                        color: DarkPalette.text
+                        color: ThemeColors.text
                         opacity: .5
                         font: Scaling.uiFont
                     }
@@ -139,7 +139,7 @@ Item {
             radius: frame.radius
             color: "transparent"
             border.width: list.activeFocus ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
-            border.color: DarkPalette.highlight
+            border.color: ThemeColors.highlight
             visible: border.width > 0
         }
     }

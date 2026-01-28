@@ -8,7 +8,7 @@ KDDW.TabBarBase {
     id: root
 
     readonly property real tabBarTextPixelSize: Math.round(14 * Scaling.uiScale)
-    readonly property real tabBarVerticalPadding: Math.round(7 * Scaling.uiScale)
+    readonly property real tabBarVerticalPadding: Math.round(8 * Scaling.uiScale)
     readonly property real tabBarHorizontalPadding: Math.round(10 * Scaling.uiScale)
     height: tabBarTextPixelSize + tabBarVerticalPadding * 2
     implicitHeight: height
@@ -63,7 +63,7 @@ KDDW.TabBarBase {
 
     Rectangle {
         id: tabBarBackground
-        color: DarkPalette.middark
+        color: ThemeColors.middark
         anchors.fill: parent
         z: -1000
         enabled: false
@@ -237,16 +237,16 @@ KDDW.TabBarBase {
                 // background fill
                 Rectangle {
                     anchors.fill: parent
-                    color: tab.isHovered ? DarkPalette.midlight : (tab.isCurrent ? DarkPalette.mid : DarkPalette.middark)
+                    color: tab.isHovered ? ThemeColors.midlight : (tab.isCurrent ? ThemeColors.mid : ThemeColors.middark)
                 }
 
-                // 1px "active" line
+                // 1px "active session" line
                 Rectangle {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
                     height: tab.isCurrent ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
-                    color: DarkPalette.highlight
+                    color: ThemeColors.highlight
                     z: 10
                 }
 
@@ -265,7 +265,7 @@ KDDW.TabBarBase {
 
                         text: title
                         font: Scaling.uiFont
-                        color: DarkPalette.text
+                        color: ThemeColors.text
                         opacity: tab.isHovered ? 1 : tab.isCurrent ? 1 : 0.5
                         elide: Text.ElideRight
                     }
@@ -276,7 +276,7 @@ KDDW.TabBarBase {
                     anchors.fill: parent
                     color: "transparent"
                     border.width: tab.activeFocus ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
-                    border.color: DarkPalette.highlight
+                    border.color: ThemeColors.highlight
                     z: 30
                 }
 
@@ -305,6 +305,11 @@ KDDW.TabBarBase {
                         tabContextMenu.popup(Qt.point(p.x, p.y));
                     }
                 }
+
+                Component.onCompleted: {
+                    console.log("dockWidgetModel keys:", Object.keys(modelData));
+                    console.log("title:", modelData.title, "affinities:", modelData.affinities);
+                }
             }
         }
 
@@ -326,7 +331,7 @@ KDDW.TabBarBase {
 
                 Rectangle {
                     anchors.fill: parent
-                    color: DarkPalette.middark
+                    color: ThemeColors.middark
                 }
 
                 // mimic hover highlight on keyboard focus as well
@@ -334,11 +339,11 @@ KDDW.TabBarBase {
                     anchors.fill: parent
                     color: "transparent"
                     border.width: addButtonFocusScope.activeFocus ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
-                    border.color: DarkPalette.highlight
+                    border.color: ThemeColors.highlight
                 }
 
                 InfoToolTip {
-                    visible: labelHover.hovered
+                    visible: addButtonMouseArea.containsMouse
                     textValue: "Add new session"
                 }
 

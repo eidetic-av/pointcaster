@@ -12,9 +12,9 @@ SpinBox {
     property var maxValue: undefined
     property var defaultValue: undefined
 
-    property color focusBorderColor: DarkPalette.highlight
+    property color focusBorderColor: ThemeColors.highlight
     property color unfocusBorderColor: "transparent"
-    property color backgroundColor: (root.activeFocus || hover.hovered) ? DarkPalette.almostdark : "transparent"
+    property color backgroundColor: (root.activeFocus || hover.hovered) ? ThemeColors.almostdark : "transparent"
 
     property real dragThresholdPx: 6.0
     property real pixelsPerStep: 6.0
@@ -111,9 +111,9 @@ SpinBox {
         text: root.textFromValue(root.value, root.locale)
 
         font: root.font
-        color: DarkPalette.text
-        selectionColor: DarkPalette.highlight
-        selectedTextColor: DarkPalette.highlightedText
+        color: ThemeColors.text
+        selectionColor: ThemeColors.highlight
+        selectedTextColor: ThemeColors.highlightedText
         horizontalAlignment: Qt.AlignHLeft
         verticalAlignment: Qt.AlignVCenter
 

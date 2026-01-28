@@ -25,7 +25,7 @@ Row {
     property int labelWidth: Math.round(16 * Scaling.uiScale)
     property int labelHeight: Math.round(16 * Scaling.uiScale)
     property int labelLeftRadius: Math.round(3 * Scaling.uiScale)
-    property color labelBackgroundColor: DarkPalette.almostdark
+    property color labelBackgroundColor: ThemeColors.almostdark
 
     signal commitValue(var v3)
 
@@ -63,17 +63,17 @@ Row {
                 {
                     label: "X",
                     index: 0,
-                    color: DarkPalette.red
+                    color: ThemeColors.red
                 },
                 {
                     label: "Y",
                     index: 1,
-                    color: DarkPalette.green
+                    color: ThemeColors.green
                 },
                 {
                     label: "Z",
                     index: 2,
-                    color: DarkPalette.blue
+                    color: ThemeColors.blue
                 }
             ]
 

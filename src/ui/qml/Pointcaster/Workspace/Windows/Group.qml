@@ -33,7 +33,7 @@ Rectangle {
     radius: 0
     color: "transparent"
     border {
-        color: DarkPalette.middark
+        color: ThemeColors.middark
         width: 1
     }
 

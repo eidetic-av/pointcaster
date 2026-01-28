@@ -122,7 +122,7 @@ Item {
 
                                     property bool isValid: true
 
-                                    color: isValid ? DarkPalette.text : DarkPalette.red
+                                    color: isValid ? ThemeColors.text : ThemeColors.red
 
                                     function validate(address, commit) {
                                         isValid = NetUtils.isValidHostAddress(address);

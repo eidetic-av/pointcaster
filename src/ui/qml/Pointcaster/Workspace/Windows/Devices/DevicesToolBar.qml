@@ -31,6 +31,48 @@ ToolBar {
     contentItem: RowLayout {
         spacing: Math.round(6 * Scaling.uiScale)
 
+        Item {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+
+            implicitHeight: label.implicitHeight + underline.height
+
+            TextMetrics {
+                id: textMetrics
+                font: label.font
+                text: label.text
+            }
+
+            Label {
+                id: label
+                text: "session_1"
+
+                font: root.font
+                color: ThemeColors.text
+                opacity: 0.9
+
+                elide: Text.ElideRight
+                verticalAlignment: Text.AlignVCenter
+                topPadding: Math.round(3 * Scaling.uiScale)
+
+                anchors.left: parent.left
+                anchors.right: parent.right
+            }
+
+            Rectangle {
+                id: underline
+                height: 1
+                width: Math.min(textMetrics.width, label.width)   // respects eliding
+                color: ThemeColors.highlight
+
+                anchors {
+                    left: label.left
+                    top: label.bottom
+                    topMargin: Math.round(1 * Scaling.uiScale)
+                }
+            }
+        }
+
         ToolButton {
             id: addButton
 
@@ -38,8 +80,8 @@ ToolBar {
             Layout.preferredHeight: Math.round(25 * Scaling.uiScale)
 
             icon.source: FontAwesome.icon("solid/plus")
-            icon.width: Math.round(18 * Scaling.uiScale)
-            icon.height: Math.round(18 * Scaling.uiScale)
+            icon.width: Math.round(17 * Scaling.uiScale)
+            icon.height: Math.round(17 * Scaling.uiScale)
 
             InfoToolTip {
                 visible: parent.hovered && !addDeviceMenu.visible
@@ -70,29 +112,25 @@ ToolBar {
 
                         contentItem: Text {
                             text: parent.text
-                            color: DarkPalette.text
+                            color: ThemeColors.text
                             font: parent.font
                             elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
                         }
 
                         background: Rectangle {
-                            color: hovered ? DarkPalette.mid : DarkPalette.almostdark
+                            color: hovered ? ThemeColors.mid : ThemeColors.almostdark
                             border.width: 1
-                            border.color: DarkPalette.mid
+                            border.color: ThemeColors.mid
                         }
 
                         onTriggered: {
-                            console.log("triggered")
                             addDeviceMenu.close();
-                            console.log("after close")
-                            console.log("addNewDevice")
                             if (modelData.kind === "discovered") {
                                 workspace.addNewDevice(modelData.plugin_name, modelData.ip);
                             } else {
                                 workspace.addNewDevice(modelData.plugin_name);
                             }
-                            console.log("add new device complete")
                         }
                     }
 
@@ -107,21 +145,21 @@ ToolBar {
             Layout.preferredHeight: Math.round(25 * Scaling.uiScale)
 
             icon.source: FontAwesome.icon("solid/trash")
-            icon.width: Math.round(18 * Scaling.uiScale)
-            icon.height: Math.round(18 * Scaling.uiScale)
+            icon.width: Math.round(17 * Scaling.uiScale)
+            icon.height: Math.round(17 * Scaling.uiScale)
 
-            InfoToolTip {
-                visible: tooltip ? parent.hovered : false
-                textValue: tooltip
-            }
+            enabled: root.workspace && root.workspace.deviceConfigAdapters.length > 0
+            opacity: enabled ? 1.0 : 0.4
 
             onClicked: {
-                root.workspace.deleteSelectedDevice();
+                if (root.workspace)
+                    root.workspace.deleteSelectedDevice();
             }
-        }
 
-        Item {
-            Layout.fillWidth: true
+            InfoToolTip {
+                visible: parent.hovered
+                textValue: "Delete selected device"
+            }
         }
     }
 }

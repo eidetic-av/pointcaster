@@ -16,7 +16,7 @@ ApplicationWindow {
     minimumWidth: 1200
     minimumHeight: 800
 
-    palette: DarkPalette.palette
+    palette: ThemeColors.palette
 
     FontLoader {
         source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Light.otf"
@@ -142,8 +142,8 @@ ApplicationWindow {
         y: (parent.height - height) / 2
 
         background: Rectangle {
-            color: DarkPalette.alternateBase
-            border.color: DarkPalette.middark
+            color: ThemeColors.alternateBase
+            border.color: ThemeColors.middark
             radius: 3
         }
 
@@ -155,7 +155,7 @@ ApplicationWindow {
                 text: "Pointcaster\n\nAbout dialog placeholder"
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
-                color: DarkPalette.text
+                color: ThemeColors.text
             }
 
             Button {

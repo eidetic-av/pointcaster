@@ -42,8 +42,8 @@ Item {
 
         implicitHeight: header.height + (root.expanded ? body.implicitHeight : 0)
 
-        color: DarkPalette.dark
-        border.color: DarkPalette.mid
+        color: ThemeColors.dark
+        border.color: ThemeColors.mid
         border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
         clip: true
 
@@ -55,8 +55,8 @@ Item {
                 right: parent.right
             }
             height: Math.round(28 * Scaling.uiScale)
-            color: headerMouseArea.containsMouse ? DarkPalette.mid : (root.expanded ? DarkPalette.middark : DarkPalette.base)
-            border.color: DarkPalette.mid
+            color: headerMouseArea.containsMouse ? ThemeColors.mid : (root.expanded ? ThemeColors.middark : ThemeColors.base)
+            border.color: ThemeColors.mid
             border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
 
             Image {
@@ -85,7 +85,7 @@ Item {
                 text: root.model ? (root.model.displayName() + " Properties") : root.emptyTitle
                 elide: Text.ElideRight
                 font: Scaling.uiFont
-                color: DarkPalette.text
+                color: ThemeColors.text
             }
 
             MouseArea {
@@ -120,7 +120,7 @@ Item {
                 visible: !root.model
                 text: "No device selected"
                 font: Scaling.uiFont
-                color: DarkPalette.text
+                color: ThemeColors.text
             }
 
             Item {
@@ -188,7 +188,7 @@ Item {
                                         verticalCenter: parent.verticalCenter
                                     }
                                     horizontalAlignment: Text.AlignLeft
-                                    color: DarkPalette.text
+                                    color: ThemeColors.text
                                     text: root.model ? StringUtils.titleFromSnake(root.model.fieldName(index)) : ""
                                     font: Scaling.uiFont
                                     elide: Text.ElideRight
@@ -239,7 +239,7 @@ Item {
 
                                     background: Rectangle {
                                         color: "transparent"
-                                        border.color: valueField.focus ? DarkPalette.highlight : "transparent"
+                                        border.color: valueField.focus ? ThemeColors.highlight : "transparent"
                                         border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
                                         radius: 0
                                     }
@@ -343,9 +343,10 @@ Item {
                                     font: Scaling.uiFont
                                     axisFont: Scaling.uiSmallFont
 
-                                    minValue: root.model ? root.model.minMax(index)[0] : undefined
-                                    maxValue: root.model ? root.model.minMax(index)[1] : undefined
-                                    defaultValue: root.model ? root.model.defaultValue(index) : undefined
+                                    property var minMax: root.model ? root.model.minMax(index) : undefined
+
+                                    minValue: minMax ? minMax[0] : undefined
+                                    maxValue: minMax ? minMax[1] : undefined
 
                                     boundValue: {
                                         if (!root.model)
@@ -435,7 +436,7 @@ Item {
                             }
                         }
 
-                        color: dividerMouseArea.drag.active ? DarkPalette.midlight : (dividerMouseArea.containsMouse ? DarkPalette.mid : DarkPalette.middark)
+                        color: dividerMouseArea.drag.active ? ThemeColors.midlight : (dividerMouseArea.containsMouse ? ThemeColors.mid : ThemeColors.middark)
 
                         Behavior on color {
                             ColorAnimation {

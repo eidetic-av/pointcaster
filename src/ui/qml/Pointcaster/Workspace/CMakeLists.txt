@@ -4,7 +4,7 @@
 
 set(qml_singletons
     WorkspaceState.qml
-    Theme/DarkPalette.qml
+    Theme/ThemeColors.qml
     Theme/FontAwesome.qml
     Theme/Scaling.qml
     Utils/StringUtils.qml
@@ -25,6 +25,7 @@ qt_add_qml_module(PointcasterWorkspace
         Controls/EnumSelector.qml
         Controls/IconButton.qml
         Controls/InfoToolTip.qml
+        Controls/OriginGizmo.qml
         Editors/ConfigurationEditor.qml
         Windows/TabBar.qml
         Windows/TabBarBase.qml
@@ -43,6 +44,7 @@ qt_add_qml_module(PointcasterWorkspace
         Windows/Sessions/SessionView.qml
         Windows/Sessions/SessionViewWindow.qml
         Windows/Sessions/CentralSessionView.qml
+        Windows/Sessions/SessionCameraControls.qml
     RESOURCES
         Resources/Fonts/AtkinsonHyperlegibleNext-Light.otf
         Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf
