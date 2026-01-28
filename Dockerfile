@@ -40,7 +40,6 @@ RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
     rm -rf /var/lib/apt/lists/*
 
 # download and install cmake
-
 ARG CMAKE_VERSION=4.2.1
 RUN set -eux; \
     BASE_URL="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}"; \
@@ -57,7 +56,6 @@ RUN --mount=type=cache,id=root-cache-pip,target=/root/.cache/pip \
     python3 -m pip install --no-input aqtinstall --break-system-packages
 
 # set up dev user
-
 ARG USERNAME=dev
 ARG USER_UID=1000
 ARG USER_GID=1000
@@ -84,13 +82,19 @@ RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
     --mount=type=cache,id=var-lib-apt,target=/var/lib/apt \
     set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends vim fish; \
+    apt-get install -y --no-install-recommends neovim fish; \
     rm -rf /var/lib/apt/lists/*
 
-# TODO
-# can install clangd here too
-# and it doesn't have to be vscode, it can be vscodium now it doesn't
-# depend on the proprietary remote code session/ssh/devcontainer tools from vscode
+# install clangd + clang-format + clang-tidy (LLVM 21)
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates wget gnupg; \
+    rm -rf /var/lib/apt/lists/*; \
+    wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /usr/share/keyrings/llvm-snapshot.gpg; \
+    printf 'deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-21 main\n' > /etc/apt/sources.list.d/llvm21.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends clangd-21 clang-tools-21; \
+    rm -rf /var/lib/apt/lists/*
 
 # optionally install vscode for in-container ide setup
 ARG INSTALL_VSCODE=0
@@ -101,30 +105,29 @@ ARG VSCODE_SHA256=1722e0cf7b72a6806c9dc24b755067635d4831ff6f927f1a93642052cc4a36
 RUN --mount=type=cache,id=var-cache-downloads,target=/var/cache/downloads \
     set -eux; \
     if [ "${INSTALL_VSCODE}" = "1" ]; then \
-    	apt-get update; \
-    	apt-get install -y --no-install-recommends libasound2 libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 libgtk-3-0 \
-		libnspr4 libnss3 libxcomposite1 libxdamage1 libxkbfile1 libxrandr2 xdg-utils;\
+        apt-get update; \
+        apt-get install -y --no-install-recommends libasound2 libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 libgtk-3-0 \
+            libnspr4 libnss3 libxcomposite1 libxdamage1 libxkbfile1 libxrandr2 xdg-utils; \
         VSCODE_DEB="code_${VSCODE_VERSION}-${VSCODE_BUILD_TIMESTAMP}_amd64.deb"; \
         if [ ! -f "/var/cache/downloads/${VSCODE_DEB}" ]; then \
             axel -n 8 -o "/var/cache/downloads/${VSCODE_DEB}" \
-	    	"https://update.code.visualstudio.com/${VSCODE_VERSION}/linux-deb-x64/stable"; \
+                "https://update.code.visualstudio.com/${VSCODE_VERSION}/linux-deb-x64/stable"; \
         fi; \
         echo "${VSCODE_SHA256}  /var/cache/downloads/${VSCODE_DEB}" | sha256sum -c -; \
-	export DEBIAN_FRONTEND=noninteractive; \
-	echo "code code/add-microsoft-repo boolean true" | debconf-set-selections; \
+        export DEBIAN_FRONTEND=noninteractive; \
+        echo "code code/add-microsoft-repo boolean true" | debconf-set-selections; \
         apt-get install -y --no-install-recommends "/var/cache/downloads/${VSCODE_DEB}"; \
-	rm -rf /var/lib/apt/lists/*; \
+        rm -rf /var/lib/apt/lists/*; \
     fi
 
 # move to the dev user's environment now and set it up
-
 USER ${USERNAME}
 
 WORKDIR /pointcaster
 
 # install qt6 libs
-
-RUN set -eux; aqt install-qt \
+RUN set -eux; \
+    aqt install-qt \
         --outputdir "${QT_INSTALL_DIR}" \
         linux desktop ${QT_VERSION} linux_gcc_64 \
         -m qtshadertools qtquick3d
@@ -132,9 +135,7 @@ RUN set -eux; aqt install-qt \
 ENV CMAKE_PREFIX_PATH="${QT_INSTALL_DIR}/${QT_VERSION}/gcc_64"
 
 # download and bootstrap vcpkg into the user's home dir
-
 ENV VCPKG_DEFAULT_BINARY_CACHE=/home/${USERNAME}/.cache/vcpkg/archives
-
 ENV VCPKG_DOWNLOADS=${VCPKG_ROOT}-cache/downloads
 ENV VCPKG_BUILDTREES=${VCPKG_ROOT}-cache/buildtrees
 
@@ -148,14 +149,13 @@ RUN --mount=type=cache,id=vcpkg-downloads,target=${VCPKG_DOWNLOADS},uid=${USER_U
     ./bootstrap-vcpkg.sh -disableMetrics
 
 # install appimagetool for AppImage deployment
-
 RUN --mount=type=cache,id=user-downloads,target=/home/${USERNAME}/.cache/downloads,uid=${USER_UID},gid=${USER_GID} \
     set -eux; \
     mkdir -p "${APPIMAGETOOL_DIR}"; \
     cd "${APPIMAGETOOL_DIR}"; \
     test -f "/home/${USERNAME}/.cache/downloads/appimagetool-x86_64.AppImage" || \
-      axel "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage" \
- 	-o "/home/${USERNAME}/.cache/downloads/appimagetool-x86_64.AppImage"; \
+        axel "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage" \
+            -o "/home/${USERNAME}/.cache/downloads/appimagetool-x86_64.AppImage"; \
     echo "${APPIMAGETOOL_SHA256}  /home/${USERNAME}/.cache/downloads/appimagetool-x86_64.AppImage" | sha256sum -c -; \
     cp -f "/home/${USERNAME}/.cache/downloads/appimagetool-x86_64.AppImage" ./appimagetool-x86_64.AppImage; \
     chmod +x appimagetool-x86_64.AppImage; \
