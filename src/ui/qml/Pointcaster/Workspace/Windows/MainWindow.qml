@@ -35,14 +35,14 @@ ApplicationWindow {
 
     FileDialog {
         id: openWorkspaceDialog
-        nameFilters: [qsTr("JSON files (*.json)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("TOML files (*.toml)"), qsTr("All files (*)")]
         onAccepted: workspaceModel.loadFromFile(selectedFile)
     }
 
     FileDialog {
         id: saveAsWorkspaceDialog
         fileMode: FileDialog.SaveFile
-        nameFilters: [qsTr("JSON files (*.json)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("TOML files (*.toml)"), qsTr("All files (*)")]
         onAccepted: {
             const hasSavePath = workspaceModel && workspaceModel.saveFileUrl.toString() !== "";
             workspaceModel.saveFileUrl = selectedFile;
@@ -96,19 +96,10 @@ ApplicationWindow {
             SessionView {}
         }
 
-        KDDW.DockWidget {
-            id: session2
-            uniqueName: "session2"
-            title: "session_2"
-            affinities: ["view"]
-            SessionView {}
-        }
-
         Component.onCompleted: {
             // layoutSaver.restoreFromFile('mylayout.json');
 
             addDockWidgetAsTab(session1);
-            addDockWidgetAsTab(session2);
 
             addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(400, 400));
 

@@ -36,6 +36,16 @@ if(NOT WIN32)
 		endforeach()
 		]])
 
+    # we need to manually copy toml++ on Linux because we don't
+    # use vcpkg
+    install(
+        FILES "/usr/lib/x86_64-linux-gnu/libtomlplusplus.so.3.3.0"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        RENAME "libtomlplusplus.so.3"
+    )
+
+    # and also some other platform libs it seems:
+
     # TODO: super hacky absolute paths for deps
     install(
         FILES "/usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0.0.0"

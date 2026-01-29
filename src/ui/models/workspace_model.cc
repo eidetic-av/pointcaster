@@ -68,10 +68,15 @@ void WorkspaceModel::save(bool update_last_session_path) {
     return;
   }
 
-  const QString local_path = saveFileUrl().toLocalFile();
+  QString local_path = saveFileUrl().toLocalFile();
   if (local_path.isEmpty()) {
     emit openSaveAsDialog();
     return;
+  }
+
+  using namespace Qt::StringLiterals;
+  if (!local_path.endsWith(u".toml"_s, Qt::CaseInsensitive)) {
+    local_path += u".toml"_s;
   }
 
   std::jthread([workspace_config = _workspace.config, local_path,

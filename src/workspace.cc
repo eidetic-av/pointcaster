@@ -13,7 +13,7 @@
 #include <plugins/plugin_loader.h>
 #include <print>
 #include <rfl/AddTagsToVariants.hpp>
-#include <rfl/json.hpp>
+#include <rfl/toml.hpp>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -29,6 +29,12 @@ namespace pc {
 using namespace Corrade::PluginManager;
 using namespace Corrade::Containers;
 
+// we wrap our workspace configuration structure in a file struct
+// so it gets serialized with a top-level "[workspace]" root element
+struct WorkspaceFile {
+  WorkspaceConfiguration workspace;
+};
+
 bool load_workspace_from_file(WorkspaceConfiguration &config,
                               const std::string &file_path) {
   std::ifstream file(file_path, std::ios::binary);
@@ -37,15 +43,17 @@ bool load_workspace_from_file(WorkspaceConfiguration &config,
     config = WorkspaceConfiguration{};
     return false;
   }
-  const std::string json_string{std::istreambuf_iterator<char>(file),
+  const std::string toml_string{std::istreambuf_iterator<char>(file),
                                 std::istreambuf_iterator<char>()};
   try {
-    config = rfl::json::read<WorkspaceConfiguration, rfl::AddTagsToVariants>(
-                 json_string)
-                 .value();
+    config = rfl::toml::read<WorkspaceFile, rfl::AddTagsToVariants>(toml_string)
+                 .value()
+                 .workspace;
+
     pc::logger()->info("Loaded configuration from '{}'", file_path);
     pc::logger()->trace("Loaded Workspace:\n{}",
-                      rfl::json::write<rfl::AddTagsToVariants>(config));
+                        rfl::toml::write<rfl::AddTagsToVariants>(
+                            WorkspaceFile{.workspace = config}));
   } catch (const std::exception &e) {
     pc::logger()->error("Failed to parse '{}': {}", file_path, e.what());
     config = WorkspaceConfiguration{};
@@ -57,8 +65,9 @@ bool load_workspace_from_file(WorkspaceConfiguration &config,
 void save_workspace_to_file(const WorkspaceConfiguration &config,
                             const std::string &file_path) {
   try {
-    const auto json_string = rfl::json::write<rfl::AddTagsToVariants>(config);
-    std::ofstream(file_path) << json_string;
+    const auto toml_string = rfl::toml::write<rfl::AddTagsToVariants>(
+        WorkspaceFile{.workspace = config});
+    std::ofstream(file_path) << toml_string;
     pc::logger()->info("Saved workspace file to '{}'", file_path);
   } catch (const std::exception &e) {
     pc::logger()->error("Failed to save '{}': {}", file_path, e.what());
@@ -96,9 +105,9 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
           std::scoped_lock lock(config_access);
           thread_config = config;
         }
-        const auto json_string =
-            rfl::json::write<rfl::AddTagsToVariants>(thread_config);
-        pc::logger()->debug("Workspace configuration: \n{}\n", json_string);
+        const auto toml_string =
+            rfl::toml::write<rfl::AddTagsToVariants>(thread_config);
+        pc::logger()->debug("Workspace configuration: \n{}\n", toml_string);
       }
     }
   }).detach();
