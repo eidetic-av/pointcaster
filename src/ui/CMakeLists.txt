@@ -34,3 +34,20 @@ target_link_libraries(pointcaster_ui PRIVATE
 target_link_libraries(pointcaster PRIVATE Qt6::Gui)
 
 qt_import_qml_plugins(pointcaster)
+
+target_precompile_headers(pointcaster_ui PRIVATE
+  <string>
+  <string_view>
+  <vector>
+  <memory>
+  <mutex>
+  <optional>
+  <QObject>
+  <QString>
+  <QVariant>
+  <QUrl>
+  <QCoreApplication>
+  <QThread>
+  <QMetaObject>
+  <QUndoCommand>
+)

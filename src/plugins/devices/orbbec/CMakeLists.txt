@@ -90,3 +90,20 @@ endif()
 
 
 set(CORRADE_PLUGINS ${CORRADE_PLUGINS} OrbbecDevice PARENT_SCOPE)
+
+target_precompile_headers(OrbbecDevice PRIVATE
+  <string>
+  <string_view>
+  <vector>
+  <memory>
+  <mutex>
+  <thread>
+  <chrono>
+  <atomic>
+  <optional>
+  <libobsensor/ObSensor.hpp>
+  <libobsensor/hpp/Context.hpp>
+  <QObject>
+  <QString>
+  <QVariant>
+)

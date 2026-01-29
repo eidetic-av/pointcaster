@@ -22,3 +22,15 @@ add_subdirectory(devices/orbbec)
 
 # the $CORRADE_PLUGINS list should be populated after adding subdirectories
 add_dependencies(pointcaster ${CORRADE_PLUGINS})
+
+target_precompile_headers(pointcaster_plugins PRIVATE
+  <string>
+  <string_view>
+  <vector>
+  <memory>
+  <filesystem>
+  <optional>
+  <Corrade/PluginManager/Manager.h>
+  <Corrade/PluginManager/AbstractManager.h>
+  <Corrade/Containers/StringView.h>
+)

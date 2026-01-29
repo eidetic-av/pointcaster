@@ -81,3 +81,15 @@ install(TARGETS PointcasterWorkspace
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )
+
+target_precompile_headers(PointcasterWorkspace PRIVATE
+  <string>
+  <string_view>
+  <vector>
+  <memory>
+  <QObject>
+  <QString>
+  <QVariant>
+  <QUrl>
+  <QCoreApplication>
+)

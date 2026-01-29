@@ -48,6 +48,21 @@ target_link_libraries(pointcaster PRIVATE
 
 target_include_directories(pointcaster PRIVATE "${CMAKE_SOURCE_DIR}/src")
 
+target_precompile_headers(pointcaster PRIVATE
+  <string>
+  <string_view>
+  <vector>
+  <memory>
+  <mutex>
+  <thread>
+  <chrono>
+  <Corrade/PluginManager/Manager.h>
+  <Corrade/PluginManager/AbstractManager.h>
+  <Corrade/Containers/StringView.h>
+  <QCoreApplication>
+  <QUrl>
+)
+
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
   add_custom_command(TARGET pointcaster POST_BUILD
     COMMAND ${CMAKE_COMMAND}

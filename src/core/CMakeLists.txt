@@ -40,3 +40,23 @@ generate_export_header(pointcaster_core
     EXPORT_FILE_NAME
         ${PROJECT_BINARY_DIR}/include/pointcaster/core.h
 )
+
+target_precompile_headers(pointcaster_core PRIVATE
+  <string>
+  <string_view>
+  <vector>
+  <memory>
+  <mutex>
+  <thread>
+  <optional>
+  <variant>
+  <functional>
+  <chrono>
+  <atomic>
+  <filesystem>
+  <utility>
+  <algorithm>
+  <span>
+  <cstddef>
+  <cstdint>
+)
