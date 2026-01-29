@@ -17,8 +17,11 @@ Item {
     readonly property bool viewLocked: lockCameraButton.checked
     readonly property bool orbitRotationRunning: orbitRotationAnim.running
 
-    // guides (grid) toggle
+    // ground grid toggle
     property bool gridEnabled: true
+
+    // projection toggle
+    property bool orthographicEnabled: false
 
     property bool originGizmoCollapsed: false
     property bool cameraToolbarCollapsed: false
@@ -35,8 +38,11 @@ Item {
     x: parent ? (parent.width - width) : 0
     y: 0
 
-    onWidthChanged: if (parent)
-        x = parent.width - width
+    onWidthChanged: {
+        if (parent)
+            x = parent.width - width;
+    }
+
     Connections {
         target: root.parent
         function onWidthChanged() {
@@ -161,6 +167,8 @@ Item {
 
                     iconSource: FontAwesome.icon(root.originGizmoCollapsed ? "solid/caret-down" : "solid/caret-up")
                     iconSize: Math.round(9 * Scaling.uiScale)
+                    iconColor: !pressed ? ThemeColors.mid : ThemeColors.midlight
+                    opacity: 0.75
 
                     leftPadding: Math.round(3 * Scaling.uiScale)
                     rightPadding: Math.round(3 * Scaling.uiScale)
@@ -171,10 +179,9 @@ Item {
                     topRightRadius: 0
 
                     backgroundColor: ThemeColors.dark
-                    hoverColor: ThemeColors.dark
-                    pressedColor: ThemeColors.middark
+                    hoverColor: ThemeColors.middark
+                    pressedColor: ThemeColors.mid
 
-                    opacity: hovered ? 1 : 0.6
                     borderWidth: 0
 
                     onClicked: root.originGizmoCollapsed = !root.originGizmoCollapsed
@@ -191,7 +198,7 @@ Item {
             Layout.fillWidth: true
             implicitHeight: Math.max(toggleCameraToolbarButton.implicitHeight, cameraToolbar.implicitHeight)
 
-            Row {
+            Column {
                 id: cameraToolbarRow
                 spacing: 0
                 y: 0
@@ -202,11 +209,12 @@ Item {
                     width: cameraToolbarCollapser.toggleButtonWidth
                     implicitHeight: cameraToolbarCollapser.toggleButtonHeight
 
-                    anchors.top: parent.top
-                    anchors.topMargin: Math.round(5 * Scaling.uiScale)
+                    anchors.right: parent.right
 
                     iconSource: FontAwesome.icon(root.cameraToolbarCollapsed ? "solid/caret-left" : "solid/caret-right")
                     iconSize: Math.round(9 * Scaling.uiScale)
+                    iconColor: !pressed ? ThemeColors.mid : ThemeColors.midlight
+                    opacity: 0.75
 
                     leftPadding: 0
                     rightPadding: 0
@@ -215,12 +223,12 @@ Item {
 
                     topRightRadius: 0
                     bottomRightRadius: 0
+                    bottomLeftRadius: cameraToolbarPanel.width < width ? radius : 0
 
                     backgroundColor: ThemeColors.dark
-                    hoverColor: ThemeColors.dark
-                    pressedColor: ThemeColors.middark
+                    hoverColor: ThemeColors.middark
+                    pressedColor: ThemeColors.mid
 
-                    opacity: hovered ? 1 : 0.6
                     borderWidth: 0
 
                     onClicked: root.cameraToolbarCollapsed = !root.cameraToolbarCollapsed
@@ -337,6 +345,36 @@ Item {
                                 InfoToolTip {
                                     visible: parent.hovered && parent.enabled
                                     textValue: guidesButton.checked ? "Disable grid" : "Enable grid"
+                                    delay: 700
+                                }
+                            }
+
+                            ToolButton {
+                                id: projectionButton
+
+                                enabled: !root.viewLocked
+                                opacity: enabled ? 1.0 : 0.35
+
+                                Layout.preferredWidth: Math.round(24 * Scaling.uiScale)
+                                Layout.preferredHeight: Math.round(24 * Scaling.uiScale)
+
+                                checkable: true
+                                checked: root.orthographicEnabled
+
+                                contentItem: Image {
+                                    source: FontAwesome.icon("solid/cube")
+                                    width: Math.round(16 * Scaling.uiScale)
+                                    height: width
+                                    anchors.centerIn: parent
+                                    smooth: true
+                                    mipmap: true
+                                }
+
+                                onToggled: root.orthographicEnabled = checked
+
+                                InfoToolTip {
+                                    visible: parent.hovered && parent.enabled
+                                    textValue: projectionButton.checked ? "Perspective view" : "Orthographic view"
                                     delay: 700
                                 }
                             }

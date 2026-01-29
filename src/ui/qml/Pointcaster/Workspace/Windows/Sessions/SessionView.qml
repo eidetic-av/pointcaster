@@ -75,9 +75,100 @@ Item {
             position: root.defaultOrbitOriginPosition
             rotation: root.defaultOrbitOriginRotation
 
-            PerspectiveCamera {
+            CustomCamera {
                 id: camera
+                // 0 = fully perspective, 1 = fully orthographic
+                property real blend: 0.0
+
                 z: root.defaultCameraDistance
+
+                // Perspective params
+                property real nearPlane: 50
+                property real farPlane: 15000
+                property real fovYRadians: 60.0 * Math.PI / 180.0
+
+                // ortho params
+                property real orthoHalfHeight: z * 0.6
+
+                // we need these parameters for OrbitCameraController but they're not being used
+                property real clipNear
+                property real clipFar
+
+                projection: {
+                    const aspect = view.width > 0 ? (view.width / view.height) : 1.0;
+                    const t = blend;
+
+                    // --- Perspective ---
+                    const cot = Math.cos(fovYRadians * 0.5) / Math.sin(fovYRadians * 0.5);
+                    const p00 = cot / aspect;
+                    const p11 = cot;
+                    const p22 = -(nearPlane + farPlane) / (farPlane - nearPlane);
+                    const p23 = -(2.0 * nearPlane * farPlane) / (farPlane - nearPlane);
+                    const p32 = -1.0;
+                    const p33 = 0.0;
+
+                    // --- Orthographic ---
+                    const top = orthoHalfHeight;
+                    const bottom = -orthoHalfHeight;
+                    const right = orthoHalfHeight * aspect;
+                    const left = -orthoHalfHeight * aspect;
+
+                    const o00 = 2.0 / (right - left);
+                    const o11 = 2.0 / (top - bottom);
+                    const o22 = -2.0 / (farPlane - nearPlane);
+                    const o23 = -(farPlane + nearPlane) / (farPlane - nearPlane);
+                    const o32 = 0.0;
+                    const o33 = 1.0;
+
+                    const m00 = lerp(p00, o00, t);
+                    const m11 = lerp(p11, o11, t);
+                    const m22 = lerp(p22, o22, t);
+                    const m23 = lerp(p23, o23, t);
+                    const m32 = lerp(p32, o32, t);
+                    const m33 = lerp(p33, o33, t);
+
+                    return Qt.matrix4x4(m00, 0, 0, 0, 0, m11, 0, 0, 0, 0, m22, m23, 0, 0, m32, m33);
+                }
+
+                function animateBlendTo(targetValue) {
+                    projectionBlendAnim.stop();
+                    projectionBlendAnim.from = blend;
+                    projectionBlendAnim.to = targetValue;
+
+                    // easing and duration needs to differ depending on the animation
+                    // direction since the matrix blend is naturally non-linear
+                    const ascending = projectionBlendAnim.to > projectionBlendAnim.from;
+                    projectionBlendAnim.easing.type = ascending ? Easing.OutExpo : Easing.InCubic;
+                    projectionBlendAnim.duration = ascending ? 150 : 350;
+
+                    projectionBlendAnim.start();
+                }
+
+                function lerp(a, b, t) {
+                    return a + (b - a) * t;
+                }
+
+                function remap(value, inputMinimum, inputMaximum, outputMinimum, outputMaximum) {
+                    return outputMinimum + (value - inputMinimum) * (outputMaximum - outputMinimum) / (inputMaximum - inputMinimum);
+                }
+
+                Component.onCompleted: animateBlendTo(sessionCameraControls.orthographicEnabled ? 1.0 : 0.0)
+
+                Connections {
+                    target: sessionCameraControls
+                    function onOrthographicEnabledChanged() {
+                        camera.animateBlendTo(sessionCameraControls.orthographicEnabled ? 1.0 : 0.0);
+                    }
+                }
+
+                NumberAnimation {
+                    id: projectionBlendAnim
+                    target: camera
+                    property: "blend"
+                    // both duration and easing type are set inside animateBlendTo
+                    // duration: 350
+                    // easing.type: Easing.OutCubic
+                }
             }
         }
 

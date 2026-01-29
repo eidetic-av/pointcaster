@@ -9,6 +9,7 @@ AbstractButton {
     property url iconSource
     property int iconSize: Math.round(9 * Scaling.uiScale)
     property int iconTextSpacing: Math.round(5 * Scaling.uiScale)
+    property color iconColor: root.palette.buttonText
 
     property color backgroundColor: ThemeColors.middark
     property color hoverColor: ThemeColors.mid
@@ -108,7 +109,7 @@ AbstractButton {
                 visible: root.hasText
                 text: root.text
                 font: root.font
-                color: root.palette.buttonText
+                color: iconColor
                 elide: Text.ElideRight
                 verticalAlignment: Text.AlignVCenter
             }
