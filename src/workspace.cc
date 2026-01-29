@@ -1,4 +1,5 @@
 #include "workspace.h"
+#include "camera/camera_config.h"
 #include "plugins/devices/device_variants.h"
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
@@ -13,7 +14,7 @@
 #include <plugins/plugin_loader.h>
 #include <print>
 #include <rfl/AddTagsToVariants.hpp>
-#include <rfl/toml.hpp>
+#include <rfl/yaml.hpp>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -43,16 +44,16 @@ bool load_workspace_from_file(WorkspaceConfiguration &config,
     config = WorkspaceConfiguration{};
     return false;
   }
-  const std::string toml_string{std::istreambuf_iterator<char>(file),
+  const std::string yaml_string{std::istreambuf_iterator<char>(file),
                                 std::istreambuf_iterator<char>()};
   try {
-    config = rfl::toml::read<WorkspaceFile, rfl::AddTagsToVariants>(toml_string)
+    config = rfl::yaml::read<WorkspaceFile, rfl::AddTagsToVariants>(yaml_string)
                  .value()
                  .workspace;
 
     pc::logger()->info("Loaded configuration from '{}'", file_path);
     pc::logger()->trace("Loaded Workspace:\n{}",
-                        rfl::toml::write<rfl::AddTagsToVariants>(
+                        rfl::yaml::write<rfl::AddTagsToVariants>(
                             WorkspaceFile{.workspace = config}));
   } catch (const std::exception &e) {
     pc::logger()->error("Failed to parse '{}': {}", file_path, e.what());
@@ -65,9 +66,9 @@ bool load_workspace_from_file(WorkspaceConfiguration &config,
 void save_workspace_to_file(const WorkspaceConfiguration &config,
                             const std::string &file_path) {
   try {
-    const auto toml_string = rfl::toml::write<rfl::AddTagsToVariants>(
+    const auto yaml_string = rfl::yaml::write<rfl::AddTagsToVariants>(
         WorkspaceFile{.workspace = config});
-    std::ofstream(file_path) << toml_string;
+    std::ofstream(file_path) << yaml_string;
     pc::logger()->info("Saved workspace file to '{}'", file_path);
   } catch (const std::exception &e) {
     pc::logger()->error("Failed to save '{}': {}", file_path, e.what());
@@ -75,12 +76,18 @@ void save_workspace_to_file(const WorkspaceConfiguration &config,
 }
 
 Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
-  if (initial.id.empty()) {
+  if (config.id.empty()) {
     config.id = pc::uuid::word();
   } else {
     // if an id was already assigned at workspace initialisation time,
     // we loaded it from disk
     auto_loaded_config = true;
+  }
+
+  if (config.sessions.empty()) {
+    // every workspace needs a session with a camera
+    config.sessions.emplace_back(pc::uuid::word(),
+                                 CameraConfiguration{.id = pc::uuid::word()});
   }
 
   // start recording metrics
@@ -105,9 +112,9 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
           std::scoped_lock lock(config_access);
           thread_config = config;
         }
-        const auto toml_string =
-            rfl::toml::write<rfl::AddTagsToVariants>(thread_config);
-        pc::logger()->debug("Workspace configuration: \n{}\n", toml_string);
+        const auto yaml_string =
+            rfl::yaml::write<rfl::AddTagsToVariants>(thread_config);
+        pc::logger()->debug("Workspace configuration: \n{}\n", yaml_string);
       }
     }
   }).detach();

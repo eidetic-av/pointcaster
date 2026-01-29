@@ -12,6 +12,7 @@ add_subdirectory(core)
 qt_add_executable(pointcaster 
     pointcaster.cc
     workspace.cc
+    session.cc
 )
 
 add_subdirectory(ui)
@@ -28,9 +29,6 @@ add_subdirectory(plugins)
 #----- Dependencies
 
 # - reflectcpp is used for de/serialization of workspace configuration,
-#  and toml++ is the backing toml serializer
-find_package(tomlplusplus CONFIG REQUIRED)
-add_library(toml11::toml11 ALIAS tomlplusplus::tomlplusplus)
 find_package(reflectcpp CONFIG REQUIRED)
 
 # TODO this is probably not what we want re: qml?

@@ -35,14 +35,14 @@ ApplicationWindow {
 
     FileDialog {
         id: openWorkspaceDialog
-        nameFilters: [qsTr("TOML files (*.toml)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("YAML files (*.yaml)"), qsTr("All files (*)")]
         onAccepted: workspaceModel.loadFromFile(selectedFile)
     }
 
     FileDialog {
         id: saveAsWorkspaceDialog
         fileMode: FileDialog.SaveFile
-        nameFilters: [qsTr("TOML files (*.toml)"), qsTr("All files (*)")]
+        nameFilters: [qsTr("YAML files (*.yaml)"), qsTr("All files (*)")]
         onAccepted: {
             const hasSavePath = workspaceModel && workspaceModel.saveFileUrl.toString() !== "";
             workspaceModel.saveFileUrl = selectedFile;

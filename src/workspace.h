@@ -2,9 +2,8 @@
 
 #include "plugins/devices/device_plugin.h"
 #include "plugins/devices/device_variants.h"
-
+#include "session.h"
 #include "metrics/prometheus_server.h"
-
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/PluginManager/Manager.h>
 #include <memory>
@@ -16,13 +15,10 @@ namespace pc {
 
 // WorkspaceConfiguration is the config that gets de/serialized and holds all
 // simulation state for the running application.
-//
-// Workspace is the application, which can read and write the
-// WorkspaceConfiguration.
-
 struct WorkspaceConfiguration {
   std::string id;
   std::vector<devices::DeviceConfigurationVariant> devices{};
+  std::vector<SessionConfiguration> sessions{};
 };
 
 bool load_workspace_from_file(WorkspaceConfiguration &config,
@@ -31,6 +27,8 @@ bool load_workspace_from_file(WorkspaceConfiguration &config,
 void save_workspace_to_file(const WorkspaceConfiguration &config,
                             const std::string &file_path);
 
+// Workspace is the application, which can read and write the
+// WorkspaceConfiguration.
 class Workspace {
 public:
   WorkspaceConfiguration config;

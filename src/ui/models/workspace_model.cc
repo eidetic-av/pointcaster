@@ -75,8 +75,8 @@ void WorkspaceModel::save(bool update_last_session_path) {
   }
 
   using namespace Qt::StringLiterals;
-  if (!local_path.endsWith(u".toml"_s, Qt::CaseInsensitive)) {
-    local_path += u".toml"_s;
+  if (!local_path.endsWith(u".yaml"_s, Qt::CaseInsensitive)) {
+    local_path += u".yaml"_s;
   }
 
   std::jthread([workspace_config = _workspace.config, local_path,
