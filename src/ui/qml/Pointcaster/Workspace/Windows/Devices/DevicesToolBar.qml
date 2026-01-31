@@ -148,7 +148,7 @@ ToolBar {
             icon.width: Math.round(17 * Scaling.uiScale)
             icon.height: Math.round(17 * Scaling.uiScale)
 
-            enabled: root.workspace && root.workspace.deviceConfigAdapters.length > 0
+            enabled: root.workspace && root.workspace.deviceAdapters.length > 0
             opacity: enabled ? 1.0 : 0.4
 
             onClicked: {

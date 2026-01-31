@@ -2,7 +2,6 @@ add_library(pointcaster_ui
     initialisation.cc
     models/workspace_model.cc
     models/device_status.h
-    models/device_plugin_controller.h
     models/settings_page_registry.h
     models/settings_page_registry.cc
     models/commands/device_config_commands.cc
@@ -34,6 +33,19 @@ target_link_libraries(pointcaster_ui PRIVATE
 target_link_libraries(pointcaster PRIVATE Qt6::Gui)
 
 qt_import_qml_plugins(pointcaster)
+
+# for our generated headers that connect configuration structs <-> qml
+set(CONFIG_ADAPTER_INPUTS
+    ${CMAKE_SOURCE_DIR}/src/session/session_config.h
+    ${CMAKE_SOURCE_DIR}/src/camera/camera_config.h
+    ${CMAKE_SOURCE_DIR}/src/plugins/devices/orbbec/orbbec_device_config.h
+)
+add_qml_adapters(
+    TARGETS pointcaster_ui
+    CONFIG_INPUTS ${CONFIG_ADAPTER_INPUTS}
+    TEMPLATES_DIR "${CMAKE_SOURCE_DIR}/src/templates"
+    OUT_DIR "${CMAKE_BINARY_DIR}/generated/config_adapters"
+)
 
 target_precompile_headers(pointcaster_ui PRIVATE
   <string>

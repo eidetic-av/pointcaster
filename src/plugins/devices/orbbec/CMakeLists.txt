@@ -7,14 +7,6 @@ corrade_add_plugin(OrbbecDevice
   ${CMAKE_SOURCE_DIR}/src/ui/models/device_status.h
 )
 
-add_qml_adapters(
-  TARGETS
-  pointcaster
-  OrbbecDevice
-  CONFIG_INPUTS
-  orbbec_device_config.h
-)
-
 set_target_properties(OrbbecDevice PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${DEVICES_PLUGIN_DIR}
   LIBRARY_OUTPUT_DIRECTORY ${DEVICES_PLUGIN_DIR}

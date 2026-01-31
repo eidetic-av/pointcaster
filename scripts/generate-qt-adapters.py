@@ -5,10 +5,18 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
+
+# ----------------------------
+# Data model
+# ----------------------------
+
 @dataclass
 class EnumEntry:
     name: str
     value: int
+
 
 @dataclass
 class Member:
@@ -23,9 +31,63 @@ class Member:
     enum_qualified_type: str
     enum_entries: list[EnumEntry]
 
+
+@dataclass(frozen=True, slots=True)
+class GeneratorArgs:
+    templates_dir: str
+    out_dir: str
+    src_root: str
+    input_headers: list[str]
+
+
+# ----------------------------
+# regexes necessary for multiple funcs are compiled once up here
+# ----------------------------
+
+STRUCTS_RE = re.compile(
+    r"struct (\w+(?:Configuration|Workspace|Entry|Session|SessionLayout|BindingTarget|putRoute|putMapping|putChangeDetection|ABB)) {([\s\S]*?^\};)",
+    re.MULTILINE,
+)
+
+TYPE_PATTERN = r"([\w:]+(?:\:\:)?[\w:]+(?:<[\w\s:,]+>)?)"
+NAME_PATTERN = r"(\w+)"
+INITIAL_VALUE_PATTERN = r"(?:\s*=\s*([^;{]+)|\s*{\s*([^}]+)\s*})?"
+COMMENT_PATTERN = r"(?:\s*//\s*(.*))?"
+
+MEMBER_RE = re.compile(
+    fr"{TYPE_PATTERN}\s+{NAME_PATTERN}{INITIAL_VALUE_PATTERN}\s*;{COMMENT_PATTERN}",
+    re.VERBOSE,
+)
+
+MINMAX_RE = re.compile(r"@minmax\(([^)]+)\)")
+OPTIONAL_RE = re.compile(r"@optional")
+DISABLED_RE = re.compile(r"@disabled")
+HIDDEN_RE = re.compile(r"@hidden")
+VERBATIM_RE = re.compile(
+    r"^\s*((?:static|constexpr|inline|virtual|extern|using)\b.*)$",
+    re.MULTILINE,
+)
+
+NAMESPACE_RE = re.compile(r"namespace\s+([A-Za-z_][\w:]*)\s*{")
+
+ENUM_DECL_RE = re.compile(
+    r"^\s*enum\s+class\s+(\w+)(?:\s*:\s*[\w:]+)?\s*\{([^}]*)\}\s*;\s*$",
+    re.MULTILINE,
+)
+
+ENUM_DEFAULT_RE = re.compile(r"(?:[\w:]+::)*(\w+)(?:::)?(\w+)")
+INTLIKE_RE = re.compile(r"(u?)int(8|16|32|64)_t")
+OPTIONAL_T_RE = re.compile(r"std::optional<\s*([^>]+)\s*>")
+
+
+# ----------------------------
+# Helper funcs
+# ----------------------------
+
 def is_float3_type(type_name: str) -> bool:
     t = type_name.strip()
     return t in ("pc::float3", "float3")
+
 
 def format_struct_name(name: str) -> str:
     name = name.replace("Configuration", "")
@@ -37,6 +99,7 @@ def format_struct_name(name: str) -> str:
         result.append(char)
     return "".join(result)
 
+
 def _try_parse_int(token: str) -> int | None:
     t = token.strip()
     if not t:
@@ -46,17 +109,6 @@ def _try_parse_int(token: str) -> int | None:
     except ValueError:
         return None
 
-def _try_parse_float(token: str) -> float | None:
-    t = token.strip()
-    if not t:
-        return None
-    try:
-        # avoid treating plain ints as floats
-        if re.fullmatch(r"[+-]?\d+", t):
-            return None
-        return float(t)
-    except ValueError:
-        return None
 
 def _parse_default_value(raw: str) -> Any:
     if raw is None:
@@ -66,14 +118,19 @@ def _parse_default_value(raw: str) -> Any:
         return ""
 
     if s in ("true", "false"):
-        return (s == "true")
+        return s == "true"
 
     parsed_int = _try_parse_int(s)
     if parsed_int is not None:
         return parsed_int
 
-    parsed_float = _try_parse_float(s)
-    if parsed_float is not None:
+    try:
+        parsed_float = float(s)
+    except ValueError:
+        parsed_float = None
+
+    if parsed_float is not None and not isinstance(parsed_float, bool):
+        # Preserve old behaviour: integers are already handled above.
         return parsed_float
 
     if (len(s) >= 2) and (
@@ -83,15 +140,16 @@ def _parse_default_value(raw: str) -> Any:
 
     return s
 
+
 def _parse_enum_entries(enum_body: str) -> list[EnumEntry]:
     items: list[EnumEntry] = []
     next_value = 0
 
-    raw_items = enum_body.split(",")
-    for raw_item in raw_items:
+    for raw_item in enum_body.split(","):
         entry = raw_item.strip()
         if not entry:
             continue
+
         entry = re.sub(r"//.*$", "", entry).strip()
         entry = re.sub(r"/\*.*?\*/", "", entry).strip()
         if not entry:
@@ -111,21 +169,17 @@ def _parse_enum_entries(enum_body: str) -> list[EnumEntry]:
 
     return items
 
-def _extract_nested_enums(struct_body: str) -> tuple[dict[str, list[EnumEntry]], str]:
-    enum_pattern = re.compile(
-        r"^\s*enum\s+class\s+(\w+)(?:\s*:\s*[\w:]+)?\s*\{([^}]*)\}\s*;\s*$",
-        re.MULTILINE,
-    )
 
+def _extract_nested_enums(struct_body: str) -> tuple[dict[str, list[EnumEntry]], str]:
     enum_map: dict[str, list[EnumEntry]] = {}
+
     def _strip_and_collect(match: re.Match) -> str:
         enum_name = match.group(1)
         enum_body = match.group(2)
-        enum_entries = _parse_enum_entries(enum_body)
-        enum_map[enum_name] = enum_entries
+        enum_map[enum_name] = _parse_enum_entries(enum_body)
         return ""
 
-    stripped_body = enum_pattern.sub(_strip_and_collect, struct_body)
+    stripped_body = ENUM_DECL_RE.sub(_strip_and_collect, struct_body)
     return enum_map, stripped_body
 
 
@@ -140,17 +194,10 @@ def _enum_default_to_int(
     if not s:
         return None
 
-    # Accept:
-    #   EnumType::Value
-    #   Namespace::EnumType::Value
-    #   ...and also just "Value"
-    m = re.fullmatch(r"(?:[\w:]+::)*(\w+)(?:::)?(\w+)", s)
+    m = ENUM_DEFAULT_RE.fullmatch(s)
     if m:
-        tail0 = m.group(1)
-        tail1 = m.group(2)
-        enum_name_candidate = tail0
-        enumerator_candidate = tail1
-
+        enum_name_candidate = m.group(1)
+        enumerator_candidate = m.group(2)
         if enum_name_candidate == enum_simple_name:
             for e in enum_entries:
                 if e.name == enumerator_candidate:
@@ -162,313 +209,100 @@ def _enum_default_to_int(
 
     return None
 
-def generate_adapter_class(struct_name: str, members: list[Member]) -> str:
-    adapter_name = f"{struct_name}Adapter"
-    display_name = format_struct_name(struct_name)
 
-    any_enums = any(m.is_enum for m in members)
-    any_float3 = any(is_float3_type(m.type) for m in members)
-    float3_indices: list[int] = [i for i, m in enumerate(members) if is_float3_type(m.type)]
+def _is_simple_comparable_type(type_name: str) -> bool:
+    t = type_name.strip()
 
-    out: list[str] = []
+    if t in ("bool", "int", "unsigned", "float", "double", "std::string", "QString"):
+        return True
 
-    out.append(f"class {adapter_name} : public ConfigAdapter {{")
-    out.append("    Q_OBJECT")
-    out.append("public:")
-    out.append(
-        f"    explicit {adapter_name}({struct_name} &config, pc::devices::DevicePlugin* plugin, QObject *parent = nullptr)"
-    )
-    out.append("        : ConfigAdapter(plugin, parent), m_config(config) {}")
-    out.append("")
-    out.append(f"    QString configType() const override {{ return QStringLiteral(\"{struct_name}\"); }}")
-    out.append(f"    Q_INVOKABLE QString displayName() const override {{ return QStringLiteral(\"{display_name}\"); }}")
-    out.append("")
-    out.append(f"    Q_INVOKABLE int fieldCount() const override {{ return {len(members)}; }}")
-    out.append("")
+    if is_float3_type(t):
+        return True
 
-    out.append("    void setConfigFromCore(const pc::devices::DeviceConfigurationVariant &v) override {")
-    out.append(f"        const auto *cfg = std::get_if<{struct_name}>(&v);")
-    out.append("        if (!cfg) return;")
-    out.append("        m_config = *cfg;")
-    out.append("        // Cheap + safe: notify all fields. Optimise later if needed.")
-    out.append("        for (int i = 0; i < fieldCount(); ++i) {")
-    out.append("            notifyFieldChanged(i);")
-    out.append("        }")
-    out.append("    }")
-    out.append("")
+    if INTLIKE_RE.fullmatch(t):
+        return True
 
-    # float3 setters
-    if any_float3:
-        out.append("    // Dedicated setters for float3 fields (avoids QVariant conversion ambiguity from QML).")
-        for i in float3_indices:
-            member = members[i]
-            out.append(
-                f"    Q_INVOKABLE void set_{member.name}(float x, float y, float z) {{"
-                f" emit fieldEditRequested({i}, QVariant::fromValue(QVector3D(x, y, z))); }}"
-            )
-        out.append("    Q_INVOKABLE void setFloat3Field(int index, float x, float y, float z) {")
-        out.append("        emit fieldEditRequested(index, QVariant::fromValue(QVector3D(x, y, z)));")
-        out.append("    }")
-        out.append("")
+    m = OPTIONAL_T_RE.fullmatch(t)
+    if m:
+        inner = m.group(1).strip()
+        return _is_simple_comparable_type(inner)
 
-    out.append("    Q_INVOKABLE QString fieldName(int index) const override {")
-    out.append("        switch (index) {")
-    for i, m in enumerate(members):
-        out.append(f"        case {i}: return QStringLiteral(\"{m.name}\");")
-    out.append("        default: return {};")
-    out.append("        }")
-    out.append("    }")
-    out.append("")
-
-    out.append("    Q_INVOKABLE QString fieldTypeName(int index) const override {")
-    out.append("        switch (index) {")
-    for i, m in enumerate(members):
-        out.append(f"        case {i}: return QStringLiteral(\"{m.type}\");")
-    out.append("        default: return {};")
-    out.append("        }")
-    out.append("    }")
-    out.append("")
-
-    if any_enums:
-        out.append("    Q_INVOKABLE bool isEnum(int index) const override {")
-        out.append("        switch (index) {")
-        for i, m in enumerate(members):
-            if m.is_enum:
-                out.append(f"        case {i}: return true;")
-        out.append("        default: return false;")
-        out.append("        }")
-        out.append("    }")
-        out.append("")
-
-        out.append("    Q_INVOKABLE QVariant enumOptions(int index) const override {")
-        out.append("        switch (index) {")
-        for i, m in enumerate(members):
-            if not m.is_enum:
-                continue
-            out.append(f"        case {i}:")
-            out.append("            return QVariantList{")
-            for j, e in enumerate(m.enum_entries):
-                comma = "," if j + 1 < len(m.enum_entries) else ""
-                out.append(
-                    f"                QVariantMap{{ {{\"text\", QStringLiteral(\"{e.name}\")}}, {{\"value\", {e.value}}} }}{comma}"
-                )
-            out.append("            };")
-        out.append("        default: return {};")
-        out.append("        }")
-    out.append("    }")
-    out.append("")
-
-    out.append("    Q_INVOKABLE QVariant defaultValue(int index) const override {")
-    out.append("        switch (index) {")
-    for i, m in enumerate(members):
-        v = m.default_value
-        if v is None:
-            out.append(f"        case {i}: return QVariant();")
-        elif m.is_enum:
-            enum_default = _enum_default_to_int(v, m.type, m.enum_entries)
-            if enum_default is None and m.enum_entries:
-                enum_default = m.enum_entries[0].value
-            if enum_default is None:
-                out.append(f"        case {i}: return QVariant();")
-            else:
-                out.append(f"        case {i}: return QVariant({enum_default});")
-        elif is_float3_type(m.type):
-            out.append(f"        case {i}: return QVariant::fromValue(QVector3D(0.0f, 0.0f, 0.0f));")
-        elif isinstance(v, bool):
-            out.append(f"        case {i}: return QVariant({str(v).lower()});")
-        elif isinstance(v, int):
-            out.append(f"        case {i}: return QVariant({v});")
-        elif isinstance(v, float):
-            out.append(f"        case {i}: return QVariant({v});")
-        else:
-            s = str(v).replace("\\", "\\\\").replace("\"", "\\\"")
-            out.append(f"        case {i}: return QVariant(QStringLiteral(\"{s}\"));")
-    out.append("        default: return {};")
-    out.append("        }")
-    out.append("    }")
-    out.append("")
-
-    out.append("    Q_INVOKABLE QVariant minMax(int index) const override {")
-    out.append("        switch (index) {")
-    for i, m in enumerate(members):
-        if m.min_max:
-            parts = [p.strip() for p in m.min_max.split(",")]
-            mn = parts[0] if len(parts) >= 1 and parts[0] else "0"
-            mx = parts[1] if len(parts) >= 2 and parts[1] else mn
-            out.append(f"        case {i}: return QVariantList{{ QVariant({mn}), QVariant({mx}) }};")
-        else:
-            out.append(f"        case {i}: return {{}};")
-    out.append("        default: return {};")
-    out.append("        }")
-    out.append("    }")
-    out.append("")
-
-    out.append("    Q_INVOKABLE bool isOptional(int index) const override {")
-    out.append("        switch (index) {")
-    for i, m in enumerate(members):
-        out.append(f"        case {i}: return {'true' if m.optional else 'false'};")
-    out.append("        default: return false;")
-    out.append("        }")
-    out.append("    }")
-    out.append("")
-    out.append("    Q_INVOKABLE bool isDisabled(int index) const override {")
-    out.append("        switch (index) {")
-    for i, m in enumerate(members):
-        out.append(f"        case {i}: return {'true' if m.disabled else 'false'};")
-    out.append("        default: return false;")
-    out.append("        }")
-    out.append("    }")
-    out.append("")
-    out.append("    Q_INVOKABLE bool isHidden(int index) const override {")
-    out.append("        switch (index) {")
-    for i, m in enumerate(members):
-        out.append(f"        case {i}: return {'true' if m.hidden else 'false'};")
-    out.append("        default: return false;")
-    out.append("        }")
-    out.append("    }")
-    out.append("")
-
-    out.append("    Q_INVOKABLE QVariant fieldValue(int index) const override {")
-    out.append("        switch (index) {")
-    for i, m in enumerate(members):
-        if m.type == "std::string":
-            out.append(f"        case {i}: return QVariant(QString::fromStdString(m_config.{m.name}));")
-        elif m.is_enum:
-            out.append(f"        case {i}: return QVariant(int(m_config.{m.name}));")
-        elif is_float3_type(m.type):
-            out.append(f"        case {i}: {{")
-            out.append(f"            const auto &v = m_config.{m.name};")
-            out.append("            return QVariant::fromValue(QVector3D(v.x, v.y, v.z));")
-            out.append("        }")
-        else:
-            out.append(f"        case {i}: return QVariant::fromValue(m_config.{m.name});")
-    out.append("        default: return {};")
-    out.append("        }")
-    out.append("    }")
-    out.append("")
-
-    # generated applyFieldValue(...) switch (type-specific mutation), no signals
-    if any_float3:
-        out.append("private:")
-        out.append("    static QVector3D toQVector3DLoose(const QVariant &value) {")
-        out.append("        if (value.canConvert<QVector3D>())")
-        out.append("            return value.value<QVector3D>();")
-        out.append("        if (value.metaType().id() == QMetaType::QVariantMap) {")
-        out.append("            const auto m = value.toMap();")
-        out.append("            return QVector3D(")
-        out.append("                m.value(QStringLiteral(\"x\")).toFloat(),")
-        out.append("                m.value(QStringLiteral(\"y\")).toFloat(),")
-        out.append("                m.value(QStringLiteral(\"z\")).toFloat());")
-        out.append("        }")
-        out.append("        if (value.metaType().id() == QMetaType::QVariantList) {")
-        out.append("            const auto l = value.toList();")
-        out.append("            if (l.size() >= 3)")
-        out.append("                return QVector3D(l[0].toFloat(), l[1].toFloat(), l[2].toFloat());")
-        out.append("        }")
-        out.append("        return QVector3D();")
-        out.append("    }")
-        out.append("")
-        out.append("public:")
-
-    out.append("    bool applyFieldValue(int index, const QVariant &value) override {")
-    out.append("        switch (index) {")
-    for i, m in enumerate(members):
-        out.append(f"        case {i}: {{")
-        if m.type == "std::string":
-            out.append("            const std::string newValue = value.toString().toStdString();")
-            out.append(f"            if (m_config.{m.name} == newValue)")
-            out.append("                return false;")
-            out.append(f"            m_config.{m.name} = newValue;")
-            out.append("            return true;")
-        elif m.is_enum:
-            out.append("            const int newValueInt = value.toInt();")
-            out.append(f"            const auto newValue = static_cast<{m.enum_qualified_type}>(newValueInt);")
-            out.append(f"            if (m_config.{m.name} == newValue)")
-            out.append("                return false;")
-            out.append(f"            m_config.{m.name} = newValue;")
-            out.append("            return true;")
-        elif is_float3_type(m.type):
-            out.append("            const QVector3D v = toQVector3DLoose(value);")
-            out.append(f"            {m.type} newValue{{ v.x(), v.y(), v.z() }};")
-            out.append(f"            if (m_config.{m.name} == newValue)")
-            out.append("                return false;")
-            out.append(f"            m_config.{m.name} = newValue;")
-            out.append("            return true;")
-        else:
-            out.append(f"            const auto newValue = qvariant_cast<{m.type}>(value);")
-            out.append(f"            if (m_config.{m.name} == newValue)")
-            out.append("                return false;")
-            out.append(f"            m_config.{m.name} = newValue;")
-            out.append("            return true;")
-        out.append("        }")
-    out.append("        default:")
-    out.append("            return false;")
-    out.append("        }")
-    out.append("    }")
-    out.append("")
-
-    # request-only setFieldValue
-    out.append("    Q_INVOKABLE void setFieldValue(int index, const QVariant &value) override {")
-    out.append("        emit fieldEditRequested(index, value);")
-    out.append("    }")
-    out.append("")
-
-    out.append("private:")
-    out.append(f"    {struct_name} &m_config;")
-    out.append("};")
-
-    return "\n".join(out)
+    return False
 
 
-def process_cpp_header(input_text: str, file_path: str) -> str:
-    structs = re.findall(
-        r"struct (\w+(?:Configuration|Workspace|Entry|Session|SessionLayout|BindingTarget|putRoute|putMapping|putChangeDetection|ABB)) {([\s\S]*?^\};)",
-        input_text,
-        re.MULTILINE,
-    )
+def default_value_case_cpp(member: Member) -> str:
+    v = member.default_value
 
-    type_pattern = r"([\w:]+(?:\:\:)?[\w:]+(?:<[\w\s:,]+>)?)"
-    name_pattern = r"(\w+)"
-    initial_value_pattern = r"(?:\s*=\s*([^;{]+)|\s*{\s*([^}]+)\s*})?"
-    comment_pattern = r"(?:\s*//\s*(.*))?"
-    minmax_pattern = re.compile(r"@minmax\(([^)]+)\)")
-    optional_pattern = re.compile(r"@optional")
-    disabled_pattern = re.compile(r"@disabled")
-    hidden_pattern = re.compile(r"@hidden")
-    verbatim_pattern = re.compile(
-        r"^\s*((?:static|constexpr|inline|virtual|extern|using)\b.*)$",
-        re.MULTILINE,
-    )
+    if v is None:
+        return "return QVariant();"
 
-    member_pattern = re.compile(
-        fr"{type_pattern}\s+{name_pattern}{initial_value_pattern}\s*;{comment_pattern}",
-        re.VERBOSE,
-    )
+    if member.is_enum:
+        enum_default = _enum_default_to_int(v, member.type, member.enum_entries)
+        if enum_default is None and member.enum_entries:
+            enum_default = member.enum_entries[0].value
+        if enum_default is None:
+            return "return QVariant();"
+        return f"return QVariant({enum_default});"
 
-    adapter_classes: list[str] = []
+    if is_float3_type(member.type):
+        return "return QVariant::fromValue(QVector3D(0.0f, 0.0f, 0.0f));"
+
+    if isinstance(v, bool):
+        return f"return QVariant({'true' if v else 'false'});"
+
+    if isinstance(v, int):
+        return f"return QVariant({v});"
+
+    if isinstance(v, float):
+        return f"return QVariant({v});"
+
+    s = str(v).replace("\\", "\\\\").replace('"', '\\"')
+    return f'return QVariant(QStringLiteral("{s}"));'
+
+
+def minmax_case_cpp(member: Member) -> str:
+    if member.min_max:
+        parts = [p.strip() for p in member.min_max.split(",")]
+        min_value = parts[0] if len(parts) >= 1 and parts[0] else "0"
+        max_value = parts[1] if len(parts) >= 2 and parts[1] else min_value
+        return f"return QVariantList{{ QVariant({min_value}), QVariant({max_value}) }};"
+    return "return {};"
+
+
+# ----------------------------
+# Main header generation
+# ----------------------------
+
+def process_cpp_header(input_text: str, file_path: str, env: Environment, src_root: str) -> str:
+    structs = STRUCTS_RE.findall(input_text)
+
     needs_qvector3d = False
+
+    ns_match = NAMESPACE_RE.search(input_text)
+    namespace_name = ns_match.group(1) if ns_match else ""
+    is_device_namespace = namespace_name == "pc::devices"
+
+    rendered_structs: list[dict[str, Any]] = []
 
     for struct_name, struct_body in structs:
         nested_enums, stripped_struct_body = _extract_nested_enums(struct_body)
+        members_body = VERBATIM_RE.sub("", stripped_struct_body)
 
-        members_body = verbatim_pattern.sub("", stripped_struct_body)
-
-        unparsed_members = member_pattern.findall(members_body)
         members: list[Member] = []
 
-        for member in unparsed_members:
-            raw_type = member[0].strip()
-            raw_name = member[1].strip()
+        for raw_type, raw_name, init_eq, init_brace, raw_comment in MEMBER_RE.findall(members_body):
+            raw_type = raw_type.strip()
+            raw_name = raw_name.strip()
 
             if is_float3_type(raw_type):
                 needs_qvector3d = True
 
-            init_value_raw = (member[2] or "").strip() or (member[3] or "").strip() or ""
+            init_value_raw = (init_eq or "").strip() or (init_brace or "").strip() or ""
             init_value_raw = init_value_raw.replace("{", "").replace("}", "").strip()
             init_value = _parse_default_value(init_value_raw)
 
-            comment = member[4].strip() if member[4] else ""
-            minmax_match = minmax_pattern.search(comment)
+            comment = raw_comment.strip() if raw_comment else ""
+            minmax_match = MINMAX_RE.search(comment)
 
             is_enum = raw_type in nested_enums
             enum_entries = nested_enums.get(raw_type, [])
@@ -480,64 +314,136 @@ def process_cpp_header(input_text: str, file_path: str) -> str:
                     name=raw_name,
                     default_value=init_value,
                     min_max=minmax_match.group(1) if minmax_match else "",
-                    optional=bool(optional_pattern.search(comment)),
-                    disabled=bool(disabled_pattern.search(comment)),
-                    hidden=bool(hidden_pattern.search(comment)),
+                    optional=bool(OPTIONAL_RE.search(comment)),
+                    disabled=bool(DISABLED_RE.search(comment)),
+                    hidden=bool(HIDDEN_RE.search(comment)),
                     is_enum=is_enum,
                     enum_qualified_type=enum_qualified_type,
                     enum_entries=enum_entries,
                 )
             )
 
-        adapter_classes.append(generate_adapter_class(struct_name, members))
+        adapter_class_base = struct_name
+        if is_device_namespace and struct_name.endswith("DeviceConfiguration"):
+            adapter_class_base = struct_name[: -len("Configuration")]
 
-    header_basename = os.path.basename(file_path)
-    lines: list[str] = []
-    lines.append("// auto-generated Qt/QML config adapters")
-    lines.append("#pragma once")
-    lines.append("")
-    lines.append("#include <QObject>")
-    lines.append("#include <QVariant>")
-    lines.append("#include <QVariantMap>")
-    lines.append("#include <QString>")
-    lines.append("#include <QMetaType>")
-    if needs_qvector3d:
-        lines.append("#include <QVector3D>")
-    lines.append("#include <variant>")
-    lines.append("")
-    lines.append('#include "models/config_adapter.h"')
-    lines.append("#include <plugins/devices/device_variants.h>")
-    lines.append(f'#include "{header_basename}"')
-    lines.append("")
+        rendered_structs.append(
+            {
+                "struct_name": struct_name,
+                "adapter_name": f"{adapter_class_base}Adapter",
+                "display_name": format_struct_name(struct_name),
+                "members": members,
+                "any_enums": any(m.is_enum for m in members),
+                "any_float3": any(is_float3_type(m.type) for m in members),
+            }
+        )
 
-    ns_match = re.search(r"namespace\s+([A-Za-z_][\w:]*)\s*{", input_text)
+    input_abs = os.path.abspath(file_path)
+    src_root_abs = os.path.abspath(src_root)
+    rel = os.path.relpath(input_abs, src_root_abs).replace("\\", "/")
+    if rel.startswith("src/"):
+        rel = rel[len("src/"):]
+    header_include_path = rel
 
-    if adapter_classes:
-        if ns_match:
-            ns = ns_match.group(1)
-            lines.append(f"namespace {ns} {{")
-            lines.append("")
-            lines.append("\n\n".join(adapter_classes))
-            lines.append("")
-            lines.append(f"}} // namespace {ns}")
+    template_name = "device_adapter_impl.h.j2" if is_device_namespace else "config_adapter_impl.h.j2"
+    template = env.get_template(template_name)
+
+    return template.render(
+        header_include_path=header_include_path,
+        namespace_name=namespace_name,
+        needs_qvector3d=needs_qvector3d,
+        structs=rendered_structs,
+    )
+
+
+# ----------------------------
+# entrypoint
+# ----------------------------
+
+def _parse_args(argv: list[str]) -> GeneratorArgs:
+    templates_dir: str | None = None
+    out_dir: str | None = None
+    src_root: str | None = None
+    input_headers: list[str] = []
+
+    it = iter(argv)
+    for tok in it:
+        if tok in ("--templates-dir", "-t"):
+            templates_dir = next(it, None)
+        elif tok in ("--out-dir", "-o"):
+            out_dir = next(it, None)
+        elif tok == "--src-root":
+            src_root = next(it, None)
         else:
-            lines.append("\n\n".join(adapter_classes))
-    else:
-        lines.append("// no matching config structs found in this header")
+            input_headers.append(tok)
 
-    return "\n".join(lines)
+    if not templates_dir or not out_dir or not src_root:
+        print(
+            "Usage: python generate-qt-adapters.py "
+            "--templates-dir <dir> --out-dir <dir> --src-root <dir> <file1> <file2> ...",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
+    if not input_headers:
+        print("error: no input headers provided", file=sys.stderr)
+        raise SystemExit(2)
+
+    return GeneratorArgs(
+        templates_dir=os.path.abspath(templates_dir),
+        out_dir=os.path.abspath(out_dir),
+        src_root=os.path.abspath(src_root),
+        input_headers=input_headers,
+    )
+
+
+def main() -> int:
+    args = _parse_args(sys.argv[1:])
+
+    env = Environment(
+        loader=FileSystemLoader(args.templates_dir),
+        undefined=StrictUndefined,
+        autoescape=False,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+
+    env.globals["is_float3_type"] = is_float3_type
+    env.globals["is_simple_comparable_type"] = _is_simple_comparable_type
+    env.globals["default_value_case_cpp"] = default_value_case_cpp
+    env.globals["minmax_case_cpp"] = minmax_case_cpp
+
+    for file_name in sorted(args.input_headers):
+        with open(file_name, "r", encoding="utf-8") as input_file:
+            file_content = input_file.read()
+
+        generated_content = process_cpp_header(file_content, file_name, env, args.src_root)
+
+        input_abs = os.path.abspath(file_name)
+        src_root_abs = os.path.abspath(args.src_root)
+
+        rel = os.path.relpath(input_abs, src_root_abs).replace("\\", "/")
+        if rel.startswith("src/"):
+            rel = rel[len("src/"):]
+        rel_dir = os.path.dirname(rel)
+        base = os.path.basename(rel)
+        base_no_ext = re.sub(r"\.h$", "", base)
+
+        is_device_header = os.path.basename(rel).endswith("_device_config.h")
+        stem = base_no_ext
+        if is_device_header and base_no_ext.endswith("_device_config"):
+            stem = base_no_ext[: -len("_config")]
+
+        generated_file_name = os.path.join(args.out_dir, rel_dir, f"{stem}_adapter.gen.h")
+        os.makedirs(os.path.dirname(generated_file_name), exist_ok=True)
+
+        with open(generated_file_name, "w", encoding="utf-8") as output_file:
+            output_file.write(generated_content)
+
+        print("--", generated_file_name)
+
+    return 0
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python generate-qt-adapters.py <filename1> <filename2> ...")
-        sys.exit(1)
-
-    for file_name in sys.argv[1:]:
-        with open(file_name, "r", encoding="utf-8") as input_file:
-            file_content = input_file.read()
-            generated_content = process_cpp_header(file_content, file_name)
-            generated_file_name = file_name.replace(".h", ".gen.h")
-            with open(generated_file_name, "w", encoding="utf-8") as output_file:
-                output_file.write(generated_content)
-            print("--", generated_file_name)
+    raise SystemExit(main())

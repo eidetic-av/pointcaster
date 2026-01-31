@@ -1,9 +1,9 @@
 #pragma once
 
 #include <QObject>
-#include "../../plugins/devices/device_status.h"
+#include <plugins/devices/device_status.h>
 
-namespace pc::ui {
+namespace pc::devices::ui {
 
 Q_NAMESPACE
 
@@ -23,6 +23,6 @@ inline pc::devices::DeviceStatus fromQt(WorkspaceDeviceStatus s) {
   return static_cast<devices::DeviceStatus>(static_cast<int>(s));
 }
 
-} // namespace pc::ui
+} // namespace pc::devices::ui
 
-Q_DECLARE_METATYPE(pc::ui::WorkspaceDeviceStatus)
+Q_DECLARE_METATYPE(pc::devices::ui::WorkspaceDeviceStatus)

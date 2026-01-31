@@ -12,7 +12,6 @@ add_subdirectory(core)
 qt_add_executable(pointcaster 
     pointcaster.cc
     workspace.cc
-    session.cc
 )
 
 add_subdirectory(ui)
@@ -62,6 +61,12 @@ target_precompile_headers(pointcaster PRIVATE
   <Corrade/Containers/StringView.h>
   <QCoreApplication>
   <QUrl>
+)
+
+# we set qt automoc off because QObjects we include should be
+# rendered inside the ui lib not the exe itself (otherwise Qt MOC runs twice)
+set_target_properties(pointcaster PROPERTIES
+  AUTOMOC OFF
 )
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")

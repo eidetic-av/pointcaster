@@ -2,21 +2,21 @@
 
 #include "app_settings/app_settings.h"
 #include "commands/device_config_commands.h"
-#include "device_plugin_controller.h"
 #include <QMetaType>
 #include <QObject>
 #include <QPointer>
 #include <QString>
 #include <QUndoCommand>
 #include <QVariant>
-#include <concepts>
 #include <core/logger/logger.h>
 #include <core/uuid/uuid.h>
 #include <functional>
 #include <plugins/devices/device_variants.h>
-#include <plugins/devices/orbbec/orbbec_device_config.gen.h>
 #include <plugins/devices/orbbec/orbbec_device_config.h>
+#include <plugins/devices/orbbec/orbbec_device_adapter.gen.h>
 #include <print>
+#include <session/session_config.h>
+#include <session/session_config_adapter.gen.h>
 #include <string>
 #include <thread>
 #include <variant>
@@ -25,7 +25,10 @@
 namespace pc::ui {
 
 using pc::devices::OrbbecDeviceConfiguration;
-using pc::devices::OrbbecDeviceConfigurationAdapter;
+using pc::devices::OrbbecDeviceAdapter;
+
+using pc::SessionConfiguration;
+using pc::SessionConfigurationAdapter;
 
 WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent,
                                std::function<void()> quit_callback)
@@ -88,8 +91,12 @@ void WorkspaceModel::save(bool update_last_session_path) {
   }).detach();
 }
 
-QVariant WorkspaceModel::deviceConfigAdapters() const {
-  return QVariant::fromValue(_deviceConfigAdapters);
+QList<QObject *> WorkspaceModel::sessionAdapters() const {
+  return _sessionAdapters;
+}
+
+QVariant WorkspaceModel::deviceAdapters() const {
+  return QVariant::fromValue(_deviceAdapters);
 }
 
 QStringList WorkspaceModel::deviceVariantNames() const {
@@ -126,10 +133,9 @@ QVariantList WorkspaceModel::addDeviceMenuEntries() const {
 }
 
 void WorkspaceModel::addNewDevice(const QString &plugin_name,
-                                  const QString &target_ip) {
+                                 const QString &target_ip) {
   if (plugin_name == OrbbecDeviceConfiguration::PluginName) {
-    auto config =
-        pc::devices::OrbbecDeviceConfiguration{.id = pc::uuid::word()};
+    auto config = pc::devices::OrbbecDeviceConfiguration{.id = pc::uuid::word()};
     if (!target_ip.isEmpty()) config.ip = target_ip.toStdString();
 
     auto new_config = _workspace.config;
@@ -142,7 +148,7 @@ void WorkspaceModel::addNewDevice(const QString &plugin_name,
 void WorkspaceModel::deleteSelectedDevice() {
   auto new_config = _workspace.config;
   const auto index = selectedDeviceIndex();
-  if (index < 0 || index >= new_config.devices.size()) {
+  if (index < 0 || index >= int(new_config.devices.size())) {
     pc::logger()->warn("deleteSelectedDevice: invalid index={} size={}", index,
                        new_config.devices.size());
     return;
@@ -154,14 +160,25 @@ void WorkspaceModel::deleteSelectedDevice() {
 }
 
 void WorkspaceModel::rebuildAdapters() {
-  pc::logger()->trace("Rebuilding device configuration adapters");
-  qDeleteAll(_deviceConfigAdapters);
-  _deviceConfigAdapters.clear();
+  pc::logger()->trace("Rebuilding adapters (sessions + devices)");
 
-  for (QObject *obj : _deviceControllers) obj->deleteLater();
-  _deviceControllers.clear();
+  // ---------- sessions ----------
+  qDeleteAll(_sessionAdapters);
+  _sessionAdapters.clear();
+
+  // ---------- devices ----------
+  qDeleteAll(_deviceAdapters);
+  _deviceAdapters.clear();
 
   std::scoped_lock lock(_workspace.config_access);
+
+  // Build session adapters from config.sessions
+  pc::logger()->trace("Session count: {}", _workspace.config.sessions.size());
+  for (auto &session_cfg : _workspace.config.sessions) {
+    auto *adapter = new SessionConfigurationAdapter(session_cfg, this);
+    _sessionAdapters.append(adapter);
+  }
+  emit sessionAdaptersChanged();
 
   const auto find_device_index = [this](const std::string &id) -> int {
     for (int i = 0; i < int(_workspace.config.devices.size()); ++i) {
@@ -182,8 +199,7 @@ void WorkspaceModel::rebuildAdapters() {
           using ConfigType = std::decay_t<decltype(device_config)>;
 
           if constexpr (std::same_as<ConfigType, OrbbecDeviceConfiguration>) {
-            auto *adapter = new OrbbecDeviceConfigurationAdapter(device_config,
-                                                                 plugin, this);
+            auto *adapter = new OrbbecDeviceAdapter(device_config, plugin, this);
 
             const int deviceIndex = find_device_index(device_config.id);
             adapter->setDeviceIndex(deviceIndex);
@@ -193,66 +209,48 @@ void WorkspaceModel::rebuildAdapters() {
                       onAdapterFieldEditRequested(adapter, fieldIndex, v);
                     });
 
-            _deviceConfigAdapters.append(adapter);
-
-            const QString device_id = QString::fromStdString(device_config.id);
-            auto *controller =
-                new DevicePluginController(plugin, device_id, this);
-            _deviceControllers.append(controller);
+            _deviceAdapters.append(adapter);
 
             plugin->set_status_callback(
-                [adapter = QPointer<OrbbecDeviceConfigurationAdapter>(adapter),
-                 controller = QPointer<DevicePluginController>(controller)](
+                [adapter = QPointer<OrbbecDeviceAdapter>(adapter)](
                     pc::devices::DeviceStatus status) {
-                  if (adapter) {
-                    QMetaObject::invokeMethod(
-                        adapter,
-                        [adapter, status]() {
-                          if (!adapter) return;
-                          adapter->setStatusFromCore(status);
-                        },
-                        Qt::QueuedConnection);
-                  }
-                  if (controller) {
-                    QMetaObject::invokeMethod(
-                        controller,
-                        [controller, status]() {
-                          if (!controller) return;
-                          controller->setStatusFromCore(status);
-                        },
-                        Qt::QueuedConnection);
-                  }
+                  if (!adapter) return;
+                  QMetaObject::invokeMethod(
+                      adapter,
+                      [adapter, status]() {
+                        if (!adapter) return;
+                        adapter->setStatusFromCore(status);
+                      },
+                      Qt::QueuedConnection);
                 });
           }
         },
         device_plugin->config());
   }
 
-  emit deviceConfigAdaptersChanged();
-  emit deviceControllersChanged();
+  emit deviceAdaptersChanged();
   emit deviceVariantNamesChanged();
   emit addDeviceMenuEntriesChanged();
 
-  pc::logger()->trace("Finished rebuilding device configuration adapters");
+  pc::logger()->trace("Finished rebuilding adapters");
 }
 
 void WorkspaceModel::refreshDeviceAdapterFromCore(int deviceIndex) {
   if (deviceIndex < 0) return;
 
-  pc::devices::DeviceConfigurationVariant variant;
+  pc::devices::DeviceConfigurationVariant config;
   {
     std::scoped_lock lock(_workspace.config_access);
     const std::size_t i = static_cast<std::size_t>(deviceIndex);
     if (i >= _workspace.config.devices.size()) return;
-    variant = _workspace.config.devices[i];
+    config = _workspace.config.devices[i];
   }
 
-  for (QObject *obj : _deviceConfigAdapters) {
-    auto *adapter = qobject_cast<ConfigAdapter *>(obj);
+  for (QObject *obj : _deviceAdapters) {
+    auto *adapter = qobject_cast<DeviceAdapter *>(obj);
     if (!adapter) continue;
     if (adapter->deviceIndex() != deviceIndex) continue;
-
-    adapter->setConfigFromCore(variant);
+    (void)adapter->setConfig(config);
     return;
   }
 }
@@ -274,9 +272,9 @@ void WorkspaceModel::triggerDeviceDiscovery() {
   }
 }
 
-void WorkspaceModel::onAdapterFieldEditRequested(ConfigAdapter *adapter,
-                                                 int fieldIndex,
-                                                 const QVariant &value) {
+void WorkspaceModel::onAdapterFieldEditRequested(DeviceAdapter *adapter,
+                                                int fieldIndex,
+                                                const QVariant &value) {
   if (!adapter) return;
 
   const int device_index = adapter->deviceIndex();
@@ -311,12 +309,9 @@ void WorkspaceModel::onAdapterFieldEditRequested(ConfigAdapter *adapter,
 
     after = plugin->config();
 
-    // revert plugin cache so command redo() is the mutator, and thats what
-    // undoStack->push does
     plugin->update_config(before);
 
-    command_text =
-        QStringLiteral("Edit %1").arg(adapter->fieldName(fieldIndex));
+    command_text = QStringLiteral("Edit %1").arg(adapter->fieldName(fieldIndex));
   }
 
   _undoStack->push(new SetDeviceConfigCommand(

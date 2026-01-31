@@ -16,8 +16,14 @@
 		"orbbecsdk",
 		"prometheus-cpp",
 		"qtawesome",
-		"reflectcpp",
+		{
+			"name": "reflectcpp",
+			"features": [
+				"yaml"
+			]
+		},
 		"spdlog",
+		"yaml-cpp",
 		"zpp-bits"
 	]
 }

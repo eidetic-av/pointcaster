@@ -2,7 +2,7 @@
 
 #include "plugins/devices/device_plugin.h"
 #include "plugins/devices/device_variants.h"
-#include "session.h"
+#include <session/session_config.h>
 #include "metrics/prometheus_server.h"
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/PluginManager/Manager.h>

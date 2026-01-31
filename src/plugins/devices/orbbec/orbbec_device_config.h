@@ -1,4 +1,5 @@
 #pragma once
+
 #include <pointcaster/point_cloud.h>
 #include <rfl/Literal.hpp>
 #include <string>

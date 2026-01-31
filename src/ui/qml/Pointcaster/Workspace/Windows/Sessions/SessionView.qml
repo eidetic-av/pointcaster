@@ -7,6 +7,8 @@ import Pointcaster 1.0
 import Pointcaster.Workspace 1.0
 
 Item {
+    required property var sessionAdapter
+
     id: root
     anchors.fill: parent
 
@@ -236,23 +238,23 @@ Item {
             }
         }
 
-        // RMB drag = pan (2/2) (kept as requested)
-        DragHandler {
-            acceptedButtons: Qt.RightButton
-            enabled: !sessionCameraControls.viewLocked
+        // // RMB drag = pan (2/2) (kept as requested)
+        // DragHandler {
+        //     acceptedButtons: Qt.RightButton
+        //     enabled: !sessionCameraControls.viewLocked
 
-            onTranslationChanged: {
-                const panScale = Math.abs(camera.z) * 0.002;
+        //     onTranslationChanged: {
+        //         const panScale = Math.abs(camera.z) * 0.002;
 
-                const sceneDelta = Qt.vector3d(camera.right.x, camera.right.y, camera.right.z).times(-translation.x * panScale).plus(Qt.vector3d(camera.up.x, camera.up.y, camera.up.z).times(translation.y * panScale));
+        //         const sceneDelta = Qt.vector3d(camera.right.x, camera.right.y, camera.right.z).times(-translation.x * panScale).plus(Qt.vector3d(camera.up.x, camera.up.y, camera.up.z).times(translation.y * panScale));
 
-                const localDelta = orbitOrigin.mapDirectionFromScene(sceneDelta);
+        //         const localDelta = orbitOrigin.mapDirectionFromScene(sceneDelta);
 
-                orbitOrigin.position = Qt.vector3d(orbitOrigin.position.x + localDelta.x, orbitOrigin.position.y + localDelta.y, orbitOrigin.position.z + localDelta.z);
+        //         orbitOrigin.position = Qt.vector3d(orbitOrigin.position.x + localDelta.x, orbitOrigin.position.y + localDelta.y, orbitOrigin.position.z + localDelta.z);
 
-                translation = Qt.point(0, 0);
-            }
-        }
+        //         translation = Qt.point(0, 0);
+        //     }
+        // }
 
         // ---------- MODELS ----------
 

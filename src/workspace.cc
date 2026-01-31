@@ -86,7 +86,7 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
 
   if (config.sessions.empty()) {
     // every workspace needs a session with a camera
-    config.sessions.emplace_back(pc::uuid::word(),
+    config.sessions.emplace_back(pc::uuid::word(), "session_1",
                                  CameraConfiguration{.id = pc::uuid::word()});
   }
 
@@ -101,23 +101,24 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   // ** for debugging
   // print out the current workspace configuration that we have in memory of the
   // workspace simulation
-  std::thread([this]() {
-    using namespace std::chrono;
-    using namespace std::chrono_literals;
-    WorkspaceConfiguration thread_config;
-    while (true) {
-      std::this_thread::sleep_for(5s);
-      {
-        {
-          std::scoped_lock lock(config_access);
-          thread_config = config;
-        }
-        const auto yaml_string =
-            rfl::yaml::write<rfl::AddTagsToVariants>(thread_config);
-        pc::logger()->debug("Workspace configuration: \n{}\n", yaml_string);
-      }
-    }
-  }).detach();
+
+  // std::thread([this]() {
+  //   using namespace std::chrono;
+  //   using namespace std::chrono_literals;
+  //   WorkspaceConfiguration thread_config;
+  //   while (true) {
+  //     std::this_thread::sleep_for(5s);
+  //     {
+  //       {
+  //         std::scoped_lock lock(config_access);
+  //         thread_config = config;
+  //       }
+  //       const auto yaml_string =
+  //           rfl::yaml::write<rfl::AddTagsToVariants>(thread_config);
+  //       pc::logger()->debug("Workspace configuration: \n{}\n", yaml_string);
+  //     }
+  //   }
+  // }).detach();
 }
 
 void Workspace::apply_new_config(const WorkspaceConfiguration &new_config) {

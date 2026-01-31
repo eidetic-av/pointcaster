@@ -7,6 +7,7 @@ namespace pc {
 
 struct SessionConfiguration {
   std::string id;
+  std::string display_name;
   CameraConfiguration camera;
 };
 

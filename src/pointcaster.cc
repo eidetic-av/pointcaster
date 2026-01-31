@@ -1,4 +1,3 @@
-#include "models/workspace_model.h"
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -7,6 +6,7 @@
 #include <core/logger/logger.h>
 #include <print>
 #include <ui/initialisation.h>
+#include <ui/models/workspace_model.h>
 #include <workspace.h>
 
 using namespace pc;

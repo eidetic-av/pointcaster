@@ -18,18 +18,10 @@ ApplicationWindow {
 
     palette: ThemeColors.palette
 
-    FontLoader {
-        source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Light.otf"
-    }
-    FontLoader {
-        source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf"
-    }
-    FontLoader {
-        source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Medium.otf"
-    }
-    FontLoader {
-        source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Bold.otf"
-    }
+    FontLoader { source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Light.otf" }
+    FontLoader { source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf" }
+    FontLoader { source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Medium.otf" }
+    FontLoader { source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Bold.otf" }
 
     font.family: "Atkinson Hyperlegible Next"
 
@@ -46,8 +38,6 @@ ApplicationWindow {
         onAccepted: {
             const hasSavePath = workspaceModel && workspaceModel.saveFileUrl.toString() !== "";
             workspaceModel.saveFileUrl = selectedFile;
-            // if there was no existing save path, we allow the 'save as' dialog to set the
-            // current save path because it hasnt been set yet
             workspaceModel.save(!hasSavePath);
         }
     }
@@ -55,7 +45,6 @@ ApplicationWindow {
     Connections {
         target: workspaceModel
         function onOpenSaveAsDialog() {
-            console.log("should have raised");
             saveAsWorkspaceDialog.open();
         }
     }
@@ -76,11 +65,7 @@ ApplicationWindow {
         uniqueName: "MainDockingArea"
 
         affinities: ["edit", "view"]
-
-        // persistentCentralItemFileName: ":/qt/qml/Pointcaster/Workspace/Windows/Sessions/CentralSessionView.qml"
-
         options: KDDW.KDDockWidgets.MainWindowOption_HasCentralGroup
-        // centralGroup: CentralSessionView {}
 
         DevicesWindow {
             id: devicesWindow
@@ -88,29 +73,64 @@ ApplicationWindow {
             affinities: ["edit"]
         }
 
-        KDDW.DockWidget {
-            id: session1
-            uniqueName: "session1"
-            title: "session_1"
-            affinities: ["view"]
-            SessionView {}
+        Component {
+            id: sessionWindowComponent
+
+            KDDW.DockWidget {
+                id: sessionDockWidget
+
+                required property string dockUniqueName
+                required property string dockTitle
+                required property var sessionAdapter
+
+                uniqueName: dockUniqueName
+                title: dockTitle
+                affinities: ["view"]
+
+                SessionView {
+                    // bind directly to the DockWidget property; don't rely on parent lookup
+                    sessionAdapter: sessionDockWidget.sessionAdapter
+                }
+            }
+        }
+
+        function buildSessionWindows() {
+            const adapters = workspaceModel.sessionAdapters;
+            console.log(`sessionAdapters length: ${adapters.length}`);
+
+            for (let i = 0; i < adapters.length; ++i) {
+                const adapter = adapters[i];
+                const id = String(adapter.fieldValue(0));
+                const name = String(adapter.fieldValue(1));
+
+                // Dedup: skip if we already have a dock for this session id
+                // if (dockingArea.dockWidget(id))
+                //     continue;
+
+                const sessionWindow = sessionWindowComponent.createObject(root, {
+                    dockUniqueName: id,
+                    dockTitle: name,
+                    sessionAdapter: adapter
+                });
+
+                addDockWidgetAsTab(sessionWindow);
+            }
         }
 
         Component.onCompleted: {
-            // layoutSaver.restoreFromFile('mylayout.json');
-
-            addDockWidgetAsTab(session1);
-
             addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(400, 400));
+            dockingArea.buildSessionWindows();
+        }
 
-            // addDockWidget(session2, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(800,800), KDDW.DockWidget.NoFloat);
-            // addDockWidget(session1, KDDW.KDDockWidgets.Location_OnRight);
+        Connections {
+            target: workspaceModel
+            function onSessionAdaptersChanged() {
+                dockingArea.buildSessionWindows();
+            }
         }
     }
 
-    KDDW.LayoutSaver {
-        id: layoutSaver
-    }
+    KDDW.LayoutSaver { id: layoutSaver }
 
     Connections {
         target: Qt.application
@@ -160,6 +180,5 @@ ApplicationWindow {
         id: settingsWindow
         x: root.x + (root.width - width) / 2
         y: root.y + (root.height - height) / 2
-        // workspace: workspaceModel
     }
 }

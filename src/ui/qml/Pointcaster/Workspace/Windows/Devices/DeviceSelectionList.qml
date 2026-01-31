@@ -30,7 +30,7 @@ Item {
             anchors.fill: parent
             anchors.margins: 1
 
-            model: root.workspace.deviceConfigAdapters
+            model: root.workspace.deviceAdapters
             focus: true
             activeFocusOnTab: true
             keyNavigationEnabled: true

@@ -25,22 +25,19 @@ KDDW.DockWidget {
             if (!workspace)
                 return null;
             const idx = deviceSelectionList.currentIndex;
-            if (idx < 0 || idx >= workspace.deviceConfigAdapters.length)
+            if (idx < 0 || idx >= workspace.deviceAdapters.length)
                 return null;
-            return workspace.deviceConfigAdapters[idx];
+            return workspace.deviceAdapters[idx];
         }
 
         property var otherAdapter: {
             if (!workspace)
                 return null;
             const idx = deviceSelectionList.currentIndex + 1;
-            if (idx < 0 || idx >= workspace.deviceConfigAdapters.length)
+            if (idx < 0 || idx >= workspace.deviceAdapters.length)
                 return null;
-            return workspace.deviceConfigAdapters[idx];
+            return workspace.deviceAdapters[idx];
         }
-
-        // controller for the currently selected device (index-aligned with adapters)
-        property var currentController: (workspace && deviceSelectionList.currentIndex >= 0 && deviceSelectionList.currentIndex < workspace.deviceControllers.length) ? workspace.deviceControllers[deviceSelectionList.currentIndex] : null
 
         Rectangle {
             anchors.fill: parent
@@ -76,7 +73,8 @@ KDDW.DockWidget {
                 rightMargin: Math.round(8 * Scaling.uiScale)
             }
             spacing: Math.round(8 * Scaling.uiScale)
-            enabled: devices.currentController !== null
+
+            enabled: devices.currentAdapter !== null
 
             IconButton {
                 id: startStopButton
@@ -85,26 +83,27 @@ KDDW.DockWidget {
 
                 tooltip: "Start/stop selected device"
                 text: {
-                    if (!devices.currentController)
+                    if (!devices.currentAdapter)
                         return "Start";
-                    return devices.currentController.status === DevicePluginController.Active ? "Stop" : "Start";
+                    return devices.currentAdapter.status === UiEnums.WorkspaceDeviceStatus.Active ? "Stop" : "Start";
                 }
 
                 iconSource: {
-                    if (!devices.currentController)
+                    if (!devices.currentAdapter)
                         return FontAwesome.icon("solid/play");
-                    return devices.currentController.status === DevicePluginController.Active ? FontAwesome.icon("solid/stop") : FontAwesome.icon("solid/play");
+                    return devices.currentAdapter.status === UiEnums.WorkspaceDeviceStatus.Active ? FontAwesome.icon("solid/stop") : FontAwesome.icon("solid/play");
                 }
 
-                enabled: devices.currentController && devices.currentController.status !== DevicePluginController.Loading
+                enabled: devices.currentAdapter && devices.currentAdapter.status !== UiEnums.WorkspaceDeviceStatus.Loading
 
                 onClicked: {
-                    if (!devices.currentController)
+                    if (!devices.currentAdapter)
                         return;
-                    if (devices.currentController.status === DevicePluginController.Active)
-                        devices.currentController.stop();
+
+                    if (devices.currentAdapter.status === UiEnums.WorkspaceDeviceStatus.Active)
+                        devices.currentAdapter.stop();
                     else
-                        devices.currentController.start();
+                        devices.currentAdapter.start();
                 }
             }
 
@@ -117,11 +116,11 @@ KDDW.DockWidget {
                 text: "Restart"
                 iconSource: FontAwesome.icon("solid/rotate-right")
 
-                enabled: devices.currentController && devices.currentController.status === DevicePluginController.Active
+                enabled: devices.currentAdapter && devices.currentAdapter.status === UiEnums.WorkspaceDeviceStatus.Active
 
                 onClicked: {
-                    if (devices.currentController)
-                        devices.currentController.restart();
+                    if (devices.currentAdapter)
+                        devices.currentAdapter.restart();
                 }
             }
 
@@ -161,6 +160,7 @@ KDDW.DockWidget {
     }
 
     Component.onCompleted: function () {
-        workspace.triggerDeviceDiscovery();
+        if (workspace)
+            workspace.triggerDeviceDiscovery();
     }
 }

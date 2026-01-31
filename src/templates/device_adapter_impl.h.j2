@@ -1,0 +1,250 @@
+#pragma once
+
+#include <QObject>
+#include <QVariant>
+#include <QVariantMap>
+#include <QString>
+#include <QMetaType>
+{% if needs_qvector3d -%}
+#include <QVector3D>
+{% endif -%}
+#include <variant>
+
+#include <ui/models/config_adapter.h>
+#include <ui/models/device_adapter.h>
+#include <config_variant.h>
+#include <plugins/devices/device_variants.h>
+#include <{{ header_include_path }}>
+
+{% if structs|length > 0 %}
+{% if namespace_name %}
+namespace {{ namespace_name }} {
+
+{% endif %}
+{% for s in structs %}
+class {{ s.adapter_name }} : public DeviceAdapter {
+    Q_OBJECT
+public:
+    explicit {{ s.adapter_name }}({{ s.struct_name }} &config, pc::devices::DevicePlugin* plugin, QObject *parent = nullptr)
+        : DeviceAdapter(plugin, parent), m_config(config) {}
+
+    QString configType() const override { return QStringLiteral("{{ s.struct_name }}"); }
+    Q_INVOKABLE QString displayName() const override { return QStringLiteral("{{ s.display_name }}"); }
+
+    Q_INVOKABLE int fieldCount() const override { return {{ s.members|length }}; }
+
+    bool setConfig(const pc::devices::DeviceConfigurationVariant &config) override {
+        const auto *configPtr = std::get_if<{{ s.struct_name }}>(&config);
+        if (!configPtr) return false;
+        return setConfig(*configPtr);
+    }
+
+    bool setConfig(const {{ s.struct_name }} &config) {
+        m_config = config;
+        for (int i = 0; i < fieldCount(); ++i) {
+            notifyFieldChanged(i);
+        }
+        return true;
+    }
+
+{% if s.any_float3 %}
+{% for m in s.members %}
+{% if is_float3_type(m.type) %}
+    Q_INVOKABLE void set_{{ m.name }}(float x, float y, float z) { emit fieldEditRequested({{ loop.index0 }}, QVariant::fromValue(QVector3D(x, y, z))); }
+{% endif %}
+{% endfor %}
+    Q_INVOKABLE void setFloat3Field(int index, float x, float y, float z) {
+        emit fieldEditRequested(index, QVariant::fromValue(QVector3D(x, y, z)));
+    }
+
+{% endif %}
+    Q_INVOKABLE QString fieldName(int index) const override {
+        switch (index) {
+{% for m in s.members %}
+        case {{ loop.index0 }}: return QStringLiteral("{{ m.name }}");
+{% endfor %}
+        default: return {};
+        }
+    }
+
+    Q_INVOKABLE QString fieldTypeName(int index) const override {
+        switch (index) {
+{% for m in s.members %}
+        case {{ loop.index0 }}: return QStringLiteral("{{ m.type }}");
+{% endfor %}
+        default: return {};
+        }
+    }
+
+{% if s.any_enums %}
+    Q_INVOKABLE bool isEnum(int index) const override {
+        switch (index) {
+{% for m in s.members %}
+{% if m.is_enum %}
+        case {{ loop.index0 }}: return true;
+{% endif %}
+{% endfor %}
+        default: return false;
+        }
+    }
+
+    Q_INVOKABLE QVariant enumOptions(int index) const override {
+        switch (index) {
+{% for m in s.members %}
+{% if m.is_enum %}
+        case {{ loop.index0 }}:
+            return QVariantList{
+{% for e in m.enum_entries %}
+                QVariantMap{ {"text", QStringLiteral("{{ e.name }}")}, {"value", {{ e.value }} } }{{ "," if not loop.last else "" }}
+{% endfor %}
+            };
+{% endif %}
+{% endfor %}
+        default: return {};
+        }
+    }
+
+{% endif %}
+    Q_INVOKABLE QVariant defaultValue(int index) const override {
+        switch (index) {
+{% for m in s.members %}
+        case {{ loop.index0 }}: {{ default_value_case_cpp(m) }}
+{% endfor %}
+        default: return {};
+        }
+    }
+
+    Q_INVOKABLE QVariant minMax(int index) const override {
+        switch (index) {
+{% for m in s.members %}
+        case {{ loop.index0 }}: {{ minmax_case_cpp(m) }}
+{% endfor %}
+        default: return {};
+        }
+    }
+
+    Q_INVOKABLE bool isOptional(int index) const override {
+        switch (index) {
+{% for m in s.members %}
+        case {{ loop.index0 }}: return {{ "true" if m.optional else "false" }};
+{% endfor %}
+        default: return false;
+        }
+    }
+
+    Q_INVOKABLE bool isDisabled(int index) const override {
+        switch (index) {
+{% for m in s.members %}
+        case {{ loop.index0 }}: return {{ "true" if m.disabled else "false" }};
+{% endfor %}
+        default: return false;
+        }
+    }
+
+    Q_INVOKABLE bool isHidden(int index) const override {
+        switch (index) {
+{% for m in s.members %}
+        case {{ loop.index0 }}: return {{ "true" if m.hidden else "false" }};
+{% endfor %}
+        default: return false;
+        }
+    }
+
+    Q_INVOKABLE QVariant fieldValue(int index) const override {
+        switch (index) {
+{% for m in s.members %}
+{% if m.type == "std::string" %}
+        case {{ loop.index0 }}: return QVariant(QString::fromStdString(m_config.{{ m.name }}));
+{% elif m.is_enum %}
+        case {{ loop.index0 }}: return QVariant(int(m_config.{{ m.name }}));
+{% elif is_float3_type(m.type) %}
+        case {{ loop.index0 }}: {
+            const auto &v = m_config.{{ m.name }};
+            return QVariant::fromValue(QVector3D(v.x, v.y, v.z));
+        }
+{% else %}
+        case {{ loop.index0 }}: return QVariant::fromValue(m_config.{{ m.name }});
+{% endif %}
+{% endfor %}
+        default: return {};
+        }
+    }
+
+{% if s.any_float3 %}
+private:
+    static QVector3D toQVector3DLoose(const QVariant &value) {
+        if (value.canConvert<QVector3D>())
+            return value.value<QVector3D>();
+        if (value.metaType().id() == QMetaType::QVariantMap) {
+            const auto m = value.toMap();
+            return QVector3D(
+                m.value(QStringLiteral("x")).toFloat(),
+                m.value(QStringLiteral("y")).toFloat(),
+                m.value(QStringLiteral("z")).toFloat());
+        }
+        if (value.metaType().id() == QMetaType::QVariantList) {
+            const auto l = value.toList();
+            if (l.size() >= 3)
+                return QVector3D(l[0].toFloat(), l[1].toFloat(), l[2].toFloat());
+        }
+        return QVector3D();
+    }
+
+public:
+{% endif %}
+    bool applyFieldValue(int index, const QVariant &value) override {
+        switch (index) {
+{% for m in s.members %}
+        case {{ loop.index0 }}: {
+{% if m.type == "std::string" %}
+            const std::string newValue = value.toString().toStdString();
+            if (m_config.{{ m.name }} == newValue)
+                return false;
+            m_config.{{ m.name }} = newValue;
+            return true;
+{% elif m.is_enum %}
+            const int newValueInt = value.toInt();
+            const auto newValue = static_cast<{{ m.enum_qualified_type }}>(newValueInt);
+            if (m_config.{{ m.name }} == newValue)
+                return false;
+            m_config.{{ m.name }} = newValue;
+            return true;
+{% elif is_float3_type(m.type) %}
+            const QVector3D v = toQVector3DLoose(value);
+            {{ m.type }} newValue{ v.x(), v.y(), v.z() };
+            if (m_config.{{ m.name }} == newValue)
+                return false;
+            m_config.{{ m.name }} = newValue;
+            return true;
+{% else %}
+            const auto newValue = qvariant_cast<{{ m.type }}>(value);
+{% if is_simple_comparable_type(m.type) %}
+            if (m_config.{{ m.name }} == newValue)
+                return false;
+            m_config.{{ m.name }} = newValue;
+            return true;
+{% else %}
+            m_config.{{ m.name }} = newValue;
+            return true;
+{% endif %}
+{% endif %}
+        }
+{% endfor %}
+        default:
+            return false;
+        }
+    }
+
+    Q_INVOKABLE void setFieldValue(int index, const QVariant &value) override {
+        emit fieldEditRequested(index, value);
+    }
+
+private:
+    {{ s.struct_name }} &m_config;
+};
+
+{% endfor %}
+{% if namespace_name %}
+} // namespace {{ namespace_name }}
+{% endif %}
+{% endif %}
