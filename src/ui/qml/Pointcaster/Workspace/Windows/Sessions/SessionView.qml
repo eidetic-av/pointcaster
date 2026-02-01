@@ -31,7 +31,9 @@ Item {
         return qYaw.times(qPitch);
     }
 
+    // Guards to prevent config->UI updates from immediately re-committing UI->config (undo/redo feedback loops)
     property bool _applyingConfigCameraPosition: false
+    property bool _applyingConfigCameraToggles: false
 
     function _vector3dFromAdapterPosition(p) {
         // p is expected to be QVector3D-ish in QML (has x/y/z)
@@ -53,6 +55,22 @@ Item {
         });
     }
 
+    function applyCameraTogglesFromConfig() {
+        if (!root.cameraAdapter)
+            return;
+
+        root._applyingConfigCameraToggles = true;
+
+        sessionCameraControls.viewLocked = !!root.cameraAdapter.locked;
+        sessionCameraControls.gridEnabled = !!root.cameraAdapter.show_grid;
+        sessionCameraControls.orthographicEnabled = !!root.cameraAdapter.orthographic;
+
+        // drop the guard next tick so any bindings/animations settle first
+        Qt.callLater(function () {
+            root._applyingConfigCameraToggles = false;
+        });
+    }
+
     function commitCameraPositionToConfig() {
         if (!root.cameraAdapter)
             return;
@@ -69,10 +87,7 @@ Item {
             return;
 
         // initial pull: config -> UI
-        sessionCameraControls.viewLocked = !!cameraAdapter.locked;
-        sessionCameraControls.gridEnabled = !!cameraAdapter.show_grid;
-        sessionCameraControls.orthographicEnabled = !!cameraAdapter.orthographic;
-
+        applyCameraTogglesFromConfig();
         applyCameraPositionFromConfig();
 
         // snap projection immediately on startup / adapter swap
@@ -88,21 +103,15 @@ Item {
         enabled: !!root.cameraAdapter
 
         function onLockedChanged() {
-            const v = !!root.cameraAdapter.locked;
-            if (sessionCameraControls.viewLocked !== v)
-                sessionCameraControls.viewLocked = v;
+            applyCameraTogglesFromConfig();
         }
 
         function onShow_gridChanged() {
-            const v = !!root.cameraAdapter.show_grid;
-            if (sessionCameraControls.gridEnabled !== v)
-                sessionCameraControls.gridEnabled = v;
+            applyCameraTogglesFromConfig();
         }
 
         function onOrthographicChanged() {
-            const v = !!root.cameraAdapter.orthographic;
-            if (sessionCameraControls.orthographicEnabled !== v)
-                sessionCameraControls.orthographicEnabled = v;
+            applyCameraTogglesFromConfig();
 
             // config-driven change gets no animation
             camera.setBlend(sessionCameraControls.orthographicEnabled ? 1.0 : 0.0, false);
@@ -118,24 +127,43 @@ Item {
         target: sessionCameraControls
 
         function onViewLockedChanged() {
-            if (!root.cameraAdapter)
+            if (!root.cameraAdapter || root._applyingConfigCameraToggles)
                 return;
-            root.cameraAdapter.set_locked(!!sessionCameraControls.viewLocked);
+
+            const desired = !!sessionCameraControls.viewLocked;
+            const current = !!root.cameraAdapter.locked;
+            if (desired === current)
+                return;
+
+            root.cameraAdapter.set_locked(desired);
         }
 
         function onGridEnabledChanged() {
-            if (!root.cameraAdapter)
+            if (!root.cameraAdapter || root._applyingConfigCameraToggles)
                 return;
-            root.cameraAdapter.set_show_grid(!!sessionCameraControls.gridEnabled);
+
+            const desired = !!sessionCameraControls.gridEnabled;
+            const current = !!root.cameraAdapter.show_grid;
+            if (desired === current)
+                return;
+
+            root.cameraAdapter.set_show_grid(desired);
         }
 
         function onOrthographicEnabledChanged() {
-            // user-driven toggle: animate
-            camera.setBlend(sessionCameraControls.orthographicEnabled ? 1.0 : 0.0, true);
+            // Animate only for user-driven toggles; config-driven updates should snap.
+            const targetBlend = sessionCameraControls.orthographicEnabled ? 1.0 : 0.0;
+            camera.setBlend(targetBlend, !root._applyingConfigCameraToggles);
 
-            if (!root.cameraAdapter)
+            if (!root.cameraAdapter || root._applyingConfigCameraToggles)
                 return;
-            root.cameraAdapter.set_orthographic(!!sessionCameraControls.orthographicEnabled);
+
+            const desired = !!sessionCameraControls.orthographicEnabled;
+            const current = !!root.cameraAdapter.orthographic;
+            if (desired === current)
+                return;
+
+            root.cameraAdapter.set_orthographic(desired);
         }
     }
 
