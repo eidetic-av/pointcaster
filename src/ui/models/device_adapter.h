@@ -26,7 +26,7 @@ public:
   // Device-only config variant, we use this for any device plugins
   virtual bool setConfig(const pc::devices::DeviceConfigurationVariant &) = 0;
 
-  bool setConfig(const pc::CoreConfigurationVariant &) override {
+  bool setConfig(const pc::ConfigurationVariant &) override {
     // base configs not applicable
     return false;
   }

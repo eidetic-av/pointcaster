@@ -20,20 +20,10 @@ KDDW.DockWidget {
         property var kddockwidgets_min_size: Qt.size(Math.round(225 * Scaling.uiScale), Math.round(500 * Scaling.uiScale))
         clip: true
 
-        // Shared state for the properties pane
         property var currentAdapter: {
             if (!workspace)
                 return null;
             const idx = deviceSelectionList.currentIndex;
-            if (idx < 0 || idx >= workspace.deviceAdapters.length)
-                return null;
-            return workspace.deviceAdapters[idx];
-        }
-
-        property var otherAdapter: {
-            if (!workspace)
-                return null;
-            const idx = deviceSelectionList.currentIndex + 1;
             if (idx < 0 || idx >= workspace.deviceAdapters.length)
                 return null;
             return workspace.deviceAdapters[idx];
@@ -151,9 +141,7 @@ KDDW.DockWidget {
 
                 ConfigurationEditor {
                     model: devices.currentAdapter
-                }
-                ConfigurationEditor {
-                    model: devices.otherAdapter
+                    flattenFields: false
                 }
             }
         }

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <session/config_variant.h>
+#include <config/config_variant.h>
 
 #include <QObject>
 #include <QString>
@@ -80,7 +80,7 @@ public:
 
   void notifyFieldChanged(const QString &path) { emit fieldChanged(path); }
 
-  virtual bool setConfig(const pc::CoreConfigurationVariant &) = 0;
+  virtual bool setConfig(const pc::ConfigurationVariant &) = 0;
 
 signals:
   void editRequested(const QString &path, const QVariant &value);

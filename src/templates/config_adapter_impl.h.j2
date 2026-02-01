@@ -12,7 +12,7 @@
 #include <variant>
 
 #include <ui/models/config_adapter.h>
-#include <session/config_variant.h>
+#include <config/config_variant.h>
 #include <{{ header_include_path }}>
 
 {% if structs|length > 0 %}
@@ -79,7 +79,7 @@ public:
     Q_INVOKABLE QString displayName() const override { return QStringLiteral("{{ s.label }}"); }
 
     // ---- Core-only ----
-    bool setConfig(const pc::CoreConfigurationVariant &config) override {
+    bool setConfig(const pc::ConfigurationVariant &config) override {
         const auto *configPtr = std::get_if<{{ s.struct_name }}>(&config);
         if (!configPtr) return false;
         return setConfig(*configPtr);

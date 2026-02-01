@@ -141,33 +141,6 @@ public:
 {% endif %}
 {% endfor %}
 
-signals:
-{% for m in s.members %}
-    void {{ m.name }}Changed();
-{% endfor %}
-
-{% if s.any_float3 %}
-private:
-    static QVector3D toQVector3DLoose(const QVariant &value) {
-        if (value.canConvert<QVector3D>())
-            return value.value<QVector3D>();
-        if (value.metaType().id() == QMetaType::QVariantMap) {
-            const auto m = value.toMap();
-            return QVector3D(
-                m.value(QStringLiteral("x")).toFloat(),
-                m.value(QStringLiteral("y")).toFloat(),
-                m.value(QStringLiteral("z")).toFloat());
-        }
-        if (value.metaType().id() == QMetaType::QVariantList) {
-            const auto l = value.toList();
-            if (l.size() >= 3)
-                return QVector3D(l[0].toFloat(), l[1].toFloat(), l[2].toFloat());
-        }
-        return QVector3D();
-    }
-public:
-{% endif %}
-
     // ---- Path-based reads ----
     Q_INVOKABLE QVariant value(const QString &path) const override {
 {% for m in s.members %}
@@ -395,6 +368,33 @@ public:
         return {};
     }
 {% endif %}
+
+signals:
+{% for m in s.members %}
+    void {{ m.name }}Changed();
+{% endfor %}
+
+{% if s.any_float3 %}
+private:
+    static QVector3D toQVector3DLoose(const QVariant &value) {
+        if (value.canConvert<QVector3D>())
+            return value.value<QVector3D>();
+        if (value.metaType().id() == QMetaType::QVariantMap) {
+            const auto m = value.toMap();
+            return QVector3D(
+                m.value(QStringLiteral("x")).toFloat(),
+                m.value(QStringLiteral("y")).toFloat(),
+                m.value(QStringLiteral("z")).toFloat());
+        }
+        if (value.metaType().id() == QMetaType::QVariantList) {
+            const auto l = value.toList();
+            if (l.size() >= 3)
+                return QVector3D(l[0].toFloat(), l[1].toFloat(), l[2].toFloat());
+        }
+        return QVector3D();
+    }
+{% endif %}
+
 
 private:
     {{ s.struct_name }} &m_config;

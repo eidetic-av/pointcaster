@@ -24,7 +24,7 @@
       "device": {
         "auto-detect-kits": true,
         "copy-cmd-bridge": true,
-         "mount-libexec": false
+        "mount-libexec": false
       }
     }
   }

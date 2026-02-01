@@ -2,6 +2,7 @@
 
 #include "orbbec/orbbec_device_config.h"
 #include <concepts>
+#include <config/config_variant.h>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -11,18 +12,7 @@ namespace pc::devices {
 
 using DeviceConfigurationVariant = std::variant<OrbbecDeviceConfiguration>;
 
-// helper trait: is T one of the types in Variant
-template <typename T, typename Variant> struct is_in_variant;
-
-template <typename T, typename... Ts>
-struct is_in_variant<T, std::variant<Ts...>>
-    : std::bool_constant<(std::same_as<T, Ts> || ...)> {};
-
-template <typename T, typename Variant>
-inline constexpr bool is_in_variant_v = is_in_variant<T, Variant>::value;
-
-template <typename T>
-concept ValidDeviceConfig = is_in_variant_v<T, DeviceConfigurationVariant>;
+// compile time utilities
 
 template <typename Callback>
 constexpr void for_each_device_config_type(Callback cb) {

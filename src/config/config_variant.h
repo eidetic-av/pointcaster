@@ -1,16 +1,22 @@
 #pragma once
 
+#include "transform_config.h"
 #include <concepts>
 #include <type_traits>
 #include <utility>
 #include <variant>
 
 #include <camera/camera_config.h>
+#include <config/transform_config.h>
 #include <session/session_config.h>
 
 namespace pc {
 
-// ---------- generic utilities ----------
+using ConfigurationVariant =
+    std::variant<TransformConfiguration, CameraConfiguration,
+                 SessionConfiguration>;
+
+// compile time utilities
 
 template <typename T, typename Variant> struct is_in_variant;
 
@@ -29,16 +35,12 @@ constexpr void for_each_variant_type(Callback cb) {
   }(std::make_index_sequence<count>{});
 }
 
-// ---------- core configuration variant ----------
-
-using CoreConfigurationVariant =
-    std::variant<CameraConfiguration, SessionConfiguration>;
 template <typename T>
-concept ValidCoreConfig = is_in_variant_v<T, CoreConfigurationVariant>;
+concept ValidConfig = is_in_variant_v<T, ConfigurationVariant>;
 
 template <typename Callback>
 constexpr void for_each_core_config_type(Callback cb) {
-  for_each_variant_type<Callback, CoreConfigurationVariant>(cb);
+  for_each_variant_type<Callback, ConfigurationVariant>(cb);
 }
 
 } // namespace pc

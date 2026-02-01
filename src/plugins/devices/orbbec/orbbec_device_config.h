@@ -1,5 +1,6 @@
 #pragma once
 
+#include <config/transform_config.h>
 #include <pointcaster/point_cloud.h>
 #include <rfl/Literal.hpp>
 #include <string>
@@ -21,7 +22,7 @@ struct OrbbecDeviceConfiguration {
 
   int decimation = 1; // @minmax(1, 8)
 
-  pc::float3 offset_position;
+  TransformConfiguration transform;
 
   using DeviceType = OrbbecDevice;
   using Tag = rfl::Literal<"orbbec">;

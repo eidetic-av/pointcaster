@@ -85,7 +85,7 @@ RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
     apt-get install -y --no-install-recommends neovim fish; \
     rm -rf /var/lib/apt/lists/*
 
-# install clangd + clang-format + clang-tidy (LLVM 21)
+# install clang dev tools
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates wget gnupg; \
@@ -93,10 +93,14 @@ RUN set -eux; \
     wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /usr/share/keyrings/llvm-snapshot.gpg; \
     printf 'deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-21 main\n' > /etc/apt/sources.list.d/llvm21.list; \
     apt-get update; \
-    apt-get install -y --no-install-recommends clangd-21 clang-tools-21; \
+    apt-get install -y --no-install-recommends clangd-21 clang-tools-21 clang-format-21 clang-tidy-21; \
+    update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-21 100; \
+    update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-21 100; \
+    update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-21 100; \
     rm -rf /var/lib/apt/lists/*
 
 # optionally install vscode for in-container ide setup
+# (useful if this container is being used with distrobox)
 ARG INSTALL_VSCODE=0
 ARG VSCODE_VERSION=1.108.0
 ARG VSCODE_BUILD_TIMESTAMP=1767881962
