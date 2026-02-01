@@ -48,7 +48,7 @@ public:
 
   // TODO: maybe it would better to return a constant reference to the
   // pointcloud here so its decided at the call site if a copy is required
-  // pc::types::PointCloud point_cloud() const override;
+  // pc::PointCloud point_cloud() const override;
 
   void start() override;
   void stop() override;
@@ -56,7 +56,7 @@ public:
 
   void on_config_field_changed(int deviceIndex, int fieldIndex) override {
     pc::logger()->trace("Orbbec config changed deviceIndex={} fieldIndex={}",
-                      deviceIndex, fieldIndex);
+                        deviceIndex, fieldIndex);
   }
 
 private:
@@ -77,7 +77,7 @@ private:
   PC_PROFILING_MUTEX(_process_current_cloud_access);
   std::uint64_t _last_processed_frame_index{0};
 
-  pc::types::PointCloud _current_point_cloud;
+  pc::PointCloud _current_point_cloud;
 
   OrbbecImplDeviceMemory *_device_memory;
   std::atomic_bool _device_memory_ready{false};

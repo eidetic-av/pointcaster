@@ -19,7 +19,7 @@
 namespace pc::devices {
 
 struct DiscoveredDevice {
-  std::string display_name;
+  std::string label;
   std::string ip;
   std::string id;
 };
@@ -88,9 +88,9 @@ public:
     _config = config;
   }
 
-  virtual void on_config_field_changed(int deviceIndex, int fieldIndex) { }
+  virtual void on_config_field_changed(int deviceIndex, int fieldIndex) {}
 
-  // virtual pc::types::PointCloud point_cloud() const = 0;
+  // virtual pc::PointCloud point_cloud() const = 0;
 
   virtual void start() = 0;
   virtual void stop() = 0;

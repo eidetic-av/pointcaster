@@ -29,6 +29,20 @@ Item {
 
     implicitHeight: root.outerTopMargin + inspectorGroup.implicitHeight
 
+    function _paths() {
+        if (!root.model || !root.model.fieldPaths)
+            return [];
+        const p = root.model.fieldPaths();
+        return p ? p : [];
+    }
+
+    function _leafName(path) {
+        if (!path || path.length === 0)
+            return "";
+        const parts = String(path).split("/");
+        return parts.length > 0 ? parts[parts.length - 1] : String(path);
+    }
+
     Rectangle {
         id: inspectorGroup
         anchors {
@@ -160,14 +174,21 @@ Item {
                     spacing: 0
 
                     Repeater {
-                        model: root.model ? root.model.fieldCount() : 0
+                        model: root.model ? root._paths().length : 0
 
                         delegate: Item {
                             required property int index
 
+                            readonly property string path: {
+                                const p = root._paths();
+                                if (index < 0 || index >= p.length)
+                                    return "";
+                                return String(p[index]);
+                            }
+
                             width: fieldsContainer.width
                             height: Math.max(nameText.implicitHeight, valueContainer.implicitHeight) + Math.round(6 * Scaling.uiScale)
-                            visible: root.model && !root.model.isHidden(index)
+                            visible: root.model && path.length > 0 && !root.model.isHidden(path)
 
                             Item {
                                 id: labelContainer
@@ -189,14 +210,14 @@ Item {
                                     }
                                     horizontalAlignment: Text.AlignLeft
                                     color: ThemeColors.text
-                                    text: root.model ? StringUtils.titleFromSnake(root.model.fieldName(index)) : ""
+                                    text: root.model ? StringUtils.titleFromSnake(root._leafName(path)) : ""
                                     font: Scaling.uiFont
                                     elide: Text.ElideRight
                                 }
 
                                 InfoToolTip {
                                     visible: labelHover.hovered
-                                    textValue: root.model ? "osc/address/" + qsTr(root.model.fieldName(index)) : ""
+                                    textValue: root.model ? ("osc/address/" + path) : ""
                                     x: Math.max((labelContainer.width - implicitWidth) * 0.5, Math.round(4 * Scaling.uiScale))
                                     y: labelContainer.height + Math.round(4 * Scaling.uiScale)
                                 }
@@ -216,10 +237,10 @@ Item {
                                 }
                                 z: 3
 
-                                readonly property string typeName: root.model ? String(root.model.fieldTypeName(index)).toLowerCase() : ""
+                                readonly property string typeName: root.model ? String(root.model.typeName(path)).toLowerCase() : ""
 
                                 sourceComponent: {
-                                    if (root.model && root.model.isEnum(index))
+                                    if (root.model && root.model.isEnum(path))
                                         return enumEditor;
                                     if (typeName === "int" || typeName === "int32" || typeName === "int32_t" || typeName === "integer")
                                         return intEditor;
@@ -244,22 +265,22 @@ Item {
                                         radius: 0
                                     }
 
-                                    text: root.model ? String(root.model.fieldValue(index)) : ""
-                                    enabled: root.model ? !root.model.isDisabled(index) : false
+                                    text: root.model ? String(root.model.value(path)) : ""
+                                    enabled: root.model ? !root.model.isDisabled(path) : false
                                     opacity: enabled ? 1.0 : 0.66
 
                                     onEditingFinished: {
                                         if (!root.model)
                                             return;
-                                        root.model.setFieldValue(index, text);
+                                        root.model.set(path, text);
                                     }
 
                                     Connections {
                                         target: root.model
-                                        function onFieldChanged(changedIndex) {
-                                            if (changedIndex !== index)
+                                        function onFieldChanged(changedPath) {
+                                            if (String(changedPath) !== path)
                                                 return;
-                                            valueField.text = root.model ? String(root.model.fieldValue(index)) : "";
+                                            valueField.text = root.model ? String(root.model.value(path)) : "";
                                         }
                                     }
                                 }
@@ -271,29 +292,29 @@ Item {
                                     id: intEditorControl
                                     font: Scaling.uiFont
 
-                                    minValue: root.model ? root.model.minMax(index)[0] : undefined
-                                    maxValue: root.model ? root.model.minMax(index)[1] : undefined
-                                    defaultValue: root.model ? root.model.defaultValue(index) : undefined
+                                    minValue: root.model ? root.model.minMax(path)[0] : undefined
+                                    maxValue: root.model ? root.model.minMax(path)[1] : undefined
+                                    defaultValue: root.model ? root.model.defaultValue(path) : undefined
 
                                     boundValue: {
                                         if (!root.model)
                                             return 0;
-                                        var n = Number(root.model.fieldValue(index));
+                                        var n = Number(root.model.value(path));
                                         return isNaN(n) ? 0 : Math.trunc(n);
                                     }
 
                                     onCommitValue: function (v) {
                                         if (!root.model)
                                             return;
-                                        root.model.setFieldValue(index, v);
+                                        root.model.set(path, v);
                                     }
 
                                     Connections {
                                         target: root.model
-                                        function onFieldChanged(changedIndex) {
-                                            if (changedIndex !== index)
+                                        function onFieldChanged(changedPath) {
+                                            if (String(changedPath) !== path)
                                                 return;
-                                            var n = Number(root.model.fieldValue(index));
+                                            var n = Number(root.model.value(path));
                                             intEditorControl.boundValue = isNaN(n) ? 0 : Math.trunc(n);
                                         }
                                     }
@@ -306,29 +327,29 @@ Item {
                                     id: floatEditorControl
                                     font: Scaling.uiFont
 
-                                    minValue: root.model ? root.model.minMax(index)[0] : undefined
-                                    maxValue: root.model ? root.model.minMax(index)[1] : undefined
-                                    defaultValue: root.model ? root.model.defaultValue(index) : undefined
+                                    minValue: root.model ? root.model.minMax(path)[0] : undefined
+                                    maxValue: root.model ? root.model.minMax(path)[1] : undefined
+                                    defaultValue: root.model ? root.model.defaultValue(path) : undefined
 
                                     boundValue: {
                                         if (!root.model)
                                             return 0.0;
-                                        var n = Number(root.model.fieldValue(index));
+                                        var n = Number(root.model.value(path));
                                         return isNaN(n) ? 0.0 : n;
                                     }
 
                                     onCommitValue: function (v) {
                                         if (!root.model)
                                             return;
-                                        root.model.setFieldValue(index, v);
+                                        root.model.set(path, v);
                                     }
 
                                     Connections {
                                         target: root.model
-                                        function onFieldChanged(changedIndex) {
-                                            if (changedIndex !== index)
+                                        function onFieldChanged(changedPath) {
+                                            if (String(changedPath) !== path)
                                                 return;
-                                            var n = Number(root.model.fieldValue(index));
+                                            var n = Number(root.model.value(path));
                                             floatEditorControl.boundValue = isNaN(n) ? 0.0 : n;
                                         }
                                     }
@@ -339,11 +360,10 @@ Item {
                                 id: float3Editor
                                 DragFloat3 {
                                     id: float3
-
                                     font: Scaling.uiFont
                                     axisFont: Scaling.uiSmallFont
 
-                                    property var minMax: root.model ? root.model.minMax(index) : undefined
+                                    property var minMax: root.model ? root.model.minMax(path) : undefined
 
                                     minValue: minMax ? minMax[0] : undefined
                                     maxValue: minMax ? minMax[1] : undefined
@@ -351,22 +371,23 @@ Item {
                                     boundValue: {
                                         if (!root.model)
                                             return Qt.vector3d(0, 0, 0);
-                                        const v = root.model.fieldValue(index); // expected QVector3D
+                                        const v = root.model.value(path); // expected QVector3D-ish
                                         return Qt.vector3d(Number(v.x) || 0, Number(v.y) || 0, Number(v.z) || 0);
                                     }
 
                                     onCommitValue: function (v3) {
                                         if (!root.model)
                                             return;
-                                        root.model.setFloat3Field(index, v3.x, v3.y, v3.z);
+                                        // QML vector3d marshals to QVector3D for QVariant in C++
+                                        root.model.set(path, v3);
                                     }
 
                                     Connections {
                                         target: root.model
-                                        function onFieldChanged(changedIndex) {
-                                            if (changedIndex !== index)
+                                        function onFieldChanged(changedPath) {
+                                            if (String(changedPath) !== path)
                                                 return;
-                                            const v = root.model.fieldValue(index);
+                                            const v = root.model.value(path);
                                             float3.boundValue = Qt.vector3d(Number(v.x) || 0, Number(v.y) || 0, Number(v.z) || 0);
                                         }
                                     }
@@ -379,29 +400,29 @@ Item {
                                     id: enumSelector
                                     font: Scaling.uiFont
 
-                                    enabled: root.model ? !root.model.isDisabled(index) : false
+                                    enabled: root.model ? !root.model.isDisabled(path) : false
                                     opacity: enabled ? 1.0 : 0.66
 
-                                    options: root.model ? root.model.enumOptions(index) : []
+                                    options: root.model ? root.model.enumOptions(path) : []
                                     boundValue: {
                                         if (!root.model)
                                             return 0;
-                                        var n = Number(root.model.fieldValue(index));
+                                        var n = Number(root.model.value(path));
                                         return isNaN(n) ? 0 : Math.trunc(n);
                                     }
 
                                     onCommitValue: function (v) {
                                         if (!root.model)
                                             return;
-                                        root.model.setFieldValue(index, v);
+                                        root.model.set(path, v);
                                     }
 
                                     Connections {
                                         target: root.model
-                                        function onFieldChanged(changedIndex) {
-                                            if (changedIndex !== index)
+                                        function onFieldChanged(changedPath) {
+                                            if (String(changedPath) !== path)
                                                 return;
-                                            var n = Number(root.model.fieldValue(index));
+                                            var n = Number(root.model.value(path));
                                             enumSelector.boundValue = isNaN(n) ? 0 : Math.trunc(n);
                                         }
                                     }

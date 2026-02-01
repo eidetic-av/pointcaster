@@ -32,10 +32,7 @@ constexpr void for_each_variant_type(Callback cb) {
 // ---------- core configuration variant ----------
 
 using CoreConfigurationVariant =
-    std::variant<CameraConfiguration, SessionConfiguration
-                 /* WorkspaceConfiguration, ... */
-                 >;
-
+    std::variant<CameraConfiguration, SessionConfiguration>;
 template <typename T>
 concept ValidCoreConfig = is_in_variant_v<T, CoreConfigurationVariant>;
 

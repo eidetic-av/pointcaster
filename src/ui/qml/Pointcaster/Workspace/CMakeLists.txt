@@ -42,7 +42,6 @@ qt_add_qml_module(PointcasterWorkspace
         Windows/Devices/DevicesToolBar.qml
         Windows/Devices/DevicesWindow.qml
         Windows/Sessions/SessionView.qml
-        Windows/Sessions/SessionViewWindow.qml
         Windows/Sessions/CentralSessionView.qml
         Windows/Sessions/SessionCameraControls.qml
     RESOURCES

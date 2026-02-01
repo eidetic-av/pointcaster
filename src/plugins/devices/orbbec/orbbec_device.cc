@@ -74,8 +74,8 @@ std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
 
   out.reserve(ctx.discovered_devices.size());
   for (const auto &d : ctx.discovered_devices) {
-    out.push_back(DiscoveredDevice{
-        .display_name = d.name, .ip = d.ip, .id = d.serial_num});
+    out.push_back(
+        DiscoveredDevice{.label = d.name, .ip = d.ip, .id = d.serial_num});
   }
   return out;
 }
@@ -191,13 +191,13 @@ void OrbbecDevice::start_sync() {
     try {
       ob_device = ob_ctx->createNetDevice(config.ip.c_str(), net_device_port);
     } catch (const ob::Error &e) {
-      pc::logger()->error("Failed to create OrbbecDevice at {}:{}: {}", config.ip,
-                        net_device_port, e.what());
+      pc::logger()->error("Failed to create OrbbecDevice at {}:{}: {}",
+                          config.ip, net_device_port, e.what());
       set_error_state(true);
       return;
     } catch (...) {
       pc::logger()->error("Unknown error creating Orbbec NetDevice at {}:{}",
-                        config.ip, net_device_port);
+                          config.ip, net_device_port);
       set_error_state(true);
       return;
     }
@@ -212,7 +212,8 @@ void OrbbecDevice::start_sync() {
   if (config.acquisition_mode ==
       OrbbecDeviceConfiguration::AcquisitionMode::XYZRGB) {
     if (!init_device_memory(colour_width * colour_height)) {
-      pc::logger()->error("Failed to initialise GPU memory for Orbbec pipeline");
+      pc::logger()->error(
+          "Failed to initialise GPU memory for Orbbec pipeline");
       set_error_state(true);
       return;
     }
@@ -235,6 +236,7 @@ void OrbbecDevice::start_sync() {
 }
 
 void OrbbecDevice::stop_sync() {
+  if (!_running_pipeline) return;
   auto config = std::get<OrbbecDeviceConfiguration>(this->config());
   std::lock_guard lock(orbbec_context().start_stop_device_access);
   pc::logger()->info("Closing OrbbecDevice {}", config.ip);
@@ -244,7 +246,7 @@ void OrbbecDevice::stop_sync() {
   pc::logger()->trace("Pipeline thread complete");
   bool readied_device_memory = _device_memory_ready.load();
   pc::logger()->trace("Need to free gpu device memory: {}",
-                    readied_device_memory ? "yes" : "no");
+                      readied_device_memory ? "yes" : "no");
   if (readied_device_memory) {
     free_device_memory();
     pc::logger()->trace("Device memory freed");
@@ -320,7 +322,8 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       depth_d2c_list =
           pipeline.getD2CDepthProfileList(colour_profile, ALIGN_D2C_HW_MODE);
     } catch (const ob::Error &e) {
-      pc::logger()->warn("Failed to get HW D2C depth profile list: {}", e.what());
+      pc::logger()->warn("Failed to get HW D2C depth profile list: {}",
+                         e.what());
     }
 
     if (depth_d2c_list && depth_d2c_list->count() > 0) {
@@ -330,7 +333,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
         ob_config->setAlignMode(ALIGN_D2C_HW_MODE);
       } catch (const ob::Error &e) {
         pc::logger()->error("Failed to select HW D2C depth profile: {}",
-                          e.what());
+                            e.what());
       }
     }
 
@@ -350,7 +353,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
         ob_config->setAlignMode(ALIGN_D2C_SW_MODE);
       } catch (const ob::Error &e) {
         pc::logger()->error("Failed to select SW D2C depth profile: {}",
-                          e.what());
+                            e.what());
         set_error_state(true);
         return;
       }

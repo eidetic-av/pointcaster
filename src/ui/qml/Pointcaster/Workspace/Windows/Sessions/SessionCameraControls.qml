@@ -13,14 +13,10 @@ Item {
     required property Node gizmoTarget
     required property Node orbitOrigin
 
-    // camera lock
-    readonly property bool viewLocked: lockCameraButton.checked
     readonly property bool orbitRotationRunning: orbitRotationAnim.running
 
-    // ground grid toggle
+    property bool viewLocked: false
     property bool gridEnabled: true
-
-    // projection toggle
     property bool orthographicEnabled: false
 
     property bool originGizmoCollapsed: false
@@ -86,9 +82,6 @@ Item {
                         anchors.fill: parent
                         color: ThemeColors.dark
                         opacity: 0.75
-                        topRightRadius: 0
-                        topLeftRadius: 0
-                        bottomRightRadius: 0
                         bottomLeftRadius: Math.round(7 * Scaling.uiScale)
                     }
 
@@ -172,18 +165,12 @@ Item {
 
                     leftPadding: Math.round(3 * Scaling.uiScale)
                     rightPadding: Math.round(3 * Scaling.uiScale)
-                    topPadding: 0
-                    bottomPadding: 0
-
-                    topLeftRadius: 0
-                    topRightRadius: 0
 
                     backgroundColor: ThemeColors.dark
                     hoverColor: ThemeColors.middark
                     pressedColor: ThemeColors.mid
 
                     borderWidth: 0
-
                     onClicked: root.originGizmoCollapsed = !root.originGizmoCollapsed
                 }
             }
@@ -201,7 +188,6 @@ Item {
             Column {
                 id: cameraToolbarRow
                 spacing: 0
-                y: 0
                 x: parent.width - width
 
                 IconButton {
@@ -216,21 +202,14 @@ Item {
                     iconColor: !pressed ? ThemeColors.mid : ThemeColors.midlight
                     opacity: 0.75
 
-                    leftPadding: 0
-                    rightPadding: 0
                     topPadding: Math.round(3 * Scaling.uiScale)
                     bottomPadding: Math.round(3 * Scaling.uiScale)
-
-                    topRightRadius: 0
-                    bottomRightRadius: 0
-                    bottomLeftRadius: cameraToolbarPanel.width < width ? radius : 0
 
                     backgroundColor: ThemeColors.dark
                     hoverColor: ThemeColors.middark
                     pressedColor: ThemeColors.mid
 
                     borderWidth: 0
-
                     onClicked: root.cameraToolbarCollapsed = !root.cameraToolbarCollapsed
                 }
 
@@ -258,11 +237,8 @@ Item {
                         background: Rectangle {
                             color: ThemeColors.dark
                             opacity: 0.75
-                            border.width: 0
                             topLeftRadius: Math.round(5 * Scaling.uiScale)
-                            topRightRadius: 0
                             bottomLeftRadius: Math.round(5 * Scaling.uiScale)
-                            bottomRightRadius: 0
                         }
 
                         contentItem: ColumnLayout {
@@ -270,12 +246,12 @@ Item {
 
                             ToolButton {
                                 id: lockCameraButton
-
                                 Layout.preferredWidth: Math.round(24 * Scaling.uiScale)
                                 Layout.preferredHeight: Math.round(24 * Scaling.uiScale)
 
                                 checkable: true
-                                checked: false
+                                checked: root.viewLocked
+                                onToggled: root.viewLocked = checked
 
                                 contentItem: Image {
                                     source: FontAwesome.icon(lockCameraButton.checked ? "solid/lock" : "solid/lock-open")
@@ -285,17 +261,10 @@ Item {
                                     smooth: true
                                     mipmap: true
                                 }
-
-                                InfoToolTip {
-                                    visible: parent.hovered
-                                    textValue: lockCameraButton.checked ? "Unlock camera view" : "Lock camera view"
-                                    delay: 700
-                                }
                             }
 
                             ToolButton {
                                 id: homeCameraButton
-
                                 enabled: !root.viewLocked
                                 opacity: enabled ? 1.0 : 0.35
 
@@ -306,22 +275,11 @@ Item {
                                 icon.width: Math.round(18 * Scaling.uiScale)
                                 icon.height: Math.round(18 * Scaling.uiScale)
 
-                                InfoToolTip {
-                                    visible: parent.hovered && parent.enabled
-                                    textValue: "Re-home camera view"
-                                    delay: 700
-                                }
-
-                                onClicked: {
-                                    if (root.viewLocked)
-                                        return;
-                                    root.requestHomeCamera();
-                                }
+                                onClicked: root.requestHomeCamera()
                             }
 
                             ToolButton {
                                 id: guidesButton
-
                                 enabled: !root.viewLocked
                                 opacity: enabled ? 1.0 : 0.35
 
@@ -330,6 +288,7 @@ Item {
 
                                 checkable: true
                                 checked: root.gridEnabled
+                                onToggled: root.gridEnabled = checked
 
                                 contentItem: Image {
                                     source: FontAwesome.icon("solid/table-cells-large")
@@ -339,19 +298,10 @@ Item {
                                     smooth: true
                                     mipmap: true
                                 }
-
-                                onToggled: root.gridEnabled = checked
-
-                                InfoToolTip {
-                                    visible: parent.hovered && parent.enabled
-                                    textValue: guidesButton.checked ? "Disable grid" : "Enable grid"
-                                    delay: 700
-                                }
                             }
 
                             ToolButton {
                                 id: projectionButton
-
                                 enabled: !root.viewLocked
                                 opacity: enabled ? 1.0 : 0.35
 
@@ -360,6 +310,7 @@ Item {
 
                                 checkable: true
                                 checked: root.orthographicEnabled
+                                onToggled: root.orthographicEnabled = checked
 
                                 contentItem: Image {
                                     source: FontAwesome.icon("solid/cube")
@@ -368,14 +319,6 @@ Item {
                                     anchors.centerIn: parent
                                     smooth: true
                                     mipmap: true
-                                }
-
-                                onToggled: root.orthographicEnabled = checked
-
-                                InfoToolTip {
-                                    visible: parent.hovered && parent.enabled
-                                    textValue: projectionButton.checked ? "Perspective view" : "Orthographic view"
-                                    delay: 700
                                 }
                             }
                         }

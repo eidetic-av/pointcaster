@@ -4,6 +4,7 @@
 #include <QVariant>
 #include <QVariantMap>
 #include <QString>
+#include <QStringList>
 #include <QMetaType>
 {% if needs_qvector3d -%}
 #include <QVector3D>
@@ -12,26 +13,74 @@
 
 #include <ui/models/config_adapter.h>
 #include <ui/models/device_adapter.h>
-#include <config_variant.h>
 #include <plugins/devices/device_variants.h>
 #include <{{ header_include_path }}>
 
 {% if structs|length > 0 %}
+{# Include nested *regular* config adapter headers so we can embed adapters by value. #}
+{% for s in structs %}
+{% for inc in s.nested_adapter_includes %}
+#include <{{ inc }}>
+{% endfor %}
+{% endfor %}
+
 {% if namespace_name %}
 namespace {{ namespace_name }} {
-
 {% endif %}
+
 {% for s in structs %}
 class {{ s.adapter_name }} : public DeviceAdapter {
     Q_OBJECT
+
+{# ---- Per-field Q_PROPERTY generation ---- #}
+{% for m in s.members %}
+{% if m.type == "std::string" or m.type == "QString" %}
+    Q_PROPERTY(QString {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
+{% elif m.type == "bool" %}
+    Q_PROPERTY(bool {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
+{% elif m.is_enum %}
+    Q_PROPERTY(int {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
+{% elif is_float3_type(m.type) %}
+    Q_PROPERTY(QVector3D {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
+{% elif is_simple_comparable_type(m.type) %}
+    Q_PROPERTY({{ m.type }} {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
+{% elif m.type.endswith("Configuration") %}
+    Q_PROPERTY(QObject* {{ m.name }}Adapter READ {{ m.name }}Adapter CONSTANT)
+{% endif %}
+{% endfor %}
+
 public:
-    explicit {{ s.adapter_name }}({{ s.struct_name }} &config, pc::devices::DevicePlugin* plugin, QObject *parent = nullptr)
-        : DeviceAdapter(plugin, parent), m_config(config) {}
+    using config_type = {{ s.struct_name }};
+    using device_adapter_type = {{ s.adapter_name }};
+
+    explicit {{ s.adapter_name }}({{ s.struct_name }} &config,
+                                 pc::devices::DevicePlugin* plugin,
+                                 QObject *parent = nullptr)
+        : DeviceAdapter(plugin, parent)
+        , m_config(config)
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        , m_{{ m.name }}Adapter(m_config.{{ m.name }}, this)
+{% endif %}
+{% endfor %}
+    {
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        QObject::connect(&m_{{ m.name }}Adapter, &ConfigAdapter::editRequested, this,
+            [this](const QString &subPath, const QVariant &value) {
+                emit editRequested(QStringLiteral("{{ m.name }}/") + subPath, value);
+            });
+
+        QObject::connect(&m_{{ m.name }}Adapter, &ConfigAdapter::fieldChanged, this,
+            [this](const QString &subPath) {
+                emit fieldChanged(QStringLiteral("{{ m.name }}/") + subPath);
+            });
+{% endif %}
+{% endfor %}
+    }
 
     QString configType() const override { return QStringLiteral("{{ s.struct_name }}"); }
-    Q_INVOKABLE QString displayName() const override { return QStringLiteral("{{ s.display_name }}"); }
-
-    Q_INVOKABLE int fieldCount() const override { return {{ s.members|length }}; }
+    Q_INVOKABLE QString displayName() const override { return QStringLiteral("{{ s.label }}"); }
 
     bool setConfig(const pc::devices::DeviceConfigurationVariant &config) override {
         const auto *configPtr = std::get_if<{{ s.struct_name }}>(&config);
@@ -41,134 +90,61 @@ public:
 
     bool setConfig(const {{ s.struct_name }} &config) {
         m_config = config;
-        for (int i = 0; i < fieldCount(); ++i) {
-            notifyFieldChanged(i);
-        }
+
+{% for m in s.members %}
+        emit {{ m.name }}Changed();
+        notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+{% endfor %}
+
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        m_{{ m.name }}Adapter.setConfig(m_config.{{ m.name }});
+{% endif %}
+{% endfor %}
         return true;
     }
 
-{% if s.any_float3 %}
-{% for m in s.members %}
-{% if is_float3_type(m.type) %}
-    Q_INVOKABLE void set_{{ m.name }}(float x, float y, float z) { emit fieldEditRequested({{ loop.index0 }}, QVariant::fromValue(QVector3D(x, y, z))); }
-{% endif %}
+    Q_INVOKABLE QStringList fieldPaths() const override {
+        static const QStringList kPaths = {
+{% for p in s.flattened_paths %}
+            QStringLiteral("{{ p }}"){{ "," if not loop.last else "" }}
 {% endfor %}
-    Q_INVOKABLE void setFloat3Field(int index, float x, float y, float z) {
-        emit fieldEditRequested(index, QVariant::fromValue(QVector3D(x, y, z)));
+        };
+        return kPaths;
     }
 
-{% endif %}
-    Q_INVOKABLE QString fieldName(int index) const override {
-        switch (index) {
-{% for m in s.members %}
-        case {{ loop.index0 }}: return QStringLiteral("{{ m.name }}");
-{% endfor %}
-        default: return {};
-        }
-    }
-
-    Q_INVOKABLE QString fieldTypeName(int index) const override {
-        switch (index) {
-{% for m in s.members %}
-        case {{ loop.index0 }}: return QStringLiteral("{{ m.type }}");
-{% endfor %}
-        default: return {};
-        }
-    }
-
-{% if s.any_enums %}
-    Q_INVOKABLE bool isEnum(int index) const override {
-        switch (index) {
-{% for m in s.members %}
-{% if m.is_enum %}
-        case {{ loop.index0 }}: return true;
-{% endif %}
-{% endfor %}
-        default: return false;
-        }
-    }
-
-    Q_INVOKABLE QVariant enumOptions(int index) const override {
-        switch (index) {
-{% for m in s.members %}
-{% if m.is_enum %}
-        case {{ loop.index0 }}:
-            return QVariantList{
-{% for e in m.enum_entries %}
-                QVariantMap{ {"text", QStringLiteral("{{ e.name }}")}, {"value", {{ e.value }} } }{{ "," if not loop.last else "" }}
-{% endfor %}
-            };
-{% endif %}
-{% endfor %}
-        default: return {};
-        }
-    }
-
-{% endif %}
-    Q_INVOKABLE QVariant defaultValue(int index) const override {
-        switch (index) {
-{% for m in s.members %}
-        case {{ loop.index0 }}: {{ default_value_case_cpp(m) }}
-{% endfor %}
-        default: return {};
-        }
-    }
-
-    Q_INVOKABLE QVariant minMax(int index) const override {
-        switch (index) {
-{% for m in s.members %}
-        case {{ loop.index0 }}: {{ minmax_case_cpp(m) }}
-{% endfor %}
-        default: return {};
-        }
-    }
-
-    Q_INVOKABLE bool isOptional(int index) const override {
-        switch (index) {
-{% for m in s.members %}
-        case {{ loop.index0 }}: return {{ "true" if m.optional else "false" }};
-{% endfor %}
-        default: return false;
-        }
-    }
-
-    Q_INVOKABLE bool isDisabled(int index) const override {
-        switch (index) {
-{% for m in s.members %}
-        case {{ loop.index0 }}: return {{ "true" if m.disabled else "false" }};
-{% endfor %}
-        default: return false;
-        }
-    }
-
-    Q_INVOKABLE bool isHidden(int index) const override {
-        switch (index) {
-{% for m in s.members %}
-        case {{ loop.index0 }}: return {{ "true" if m.hidden else "false" }};
-{% endfor %}
-        default: return false;
-        }
-    }
-
-    Q_INVOKABLE QVariant fieldValue(int index) const override {
-        switch (index) {
+{# ---- Per-field strongly-typed accessors ---- #}
 {% for m in s.members %}
 {% if m.type == "std::string" %}
-        case {{ loop.index0 }}: return QVariant(QString::fromStdString(m_config.{{ m.name }}));
+    Q_INVOKABLE QString {{ m.name }}() const { return QString::fromStdString(m_config.{{ m.name }}); }
+    Q_INVOKABLE void set_{{ m.name }}(const QString &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
+{% elif m.type == "QString" %}
+    Q_INVOKABLE QString {{ m.name }}() const { return m_config.{{ m.name }}; }
+    Q_INVOKABLE void set_{{ m.name }}(const QString &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
+{% elif m.type == "bool" %}
+    Q_INVOKABLE bool {{ m.name }}() const { return m_config.{{ m.name }}; }
+    Q_INVOKABLE void set_{{ m.name }}(bool value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
 {% elif m.is_enum %}
-        case {{ loop.index0 }}: return QVariant(int(m_config.{{ m.name }}));
+    Q_INVOKABLE int {{ m.name }}() const { return int(m_config.{{ m.name }}); }
+    Q_INVOKABLE void set_{{ m.name }}(int value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
 {% elif is_float3_type(m.type) %}
-        case {{ loop.index0 }}: {
-            const auto &v = m_config.{{ m.name }};
-            return QVariant::fromValue(QVector3D(v.x, v.y, v.z));
-        }
-{% else %}
-        case {{ loop.index0 }}: return QVariant::fromValue(m_config.{{ m.name }});
+    Q_INVOKABLE QVector3D {{ m.name }}() const {
+        const auto &v = m_config.{{ m.name }};
+        return QVector3D(v.x, v.y, v.z);
+    }
+    Q_INVOKABLE void set_{{ m.name }}(const QVector3D &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant::fromValue(value)); }
+{% elif is_simple_comparable_type(m.type) %}
+    Q_INVOKABLE {{ m.type }} {{ m.name }}() const { return m_config.{{ m.name }}; }
+    Q_INVOKABLE void set_{{ m.name }}({{ m.type }} value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant::fromValue(value)); }
+{% elif m.type.endswith("Configuration") %}
+    Q_INVOKABLE QObject* {{ m.name }}Adapter() { return &m_{{ m.name }}Adapter; }
 {% endif %}
 {% endfor %}
-        default: return {};
-        }
-    }
+
+signals:
+{% for m in s.members %}
+    void {{ m.name }}Changed();
+{% endfor %}
 
 {% if s.any_float3 %}
 private:
@@ -189,18 +165,73 @@ private:
         }
         return QVector3D();
     }
-
 public:
 {% endif %}
-    bool applyFieldValue(int index, const QVariant &value) override {
-        switch (index) {
+
+    // ---- Path-based reads ----
+    Q_INVOKABLE QVariant value(const QString &path) const override {
 {% for m in s.members %}
-        case {{ loop.index0 }}: {
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        if (path == QStringLiteral("{{ m.name }}"))
+            return QVariant(); // whole-struct-by-value not exposed
+        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
+            return m_{{ m.name }}Adapter.value(sub);
+        }
+{% else %}
+{% if m.type == "std::string" %}
+        if (path == QStringLiteral("{{ m.name }}"))
+            return QVariant(QString::fromStdString(m_config.{{ m.name }}));
+{% elif m.is_enum %}
+        if (path == QStringLiteral("{{ m.name }}"))
+            return QVariant(int(m_config.{{ m.name }}));
+{% elif is_float3_type(m.type) %}
+        if (path == QStringLiteral("{{ m.name }}")) {
+            const auto &v = m_config.{{ m.name }};
+            return QVariant::fromValue(QVector3D(v.x, v.y, v.z));
+        }
+{% else %}
+        if (path == QStringLiteral("{{ m.name }}"))
+            return QVariant::fromValue(m_config.{{ m.name }});
+{% endif %}
+{% endif %}
+{% endfor %}
+        return {};
+    }
+
+    // ---- Path-based apply (mutates device config) ----
+    Q_INVOKABLE bool apply(const QString &path, const QVariant &value) override {
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
+            return m_{{ m.name }}Adapter.apply(sub, value);
+        }
+{% else %}
+        if (path == QStringLiteral("{{ m.name }}")) {
 {% if m.type == "std::string" %}
             const std::string newValue = value.toString().toStdString();
             if (m_config.{{ m.name }} == newValue)
                 return false;
             m_config.{{ m.name }} = newValue;
+            emit {{ m.name }}Changed();
+            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+            return true;
+{% elif m.type == "QString" %}
+            const QString newValue = value.toString();
+            if (m_config.{{ m.name }} == newValue)
+                return false;
+            m_config.{{ m.name }} = newValue;
+            emit {{ m.name }}Changed();
+            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+            return true;
+{% elif m.type == "bool" %}
+            const bool newValue = value.toBool();
+            if (m_config.{{ m.name }} == newValue)
+                return false;
+            m_config.{{ m.name }} = newValue;
+            emit {{ m.name }}Changed();
+            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
             return true;
 {% elif m.is_enum %}
             const int newValueInt = value.toInt();
@@ -208,6 +239,8 @@ public:
             if (m_config.{{ m.name }} == newValue)
                 return false;
             m_config.{{ m.name }} = newValue;
+            emit {{ m.name }}Changed();
+            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
             return true;
 {% elif is_float3_type(m.type) %}
             const QVector3D v = toQVector3DLoose(value);
@@ -215,36 +248,182 @@ public:
             if (m_config.{{ m.name }} == newValue)
                 return false;
             m_config.{{ m.name }} = newValue;
+            emit {{ m.name }}Changed();
+            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
             return true;
 {% else %}
             const auto newValue = qvariant_cast<{{ m.type }}>(value);
 {% if is_simple_comparable_type(m.type) %}
             if (m_config.{{ m.name }} == newValue)
                 return false;
-            m_config.{{ m.name }} = newValue;
-            return true;
-{% else %}
-            m_config.{{ m.name }} = newValue;
-            return true;
 {% endif %}
+            m_config.{{ m.name }} = newValue;
+            emit {{ m.name }}Changed();
+            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+            return true;
 {% endif %}
         }
+{% endif %}
 {% endfor %}
-        default:
-            return false;
-        }
+        return false;
     }
 
-    Q_INVOKABLE void setFieldValue(int index, const QVariant &value) override {
-        emit fieldEditRequested(index, value);
+    // ---- Metadata by path ----
+    Q_INVOKABLE QString typeName(const QString &path) const override {
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
+            return m_{{ m.name }}Adapter.typeName(sub);
+        }
+{% else %}
+        if (path == QStringLiteral("{{ m.name }}"))
+            return QStringLiteral("{{ m.type }}");
+{% endif %}
+{% endfor %}
+        return {};
     }
+
+    Q_INVOKABLE QVariant defaultValue(const QString &path) const override {
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
+            return m_{{ m.name }}Adapter.defaultValue(sub);
+        }
+{% else %}
+        if (path == QStringLiteral("{{ m.name }}")) { {{ default_value_case_cpp(m) }} }
+{% endif %}
+{% endfor %}
+        return {};
+    }
+
+    Q_INVOKABLE QVariant minMax(const QString &path) const override {
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
+            return m_{{ m.name }}Adapter.minMax(sub);
+        }
+{% else %}
+        if (path == QStringLiteral("{{ m.name }}")) { {{ minmax_case_cpp(m) }} }
+{% endif %}
+{% endfor %}
+        return {};
+    }
+
+    Q_INVOKABLE bool isOptional(const QString &path) const override {
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
+            return m_{{ m.name }}Adapter.isOptional(sub);
+        }
+{% else %}
+        if (path == QStringLiteral("{{ m.name }}")) return {{ "true" if m.optional else "false" }};
+{% endif %}
+{% endfor %}
+        return false;
+    }
+
+    Q_INVOKABLE bool isDisabled(const QString &path) const override {
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
+            return m_{{ m.name }}Adapter.isDisabled(sub);
+        }
+{% else %}
+        if (path == QStringLiteral("{{ m.name }}")) return {{ "true" if m.disabled else "false" }};
+{% endif %}
+{% endfor %}
+        return false;
+    }
+
+    Q_INVOKABLE bool isHidden(const QString &path) const override {
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
+            return m_{{ m.name }}Adapter.isHidden(sub);
+        }
+{% else %}
+        if (path == QStringLiteral("{{ m.name }}")) return {{ "true" if m.hidden else "false" }};
+{% endif %}
+{% endfor %}
+        return false;
+    }
+
+{% if s.any_enums %}
+    Q_INVOKABLE bool isEnum(const QString &path) const override {
+{% for m in s.members %}
+{% if m.is_enum %}
+        if (path == QStringLiteral("{{ m.name }}")) return true;
+{% endif %}
+{% endfor %}
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
+            return m_{{ m.name }}Adapter.isEnum(sub);
+        }
+{% endif %}
+{% endfor %}
+        return false;
+    }
+
+    Q_INVOKABLE QVariant enumOptions(const QString &path) const override {
+{% for m in s.members %}
+{% if m.is_enum %}
+        if (path == QStringLiteral("{{ m.name }}")) {
+            return QVariantList{
+{% for e in m.enum_entries %}
+                QVariantMap{ {"text", QStringLiteral("{{ e.name }}")}, {"value", {{ e.value }} } }{{ "," if not loop.last else "" }}
+{% endfor %}
+            };
+        }
+{% endif %}
+{% endfor %}
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
+            return m_{{ m.name }}Adapter.enumOptions(sub);
+        }
+{% endif %}
+{% endfor %}
+        return {};
+    }
+{% endif %}
 
 private:
     {{ s.struct_name }} &m_config;
-};
 
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+    {{ m.type }}Adapter m_{{ m.name }}Adapter;
+{% endif %}
 {% endfor %}
+};
+{% endfor %}
+
+{#  Mapping between configuration and adapter class  #}
+
+template <class ConfigT>
+struct device_adapter_for_config; 
+
+{% for s in structs %}
+template <>
+struct device_adapter_for_config<{{ s.struct_name }}> {
+    using type = {{ s.adapter_name }};
+};
+{% endfor %}
+
+template <class ConfigT>
+using device_adapter_for_config_t = typename device_adapter_for_config<ConfigT>::type;
+
 {% if namespace_name %}
 } // namespace {{ namespace_name }}
 {% endif %}
+
 {% endif %}

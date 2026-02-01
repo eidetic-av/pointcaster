@@ -1,6 +1,6 @@
 #include "device_config_commands.h"
 #include <mutex>
-#include <workspace.h>
+#include <workspace/workspace.h>
 
 namespace pc::ui {
 

@@ -7,7 +7,6 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-
 # ----------------------------
 # Data model
 # ----------------------------
@@ -130,7 +129,6 @@ def _parse_default_value(raw: str) -> Any:
         parsed_float = None
 
     if parsed_float is not None and not isinstance(parsed_float, bool):
-        # Preserve old behaviour: integers are already handled above.
         return parsed_float
 
     if (len(s) >= 2) and (
@@ -270,79 +268,207 @@ def minmax_case_cpp(member: Member) -> str:
 
 
 # ----------------------------
+# Path helpers
+# ----------------------------
+
+def _rel_header_path(file_path: str, src_root: str) -> str:
+    input_abs = os.path.abspath(file_path)
+    src_root_abs = os.path.abspath(src_root)
+    rel = os.path.relpath(input_abs, src_root_abs).replace("\\", "/")
+    if rel.startswith("src/"):
+        rel = rel[len("src/") :]
+    return rel
+
+
+def _generated_adapter_include_for_header_rel(rel_header: str) -> str:
+    """
+    Given 'camera/camera_config.h' -> 'camera/camera_config_adapter.gen.h'
+    Given 'plugins/devices/orbbec/orbbec_device_config.h' -> 'plugins/devices/orbbec/orbbec_device_adapter.gen.h'
+    """
+    rel_dir = os.path.dirname(rel_header)
+    base = os.path.basename(rel_header)
+    base_no_ext = re.sub(r"\.h$", "", base)
+
+    is_device_header = os.path.basename(rel_header).endswith("_device_config.h")
+    stem = base_no_ext
+    if is_device_header and base_no_ext.endswith("_device_config"):
+        stem = base_no_ext[: -len("_config")]
+
+    return os.path.join(rel_dir, f"{stem}_adapter.gen.h").replace("\\", "/")
+
+
+def _scan_structs_in_header(input_text: str) -> list[str]:
+    return [struct_name for struct_name, _ in STRUCTS_RE.findall(input_text)]
+
+
+# ----------------------------
+# Flattened path computation
+# ----------------------------
+
+def _is_nested_config_member(member: Member) -> bool:
+    """
+    "Nested" means: endswith Configuration AND has an adapter generated (i.e. not a scalar/string/bool/enum/float3/simple).
+    """
+    if not member.type.endswith("Configuration"):
+        return False
+    if member.type in ("std::string", "QString", "bool"):
+        return False
+    if member.is_enum:
+        return False
+    if is_float3_type(member.type) or _is_simple_comparable_type(member.type):
+        return False
+    return True
+
+
+def compute_flattened_paths(
+    struct_name: str,
+    struct_members: list[Member],
+    struct_members_map: dict[str, list[Member]],
+) -> list[str]:
+    """
+    Returns leaf paths like:
+      ["id", "label", "camera/locked", "camera/show_grid"]
+    for the given struct.
+    """
+
+    def _recurse(current_struct_name: str, prefix: str, visiting: set[str]) -> list[str]:
+        if current_struct_name in visiting:
+            # break cycles (shouldn't happen in configs, but keep it safe)
+            return []
+        visiting.add(current_struct_name)
+
+        members = struct_members_map.get(current_struct_name, [])
+        out: list[str] = []
+
+        for member in members:
+            member_path = f"{prefix}{member.name}" if prefix else member.name
+
+            if _is_nested_config_member(member) and (member.type in struct_members_map):
+                # Expand nested config and prefix with "member/"
+                nested_prefix = f"{member_path}/"
+                out.extend(_recurse(member.type, nested_prefix, visiting))
+            else:
+                # Leaf (or unknown nested type): keep as leaf path
+                out.append(member_path)
+
+        visiting.remove(current_struct_name)
+        return out
+
+    # Ensure we use the exact members passed for the top-level struct even if the map differs.
+    # (But usually they match.)
+    struct_members_map = dict(struct_members_map)
+    struct_members_map[struct_name] = struct_members
+
+    return _recurse(struct_name, prefix="", visiting=set())
+
+
+# ----------------------------
+# Parsing helpers
+# ----------------------------
+
+def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[Member], bool]:
+    nested_enums, stripped_struct_body = _extract_nested_enums(struct_body)
+    members_body = VERBATIM_RE.sub("", stripped_struct_body)
+
+    needs_qvector3d = False
+    members: list[Member] = []
+
+    for raw_type, raw_name, init_eq, init_brace, raw_comment in MEMBER_RE.findall(members_body):
+        raw_type = raw_type.strip()
+        raw_name = raw_name.strip()
+
+        if is_float3_type(raw_type):
+            needs_qvector3d = True
+
+        init_value_raw = (init_eq or "").strip() or (init_brace or "").strip() or ""
+        init_value_raw = init_value_raw.replace("{", "").replace("}", "").strip()
+        init_value = _parse_default_value(init_value_raw)
+
+        comment = raw_comment.strip() if raw_comment else ""
+        minmax_match = MINMAX_RE.search(comment)
+
+        is_enum = raw_type in nested_enums
+        enum_entries = nested_enums.get(raw_type, [])
+        enum_qualified_type = f"{struct_name}::{raw_type}" if is_enum else ""
+
+        members.append(
+            Member(
+                type=raw_type,
+                name=raw_name,
+                default_value=init_value,
+                min_max=minmax_match.group(1) if minmax_match else "",
+                optional=bool(OPTIONAL_RE.search(comment)),
+                disabled=bool(DISABLED_RE.search(comment)),
+                hidden=bool(HIDDEN_RE.search(comment)),
+                is_enum=is_enum,
+                enum_qualified_type=enum_qualified_type,
+                enum_entries=enum_entries,
+            )
+        )
+
+    return members, needs_qvector3d
+
+
+# ----------------------------
 # Main header generation
 # ----------------------------
 
-def process_cpp_header(input_text: str, file_path: str, env: Environment, src_root: str) -> str:
+def process_cpp_header(
+    input_text: str,
+    file_path: str,
+    env: Environment,
+    src_root: str,
+    struct_to_adapter_include: dict[str, str],
+    struct_members_map: dict[str, list[Member]],
+) -> str:
     structs = STRUCTS_RE.findall(input_text)
-
-    needs_qvector3d = False
 
     ns_match = NAMESPACE_RE.search(input_text)
     namespace_name = ns_match.group(1) if ns_match else ""
     is_device_namespace = namespace_name == "pc::devices"
 
+    needs_qvector3d = False
     rendered_structs: list[dict[str, Any]] = []
 
     for struct_name, struct_body in structs:
-        nested_enums, stripped_struct_body = _extract_nested_enums(struct_body)
-        members_body = VERBATIM_RE.sub("", stripped_struct_body)
+        members, struct_needs_qvector3d = _parse_members_for_struct(struct_name, struct_body)
+        if struct_needs_qvector3d:
+            needs_qvector3d = True
 
-        members: list[Member] = []
-
-        for raw_type, raw_name, init_eq, init_brace, raw_comment in MEMBER_RE.findall(members_body):
-            raw_type = raw_type.strip()
-            raw_name = raw_name.strip()
-
-            if is_float3_type(raw_type):
-                needs_qvector3d = True
-
-            init_value_raw = (init_eq or "").strip() or (init_brace or "").strip() or ""
-            init_value_raw = init_value_raw.replace("{", "").replace("}", "").strip()
-            init_value = _parse_default_value(init_value_raw)
-
-            comment = raw_comment.strip() if raw_comment else ""
-            minmax_match = MINMAX_RE.search(comment)
-
-            is_enum = raw_type in nested_enums
-            enum_entries = nested_enums.get(raw_type, [])
-            enum_qualified_type = f"{struct_name}::{raw_type}" if is_enum else ""
-
-            members.append(
-                Member(
-                    type=raw_type,
-                    name=raw_name,
-                    default_value=init_value,
-                    min_max=minmax_match.group(1) if minmax_match else "",
-                    optional=bool(OPTIONAL_RE.search(comment)),
-                    disabled=bool(DISABLED_RE.search(comment)),
-                    hidden=bool(HIDDEN_RE.search(comment)),
-                    is_enum=is_enum,
-                    enum_qualified_type=enum_qualified_type,
-                    enum_entries=enum_entries,
-                )
-            )
-
+        # Adapter class name
         adapter_class_base = struct_name
         if is_device_namespace and struct_name.endswith("DeviceConfiguration"):
             adapter_class_base = struct_name[: -len("Configuration")]
+        adapter_name = f"{adapter_class_base}Adapter"
+
+        # Nested adapter includes:
+        # - For core config adapters: include nested config adapter headers (same as before).
+        # - For device adapters: nested device structures don't exist, but nested regular config structures can.
+        nested_adapter_includes: list[str] = []
+        for m in members:
+            if not _is_nested_config_member(m):
+                continue
+
+            inc = struct_to_adapter_include.get(m.type)
+            if inc and inc not in nested_adapter_includes:
+                nested_adapter_includes.append(inc)
+
+        flattened_paths = compute_flattened_paths(struct_name, members, struct_members_map)
 
         rendered_structs.append(
             {
                 "struct_name": struct_name,
-                "adapter_name": f"{adapter_class_base}Adapter",
-                "display_name": format_struct_name(struct_name),
+                "adapter_name": adapter_name,
+                "label": format_struct_name(struct_name),
                 "members": members,
                 "any_enums": any(m.is_enum for m in members),
                 "any_float3": any(is_float3_type(m.type) for m in members),
+                "nested_adapter_includes": nested_adapter_includes,
+                "flattened_paths": flattened_paths,
             }
         )
 
-    input_abs = os.path.abspath(file_path)
-    src_root_abs = os.path.abspath(src_root)
-    rel = os.path.relpath(input_abs, src_root_abs).replace("\\", "/")
-    if rel.startswith("src/"):
-        rel = rel[len("src/"):]
+    rel = _rel_header_path(file_path, src_root)
     header_include_path = rel
 
     template_name = "device_adapter_impl.h.j2" if is_device_namespace else "config_adapter_impl.h.j2"
@@ -413,18 +539,45 @@ def main() -> int:
     env.globals["default_value_case_cpp"] = default_value_case_cpp
     env.globals["minmax_case_cpp"] = minmax_case_cpp
 
+    # ---------- Pass 1: scan headers, cache text, build maps ----------
+    header_cache: dict[str, str] = {}
+
+    # Map: struct name -> generated adapter include path
+    struct_to_adapter_include: dict[str, str] = {}
+
+    # Map: struct name -> parsed members (used for flattened path recursion)
+    struct_members_map: dict[str, list[Member]] = {}
+
     for file_name in sorted(args.input_headers):
         with open(file_name, "r", encoding="utf-8") as input_file:
             file_content = input_file.read()
+        header_cache[file_name] = file_content
 
-        generated_content = process_cpp_header(file_content, file_name, env, args.src_root)
+        rel_header = _rel_header_path(file_name, args.src_root)
+        adapter_include = _generated_adapter_include_for_header_rel(rel_header)
 
-        input_abs = os.path.abspath(file_name)
-        src_root_abs = os.path.abspath(args.src_root)
+        for struct_name, struct_body in STRUCTS_RE.findall(file_content):
+            # struct->include mapping
+            struct_to_adapter_include.setdefault(struct_name, adapter_include)
 
-        rel = os.path.relpath(input_abs, src_root_abs).replace("\\", "/")
-        if rel.startswith("src/"):
-            rel = rel[len("src/"):]
+            # struct->members mapping (for recursion)
+            members, _ = _parse_members_for_struct(struct_name, struct_body)
+            struct_members_map.setdefault(struct_name, members)
+
+    # ---------- Pass 2: render + write ----------
+    for file_name in sorted(args.input_headers):
+        file_content = header_cache[file_name]
+
+        generated_content = process_cpp_header(
+            file_content,
+            file_name,
+            env,
+            args.src_root,
+            struct_to_adapter_include,
+            struct_members_map,
+        )
+
+        rel = _rel_header_path(file_name, args.src_root)
         rel_dir = os.path.dirname(rel)
         base = os.path.basename(rel)
         base_no_ext = re.sub(r"\.h$", "", base)

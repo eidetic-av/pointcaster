@@ -7,7 +7,7 @@
 #include <print>
 #include <ui/initialisation.h>
 #include <ui/models/workspace_model.h>
-#include <workspace.h>
+#include <workspace/workspace.h>
 
 using namespace pc;
 

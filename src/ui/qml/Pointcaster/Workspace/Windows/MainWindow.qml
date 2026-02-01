@@ -18,10 +18,18 @@ ApplicationWindow {
 
     palette: ThemeColors.palette
 
-    FontLoader { source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Light.otf" }
-    FontLoader { source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf" }
-    FontLoader { source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Medium.otf" }
-    FontLoader { source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Bold.otf" }
+    FontLoader {
+        source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Light.otf"
+    }
+    FontLoader {
+        source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf"
+    }
+    FontLoader {
+        source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Medium.otf"
+    }
+    FontLoader {
+        source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Bold.otf"
+    }
 
     font.family: "Atkinson Hyperlegible Next"
 
@@ -94,43 +102,96 @@ ApplicationWindow {
             }
         }
 
-        function buildSessionWindows() {
+        // id(string) -> KDDW.DockWidget
+        property var sessionDockById: ({})
+
+        function syncSessionWindows() {
             const adapters = workspaceModel.sessionAdapters;
-            console.log(`sessionAdapters length: ${adapters.length}`);
+            console.log(`syncSessionWindows: adapters length=${adapters.length}`);
+
+            // Mark all existing as unseen initially
+            const seen = ({});
+            for (const key in sessionDockById)
+                seen[key] = false;
 
             for (let i = 0; i < adapters.length; ++i) {
                 const adapter = adapters[i];
-                const id = String(adapter.fieldValue(0));
-                const name = String(adapter.fieldValue(1));
+                if (!adapter)
+                    continue;
 
-                // Dedup: skip if we already have a dock for this session id
-                // if (dockingArea.dockWidget(id))
-                //     continue;
+                const idStr = String(adapter.id);
+                if (idStr.length === 0)
+                    continue;
 
-                const sessionWindow = sessionWindowComponent.createObject(root, {
-                    dockUniqueName: id,
-                    dockTitle: name,
+                seen[idStr] = true;
+
+                let dock = sessionDockById[idStr];
+                if (dock) {
+                    // Update existing dock
+                    const newTitle = String(adapter.label);
+                    if (dock.title !== newTitle)
+                        dock.title = newTitle;
+
+                    dock.sessionAdapter = adapter;
+
+                    continue;
+                }
+
+                // Create new dock
+                const newDock = sessionWindowComponent.createObject(dockingArea, {
+                    dockUniqueName: idStr,
+                    dockTitle: String(adapter.label),
                     sessionAdapter: adapter
                 });
 
-                addDockWidgetAsTab(sessionWindow);
+                if (!newDock) {
+                    console.log(`Failed to create dock for session id=${idStr}`);
+                    continue;
+                }
+
+                sessionDockById[idStr] = newDock;
+
+                // Place it (tab with central group)
+                addDockWidgetAsTab(newDock);
+            }
+
+            // Remove docks whose sessions no longer exist
+            for (const id in sessionDockById) {
+                if (seen[id])
+                    continue;
+
+                const dock = sessionDockById[id];
+                console.log(`Removing dock for deleted session id=${id}`);
+
+                // Close/remove from layout first
+                try {
+                    if (dock && dock.isOpen)
+                        dock.forceClose();
+                } catch (e) {}
+
+                if (dock)
+                    dock.destroy();
+
+                delete sessionDockById[id];
             }
         }
 
         Component.onCompleted: {
             addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(400, 400));
-            dockingArea.buildSessionWindows();
+            dockingArea.syncSessionWindows();
         }
 
         Connections {
             target: workspaceModel
             function onSessionAdaptersChanged() {
-                dockingArea.buildSessionWindows();
+                dockingArea.syncSessionWindows();
             }
         }
     }
 
-    KDDW.LayoutSaver { id: layoutSaver }
+    KDDW.LayoutSaver {
+        id: layoutSaver
+    }
 
     Connections {
         target: Qt.application

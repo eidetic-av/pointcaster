@@ -87,7 +87,7 @@ function(add_qml_adapters)
     # Link the generated stuff to our target(s)
     foreach(target IN LISTS ADAPTER_TARGETS)
         target_include_directories(${target} PRIVATE "${CMAKE_SOURCE_DIR}/src")
-        target_include_directories(${target} PRIVATE "${ADAPTER_OUT_DIR}")
+        target_include_directories(${target} PUBLIC "${ADAPTER_OUT_DIR}")
         target_include_directories(${target} PRIVATE "${CMAKE_SOURCE_DIR}/src/ui")
 
         target_sources(${target} PRIVATE

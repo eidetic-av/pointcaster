@@ -1,31 +1,20 @@
 #pragma once
 
+#include "metrics/prometheus_server.h"
 #include "plugins/devices/device_plugin.h"
 #include "plugins/devices/device_variants.h"
-#include <session/session_config.h>
-#include "metrics/prometheus_server.h"
+#include "workspace_config.h"
+
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/PluginManager/Manager.h>
+
 #include <memory>
+#include <mutex>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
 namespace pc {
-
-// WorkspaceConfiguration is the config that gets de/serialized and holds all
-// simulation state for the running application.
-struct WorkspaceConfiguration {
-  std::string id;
-  std::vector<devices::DeviceConfigurationVariant> devices{};
-  std::vector<SessionConfiguration> sessions{};
-};
-
-bool load_workspace_from_file(WorkspaceConfiguration &config,
-                              const std::string &file_path);
-
-void save_workspace_to_file(const WorkspaceConfiguration &config,
-                            const std::string &file_path);
 
 // Workspace is the application, which can read and write the
 // WorkspaceConfiguration.
@@ -48,9 +37,11 @@ public:
 
   explicit Workspace(const WorkspaceConfiguration &initial);
 
+  // updates config and syncs (creates/destroys) device plugin instances
   void apply_new_config(const WorkspaceConfiguration &new_config);
 
-  void rebuild_devices();
+  // sync device plugin instances to match config.devices
+  void sync_devices();
 };
 
 } // namespace pc

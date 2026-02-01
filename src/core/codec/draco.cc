@@ -5,7 +5,7 @@
 #include <draco/point_cloud/point_cloud_builder.h>
 #include <pointcaster/point_cloud.h>
 
-namespace pc::types {
+namespace pc {
 
 using namespace draco;
 
@@ -70,4 +70,4 @@ PointCloud PointCloud::decompress(const std::vector<std::byte> &buffer,
 
   return point_cloud;
 }
-} // namespace pc::types
+} // namespace pc

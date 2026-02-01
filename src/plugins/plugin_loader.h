@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <workspace.h>
+#include <workspace/workspace.h>
 
 namespace pc::devices {
 class DevicePlugin;

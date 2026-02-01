@@ -107,7 +107,7 @@ ToolBar {
                     delegate: MenuItem {
                         required property var modelData
 
-                        text: modelData.display_name + " (" + modelData.ip + ")"
+                        text: modelData.label + " (" + modelData.ip + ")"
                         font: root.font
 
                         contentItem: Text {

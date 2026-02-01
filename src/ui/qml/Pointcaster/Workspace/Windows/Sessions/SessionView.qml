@@ -7,9 +7,11 @@ import Pointcaster 1.0
 import Pointcaster.Workspace 1.0
 
 Item {
-    required property var sessionAdapter
-
     id: root
+
+    required property var sessionAdapter
+    property var cameraAdapter: null
+
     anchors.fill: parent
 
     property bool showBorder: false
@@ -29,14 +31,120 @@ Item {
         return qYaw.times(qPitch);
     }
 
+    property bool _applyingConfigCameraPosition: false
+
+    function _vector3dFromAdapterPosition(p) {
+        // p is expected to be QVector3D-ish in QML (has x/y/z)
+        if (!p)
+            return Qt.vector3d(0, 0, 0);
+        return Qt.vector3d(Number(p.x) || 0, Number(p.y) || 0, Number(p.z) || 0);
+    }
+
+    function applyCameraPositionFromConfig() {
+        if (!root.cameraAdapter)
+            return;
+
+        root._applyingConfigCameraPosition = true;
+        orbitOrigin.position = _vector3dFromAdapterPosition(root.cameraAdapter.position);
+
+        // drop the guard next tick so any bindings/animations settle first
+        Qt.callLater(function () {
+            root._applyingConfigCameraPosition = false;
+        });
+    }
+
+    function commitCameraPositionToConfig() {
+        if (!root.cameraAdapter)
+            return;
+        if (root._applyingConfigCameraPosition)
+            return;
+
+        // QML vector3d -> C++ QVariant should marshal to QVector3D
+        root.cameraAdapter.set_position(orbitOrigin.position);
+    }
+
+    function refreshFromAdapter() {
+        cameraAdapter = sessionAdapter ? sessionAdapter.cameraAdapter : null;
+        if (!cameraAdapter)
+            return;
+
+        // initial pull: config -> UI
+        sessionCameraControls.viewLocked = !!cameraAdapter.locked;
+        sessionCameraControls.gridEnabled = !!cameraAdapter.show_grid;
+        sessionCameraControls.orthographicEnabled = !!cameraAdapter.orthographic;
+
+        applyCameraPositionFromConfig();
+
+        // snap projection immediately on startup / adapter swap
+        camera.setBlend(sessionCameraControls.orthographicEnabled ? 1.0 : 0.0, false);
+    }
+
+    Component.onCompleted: refreshFromAdapter()
+    onSessionAdapterChanged: refreshFromAdapter()
+
+    // config -> UI
+    Connections {
+        target: root.cameraAdapter
+        enabled: !!root.cameraAdapter
+
+        function onLockedChanged() {
+            const v = !!root.cameraAdapter.locked;
+            if (sessionCameraControls.viewLocked !== v)
+                sessionCameraControls.viewLocked = v;
+        }
+
+        function onShow_gridChanged() {
+            const v = !!root.cameraAdapter.show_grid;
+            if (sessionCameraControls.gridEnabled !== v)
+                sessionCameraControls.gridEnabled = v;
+        }
+
+        function onOrthographicChanged() {
+            const v = !!root.cameraAdapter.orthographic;
+            if (sessionCameraControls.orthographicEnabled !== v)
+                sessionCameraControls.orthographicEnabled = v;
+
+            // config-driven change gets no animation
+            camera.setBlend(sessionCameraControls.orthographicEnabled ? 1.0 : 0.0, false);
+        }
+
+        function onPositionChanged() {
+            applyCameraPositionFromConfig();
+        }
+    }
+
+    // UI -> config (toggles)
+    Connections {
+        target: sessionCameraControls
+
+        function onViewLockedChanged() {
+            if (!root.cameraAdapter)
+                return;
+            root.cameraAdapter.set_locked(!!sessionCameraControls.viewLocked);
+        }
+
+        function onGridEnabledChanged() {
+            if (!root.cameraAdapter)
+                return;
+            root.cameraAdapter.set_show_grid(!!sessionCameraControls.gridEnabled);
+        }
+
+        function onOrthographicEnabledChanged() {
+            // user-driven toggle: animate
+            camera.setBlend(sessionCameraControls.orthographicEnabled ? 1.0 : 0.0, true);
+
+            if (!root.cameraAdapter)
+                return;
+            root.cameraAdapter.set_orthographic(!!sessionCameraControls.orthographicEnabled);
+        }
+    }
+
     View3D {
         id: view
         anchors.fill: parent
         camera: camera
 
         property var selectedObject: null
-
-        property bool gridEnabled: true
 
         environment: SceneEnvironment {
             clearColor: ThemeColors.shadow
@@ -46,24 +154,21 @@ Item {
                 id: groundGrid
                 gridInterval: 100
                 gridAxes: true
-                visible: view.gridEnabled
+                visible: sessionCameraControls.gridEnabled
             }
         }
 
         // -------- LIGHT RIG --------
-
         DirectionalLight {
             eulerRotation: Qt.vector3d(-35, 35, 0)
             brightness: 55
             ambientColor: Qt.rgba(0.18, 0.18, 0.18, 1.0)
         }
-
         DirectionalLight {
             eulerRotation: Qt.vector3d(-5, -120, 0)
             brightness: 40
             ambientColor: Qt.rgba(0.26, 0.26, 0.26, 1.0)
         }
-
         DirectionalLight {
             eulerRotation: Qt.vector3d(25, 160, 0)
             brightness: 45
@@ -71,7 +176,6 @@ Item {
         }
 
         // ---------- CAMERA ----------
-
         Node {
             id: orbitOrigin
             position: root.defaultOrbitOriginPosition
@@ -92,7 +196,7 @@ Item {
                 // ortho params
                 property real orthoHalfHeight: z * 0.6
 
-                // we need these parameters for OrbitCameraController but they're not being used
+                // OrbitCameraController expects these to exist
                 property real clipNear
                 property real clipFar
 
@@ -132,13 +236,22 @@ Item {
                     return Qt.matrix4x4(m00, 0, 0, 0, 0, m11, 0, 0, 0, 0, m22, m23, 0, 0, m32, m33);
                 }
 
-                function animateBlendTo(targetValue) {
+                function lerp(a, b, t) {
+                    return a + (b - a) * t;
+                }
+
+                function setBlend(targetValue, animate) {
                     projectionBlendAnim.stop();
+
+                    if (!animate) {
+                        blend = targetValue;
+                        return;
+                    }
+
                     projectionBlendAnim.from = blend;
                     projectionBlendAnim.to = targetValue;
 
-                    // easing and duration needs to differ depending on the animation
-                    // direction since the matrix blend is naturally non-linear
+                    // easing/duration differs by direction because the matrix blend is non-linear
                     const ascending = projectionBlendAnim.to > projectionBlendAnim.from;
                     projectionBlendAnim.easing.type = ascending ? Easing.OutExpo : Easing.InCubic;
                     projectionBlendAnim.duration = ascending ? 150 : 350;
@@ -146,30 +259,11 @@ Item {
                     projectionBlendAnim.start();
                 }
 
-                function lerp(a, b, t) {
-                    return a + (b - a) * t;
-                }
-
-                function remap(value, inputMinimum, inputMaximum, outputMinimum, outputMaximum) {
-                    return outputMinimum + (value - inputMinimum) * (outputMaximum - outputMinimum) / (inputMaximum - inputMinimum);
-                }
-
-                Component.onCompleted: animateBlendTo(sessionCameraControls.orthographicEnabled ? 1.0 : 0.0)
-
-                Connections {
-                    target: sessionCameraControls
-                    function onOrthographicEnabledChanged() {
-                        camera.animateBlendTo(sessionCameraControls.orthographicEnabled ? 1.0 : 0.0);
-                    }
-                }
-
                 NumberAnimation {
                     id: projectionBlendAnim
                     target: camera
                     property: "blend"
-                    // both duration and easing type are set inside animateBlendTo
-                    // duration: 350
-                    // easing.type: Easing.OutCubic
+                    // duration/easing set in setBlend()
                 }
             }
         }
@@ -179,14 +273,12 @@ Item {
             id: gizmoTarget
         }
 
-        // Flip 180° about X
         readonly property quaternion gizmoBasis: Qt.quaternion(1, 0, 0, 0)
         readonly property quaternion gizmoBasisInv: gizmoBasis.conjugated()
 
         function orbitToGizmoRotation(q) {
             return gizmoBasis.times(q).times(gizmoBasisInv);
         }
-
         function gizmoToOrbitRotation(q) {
             return gizmoBasisInv.times(q).times(gizmoBasis);
         }
@@ -207,7 +299,7 @@ Item {
             enabled: !sessionCameraControls.orbitRotationRunning && !sessionCameraControls.viewLocked
         }
 
-        // RMB drag = pan (1/2)
+        // RMB drag = pan
         DragHandler {
             acceptedButtons: Qt.RightButton
             enabled: !sessionCameraControls.viewLocked
@@ -219,6 +311,9 @@ Item {
                 if (active) {
                     lastX = translation.x;
                     lastY = translation.y;
+                } else {
+                    // Commit once when the interaction finishes.
+                    root.commitCameraPositionToConfig();
                 }
             }
 
@@ -238,26 +333,7 @@ Item {
             }
         }
 
-        // // RMB drag = pan (2/2) (kept as requested)
-        // DragHandler {
-        //     acceptedButtons: Qt.RightButton
-        //     enabled: !sessionCameraControls.viewLocked
-
-        //     onTranslationChanged: {
-        //         const panScale = Math.abs(camera.z) * 0.002;
-
-        //         const sceneDelta = Qt.vector3d(camera.right.x, camera.right.y, camera.right.z).times(-translation.x * panScale).plus(Qt.vector3d(camera.up.x, camera.up.y, camera.up.z).times(translation.y * panScale));
-
-        //         const localDelta = orbitOrigin.mapDirectionFromScene(sceneDelta);
-
-        //         orbitOrigin.position = Qt.vector3d(orbitOrigin.position.x + localDelta.x, orbitOrigin.position.y + localDelta.y, orbitOrigin.position.z + localDelta.z);
-
-        //         translation = Qt.point(0, 0);
-        //     }
-        // }
-
         // ---------- MODELS ----------
-
         Model {
             id: cubeMain
             source: "#Cube"
@@ -320,7 +396,6 @@ Item {
         }
 
         // ---------- PICKING + FOCUS ----------
-
         TapHandler {
             target: view
             acceptedButtons: Qt.LeftButton
@@ -337,18 +412,11 @@ Item {
                 const hit = result.objectHit;
                 if (!hit)
                     return;
+
                 focusAnimation.from = orbitOrigin.position;
                 focusAnimation.to = hit.position;
                 focusAnimation.start();
             }
-        }
-
-        Vector3dAnimation {
-            id: focusAnimation
-            target: orbitOrigin
-            property: "position"
-            duration: 350
-            easing.type: Easing.OutQuart
         }
     }
 
@@ -359,9 +427,6 @@ Item {
         gizmoTarget: gizmoTarget
         orbitOrigin: orbitOrigin
         z: 120
-
-        // drives grid visibility
-        onGridEnabledChanged: view.gridEnabled = gridEnabled
 
         onRequestHomeCamera: {
             if (sessionCameraControls.viewLocked)
@@ -388,14 +453,23 @@ Item {
         }
     }
 
+    // Camera move animations
+    Vector3dAnimation {
+        id: focusAnimation
+        target: orbitOrigin
+        property: "position"
+        duration: 350
+        easing.type: Easing.OutQuart
+        onStopped: root.commitCameraPositionToConfig()
+    }
     Vector3dAnimation {
         id: homeOrbitOriginPositionAnim
         target: orbitOrigin
         property: "position"
         duration: 420
         easing.type: Easing.OutCubic
+        onStopped: root.commitCameraPositionToConfig()
     }
-
     PropertyAnimation {
         id: homeOrbitOriginRotationAnim
         target: orbitOrigin
@@ -403,7 +477,6 @@ Item {
         duration: 420
         easing.type: Easing.OutCubic
     }
-
     NumberAnimation {
         id: homeCameraZAnim
         target: camera
@@ -418,7 +491,6 @@ Item {
         color: "transparent"
         border.width: root.showBorder ? 1 : 0
         border.color: root.borderColor
-        radius: 0
         z: 99
         enabled: false
     }

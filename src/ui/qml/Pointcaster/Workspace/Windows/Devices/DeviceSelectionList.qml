@@ -102,7 +102,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         width: Math.max(Math.round(75 * Scaling.uiScale), parent.width - statusCircle.width - deviceTypeText.width - (parent.spacing * 2))
                         elide: Text.ElideRight
-                        text: modelData.fieldValue(0)
+                        text: modelData.id
                         color: ThemeColors.text
                         font: Scaling.uiFont
                     }

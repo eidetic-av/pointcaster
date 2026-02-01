@@ -11,7 +11,8 @@ add_subdirectory(core)
 
 qt_add_executable(pointcaster 
     pointcaster.cc
-    workspace.cc
+    workspace/workspace.cc
+    workspace/workspace_config.cc
 )
 
 add_subdirectory(ui)

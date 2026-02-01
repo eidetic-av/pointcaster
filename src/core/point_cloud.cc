@@ -3,7 +3,7 @@
 #include <pointcaster/point_cloud.h>
 #include <zpp_bits.h>
 
-namespace pc::types {
+namespace pc {
 
 using namespace std::chrono;
 
@@ -94,4 +94,4 @@ PointCloud operator+=(PointCloud &lhs, PointCloud const &rhs) {
   return lhs;
 }
 
-} // namespace pc::types
+} // namespace pc
