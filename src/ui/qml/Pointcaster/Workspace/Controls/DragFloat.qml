@@ -105,7 +105,6 @@ DoubleSpinBox {
 
     onValueModified: {
         boundValue = value;
-        commitValue(value);
     }
 
     onActiveFocusChanged: {
@@ -187,7 +186,6 @@ DoubleSpinBox {
 
             onEdited: {
                 root.boundValue = root.value;
-                root.commitValue(root.value);
             }
             onCommitted: {
                 root.boundValue = root.value;

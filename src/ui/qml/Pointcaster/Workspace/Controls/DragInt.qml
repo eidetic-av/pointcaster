@@ -83,7 +83,6 @@ SpinBox {
 
     onValueModified: {
         boundValue = value;
-        commitValue(value);
     }
 
     onActiveFocusChanged: {
@@ -165,7 +164,6 @@ SpinBox {
 
             onEdited: {
                 root.boundValue = root.value;
-                root.commitValue(root.value);
             }
             onCommitted: {
                 root.boundValue = root.value;
