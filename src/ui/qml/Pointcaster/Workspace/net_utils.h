@@ -8,7 +8,7 @@ namespace pc::ui::qml {
 
 // this class is automatically instantiated as a singleton and can be accessed
 // from QML using the type name
-class NetUtils final : public QObject {
+class NetUtils : public QObject {
   Q_OBJECT
   QML_ELEMENT
   QML_SINGLETON
