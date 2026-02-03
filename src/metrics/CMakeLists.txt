@@ -25,4 +25,11 @@ target_link_libraries(pointcaster_metrics PRIVATE
   unofficial::concurrentqueue::concurrentqueue
 )
 
+target_compile_definitions(pointcaster_metrics PRIVATE METRICS_DLL)
+
 target_include_directories(pointcaster_metrics PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/include)
+
+install(TARGETS pointcaster_metrics
+  RUNTIME DESTINATION bin
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib                                                            )

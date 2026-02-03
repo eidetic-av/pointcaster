@@ -6,10 +6,20 @@
 #include <QString>
 #include <QVariant>
 #include <spdlog/common.h>
+ 
+#if defined(_WIN32)
+  #if defined(APP_SETTINGS_DLL)
+    #define APP_SETTINGS_API __declspec(dllexport)
+  #else
+    #define APP_SETTINGS_API __declspec(dllimport)
+  #endif
+#else
+  #define APP_SETTINGS_API 
+#endif
 
 namespace pc {
 
-class AppSettings final : public QObject {
+class APP_SETTINGS_API AppSettings final : public QObject {
   Q_OBJECT
 
   Q_PROPERTY(bool restoreLastSession READ restoreLastSession WRITE

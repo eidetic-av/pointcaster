@@ -8,13 +8,23 @@
 #include <utility>
 #include <vector>
 
+#if defined(_WIN32)
+  #if defined(METRICS_DLL)
+    #define METRICS_API __declspec(dllexport)
+  #else
+    #define METRICS_API __declspec(dllimport)
+  #endif
+#else
+  #define METRICS_API
+#endif
+
 namespace prometheus {
 class Registry;
 }
 
 namespace pc::metrics {
 
-class PrometheusServer {
+class METRICS_API PrometheusServer {
 public:
   static void initialise();
   static void set_enabled(bool enabled, std::string_view bind_address);
