@@ -91,17 +91,17 @@ DLLEXPORT void FillTOPPluginInfo(TOP_PluginInfo *info)
 	// The opType is the unique name for this TOP. It must start with a 
 	// capital A-Z character, and all the following characters must lower case
 	// or numbers (a-z, 0-9)
-	info->customOPInfo.opType->setString("Bobpointreceiver");
+	info->customOPInfo.opType->setString("Pointreceiver");
 
 	// The opLabel is the text that will show up in the OP Create Dialog
-	info->customOPInfo.opLabel->setString("BoB Point Receiver");
+	info->customOPInfo.opLabel->setString("Point Receiver");
 
 	// Will be turned into a 3 letter icon on the nodes
-	info->customOPInfo.opIcon->setString("BPR");
+	info->customOPInfo.opIcon->setString("PRC");
 
 	// Information about the author of this OP
 	info->customOPInfo.authorName->setString("Matt Hughes");
-	info->customOPInfo.authorEmail->setString("matth@eidetic.net.au");
+	info->customOPInfo.authorEmail->setString("matt@pointcaster.net");
 
 	// This TOP works with 0 inputs connected
 	info->customOPInfo.minInputs = 0;
@@ -123,7 +123,7 @@ PointReceiverTOP::PointReceiverTOP(const OP_NodeInfo* info) : worker_thread(null
 	nodeInfo = info;
 	quit_worker_thread = false;
 	startWork = false;
-	hostname = "192.168.1.10:9999";
+	hostname = "127.0.0.1:9999";
 }
 
 PointReceiverTOP::~PointReceiverTOP() {
@@ -300,7 +300,7 @@ void PointReceiverTOP::setupParameters(OP_ParameterManager* manager, void *reser
 
 		sp.name = "Hostname";
 		sp.label = "Hostname";
-		sp.defaultValue = "192.168.1.10:9999";
+		sp.defaultValue = "127.0.0.1:9999";
 
 		OP_ParAppendResult res = manager->appendString(sp);
 		assert(res == OP_ParAppendResult::Success);

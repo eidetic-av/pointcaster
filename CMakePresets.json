@@ -18,7 +18,7 @@
         "ARCHIVE_NAME": "pointcaster_windows-release",
         "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-release-custom",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-custom",
         "X_VCPKG_APPLOCAL_DEPS_INSTALL": true,
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_BUILD_TYPE": "Release",
@@ -34,6 +34,26 @@
       }
     },
     {
+      "name": "windows-release-zen3",
+      "inherits": "windows-release",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-release-zen3"
+      }
+    },
+    {
+      "name": "windows-clang-release",
+      "inherits": "windows-release",
+      "displayName": "Windows x64 Clang Release",
+      "description": "Release build using LLVM toolchain",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-clangcl-static",
+        "WITH_OSC": false
+      },
+      "environment": {
+        "LLVMInstallDir": "/Program Files/LLVM/"
+      }
+    },
+    {
       "name": "windows-debug",
       "inherits": "windows-release",
       "displayName": "Windows x64 Debug",
@@ -43,7 +63,8 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md-custom",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_PDB_OUTPUT_DIRECTORY": "${sourceDir}/build/${presetName}",
-        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "ProgramDatabase"
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "ProgramDatabase",
+        "WITH_VLD": false
       }
     },
     {
@@ -69,13 +90,25 @@
       }
     },
     {
-      "name": "pointreceiver-windows-debug",
+      "name": "touchdesigner",
       "inherits": "pointreceiver-windows-release",
+      "displayName": "Pointreceiver for TouchDesigner Windows x64 Release",
+      "description": "Build TouchDesigner and Pointreceiver dll",
+      "cacheVariables": {
+        "ARCHIVE_NAME": "td-pointreceiver_windows-release",
+	"BUILD_TOUCHDESIGNER_LIB": true
+      }
+    },
+    {
+      "name": "pointreceiver-windows-debug",
+      "inherits": "windows-debug",
       "displayName": "PointReceiver Lib Windows x64 Debug",
       "description": "Build pointreceiver dll with debug info and tests",
       "cacheVariables": {
         "ARCHIVE_NAME": "pointreceiver_windows-debug",
-        "CMAKE_BUILD_TYPE": "Debug"
+        "WITH_POINTCASTER": false,
+        "WITH_RECEIVER_LIB": true,
+        "WITH_TESTS": true
       }
     },
     {

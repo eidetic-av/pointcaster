@@ -112,6 +112,10 @@ if (WITH_TESTS)
   endif()
 endif()
 
+# ----- third-party integrations -----
+
+add_subdirectory(touchdesigner)
+
 # ----- Upload/deploy build artefacts -----
 
 list(APPEND RECEIVER_DEPLOY_EXCLUDES

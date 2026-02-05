@@ -113,22 +113,22 @@ void log(std::string_view arg, Args &&...args) {
 template <typename... Args>
 void log(fmt::format_string<Args...> fmt, Args &&...args) {
   spdlog::info(fmt, std::forward<Args>(args)...);
-  static auto logger = [] {
-    auto console_sink =
-    std::make_shared<spdlog::sinks::stdout_color_sink_mt>(); auto file_sink =
-    std::make_shared<spdlog::sinks::basic_file_sink_mt>(
-        "logs/pointreceiver.txt", true);
-    std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
-    auto logger = std::make_shared<spdlog::logger>("native_log",
-    sinks.begin(),
-                                                   sinks.end());
-    logger->set_level(spdlog::level::info);
-    logger->flush_on(spdlog::level::info);
-    spdlog::register_logger(logger);
-    return logger;
-  }();
-
-  logger->info(fmt, std::forward<Args>(args)...);
+  /*static auto logger = [] {*/
+  /*  auto console_sink =*/
+  /*  std::make_shared<spdlog::sinks::stdout_color_sink_mt>(); auto file_sink =*/
+  /*  std::make_shared<spdlog::sinks::basic_file_sink_mt>(*/
+  /*      "logs/pointreceiver.txt", true);*/
+  /*  std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};*/
+  /*  auto logger = std::make_shared<spdlog::logger>("native_log",*/
+  /*  sinks.begin(),*/
+  /*                                                 sinks.end());*/
+  /*  logger->set_level(spdlog::level::info);*/
+  /*  logger->flush_on(spdlog::level::info);*/
+  /*  spdlog::register_logger(logger);*/
+  /*  return logger;*/
+  /*}();*/
+  /**/
+  /*logger->info(fmt, std::forward<Args>(args)...);*/
 }
 #endif
 
@@ -925,10 +925,13 @@ void test_pointcloud_loop(pointreceiver_context *ctx) {
       // auto o = buffer[200];
       // log(fmt::format("x {}, y {}, z {}, p {}", o.x, o.y, o.z, o.__pad));
     }
-    if (pointreceiver_dequeue_static_point_cloud(ctx, source_id,
-                                                     &pointcloud, 5)) {
-      log("--static cloud from '{}' received", source_id);
-    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    /*log("static");*/
+    /*if (pointreceiver_dequeue_static_point_cloud(ctx, source_id,*/
+    /*&pointcloud, 5)) {*/
+    /*log("--static cloud from '{}' received", source_id);*/
+    /*}*/
+    /*log("post static");*/
   }
 }
 
@@ -943,16 +946,17 @@ int main(int argc, char *argv[]) {
     pointreceiver_start_message_receiver(ctx, argv[2]);
   }
   {
-    auto pc_loop = std::jthread([&] {
-      for (int i = 0; i < 3; i++) { test_pointcloud_loop(ctx); }
+    /*std::this_thread::sleep_for(std::chrono::seconds(5));*/
+    // auto pc_loop = std::jthread([&] {
+    //   for (int i = 0; i < 3; i++) { test_pointcloud_loop(ctx); }
+    // });
+    auto msg_loop = std::jthread([&] {
+      for (int i = 0; i < 3; i++) { testMessageLoop(ctx); }
     });
-    // auto msg_loop = std::jthread([&] {
-    //   for (int i = 0; i < 3; i++) { testMessageLoop(ctx); }
-    // });
-    // auto sleep = std::jthread([&] {
-    //   using namespace std::chrono_literals;
-    //   std::this_thread::sleep_for(5s);
-    // });
+    auto sleep = std::jthread([&] {
+      using namespace std::chrono_literals;
+      std::this_thread::sleep_for(5s);
+    });
   }
   pointreceiver_stop_message_receiver(ctx);
   pointreceiver_stop_point_receiver(ctx);
