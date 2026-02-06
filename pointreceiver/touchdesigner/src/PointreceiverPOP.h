@@ -1,76 +1,103 @@
 /* Shared Use License: This file is owned by Derivative Inc. (Derivative)
-* and can only be used, and/or modified for use, in conjunction with
-* Derivative's TouchDesigner software, and only if you are a licensee who has
-* accepted Derivative's TouchDesigner license or assignment agreement
-* (which also govern the use of this file). You may share or redistribute
-* a modified version of this file provided the following conditions are met:
-*
-* 1. The shared file or redistribution must retain the information set out
-* above and this list of conditions.
-* 2. Derivative's name (Derivative Inc.) or its trademarks may not be used
-* to endorse or promote products derived from this file without specific
-* prior written permission from Derivative.
-*/
+ * and can only be used, and/or modified for use, in conjunction with
+ * Derivative's TouchDesigner software, and only if you are a licensee who has
+ * accepted Derivative's TouchDesigner license or assignment agreement
+ * (which also govern the use of this file). You may share or redistribute
+ * a modified version of this file provided the following conditions are met:
+ *
+ * 1. The shared file or redistribution must retain the information set out
+ * above and this list of conditions.
+ * 2. Derivative's name (Derivative Inc.) or its trademarks may not be used
+ * to endorse or promote products derived from this file without specific
+ * prior written permission from Derivative.
+ */
 
 #pragma once
 
 #include "POP_CPlusPlusBase.h"
+
+#include <pointreceiver.h>
+
+#include <atomic>
+#include <cstdint>
+#include <memory>
 #include <string>
-using namespace TD;
+#include <thread>
 
-// To get more help about these functions, look at POP_CPlusPlusBase.h
-class PointreceiverPOP : public POP_CPlusPlusBase
-{
+class PointreceiverPOP final : public TD::POP_CPlusPlusBase {
 public:
+  PointreceiverPOP(const TD::OP_NodeInfo *node_info, TD::POP_Context *context);
+  ~PointreceiverPOP() override;
 
-	PointreceiverPOP(const OP_NodeInfo* info, POP_Context* context);
+  void getGeneralInfo(TD::POP_GeneralInfo *general_info,
+                      const TD::OP_Inputs *inputs, void *reserved) override;
 
-	virtual ~PointreceiverPOP();
+  void execute(TD::POP_Output *output, const TD::OP_Inputs *inputs,
+               void *reserved) override;
 
-	virtual void	getGeneralInfo(POP_GeneralInfo*, const OP_Inputs*, void* reserved1) override;
+  void setupParameters(TD::OP_ParameterManager *manager,
+                       void *reserved) override;
 
-	virtual void	execute(POP_Output*, const OP_Inputs*, void* reserved) override;
-
-	virtual int32_t getNumInfoCHOPChans(void* reserved) override;
-
-	virtual void	getInfoCHOPChan(int index, OP_InfoCHOPChan* chan, void* reserved) override;
-
-	virtual bool	getInfoDATSize(OP_InfoDATSize* infoSize, void* reserved) override;
-
-	virtual void	getInfoDATEntries(int32_t index, int32_t nEntries,
-									OP_InfoDATEntries* entries,
-									void* reserved) override;
-
-	virtual void	setupParameters(OP_ParameterManager* manager, void* reserved) override;
+  int32_t getNumInfoCHOPChans(void *reserved) override;
+  void getInfoCHOPChan(int32_t index, TD::OP_InfoCHOPChan *chan,
+                       void *reserved) override;
+  bool getInfoDATSize(TD::OP_InfoDATSize *info_size, void *reserved) override;
+  void getInfoDATEntries(int32_t index, int32_t n_entries,
+                         TD::OP_InfoDATEntries *entries,
+                         void *reserved) override;
 
 private:
+  struct ConnectionSettings {
+    std::string host{"127.0.0.1"};
+    std::uint16_t pointcloud_port{9992};
+    std::uint16_t message_port{9002};
+    bool active{true};
 
-	// example functions for generating a geometry, change them with any
-	// fucntions and algorithm:
+    bool operator==(const ConnectionSettings &other) const {
+      return host == other.host && pointcloud_port == other.pointcloud_port &&
+             message_port == other.message_port && active == other.active;
+    }
+    bool operator!=(const ConnectionSettings &other) const {
+      return !(*this == other);
+    }
+  };
 
-	void			cubeGeometry(POP_Output* output, float scale);
-	void			mixedPrimitives(POP_Output* output);
-	void			mixedPrimitivesComplex(POP_Output* output);
-	void			gridGeometry(POP_Output* output);
+  ConnectionSettings readSettings(const TD::OP_Inputs *inputs) const;
 
-	OP_SmartRef<POP_Buffer>		createTopologyInfoBuffer();
-	OP_SmartRef<POP_Buffer>		createPointInfoBuffer();
-	OP_SmartRef<POP_Buffer>		createGridInfoBuffer(uint32_t numDims);
+  void requestReconfigure(ConnectionSettings new_settings);
 
-	OP_SmartRef<POP_Buffer>		createBuffer(POP_BufferInfo createInfo);
+  // pointreceiver C API lifetime
+  void ensureContextCreated();
 
-	// We don't need to store this pointer, but we do for the example.
-	// The OP_NodeInfo class store information about the node that's using
-	// this instance of the class (like its name).
-	const OP_NodeInfo* const	myNodeInfo;
+  // Worker thread lifecycle
+  void ensureWorkerRunning();
+  void stopWorker();
+  void workerMain(std::stop_token stop_token);
 
-	// In this example this value will be incremented each time the execute()
-	// function is called, then passes back to the POP
-	int32_t						myExecuteCount;
+  // Worker thread only
+  bool initialisePointreceiver(const ConnectionSettings &settings);
 
-	// The context is used for things such as buffer memory management.
-	// It is held inside the class instead of passed into the callbacks
-	// since the class (or threads it spawns) can use the context to
-	// do operations such as allocate memory outside of the callbacks.
-	POP_Context* const			myContext;
+  // TD thread only
+  void ensureMainThreadBuffersAllocated();
+  void outputLatestFrame(TD::POP_Output *output);
+
+private:
+  const TD::OP_NodeInfo *const _node_info = nullptr;
+  TD::POP_Context *const _context = nullptr;
+
+  int32_t _execute_count = 0;
+  std::atomic<std::uint64_t> _frames_received{0};
+ std::uint64_t _last_consumed_sequence = 0;
+ std::uint32_t _last_published_num_points = 0;
+
+  std::atomic<bool> _reconfigure_requested{false};
+  std::atomic<std::shared_ptr<const ConnectionSettings>> _pending_settings;
+  ConnectionSettings _cached_settings{};
+
+  pointreceiver_context *_pointreceiver_context = nullptr;
+
+  std::jthread _worker_thread;
+
+  struct SharedState;
+  std::unique_ptr<SharedState> _state;
 };

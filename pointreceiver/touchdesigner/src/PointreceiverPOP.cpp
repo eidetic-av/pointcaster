@@ -1,1155 +1,801 @@
 /* Shared Use License: This file is owned by Derivative Inc. (Derivative)
-* and can only be used, and/or modified for use, in conjunction with
-* Derivative's TouchDesigner software, and only if you are a licensee who has
-* accepted Derivative's TouchDesigner license or assignment agreement
-* (which also govern the use of this file). You may share or redistribute
-* a modified version of this file provided the following conditions are met:
-*
-* 1. The shared file or redistribution must retain the information set out
-* above and this list of conditions.
-* 2. Derivative's name (Derivative Inc.) or its trademarks may not be used
-* to endorse or promote products derived from this file without specific
-* prior written permission from Derivative.
-*/
+ * and can only be used, and/or modified for use, in conjunction with
+ * Derivative's TouchDesigner software, and only if you are a licensee who has
+ * accepted Derivative's TouchDesigner license or assignment agreement
+ * (which also govern the use of this file). You may share or redistribute
+ * a modified version of this file provided the following conditions are met:
+ *
+ * 1. The shared file or redistribution must retain the information set out
+ * above and this list of conditions.
+ * 2. Derivative's name (Derivative Inc.) or its trademarks may not be used
+ * to endorse or promote products derived from this file without specific
+ * prior written permission from Derivative.
+ */
 
 #include "PointreceiverPOP.h"
 
-#include <stdio.h>
-#include <array>
-#include <vector>
-#include <string.h>
-#include <math.h>
 #include <assert.h>
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <cstring>
+#include <format>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <utility>
+#include <vector>
 
-#include <pointreceiver.h>
+#include <windows.h>
 
-// These functions are basic C function, which the DLL loader can find
-// much easier than finding a C++ Class.
-// The DLLEXPORT prefix is needed so the compile exports these functions from the .dll
-// you are creating
-extern "C"
-{
+#include <logger.h>
+#include <pointclouds.h>
 
-	DLLEXPORT
-	void
-	FillPOPPluginInfo(POP_PluginInfo *info)
-	{
-		// Always set this to POPCPlusPlusAPIVersion
-		if (!info->setAPIVersion(POPCPlusPlusAPIVersion))
-			return;
+namespace {
 
-		// The opType is the unique name for this TOP. It must start with a
-		// capital A-Z character, and all the following characters must lower case
-		// or numbers (a-z, 0-9)
-		info->customOPInfo.opType->setString("Pointreceiver");
+constexpr const char *k_par_host = "Host";
+constexpr const char *k_par_pointcloud_port = "Pointcloudport";
+constexpr const char *k_par_message_port = "Messageport";
+constexpr const char *k_par_active = "Active";
+constexpr const char *k_par_reconnect = "Reconnect";
 
-		// The opLabel is the text that will show up in the OP Create Dialog
-		info->customOPInfo.opLabel->setString("Simple Shapes");
+constexpr std::uint32_t k_log_every_n_frames = 60;
 
-		// Will be turned into a 3 letter icon on the nodes
-		info->customOPInfo.opIcon->setString("SSP");
+constexpr std::uint32_t k_max_points_capacity = 500'000;
 
-		// Information about the author of this OP
-		info->customOPInfo.authorName->setString("Author Name");
-		info->customOPInfo.authorEmail->setString("email@email.com");
+inline std::string make_tcp_endpoint(std::string_view host,
+                                     std::uint16_t port) {
+  return std::format("tcp://{}:{}", host, port);
+}
 
-		// This POP works with 0 or 1 inputs
-		info->customOPInfo.minInputs = 0;
-		info->customOPInfo.maxInputs = 1;
+static TD::OP_SmartRef<TD::POP_Buffer>
+create_cpu_buffer(TD::POP_Context *context, TD::POP_BufferUsage usage,
+                  std::uint64_t size_bytes, TD::POP_BufferMode mode) {
+  TD::POP_BufferInfo info;
+  info.size = size_bytes;
+  info.mode = mode;
+  info.usage = usage;
+  info.location = TD::POP_BufferLocation::CPU;
+  info.stream = 0;
+  return context->createBuffer(info, nullptr);
+}
 
-		// Custom website URL that the Operator Help can point to
-		info->customOPInfo.opHelpURL->setString("yourwebsiteurl.com");
+} // namespace
 
-	}
+// -------------------------
+// Shared state:
+// - MAIN THREAD: allocates POP buffers (once) inside execute().
+// - Worker thread: never calls createBuffer(), never resizes vectors.
+// - Worker writes into pre-sized staging arrays.
+// - Main thread memcpy staging -> POP buffer memory when publishing.
+// -------------------------
 
-	DLLEXPORT
-	POP_CPlusPlusBase*
-	CreatePOPInstance(const OP_NodeInfo* info, POP_Context* context)
-	{
-		// Return a new instance of your class every time this is called.
-		// It will be called once per POP that is using the .dll
-		return new PointreceiverPOP(info, context);
-	}
+struct PointreceiverPOP::SharedState final {
+  struct OutputBuffers final {
+    TD::OP_SmartRef<TD::POP_Buffer> position_attribute_buffer;
+    TD::OP_SmartRef<TD::POP_Buffer> colour_attribute_buffer;
+    TD::OP_SmartRef<TD::POP_Buffer> index_buffer;
+    TD::OP_SmartRef<TD::POP_Buffer> point_info_buffer;
+    TD::OP_SmartRef<TD::POP_Buffer> topo_info_buffer;
 
-	DLLEXPORT
-	void
-	DestroyPOPInstance(POP_CPlusPlusBase* instance)
-	{
-		// Delete the instance here, this will be called when
-		// Touch is shutting down, when the POP using that instance is deleted, or
-		// if the POP loads a different DLL
-		delete (PointreceiverPOP*)instance;
-	}
+    std::uint32_t capacity_points = 0;
 
+    void clear() {
+      position_attribute_buffer.release();
+      colour_attribute_buffer.release();
+      index_buffer.release();
+      point_info_buffer.release();
+      topo_info_buffer.release();
+      capacity_points = 0;
+    }
+
+    bool handles_valid() const {
+      return capacity_points > 0 && position_attribute_buffer &&
+             colour_attribute_buffer && index_buffer && point_info_buffer &&
+             topo_info_buffer;
+    }
+  };
+
+  struct StagingSlot final {
+    std::vector<float> positions_xyz;   // cap * 3
+    std::vector<float> colours_rgba;    // cap * 4
+    std::vector<std::uint32_t> indices; // cap
+
+    std::uint64_t sequence = 0;
+    std::uint32_t num_points = 0;
+
+    void reset_metadata() {
+      sequence = 0;
+      num_points = 0;
+    }
+  };
+
+  OutputBuffers out{};
+
+  StagingSlot slot_a{};
+  StagingSlot slot_b{};
+
+  std::atomic<StagingSlot *> front_ptr{&slot_a};
+  StagingSlot *back_ptr = &slot_b;
+
+  std::atomic<bool> has_new{false};
 };
 
-PointreceiverPOP::PointreceiverPOP(const OP_NodeInfo* info, POP_Context* context) :
-	myNodeInfo(info),
-	myContext(context)
-{
-	myExecuteCount = 0;
+// -------------------------
+// TD plugin entry points
+// -------------------------
+
+extern "C" {
+
+DLLEXPORT void FillPOPPluginInfo(TD::POP_PluginInfo *info) {
+  if (!info->setAPIVersion(TD::POPCPlusPlusAPIVersion)) { return; }
+
+  info->customOPInfo.opType->setString("Pointreceiver");
+  info->customOPInfo.opLabel->setString("Pointreceiver");
+  info->customOPInfo.opIcon->setString("PRC");
+
+  info->customOPInfo.authorName->setString("Matt Hughes");
+  info->customOPInfo.authorEmail->setString("matt@pointcaster.net");
+
+  info->customOPInfo.minInputs = 0;
+  info->customOPInfo.maxInputs = 0;
+
+  info->customOPInfo.opHelpURL->setString(
+      "docs.pointcaster.net/Integrations/TouchDesigner");
 }
 
-PointreceiverPOP::~PointreceiverPOP()
-{
-
+DLLEXPORT TD::POP_CPlusPlusBase *CreatePOPInstance(const TD::OP_NodeInfo *info,
+                                                   TD::POP_Context *context) {
+  return new PointreceiverPOP(info, context);
 }
 
-void
-PointreceiverPOP::getGeneralInfo(POP_GeneralInfo* ginfo, const OP_Inputs* inputs, void* reserved)
-{
-	// This will cause the node to cook every frame
-	ginfo->cookEveryFrameIfAsked = false;
+DLLEXPORT void DestroyPOPInstance(TD::POP_CPlusPlusBase *instance) {
+  delete static_cast<PointreceiverPOP *>(instance);
 }
 
-//-----------------------------------------------------------------------------------------------------
-//										Generate a geometry on CPU
-//-----------------------------------------------------------------------------------------------------
+} // extern "C"
 
-template <class T, size_t N>
-static int64_t
-getArrayByteSize(const std::array<T, N>& arr)
-{
-	return N * sizeof(T);
+// -------------------------
+// PointreceiverPOP
+// -------------------------
+
+PointreceiverPOP::PointreceiverPOP(const TD::OP_NodeInfo *node_info,
+                                   TD::POP_Context *context)
+    : _node_info(node_info), _context(context),
+      _state(std::make_unique<SharedState>()) {
+  _execute_count = 0;
+
+  pc::enable_file_logging("PointreceiverPOP");
+
+  // Make sure file sink exists for ctor logs too.
+
+  pc::logger()->trace(
+      "CTOR this={} node_info={} context={}", static_cast<void *>(this),
+      static_cast<const void *>(node_info), static_cast<void *>(context));
+
+  ensureContextCreated();
+
+  // Only allocate *staging* here (main thread) - no TD buffer allocations here.
+  {
+    SharedState &st = *_state;
+    const std::uint32_t cap = k_max_points_capacity;
+
+    auto init_slot = [&](SharedState::StagingSlot &s) {
+      s.positions_xyz.resize(static_cast<std::size_t>(cap) * 3u);
+      s.colours_rgba.resize(static_cast<std::size_t>(cap) * 4u);
+      s.indices.resize(static_cast<std::size_t>(cap));
+      s.reset_metadata();
+    };
+
+    init_slot(st.slot_a);
+    init_slot(st.slot_b);
+
+    st.out.clear(); // buffers will be allocated in execute()
+    pc::logger()->trace("CTOR: staging prealloc done cap={}", cap);
+  }
+
+  ensureWorkerRunning();
 }
 
-OP_SmartRef<POP_Buffer>
-PointreceiverPOP::createBuffer(POP_BufferInfo createInfo)
-{
-	createInfo.location = POP_BufferLocation::CPU;
-	createInfo.mode = POP_BufferMode::ReadWrite;
-	OP_SmartRef<POP_Buffer> buf = myContext->createBuffer(createInfo, nullptr);
-	void* data = (POP_PointInfo*)buf->getData(nullptr);
-	memset(data, 0, createInfo.size);
-	return buf;
+PointreceiverPOP::~PointreceiverPOP() {
+  pc::logger()->trace("DTOR begin this={}", static_cast<void *>(this));
+  stopWorker();
+  pointreceiver_destroy_context(_pointreceiver_context);
+  _state.reset();
+  pc::logger()->trace("DTOR end this={}", static_cast<void *>(this));
 }
 
-OP_SmartRef<POP_Buffer>
-PointreceiverPOP::createTopologyInfoBuffer()
-{
-	POP_BufferInfo createInfo;
-	createInfo.usage = POP_BufferUsage::TopologyInfoBuffer;
-	createInfo.size = sizeof(POP_TopologyInfo);
-
-	return createBuffer(createInfo);
+void PointreceiverPOP::getGeneralInfo(TD::POP_GeneralInfo *general_info,
+                                      const TD::OP_Inputs * /*inputs*/,
+                                      void * /*reserved*/) {
+  general_info->cookEveryFrameIfAsked = true;
 }
 
-OP_SmartRef<POP_Buffer>
-PointreceiverPOP::createPointInfoBuffer()
-{
-	POP_BufferInfo createInfo;
-	createInfo.usage = POP_BufferUsage::PointInfoBuffer;
-	createInfo.size = sizeof(POP_PointInfo);
+void PointreceiverPOP::setupParameters(TD::OP_ParameterManager *manager,
+                                       void * /*reserved*/) {
+  pc::logger()->trace("setupParameters manager={}",
+                      static_cast<void *>(manager));
 
-	return createBuffer(createInfo);
+  // Host
+  {
+    TD::OP_StringParameter sp;
+    sp.name = k_par_host;
+    sp.label = "Host";
+    sp.defaultValue = "127.0.0.1";
+    const auto res = manager->appendString(sp);
+    assert(res == TD::OP_ParAppendResult::Success);
+  }
+
+  // Pointcloud Port
+  {
+    TD::OP_NumericParameter np;
+    np.name = k_par_pointcloud_port;
+    np.label = "Pointcloud Port";
+    np.defaultValues[0] = 9992;
+    np.minSliders[0] = 1;
+    np.maxSliders[0] = 65535;
+    np.minValues[0] = 1;
+    np.maxValues[0] = 65535;
+    const auto res = manager->appendInt(np);
+    assert(res == TD::OP_ParAppendResult::Success);
+  }
+
+  // Message Port
+  {
+    TD::OP_NumericParameter np;
+    np.name = k_par_message_port;
+    np.label = "Message Port";
+    np.defaultValues[0] = 9002;
+    np.minSliders[0] = 1;
+    np.maxSliders[0] = 65535;
+    np.minValues[0] = 1;
+    np.maxValues[0] = 65535;
+    const auto res = manager->appendInt(np);
+    assert(res == TD::OP_ParAppendResult::Success);
+  }
+
+  // Active
+  {
+    TD::OP_NumericParameter np;
+    np.name = k_par_active;
+    np.label = "Active";
+    np.defaultValues[0] = 1.0;
+    const auto res = manager->appendToggle(np);
+    assert(res == TD::OP_ParAppendResult::Success);
+  }
+
+  // Reconnect pulse
+  {
+    TD::OP_NumericParameter np;
+    np.name = k_par_reconnect;
+    np.label = "Reconnect";
+    const auto res = manager->appendPulse(np);
+    assert(res == TD::OP_ParAppendResult::Success);
+  }
 }
 
-OP_SmartRef<POP_Buffer>
-PointreceiverPOP::createGridInfoBuffer(uint32_t numDims)
-{
-	POP_BufferInfo createInfo;
-	createInfo.usage = POP_BufferUsage::GridInfoBuffer;
-	createInfo.size = POP_GridInfo::getRequiredSize(numDims);
+PointreceiverPOP::ConnectionSettings
+PointreceiverPOP::readSettings(const TD::OP_Inputs *inputs) const {
+  ConnectionSettings settings{};
 
-	return createBuffer(createInfo);
+  if (const char *host_cstr = inputs->getParString(k_par_host);
+      host_cstr && host_cstr[0] != '\0') {
+    settings.host = host_cstr;
+  }
+
+  settings.pointcloud_port =
+      static_cast<std::uint16_t>(inputs->getParInt(k_par_pointcloud_port));
+  settings.message_port =
+      static_cast<std::uint16_t>(inputs->getParInt(k_par_message_port));
+  settings.active = (inputs->getParInt(k_par_active) != 0);
+
+  return settings;
 }
 
-// This examples is a single set of triangles, using a mix of point, vertex and primitive attributes.
-void
-PointreceiverPOP::cubeGeometry(POP_Output* output, float scale)
-{
-	POP_SetBufferInfo sinfo;
+void PointreceiverPOP::requestReconfigure(ConnectionSettings new_settings) {
+  pc::logger()->trace(
+      "requestReconfigure host='{}' pc_port={} msg_port={} active={}",
+      new_settings.host, new_settings.pointcloud_port,
+      new_settings.message_port, new_settings.active);
 
-	POP_BufferInfo attBufCreateInfo;
-	uint64_t posSize = 8 * sizeof(Position);
-	attBufCreateInfo.size = posSize;
-	OP_SmartRef<POP_Buffer>	posBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!posBuf)
-		return;
-	Position* posData = (Position*)posBuf->getData(nullptr);
+  _pending_settings.store(
+      std::make_shared<const ConnectionSettings>(std::move(new_settings)),
+      std::memory_order_release);
 
-	// front
-	posData[0] = Position(1.0f*scale, -1.0f, 1.0f),
-	posData[1] = Position(3.0f*scale, -1.0f, 1.0f),
-	posData[2] = Position(3.0f*scale, 1.0f, 1.0f),
-	posData[3] = Position(1.0f*scale, 1.0f, 1.0f),
-	// back
-	posData[4] = Position(1.0f*scale, -1.0f, -1.0f);
-	posData[5] = Position(3.0f*scale, -1.0f, -1.0f);
-	posData[6] = Position(3.0f*scale, 1.0f, -1.0f);
-	posData[7] = Position(1.0f*scale, 1.0f, -1.0f);
-
-	POP_AttributeInfo posInfo;
-	posInfo.numComponents = 3;
-	posInfo.type = POP_AttributeType::Float;
-	posInfo.name = "P";
-	posInfo.attribClass = POP_AttributeClass::Point;
-	output->setAttribute(&posBuf, posInfo, sinfo, nullptr);
-
-	// Use vertex attribute for the normal, since we need different normals for
-	// vertices, to face the direction of the side. They can't be point normals
-	// for a cube.
-	std::array<Vector, 36> normal =
-	{
-		// front
-		Vector(0.0f, 0.0f, 1.0f),
-		Vector(0.0f, 0.0f, 1.0f),
-		Vector(0.0f, 0.0f, 1.0f),
-		Vector(0.0f, 0.0f, 1.0f),
-		Vector(0.0f, 0.0f, 1.0f),
-		Vector(0.0f, 0.0f, 1.0f),
-
-		// right
-		Vector(1.0f, 0.0f, 0.0f),
-		Vector(1.0f, 0.0f, 0.0f),
-		Vector(1.0f, 0.0f, 0.0f),
-		Vector(1.0f, 0.0f, 0.0f),
-		Vector(1.0f, 0.0f, 0.0f),
-		Vector(1.0f, 0.0f, 0.0f),
-
-		// back
-		Vector(0.0f, 0.0f, -1.0f),
-		Vector(0.0f, 0.0f, -1.0f),
-		Vector(0.0f, 0.0f, -1.0f),
-		Vector(0.0f, 0.0f, -1.0f),
-		Vector(0.0f, 0.0f, -1.0f),
-		Vector(0.0f, 0.0f, -1.0f),
-
-		// left
-		Vector(-1.0f, 0.0f, 0.0f),
-		Vector(-1.0f, 0.0f, 0.0f),
-		Vector(-1.0f, 0.0f, 0.0f),
-		Vector(-1.0f, 0.0f, 0.0f),
-		Vector(-1.0f, 0.0f, 0.0f),
-		Vector(-1.0f, 0.0f, 0.0f),
-
-		// bottom
-		Vector(0.0f, -1.0f, 0.0f),
-		Vector(0.0f, -1.0f, 0.0f),
-		Vector(0.0f, -1.0f, 0.0f),
-		Vector(0.0f, -1.0f, 0.0f),
-		Vector(0.0f, -1.0f, 0.0f),
-		Vector(0.0f, -1.0f, 0.0f),
-
-		// top
-		Vector(0.0f, 1.0f, 0.0f),
-		Vector(0.0f, 1.0f, 0.0f),
-		Vector(0.0f, 1.0f, 0.0f),
-		Vector(0.0f, 1.0f, 0.0f),
-		Vector(0.0f, 1.0f, 0.0f),
-		Vector(0.0f, 1.0f, 0.0f),
-	};
-
-	int64_t normalSize = getArrayByteSize(normal);
-	attBufCreateInfo.size = normalSize;
-	OP_SmartRef<POP_Buffer>	normalBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!normalBuf)
-		return;
-	memcpy(normalBuf->getData(nullptr), normal.data(), normalSize);
-
-	POP_AttributeInfo normalInfo;
-	normalInfo.numComponents = 3;
-	normalInfo.type = POP_AttributeType::Float;
-	normalInfo.qualifier = POP_AttributeQualifier::Direction;
-	normalInfo.name = "N";
-	normalInfo.attribClass = POP_AttributeClass::Vertex;
-	output->setAttribute(&normalBuf, normalInfo, sinfo, nullptr);
-
-	// Use primitive attribute for the color.
-	// One attribute per triangle
-	std::array<Color, 12> color =
-	{
-		// front
-		Color(1.0f, 0.0f, 0.0f, 1.0f),
-		Color(1.0f, 0.0f, 0.0f, 1.0f),
-
-		// right
-		Color(0.0f, 1.0f, 0.0f, 1.0f),
-		Color(0.0f, 1.0f, 0.0f, 1.0f),
-
-		// back
-		Color(0.0f, 0.0f, 1.0f, 1.0f),
-		Color(0.0f, 0.0f, 1.0f, 1.0f),
-
-		// left
-		Color(1.0f, 1.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 1.0f, 1.0f),
-
-		// bottom
-		Color(1.0f, 1.0f, 0.0f, 1.0f),
-		Color(1.0f, 1.0f, 0.0f, 1.0f),
-
-		// top
-		Color(1.0f, 0.0f, 1.0f, 1.0f),
-		Color(1.0f, 0.0f, 1.0f, 1.0f),
-	};
-
-	int64_t colorSize = getArrayByteSize(color);
-	attBufCreateInfo.size = colorSize;
-	OP_SmartRef<POP_Buffer>	colorBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!colorBuf)
-		return;
-	memcpy(colorBuf->getData(nullptr), color.data(), colorSize);
-
-	POP_AttributeInfo colorInfo;
-	colorInfo.numComponents = 4;
-	colorInfo.type = POP_AttributeType::Float;
-	colorInfo.name = "Color";
-	colorInfo.attribClass = POP_AttributeClass::Primitive;
-	// This is needed so the attribute is treated properly as a color for
-	// color space correctness.
-	colorInfo.qualifier = POP_AttributeQualifier::Color;
-	output->setAttribute(&colorBuf, colorInfo, sinfo, nullptr);
-
-	// indices for the triangle primitives
-
-	std::array<int32_t, 36> indices =
-	{
-		// front
-		0, 1, 2,
-		2, 3, 0,
-		// right
-		1, 5, 6,
-		6, 2, 1,
-		// back
-		7, 6, 5,
-		5, 4, 7,
-		// left
-		4, 0, 3,
-		3, 7, 4,
-		// bottom
-		4, 5, 1,
-		1, 0, 4,
-		// top
-		3, 2, 6,
-		6, 7, 3,
-	};
-
-	int64_t indexSize = getArrayByteSize(indices);
-	POP_BufferInfo indexBufCreateInfo;
-	indexBufCreateInfo.usage = POP_BufferUsage::IndexBuffer;
-	indexBufCreateInfo.size = indexSize;
-	OP_SmartRef<POP_Buffer>	indexBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!indexBuf)
-		return;
-	memcpy(indexBuf->getData(nullptr), indices.data(), indexSize);
-
-	POP_IndexBufferInfo indexInfo;
-	indexInfo.type = POP_IndexType::UInt32;
-	output->setIndexBuffer(&indexBuf, indexInfo, sinfo, nullptr);
-
-	POP_InfoBuffers infoBufs;
-
-	infoBufs.pointInfo = createPointInfoBuffer();
-	POP_PointInfo* pointInfo = (POP_PointInfo*)infoBufs.pointInfo->getData(nullptr);
-	pointInfo->numPoints = 8;
-
-	infoBufs.topoInfo = createTopologyInfoBuffer();
-	POP_TopologyInfo* topoInfo = (POP_TopologyInfo*)infoBufs.topoInfo->getData(nullptr);
-	topoInfo->trianglesCount = (uint32_t)indices.size() / 3;
-
-	output->setInfoBuffers(&infoBufs, sinfo, nullptr);
+  _reconfigure_requested.store(true, std::memory_order_release);
 }
 
-// This mode shows how multiple different types of primitives can be mixed inside the same output.
-// Only position is provided
-void
-PointreceiverPOP::mixedPrimitives(POP_Output* output)
-{
-	POP_SetBufferInfo sinfo;
+void PointreceiverPOP::ensureContextCreated() {
+  if (_pointreceiver_context) return;
 
-	// to generate a geometry:
-	// addPoint() is the first function to be called.
-	// then we can add normals, colors, and any custom attributes for the points
-	// last function to be called is addLines()
-
-	// Generate some line strips
-	// Points 0-8
-	std::array<Position, 9> lineStrip0Pos =
-	{
-		Position(-0.8f, 0.0f, 1.0f),
-		Position(-0.6f, 0.4f, 1.0f),
-		Position(-0.4f, 0.8f, 1.0f),
-		Position(-0.2f, 0.4f, 1.0f),
-		Position(0.0f,  0.0f, 1.0f),
-		Position(0.2f, -0.4f, 1.0f),
-		Position(0.4f, -0.8f, 1.0f),
-		Position(0.6f, -0.4f, 1.0f),
-		Position(0.8f,  0.0f, 1.0f),
-	};
-
-	// Points 9-16
-	std::array<Position, 8> lineStrip1Pos =
-	{
-		Position(-0.8f, 0.2f, 1.0f),
-		Position(-0.6f, 0.6f, 1.0f),
-		Position(-0.4f, 1.0f, 1.0f),
-		Position(-0.2f, 0.6f, 1.0f),
-		Position(0.0f,  0.2f, 1.0f),
-		Position(0.2f, -0.2f, 1.0f),
-		Position(0.4f, -0.6f, 1.0f),
-		Position(0.6f, -0.2f, 1.0f),
-	};
-
-	// This is a geometry made up of a quad and a triangle, that share some points
-	// Points 17-21
-	std::array<Position, 5> triAndQuadPos =
-	{
-		Position(1.0f, 0.0f, 0.0f),
-		Position(1.0f, 1.0f, 0.0f),
-		Position(0.0f, 1.0f, 0.0f),
-		Position(0.0f, 0.0f, 0.0f),
-		Position(1.5f, 0.5f, 0.0f),
-	};
-
-	// Points 22-26
-	std::array<Position, 5> pointPrimsPos =
-	{
-		Position(1.0f, 0.0f, 2.0f),
-		Position(1.0f, 1.0f, 2.0f),
-		Position(0.0f, 1.0f, 2.0f),
-		Position(0.0f, 0.0f, 2.0f),
-		Position(1.5f, 0.5f, 2.0f),
-	};
-
-	POP_BufferInfo attBufCreateInfo;
-	uint64_t posSize = getArrayByteSize(lineStrip0Pos) + getArrayByteSize(lineStrip1Pos) + getArrayByteSize(triAndQuadPos) + getArrayByteSize(pointPrimsPos);
-	attBufCreateInfo.size = posSize;
-	OP_SmartRef<POP_Buffer>	posBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!posBuf)
-		return;
-	Position* posData = (Position*)posBuf->getData(nullptr);
-
-	auto copyArray =
-		[&posData](const auto& arr)
-		{
-			memcpy(posData, arr.data(), getArrayByteSize(arr));
-			posData += arr.size();
-		};
-
-	copyArray(lineStrip0Pos);
-	copyArray(lineStrip1Pos);
-	copyArray(triAndQuadPos);
-	copyArray(pointPrimsPos);
-
-	POP_AttributeInfo posInfo;
-	posInfo.numComponents = 3;
-	posInfo.type = POP_AttributeType::Float;
-	posInfo.name = "P";
-	posInfo.attribClass = POP_AttributeClass::Point;
-	output->setAttribute(&posBuf, posInfo, sinfo, nullptr);
-
-	////////////////////////////////////////////
-
-	// Notice that altough the different primitive types need to appear in the index buffer in the same
-	// order that they appear in the POP_PrimitiveInfo class:
-	// triangles, quads, lineStrips, lines, pointPrimitives
-	// they can reference point indices anywhere in the buffer.
-	std::array<uint32_t, 31> indices =
-	{
-		// triangle
-		18, 17, 21,
-
-		// quad
-		17, 18, 19, 20,
-
-		// lineStrip0
-		0, 1, 2, 3, 4, 5, 6, 7, 8,
-		// line strip restart index
-		0xFFFFFFFFU,
-
-		// lineStrip1
-		9, 10, 11, 12, 13, 14, 15, 16,
-		// line strip restart index
-		0xFFFFFFFFU,
-
-		// point primitives
-		22, 23, 24, 25, 26
-	};
-
-	int64_t indexSize = getArrayByteSize(indices);
-	POP_BufferInfo indexBufCreateInfo;
-	indexBufCreateInfo.usage = POP_BufferUsage::IndexBuffer;
-	indexBufCreateInfo.size = indexSize;
-	OP_SmartRef<POP_Buffer>	indexBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!indexBuf)
-		return;
-	memcpy(indexBuf->getData(nullptr), indices.data(), indexSize);
-
-	POP_IndexBufferInfo indexInfo;
-	indexInfo.type = POP_IndexType::UInt32;
-	output->setIndexBuffer(&indexBuf, indexInfo, sinfo, nullptr);
-
-	////////////////////////////////////////////
-
-	// Each line strip requires two entries in this buffer.
-	// One is the start index, the second is the number of points in the strip, including the restart index
-	uint64_t lineStripsInfoSize = 2 * 2 * sizeof(uint32_t);
-	POP_BufferInfo lineStripsInfoCreateInfo;
-	lineStripsInfoCreateInfo.usage = POP_BufferUsage::LineStripsInfoBuffer;
-	lineStripsInfoCreateInfo.size = lineStripsInfoSize;
-
-	OP_SmartRef<POP_Buffer>	lineStripsInfoBuf = myContext->createBuffer(lineStripsInfoCreateInfo, nullptr);
-	if (!lineStripsInfoBuf)
-		return;
-	uint32_t* lineStripsInfoData = (uint32_t*)lineStripsInfoBuf->getData(nullptr);
-	// First index location in the index buffer of the line strip, starting where the line strips being
-	lineStripsInfoData[0] = 0;
-	// number of indices in the line strip, including the restart index
-	lineStripsInfoData[1] = (uint32_t)(lineStrip0Pos.size() + 1);
-	// Don't read from the lineStripsInfoData[1] memory, since that is not allocated as readable.
-	lineStripsInfoData[2] = (uint32_t)(lineStrip0Pos.size() + 1);
-	lineStripsInfoData[3] = (uint32_t)(lineStrip1Pos.size() + 1);
-
-	POP_InfoBuffers infoBufs;
-
-	infoBufs.pointInfo = createPointInfoBuffer();
-	POP_PointInfo* pointInfo = (POP_PointInfo*)infoBufs.pointInfo->getData(nullptr);
-	pointInfo->numPoints = uint32_t(posSize / sizeof(Position));
-
-	infoBufs.topoInfo = createTopologyInfoBuffer();
-	POP_TopologyInfo* topoInfo = (POP_TopologyInfo*)infoBufs.topoInfo->getData(nullptr);
-
-	topoInfo->trianglesStartIndex = 0;
-	topoInfo->trianglesCount = 1;
-
-	topoInfo->quadsStartIndex = topoInfo->trianglesStartIndex + topoInfo->trianglesCount * 3;
-	topoInfo->quadsCount = 1;
-
-	topoInfo->lineStripsStartIndex = topoInfo->quadsStartIndex + topoInfo->quadsCount * 4;
-	// +2 for the restart indices
-	topoInfo->lineStripsNumVertices = (uint32_t)(lineStrip0Pos.size() + lineStrip1Pos.size() + 2);
-	topoInfo->lineStripsCount = 2;
-
-	topoInfo->pointPrimitivesStartIndex = topoInfo->lineStripsStartIndex + topoInfo->lineStripsNumVertices;
-	topoInfo->pointPrimitivesCount = (uint32_t)pointPrimsPos.size();
-
-	////////////////////////////////////////////
-
-	uint64_t lineStripsPrimIndicesSize = topoInfo->lineStripsNumVertices * sizeof(uint32_t);
-	lineStripsInfoCreateInfo.size = lineStripsPrimIndicesSize;
-	OP_SmartRef<POP_Buffer>	lineStripsPrimIndicesBuf = myContext->createBuffer(lineStripsInfoCreateInfo, nullptr);
-	if (!lineStripsPrimIndicesBuf)
-		return;
-	uint32_t* lineStripsPrimIndicesData = (uint32_t*)lineStripsPrimIndicesBuf->getData(nullptr);
-
-	// include the restart index
-	for (int i = 0; i < lineStrip0Pos.size() + 1; i++)
-	{
-		*lineStripsPrimIndicesData = 0;
-		lineStripsPrimIndicesData++;
-	}
-
-	for (int i = 0; i < lineStrip1Pos.size() + 1; i++)
-	{
-		*lineStripsPrimIndicesData = 1;
-		lineStripsPrimIndicesData++;
-	}
-
-	// We can't use the buffers once we've given them to this call, so move the reference into this class
-	infoBufs.lineStripsInfo = std::move(lineStripsInfoBuf);
-	infoBufs.lineStripsPrimIndices = std::move(lineStripsPrimIndicesBuf);
-
-	output->setInfoBuffers(&infoBufs, sinfo, nullptr);
+  pc::logger()->trace("ensureContextCreated: creating pointreceiver context");
+  _pointreceiver_context = pointreceiver_create_context();
+  if (_pointreceiver_context) {
+    pointreceiver_set_client_name(_pointreceiver_context, "touchdesigner");
+    pc::logger()->info("context created {}",
+                       static_cast<void *>(_pointreceiver_context));
+  } else {
+    pc::logger()->error("ensureContextCreated: FAILED to create context");
+  }
 }
 
-// This one uses more attributes and vertex/primitive attributes for the mixedPrimitives
-void
-PointreceiverPOP::mixedPrimitivesComplex(POP_Output* output)
-{
-	POP_SetBufferInfo sinfo;
+void PointreceiverPOP::ensureWorkerRunning() {
+  if (_worker_thread.joinable()) return;
 
-	// to generate a geometry:
-	// addPoint() is the first function to be called.
-	// then we can add normals, colors, and any custom attributes for the points
-	// last function to be called is addLines()
-
-	// Generate some line strips
-	// Points 0-8
-	std::array<Position, 9> lineStrip0Pos =
-	{
-		Position(-0.8f, 0.0f, 1.0f),
-		Position(-0.6f, 0.4f, 1.0f),
-		Position(-0.4f, 0.8f, 1.0f),
-		Position(-0.2f, 0.4f, 1.0f),
-		Position(0.0f,  0.0f, 1.0f),
-		Position(0.2f, -0.4f, 1.0f),
-		Position(0.4f, -0.8f, 1.0f),
-		Position(0.6f, -0.4f, 1.0f),
-		Position(0.8f,  0.0f, 1.0f),
-	};
-
-	// Points 9-16
-	std::array<Position, 8> lineStrip1Pos =
-	{
-		Position(-0.8f, 0.2f, 1.0f),
-		Position(-0.6f, 0.6f, 1.0f),
-		Position(-0.4f, 1.0f, 1.0f),
-		Position(-0.2f, 0.6f, 1.0f),
-		Position(0.0f,  0.2f, 1.0f),
-		Position(0.2f, -0.2f, 1.0f),
-		Position(0.4f, -0.6f, 1.0f),
-		Position(0.6f, -0.2f, 1.0f),
-	};
-
-	// This is a geometry made up of a quad and a triangle, that share some points
-	// Points 17-21
-	std::array<Position, 5> triAndQuadPos =
-	{
-		Position(1.0f, 0.0f, 0.0f),
-		Position(1.0f, 1.0f, 0.0f),
-		Position(0.0f, 1.0f, 0.0f),
-		Position(0.0f, 0.0f, 0.0f),
-		Position(1.5f, 0.5f, 0.0f),
-	};
-
-	POP_BufferInfo attBufCreateInfo;
-	uint64_t posSize = getArrayByteSize(lineStrip0Pos) + getArrayByteSize(lineStrip1Pos) + getArrayByteSize(triAndQuadPos);
-	attBufCreateInfo.size = posSize;
-	OP_SmartRef<POP_Buffer>	posBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!posBuf)
-		return;
-	Position* posData = (Position*)posBuf->getData(nullptr);
-
-	auto copyArray =
-		[&posData](const auto& arr)
-		{
-			memcpy(posData, arr.data(), getArrayByteSize(arr));
-			posData += arr.size();
-		};
-
-	copyArray(lineStrip0Pos);
-	copyArray(lineStrip1Pos);
-	copyArray(triAndQuadPos);
-
-	POP_AttributeInfo posInfo;
-	posInfo.numComponents = 3;
-	posInfo.type = POP_AttributeType::Float;
-	posInfo.name = "P";
-	posInfo.attribClass = POP_AttributeClass::Point;
-	output->setAttribute(&posBuf, posInfo, sinfo, nullptr);
-
-	////////////////////////////////////////////
-
-	POP_InfoBuffers infoBufs;
-
-	infoBufs.pointInfo = createPointInfoBuffer();
-	POP_PointInfo* pointInfo = (POP_PointInfo*)infoBufs.pointInfo->getData(nullptr);
-	pointInfo->numPoints = uint32_t(posSize / sizeof(Position));
-
-	infoBufs.topoInfo = createTopologyInfoBuffer();
-	POP_TopologyInfo* topoInfo = (POP_TopologyInfo*)infoBufs.topoInfo->getData(nullptr);;
-
-	topoInfo->trianglesStartIndex = 0;
-	topoInfo->trianglesCount = 1;
-
-	topoInfo->quadsStartIndex = topoInfo->trianglesStartIndex + topoInfo->trianglesCount * 3;
-	topoInfo->quadsCount = 1;
-
-	topoInfo->lineStripsStartIndex = topoInfo->quadsStartIndex + topoInfo->quadsCount * 4;
-	// +2 for the restart indices
-	topoInfo->lineStripsNumVertices = (uint32_t)(lineStrip0Pos.size() + lineStrip1Pos.size() + 2);
-	topoInfo->lineStripsCount = 2;
-
-	////////////////////////////////////////////
-
-	// Per-primitive normals
-	std::array<Vector, 4> normal =
-	{
-		Vector(0.0f, 0.0f, 1.0f),
-		Vector(0.0f, 0.0f, 1.0f),
-		Vector(0.0f, 0.0f, 1.0f),
-		Vector(0.0f, 0.0f, 1.0f),
-	};
-
-	uint64_t normalSize = getArrayByteSize(normal);
-	attBufCreateInfo.size = normalSize;
-	OP_SmartRef<POP_Buffer>	normalBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!normalBuf)
-		return;
-	memcpy(normalBuf->getData(nullptr), normal.data(), getArrayByteSize(normal));
-
-	POP_AttributeInfo normalInfo;
-	normalInfo.numComponents = 3;
-	normalInfo.type = POP_AttributeType::Float;
-	normalInfo.qualifier = POP_AttributeQualifier::Direction;
-	normalInfo.name = "N";
-	normalInfo.attribClass = POP_AttributeClass::Primitive;
-	output->setAttribute(&normalBuf, normalInfo, sinfo, nullptr);
-
-	////////////////////////////////////////////
-
-	// Per-vertex colors. These need to line up with the entries in the 'indices' buffer below
-	std::array<Color, 26> color =
-	{
-		// triangle
-		Color(1.0f, 0.0f, 0.0f, 1.0f),
-		Color(0.0f, 1.0f, 0.0f, 1.0f),
-		Color(0.0f, 0.0f, 1.0f, 1.0f),
-
-		// quad
-		Color(1.0f, 0.0f, 1.0f, 1.0f),
-		Color(0.0f, 1.0f, 0.0f, 1.0f),
-		Color(0.0f, 0.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 1.0f, 1.0f),
-
-		// lineStrip0
-		Color(1.0f, 0.0f, 0.0f, 1.0f),
-		Color(1.0f, 0.0f, 0.1f, 1.0f),
-		Color(1.0f, 0.0f, 0.2f, 1.0f),
-		Color(1.0f, 0.0f, 0.3f, 1.0f),
-		Color(1.0f, 0.0f, 0.4f, 1.0f),
-		Color(1.0f, 0.0f, 0.5f, 1.0f),
-		Color(1.0f, 0.0f, 0.6f, 1.0f),
-		Color(1.0f, 0.0f, 0.7f, 1.0f),
-		Color(1.0f, 0.0f, 0.8f, 1.0f),
-		// Restart index, although not shown, still needs an entry
-		Color(1.0f, 1.0f, 1.0f, 1.0f),
-
-		// lineStrip1
-		Color(1.0f, 0.8f, 0.0f, 1.0f),
-		Color(1.0f, 0.7f, 0.1f, 1.0f),
-		Color(1.0f, 0.6f, 0.2f, 1.0f),
-		Color(1.0f, 0.5f, 0.3f, 1.0f),
-		Color(1.0f, 0.4f, 0.4f, 1.0f),
-		Color(1.0f, 0.3f, 0.5f, 1.0f),
-		Color(1.0f, 0.2f, 0.6f, 1.0f),
-		Color(1.0f, 0.1f, 0.7f, 1.0f),
-		// Restart index, although not shown, still needs an entry
-		Color(1.0f, 1.0f, 1.0f, 1.0),
-	};
-
-	uint64_t colorSize = getArrayByteSize(color);
-	attBufCreateInfo.size = colorSize;
-	OP_SmartRef<POP_Buffer>	colorBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!colorBuf)
-		return;
-	memcpy(colorBuf->getData(nullptr), color.data(), getArrayByteSize(color));
-
-	POP_AttributeInfo colorInfo;
-	colorInfo.numComponents = 4;
-	colorInfo.type = POP_AttributeType::Float;
-	colorInfo.name = "Color";
-	colorInfo.attribClass = POP_AttributeClass::Vertex;
-	output->setAttribute(&colorBuf, colorInfo, sinfo, nullptr);
-
-	////////////////////////////////////////////
-
-	// Notice that altough the different primitive types need to appear in the index buffer in the same
-	// order that they appear in the POP_PrimitiveInfo class:
-	// triangles, quads, lineStrips, lines, pointPrimitives
-	// they can reference point indices anywhere in the buffer.
-	std::array<uint32_t, 26> indices =
-	{
-		// triangle
-		18, 17, 21,
-
-		// quad
-		17, 18, 19, 20,
-
-		// lineStrip0
-		0, 1, 2, 3, 4, 5, 6, 7, 8,
-		// line strip restart index
-		0xFFFFFFFFU,
-
-		// lineStrip1
-		9, 10, 11, 12, 13, 14, 15, 16,
-		// line strip restart index
-		0xFFFFFFFFU,
-	};
-
-	int64_t indexSize = getArrayByteSize(indices);
-	POP_BufferInfo indexBufCreateInfo;
-	indexBufCreateInfo.usage = POP_BufferUsage::IndexBuffer;
-	indexBufCreateInfo.size = indexSize;
-	OP_SmartRef<POP_Buffer>	indexBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!indexBuf)
-		return;
-	memcpy(indexBuf->getData(nullptr), indices.data(), indexSize);
-
-	POP_IndexBufferInfo indexInfo;
-	indexInfo.type = POP_IndexType::UInt32;
-	output->setIndexBuffer(&indexBuf, indexInfo, sinfo, nullptr);
-
-	////////////////////////////////////////////
-
-	// Each line strip requires two entries in this buffer.
-	// One is the start index, the second is the number of points in the strip, including the restart index
-	uint64_t lineStripsInfoSize = 2 * 2 * sizeof(uint32_t);
-
-	POP_BufferInfo lineStripsInfoCreateInfo;
-	lineStripsInfoCreateInfo.usage = POP_BufferUsage::LineStripsInfoBuffer;
-	lineStripsInfoCreateInfo.size = lineStripsInfoSize;
-
-	OP_SmartRef<POP_Buffer>	lineStripsInfoBuf = myContext->createBuffer(lineStripsInfoCreateInfo, nullptr);
-	if (!lineStripsInfoBuf)
-		return;
-	uint32_t* lineStripsInfoData = (uint32_t*)lineStripsInfoBuf->getData(nullptr);
-	// First index location in the index buffer of the line strip, starting where the line strips being
-	lineStripsInfoData[0] = 0;
-	// number of indices in the line strip, including the restart index
-	lineStripsInfoData[1] = (uint32_t)(lineStrip0Pos.size() + 1);
-	// Don't read from the lineStripsInfoData[1] memory, since that is not allocated as readable.
-	lineStripsInfoData[2] = (uint32_t)(lineStrip0Pos.size() + 1);
-	lineStripsInfoData[3] = (uint32_t)(lineStrip1Pos.size() + 1);
-
-	////////////////////////////////////////////
-
-	uint64_t lineStripsPrimIndicesSize = topoInfo->lineStripsNumVertices * sizeof(uint32_t);
-	lineStripsInfoCreateInfo.size = lineStripsPrimIndicesSize;
-	OP_SmartRef<POP_Buffer>	lineStripsPrimIndicesBuf = myContext->createBuffer(lineStripsInfoCreateInfo, nullptr);
-	if (!lineStripsPrimIndicesBuf)
-		return;
-
-	uint32_t* lineStripsPrimIndicesData = (uint32_t*)lineStripsPrimIndicesBuf->getData(nullptr);
-	// include the restart index
-	for (int i = 0; i < lineStrip0Pos.size() + 1; i++)
-	{
-		*lineStripsPrimIndicesData = 0;
-		lineStripsPrimIndicesData++;
-	}
-
-	for (int i = 0; i < lineStrip1Pos.size() + 1; i++)
-	{
-		*lineStripsPrimIndicesData = 1;
-		lineStripsPrimIndicesData++;
-	}
-
-	infoBufs.lineStripsInfo = std::move(lineStripsInfoBuf);
-	infoBufs.lineStripsPrimIndices = std::move(lineStripsPrimIndicesBuf);
-
-	output->setInfoBuffers(&infoBufs, sinfo, nullptr);
+  pc::logger()->info("starting worker thread");
+  _worker_thread = std::jthread([this](std::stop_token st) { workerMain(st); });
 }
 
-// This one creates a grid and assigns the grid metadata that can be used be some other POPs
-void
-PointreceiverPOP::gridGeometry(POP_Output* output)
-{
-	POP_SetBufferInfo sinfo;
-	POP_BufferInfo attBufCreateInfo;
-
-	// 4x3 grid
-	std::array<uint32_t, 2> gridDims = { 4, 3 };
-	uint32_t numPoints = 1;
-	for (auto i : gridDims)
-		numPoints *= i;
-	uint64_t posSize = numPoints * sizeof(Position);
-	attBufCreateInfo.size = posSize;
-	OP_SmartRef<POP_Buffer>	posBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!posBuf)
-		return;
-	Position* posData = (Position*)posBuf->getData(nullptr);
-
-	// front
-	int cnt = 0;
-	posData[cnt++] = Position(0.0f, 0.0f, 0.0f);
-	posData[cnt++] = Position(1.0f, 0.0f, 0.0f);
-	posData[cnt++] = Position(2.0f, 0.0f, 0.0f);
-	posData[cnt++] = Position(3.0f, 0.0f, 0.0f);
-
-	posData[cnt++] = Position(0.0f, 0.0f, 1.0f);
-	posData[cnt++] = Position(1.0f, 0.0f, 1.0f);
-	posData[cnt++] = Position(2.0f, 0.0f, 1.0f);
-	posData[cnt++] = Position(3.0f, 0.0f, 1.0f);
-
-	posData[cnt++] = Position(0.0f, 0.0f, 2.0f);
-	posData[cnt++] = Position(1.0f, 0.0f, 2.0f);
-	posData[cnt++] = Position(2.0f, 0.0f, 2.0f);
-	posData[cnt++] = Position(3.0f, 0.0f, 2.0f);
-
-	POP_AttributeInfo posInfo;
-	posInfo.numComponents = 3;
-	posInfo.type = POP_AttributeType::Float;
-	posInfo.name = "P";
-	posInfo.attribClass = POP_AttributeClass::Point;
-	output->setAttribute(&posBuf, posInfo, sinfo, nullptr);
-
-	int64_t normalSize = numPoints * sizeof(Vector);
-	attBufCreateInfo.size = normalSize;
-	OP_SmartRef<POP_Buffer>	normalBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!normalBuf)
-		return;
-	Vector* normData = (Vector*)normalBuf->getData(nullptr);
-
-	for (uint32_t i = 0; i < numPoints; i++)
-		normData[i] = Vector(0.0f, 1.0f, 0.0f);
-
-	POP_AttributeInfo normalInfo;
-	normalInfo.numComponents = 3;
-	normalInfo.type = POP_AttributeType::Float;
-	normalInfo.qualifier = POP_AttributeQualifier::Direction;
-	normalInfo.name = "N";
-	normalInfo.attribClass = POP_AttributeClass::Point;
-	output->setAttribute(&normalBuf, normalInfo, sinfo, nullptr);
-
-	// indices for the quad primitives
-	std::array<int32_t, 24> indices =
-	{
-		// front
-		0, 4, 5, 1,
-		1, 5, 6, 2,
-		2, 6, 7, 3,
-
-		4, 8, 9, 5,
-		5, 9, 10, 6,
-		6, 10, 11, 7,
-	};
-
-	int64_t indexSize = getArrayByteSize(indices);
-	POP_BufferInfo indexBufCreateInfo;
-	indexBufCreateInfo.usage = POP_BufferUsage::IndexBuffer;
-	indexBufCreateInfo.size = indexSize;
-	OP_SmartRef<POP_Buffer>	indexBuf = myContext->createBuffer(attBufCreateInfo, nullptr);
-	if (!indexBuf)
-		return;
-	memcpy(indexBuf->getData(nullptr), indices.data(), indexSize);
-
-	POP_IndexBufferInfo indexInfo;
-	indexInfo.type = POP_IndexType::UInt32;
-	output->setIndexBuffer(&indexBuf, indexInfo, sinfo, nullptr);
-
-	POP_InfoBuffers infoBufs;
-
-	infoBufs.pointInfo = createPointInfoBuffer();
-	POP_PointInfo* pointInfo = (POP_PointInfo*)infoBufs.pointInfo->getData(nullptr);
-	pointInfo->numPoints = numPoints;
-
-	infoBufs.topoInfo = createTopologyInfoBuffer();
-	POP_TopologyInfo* topoInfo = (POP_TopologyInfo*)infoBufs.topoInfo->getData(nullptr);
-	topoInfo->quadsCount = (uint32_t)indices.size() / 4;
-
-	infoBufs.gridInfo = createGridInfoBuffer(2);
-	POP_GridInfo* gridInfo = (POP_GridInfo*)infoBufs.gridInfo->getData(nullptr);
-	gridInfo->gridDimensionsCount = (uint32_t)gridDims.size();
-	memcpy(gridInfo->gridDimensions, gridDims.data(), getArrayByteSize(gridDims));
-
-	output->setInfoBuffers(&infoBufs, sinfo, nullptr);
+void PointreceiverPOP::stopWorker() {
+  if (_worker_thread.joinable()) {
+    pc::logger()->trace("stopWorker: request_stop + join");
+    _worker_thread.request_stop();
+    _worker_thread.join();
+  }
+  pc::logger()->info("worker thread stopped");
 }
 
-static std::vector<std::pair<std::string, OP_SmartRef<POP_Buffer>>>
-getAllAttributes(POP_AttributeClass c, const OP_POPInput* input)
-{
-	std::vector<std::pair<std::string, OP_SmartRef<POP_Buffer>>> res;
-	for (uint32_t i = 0; i < input->getNumAttributes(c); i++)
-	{
-		const POP_Attribute* attr = input->getAttribute(c, i, nullptr);
-		POP_GetBufferInfo info;
-		info.location = POP_BufferLocation::CPU;
-		OP_SmartRef<POP_Buffer> buf = attr->getBuffer(info, nullptr);
-		res.emplace_back(std::string(attr->info.name), buf);
-	}
-	return res;
+bool PointreceiverPOP::initialisePointreceiver(
+    const ConnectionSettings &settings) {
+  if (!_pointreceiver_context) {
+    pc::logger()->error("initialisePointreceiver: no context");
+    return false;
+  }
+
+  pc::logger()->trace("initialisePointreceiver: begin active={}",
+                      settings.active);
+
+  pointreceiver_stop_message_receiver(_pointreceiver_context);
+  pointreceiver_stop_point_receiver(_pointreceiver_context);
+
+  if (!settings.active) {
+    pc::logger()->trace(
+        "initialisePointreceiver: inactive -> receivers stopped");
+    return true;
+  }
+
+  const std::string pointcloud_endpoint =
+      make_tcp_endpoint(settings.host, settings.pointcloud_port);
+  const std::string message_endpoint =
+      make_tcp_endpoint(settings.host, settings.message_port);
+
+  pc::logger()->trace("initialisePointreceiver: pc='{}' msg='{}'",
+                      pointcloud_endpoint, message_endpoint);
+
+  const int pc_res = pointreceiver_start_point_receiver(
+      _pointreceiver_context, pointcloud_endpoint.c_str());
+  const int msg_res = pointreceiver_start_message_receiver(
+      _pointreceiver_context, message_endpoint.c_str());
+
+  pc::logger()->trace(
+      "initialisePointreceiver: start results pc_res={} msg_res={}", pc_res,
+      msg_res);
+  return (pc_res == 0) && (msg_res == 0);
 }
 
-static void
-copyAllAttributes(POP_AttributeClass c, std::vector<std::pair<std::string, OP_SmartRef<POP_Buffer>>>& attrs, const OP_POPInput* input, POP_Output* output)
-{
-	POP_SetBufferInfo sinfo;
-	for (auto& p : attrs)
-	{
-		const std::string& name = p.first;
-		const POP_Attribute* attr = input->getAttribute(c, name.c_str(), nullptr);
-		if (!attr)
-		{
-			// This should never happen though, since the attrs array was built up from this input.
-			continue;
-		}
-		Vector* b = (Vector*)p.second->getData(nullptr);
-		output->setAttribute(&p.second, attr->info, sinfo, nullptr);
-	}
+void PointreceiverPOP::workerMain(std::stop_token stop_token) {
+  pc::logger()->trace("workerMain: enter this={} context={}",
+                      static_cast<void *>(this),
+                      static_cast<void *>(_pointreceiver_context));
+
+  ConnectionSettings applied = _cached_settings;
+  if (!initialisePointreceiver(applied)) {
+    pc::logger()->error(
+        "workerMain: unable to start pointreceiver (init failed)");
+    return;
+  }
+
+  while (!stop_token.stop_requested()) {
+    if (_reconfigure_requested.exchange(false, std::memory_order_acq_rel)) {
+      if (auto pending = _pending_settings.load(std::memory_order_acquire)) {
+        applied = *pending;
+        pc::logger()->trace(
+            "workerMain: applying reconfigure host='{}' pc_port={} "
+            "msg_port={} active={}",
+            applied.host, applied.pointcloud_port, applied.message_port,
+            applied.active);
+        const bool ok = initialisePointreceiver(applied);
+        pc::logger()->trace("workerMain: reconfigure initialise ok={}", ok);
+        _cached_settings = applied;
+      }
+    }
+
+    if (!_pointreceiver_context || !applied.active) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      continue;
+    }
+
+    pointreceiver_pointcloud_frame in_frame{};
+    const bool got =
+        pointreceiver_dequeue_point_cloud(_pointreceiver_context, &in_frame, 5);
+    if (!got) continue;
+
+    const int n = in_frame.point_count;
+    if (n <= 0 || !in_frame.positions || !in_frame.colours) {
+      pc::logger()->trace(
+          "workerMain: got frame but invalid n={} positions={} colours={}", n,
+          static_cast<const void *>(in_frame.positions),
+          static_cast<const void *>(in_frame.colours));
+      continue;
+    }
+
+    SharedState &st = *_state;
+
+    const std::uint32_t cap = k_max_points_capacity;
+    const std::uint32_t num_points_in = static_cast<std::uint32_t>(n);
+    const std::uint32_t num_points =
+        (num_points_in <= cap) ? num_points_in : cap;
+
+    const auto *packed_pos =
+        static_cast<const bob::types::position *>(in_frame.positions);
+    const auto *packed_col =
+        static_cast<const bob::types::color *>(in_frame.colours);
+
+    SharedState::StagingSlot &out = *st.back_ptr;
+
+    float *pos_out = out.positions_xyz.data();
+    float *col_out = out.colours_rgba.data();
+    std::uint32_t *idx_out = out.indices.data();
+
+    for (std::uint32_t i = 0; i < num_points; ++i) {
+      const auto p = packed_pos[i];
+      pos_out[i * 3u + 0u] = static_cast<float>(p.x);
+      pos_out[i * 3u + 1u] = static_cast<float>(p.y);
+      pos_out[i * 3u + 2u] = static_cast<float>(p.z);
+
+      const auto c = packed_col[i];
+      col_out[i * 4u + 0u] = static_cast<float>(c.r) * (1.0f / 255.0f);
+      col_out[i * 4u + 1u] = static_cast<float>(c.g) * (1.0f / 255.0f);
+      col_out[i * 4u + 2u] = static_cast<float>(c.b) * (1.0f / 255.0f);
+      col_out[i * 4u + 3u] = static_cast<float>(c.a) * (1.0f / 255.0f);
+
+      idx_out[i] = i;
+    }
+
+    out.num_points = num_points;
+    const std::uint64_t seq =
+        _frames_received.fetch_add(1, std::memory_order_relaxed) + 1ull;
+    out.sequence = seq;
+
+    if ((seq % k_log_every_n_frames) == 0u) {
+      pc::logger()->trace(
+          "workerMain: publish seq={} num_points={} (in={} cap={})", seq,
+          num_points, num_points_in, cap);
+    }
+
+    SharedState::StagingSlot *previous_front =
+        st.front_ptr.exchange(st.back_ptr, std::memory_order_acq_rel);
+    st.back_ptr = previous_front;
+    st.has_new.store(true, std::memory_order_release);
+  }
+
+  pc::logger()->trace("workerMain: exit");
+
+  if (_pointreceiver_context) {
+    pc::logger()->trace("workerMain: shutdown stop receivers");
+    pointreceiver_stop_message_receiver(_pointreceiver_context);
+    pointreceiver_stop_point_receiver(_pointreceiver_context);
+  }
 }
 
-void
-PointreceiverPOP::execute(POP_Output* output, const OP_Inputs* inputs, void* reserved)
-{
-	myExecuteCount++;
+// Allocate (or re-allocate) POP buffers on the MAIN THREAD (inside execute()).
+// Also, validate mapping by calling getData() once; if it returns nullptr,
+// discard and re-create again. This specifically targets the failure you’re
+// seeing.
+void PointreceiverPOP::ensureMainThreadBuffersAllocated() {
+  if (!_state) return;
 
-	// If there is an input connected, we'll just do a copy of the data to the CPU and then back up to the GPU.
-	// To show how the download operations work.
-	if (inputs->getNumInputs() > 0)
-	{
-		inputs->enablePar("Shape", false);
-		inputs->enablePar("Scale", false);
+  SharedState &st = *_state;
+  const std::uint32_t cap = k_max_points_capacity;
 
-		const OP_POPInput* input = inputs->getInputPOP(0);
+  auto allocate_handles = [&]() -> bool {
+    const std::uint64_t pos_bytes =
+        static_cast<std::uint64_t>(cap) * 3ull * sizeof(float);
+    const std::uint64_t col_bytes =
+        static_cast<std::uint64_t>(cap) * 4ull * sizeof(float);
+    const std::uint64_t idx_bytes =
+        static_cast<std::uint64_t>(cap) * sizeof(std::uint32_t);
 
-		if (!input)
-			return;
+    st.out.clear();
 
-		// We issue all the download operations first, then start processing them. This allows multiple
-		// downloads to be occuring while we process the data
-		std::vector<std::pair<std::string, OP_SmartRef<POP_Buffer>>> pointAttrs, vertAttrs, primAttrs;
-		pointAttrs = getAllAttributes(POP_AttributeClass::Point, input);
-		vertAttrs = getAllAttributes(POP_AttributeClass::Vertex, input);
-		primAttrs = getAllAttributes(POP_AttributeClass::Primitive, input);
+    st.out.position_attribute_buffer =
+        create_cpu_buffer(_context, TD::POP_BufferUsage::Attribute, pos_bytes,
+                          TD::POP_BufferMode::SequentialWrite);
+    st.out.colour_attribute_buffer =
+        create_cpu_buffer(_context, TD::POP_BufferUsage::Attribute, col_bytes,
+                          TD::POP_BufferMode::SequentialWrite);
+    st.out.index_buffer =
+        create_cpu_buffer(_context, TD::POP_BufferUsage::IndexBuffer, idx_bytes,
+                          TD::POP_BufferMode::SequentialWrite);
 
-		POP_GetBufferInfo ginfo;
-		ginfo.location = POP_BufferLocation::CPU;
-		POP_InfoBuffers infoBufs;
-		// You can individually get the Info buffers, or just get them all in one call
-#if 1
-		input->getAllInfoBuffers(&infoBufs, ginfo, nullptr);
-#else
-		infoBufs.topoInfo = input->getTopologyInfo(ginfo, nullptr);
-		infoBufs.pointInfo = input->getPointInfo(ginfo, nullptr);
-		infoBufs.lineStripsInfo = input->getLineStripsInfo(ginfo, nullptr);
-		infoBufs.lineStripsPrimIndices = input->getLineStripsPrimIndices(ginfo, nullptr);
-		infoBufs.gridInfo = input->getGridInfo(ginfo, nullptr);
-#endif
-		OP_SmartRef<POP_Buffer> indexBuf = input->getIndexBuffer(nullptr)->getBuffer(ginfo, nullptr);
+    st.out.point_info_buffer = create_cpu_buffer(
+        _context, TD::POP_BufferUsage::PointInfoBuffer,
+        sizeof(TD::POP_PointInfo), TD::POP_BufferMode::ReadWrite);
 
-		POP_SetBufferInfo sinfo;
+    st.out.topo_info_buffer = create_cpu_buffer(
+        _context, TD::POP_BufferUsage::TopologyInfoBuffer,
+        sizeof(TD::POP_TopologyInfo), TD::POP_BufferMode::ReadWrite);
 
-		// How assign the outputs.
-		// This example just passes the data though.
-		// We can do edits to the buffers as we want though, and set them after editing them.
-		copyAllAttributes(POP_AttributeClass::Point, pointAttrs, input, output);
-		copyAllAttributes(POP_AttributeClass::Vertex, vertAttrs, input, output);
-		copyAllAttributes(POP_AttributeClass::Primitive, primAttrs, input, output);
-		output->setIndexBuffer(&indexBuf, input->getIndexBuffer(nullptr)->info, sinfo, nullptr);
-		output->setInfoBuffers(&infoBufs, sinfo, nullptr);
-	}
-	else
-	{
-		inputs->enablePar("Shape", true);
+    st.out.capacity_points = cap;
 
-		int shape = inputs->getParInt("Shape");
+    return st.out.handles_valid();
+  };
 
-		inputs->enablePar("Scale", true);
-		double	 scale = inputs->getParDouble("Scale");
+  auto mapping_ok = [&]() -> bool {
+    if (!st.out.handles_valid()) return false;
 
-		switch (shape)
-		{
-				// Cube
-			case 0:
-			{
-				cubeGeometry(output, (float)scale);
-				break;
-			}
-			// mixed geometry
-			case 1:
-			{
-				mixedPrimitives(output);
-				break;
-			}
-			// mixed geometry complex
-			case 2:
-			{
-				mixedPrimitivesComplex(output);
-				break;
-			}
-			// grid
-			case 3:
-			{
-				gridGeometry(output);
-				break;
-			}
-			// empty
-			case 4:
-			{
-				// Do nothing
-				break;
-			}
-		}
-	}
+    // This is exactly what was failing for you:
+    // if these are nullptr, treat buffers as not actually ready.
+    void *pos = st.out.position_attribute_buffer->getData(nullptr);
+    void *col = st.out.colour_attribute_buffer->getData(nullptr);
+    void *idx = st.out.index_buffer->getData(nullptr);
+
+    const bool ok = (pos != nullptr) && (col != nullptr) && (idx != nullptr);
+    if (!ok) {
+      pc::logger()->error(
+          "ensureMainThreadBuffersAllocated: mapping test failed pos={} "
+          "col={} idx={}",
+          pos, col, idx);
+    }
+    return ok;
+  };
+
+  if (st.out.handles_valid() && mapping_ok()) { return; }
+
+  pc::logger()->trace(
+      "ensureMainThreadBuffersAllocated: allocating cap={} (main thread)", cap);
+
+  // First attempt.
+  bool ok = allocate_handles() && mapping_ok();
+
+  // One retry: some TD internals may only be ready once execute() is active.
+  if (!ok) {
+    pc::logger()->warn(
+        "ensureMainThreadBuffersAllocated: retry allocate after mapping "
+        "failure");
+    ok = allocate_handles() && mapping_ok();
+  }
+
+  pc::logger()->trace("ensureMainThreadBuffersAllocated: done ok={}", ok);
 }
 
-//-----------------------------------------------------------------------------------------------------
-//								CHOP, DAT, and custom parameters
-//-----------------------------------------------------------------------------------------------------
+void PointreceiverPOP::outputLatestFrame(TD::POP_Output *output) {
+  SharedState &st = *_state;
 
-int32_t
-PointreceiverPOP::getNumInfoCHOPChans(void* reserved)
-{
-	// We return the number of channel we want to output to any Info CHOP
-	// connected to the CHOP. In this example we are just going to send 4 channels.
-	return 1;
+  ensureMainThreadBuffersAllocated();
+  if (!st.out.handles_valid()) {
+    pc::logger()->warn("outputLatestFrame: output buffers not allocated/valid");
+    return;
+  }
+
+  auto publish_current = [&]() {
+    if (_last_published_num_points == 0) return;
+
+    TD::POP_SetBufferInfo set_info{};
+
+    // P
+    {
+      TD::POP_AttributeInfo pos_info;
+      pos_info.name = "P";
+      pos_info.numComponents = 3;
+      pos_info.numColumns = 1;
+      pos_info.arraySize = 0;
+      pos_info.type = TD::POP_AttributeType::Float;
+      pos_info.qualifier = TD::POP_AttributeQualifier::None;
+      pos_info.attribClass = TD::POP_AttributeClass::Point;
+
+      auto tmp = st.out.position_attribute_buffer;
+      output->setAttribute(&tmp, pos_info, set_info, nullptr);
+    }
+
+    // Color
+    {
+      TD::POP_AttributeInfo col_info;
+      col_info.name = "Color";
+      col_info.numComponents = 4;
+      col_info.numColumns = 1;
+      col_info.arraySize = 0;
+      col_info.type = TD::POP_AttributeType::Float;
+      col_info.qualifier = TD::POP_AttributeQualifier::Color;
+      col_info.attribClass = TD::POP_AttributeClass::Point;
+
+      auto tmp = st.out.colour_attribute_buffer;
+      output->setAttribute(&tmp, col_info, set_info, nullptr);
+    }
+
+    // Index buffer
+    {
+      TD::POP_IndexBufferInfo index_info;
+      index_info.type = TD::POP_IndexType::UInt32;
+
+      auto tmp = st.out.index_buffer;
+      output->setIndexBuffer(&tmp, index_info, set_info, nullptr);
+    }
+
+    // Info buffers
+    {
+      TD::POP_InfoBuffers info_bufs;
+      info_bufs.pointInfo = st.out.point_info_buffer;
+      info_bufs.topoInfo = st.out.topo_info_buffer;
+      output->setInfoBuffers(&info_bufs, set_info, nullptr);
+    }
+  };
+
+  const bool has_new = st.has_new.load(std::memory_order_acquire);
+  SharedState::StagingSlot *front =
+      st.front_ptr.load(std::memory_order_acquire);
+
+  const bool frame_ready = has_new && front && front->sequence != 0 &&
+                           front->sequence != _last_consumed_sequence;
+
+  if (frame_ready) {
+    const std::uint32_t num_points = front->num_points;
+
+    if (num_points == 0 || num_points > st.out.capacity_points) {
+      pc::logger()->warn("outputLatestFrame: invalid num_points={} cap={}",
+                         num_points, st.out.capacity_points);
+      publish_current();
+      return;
+    }
+
+    float *pos_out = static_cast<float *>(
+        st.out.position_attribute_buffer->getData(nullptr));
+    float *col_out =
+        static_cast<float *>(st.out.colour_attribute_buffer->getData(nullptr));
+    std::uint32_t *idx_out =
+        static_cast<std::uint32_t *>(st.out.index_buffer->getData(nullptr));
+
+    if (!pos_out || !col_out || !idx_out) {
+      // try realloc once (same as before)
+      st.out.clear();
+      ensureMainThreadBuffersAllocated();
+
+      pos_out = st.out.position_attribute_buffer
+                    ? static_cast<float *>(
+                          st.out.position_attribute_buffer->getData(nullptr))
+                    : nullptr;
+      col_out = st.out.colour_attribute_buffer
+                    ? static_cast<float *>(
+                          st.out.colour_attribute_buffer->getData(nullptr))
+                    : nullptr;
+      idx_out = st.out.index_buffer ? static_cast<std::uint32_t *>(
+                                          st.out.index_buffer->getData(nullptr))
+                                    : nullptr;
+
+      if (!pos_out || !col_out || !idx_out) {
+        publish_current();
+        return;
+      }
+    }
+
+    // memcpy, update info buffers, update cached counts
+    const std::size_t pos_count = static_cast<std::size_t>(num_points) * 3u;
+    const std::size_t col_count = static_cast<std::size_t>(num_points) * 4u;
+    const std::size_t idx_count = static_cast<std::size_t>(num_points);
+
+    std::memcpy(pos_out, front->positions_xyz.data(),
+                pos_count * sizeof(float));
+    std::memcpy(col_out, front->colours_rgba.data(), col_count * sizeof(float));
+    std::memcpy(idx_out, front->indices.data(),
+                idx_count * sizeof(std::uint32_t));
+
+    auto *point_info = static_cast<TD::POP_PointInfo *>(
+        st.out.point_info_buffer->getData(nullptr));
+    auto *topo_info = static_cast<TD::POP_TopologyInfo *>(
+        st.out.topo_info_buffer->getData(nullptr));
+
+    if (point_info && topo_info) {
+      std::memset(point_info, 0, sizeof(TD::POP_PointInfo));
+      std::memset(topo_info, 0, sizeof(TD::POP_TopologyInfo));
+      point_info->numPoints = num_points;
+      topo_info->pointPrimitivesStartIndex = 0;
+      topo_info->pointPrimitivesCount = num_points;
+
+      _last_published_num_points = num_points;
+      _last_consumed_sequence = front->sequence;
+      st.has_new.store(false, std::memory_order_release);
+    }
+  }
+
+  publish_current();
 }
 
-void
-PointreceiverPOP::getInfoCHOPChan(int32_t index, OP_InfoCHOPChan* chan, void* reserved)
-{
-	// This function will be called once for each channel we said we'd want to return
-	// In this example it'll only be called once.
+void PointreceiverPOP::execute(TD::POP_Output *output,
+                               const TD::OP_Inputs *inputs,
+                               void * /*reserved*/) {
+  ++_execute_count;
 
-	if (index == 0)
-	{
-		chan->name->setString("executeCount");
-		chan->value = (float)myExecuteCount;
-	}
+  ensureContextCreated();
+  ensureWorkerRunning();
+
+  ensureMainThreadBuffersAllocated();
+
+  const ConnectionSettings new_settings = readSettings(inputs);
+  const bool reconnect_pulse = (inputs->getParInt(k_par_reconnect) != 0);
+
+  if (reconnect_pulse || (new_settings != _cached_settings)) {
+    pc::logger()->trace(
+        "execute: reconfigure requested reconnect_pulse={} host='{}' "
+        "pc_port={} msg_port={} active={}",
+        reconnect_pulse, new_settings.host, new_settings.pointcloud_port,
+        new_settings.message_port, new_settings.active);
+    _cached_settings = new_settings;
+    requestReconfigure(new_settings);
+  }
+
+  outputLatestFrame(output);
 }
 
-bool
-PointreceiverPOP::getInfoDATSize(OP_InfoDATSize* infoSize, void* reserved)
-{
-	infoSize->rows = 3;
-	infoSize->cols = 2;
-	// Setting this to false means we'll be assigning values to the table
-	// one row at a time. True means we'll do it one column at a time.
-	infoSize->byColumn = false;
-	return true;
+int32_t PointreceiverPOP::getNumInfoCHOPChans(void * /*reserved*/) {
+  return 3; // executeCount, framesReceived, lastSequence
 }
 
-void
-PointreceiverPOP::getInfoDATEntries(int32_t index,
-								int32_t nEntries,
-								OP_InfoDATEntries* entries,
-								void* reserved)
-{
-	char tempBuffer[4096];
+void PointreceiverPOP::getInfoCHOPChan(int32_t index, TD::OP_InfoCHOPChan *chan,
+                                       void * /*reserved*/) {
+  if (!chan) return;
 
-	if (index == 0)
-	{
-		// Set the value for the first column
-#ifdef _WIN32
-		strcpy_s(tempBuffer, "executeCount");
-#else // macOS
-		strlcpy(tempBuffer, "executeCount", sizeof(tempBuffer));
-#endif
-		entries->values[0]->setString(tempBuffer);
-
-		// Set the value for the second column
-#ifdef _WIN32
-		sprintf_s(tempBuffer, "%d", myExecuteCount);
-#else // macOS
-		snprintf(tempBuffer, sizeof(tempBuffer), "%d", myExecuteCount);
-#endif
-		entries->values[1]->setString(tempBuffer);
-	}
+  if (index == 0) {
+    chan->name->setString("executeCount");
+    chan->value = static_cast<float>(_execute_count);
+  } else if (index == 1) {
+    chan->name->setString("framesReceived");
+    chan->value =
+        static_cast<float>(_frames_received.load(std::memory_order_relaxed));
+  } else if (index == 2) {
+    chan->name->setString("lastSequence");
+    chan->value = static_cast<float>(_last_consumed_sequence);
+  }
 }
 
-void
-PointreceiverPOP::setupParameters(OP_ParameterManager* manager, void* reserved)
-{
-	// scale
-	{
-		OP_NumericParameter	np;
+bool PointreceiverPOP::getInfoDATSize(TD::OP_InfoDATSize *info_size,
+                                      void * /*reserved*/) {
+  if (!info_size) return false;
 
-		np.name = "Scale";
-		np.label = "Scale";
-		np.defaultValues[0] = 1.0;
-		np.minSliders[0] = -10.0;
-		np.maxSliders[0] = 10.0;
-
-		OP_ParAppendResult res = manager->appendFloat(np);
-		assert(res == OP_ParAppendResult::Success);
-	}
-
-	// shape
-	{
-		OP_StringParameter	sp;
-
-		sp.name = "Shape";
-		sp.label = "Shape";
-
-		sp.defaultValue = "Cube";
-
-		std::array<const char *, 5> names = { "cube", "mixedprims", "mixedprimscomplex", "grid", "empty" };
-		std::array<const char *, 5> labels = { "Cube", "Mixed Primitives", "Mixed Primitives (Complex)", "Grid", "Empty" };
-
-		OP_ParAppendResult res = manager->appendMenu(sp, (int32_t)names.size(), names.data(), labels.data());
-		assert(res == OP_ParAppendResult::Success);
-	}
+  info_size->rows = 6;
+  info_size->cols = 2;
+  info_size->byColumn = false;
+  return true;
 }
 
+void PointreceiverPOP::getInfoDATEntries(int32_t index, int32_t /*n_entries*/,
+                                         TD::OP_InfoDATEntries *entries,
+                                         void * /*reserved*/) {
+  if (!entries || !entries->values || !entries->values[0] ||
+      !entries->values[1])
+    return;
 
+  char key[256]{};
+  char val[1024]{};
+
+  const auto set_row = [&](const char *k, const char *v) {
+    strcpy_s(key, k);
+    strcpy_s(val, v);
+    entries->values[0]->setString(key);
+    entries->values[1]->setString(val);
+  };
+
+  switch (index) {
+  case 0:
+    set_row("executeCount", std::to_string(_execute_count).c_str());
+    break;
+  case 1:
+    set_row("framesReceived",
+            std::to_string(_frames_received.load(std::memory_order_relaxed))
+                .c_str());
+    break;
+  case 2:
+    set_row("lastSequence", std::to_string(_last_consumed_sequence).c_str());
+    break;
+  case 3: set_row("host", _cached_settings.host.c_str()); break;
+  case 4: {
+    const std::string s = std::format("pointcloud={}, message={}",
+                                      _cached_settings.pointcloud_port,
+                                      _cached_settings.message_port);
+    set_row("ports", s.c_str());
+    break;
+  }
+  case 5: set_row("active", _cached_settings.active ? "true" : "false"); break;
+  default: break;
+  }
+}

@@ -145,6 +145,7 @@ void pointreceiver_destroy_context(pointreceiver_context *ctx) {
   }
   log("Pointreceiver context is destroyed");
   delete ctx;
+  ctx = nullptr;
 }
 
 void pointreceiver_set_client_name(pointreceiver_context *ctx,
