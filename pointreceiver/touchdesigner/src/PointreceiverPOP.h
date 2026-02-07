@@ -87,12 +87,15 @@ private:
 
   int32_t _execute_count = 0;
   std::atomic<std::uint64_t> _frames_received{0};
- std::uint64_t _last_consumed_sequence = 0;
- std::uint32_t _last_published_num_points = 0;
+  std::uint64_t _last_consumed_sequence = 0;
+  std::uint32_t _last_published_num_points = 0;
 
   std::atomic<bool> _reconfigure_requested{false};
   std::atomic<std::shared_ptr<const ConnectionSettings>> _pending_settings;
   ConnectionSettings _cached_settings{};
+
+  std::atomic<float> _worker_frame_last_ms{0.0f};
+  std::atomic<float> _worker_frame_avg_ms{0.0f};
 
   pointreceiver_context *_pointreceiver_context = nullptr;
 

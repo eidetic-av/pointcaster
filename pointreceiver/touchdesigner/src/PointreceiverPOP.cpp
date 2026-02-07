@@ -14,6 +14,7 @@
 
 #include "PointreceiverPOP.h"
 
+#include <array>
 #include <assert.h>
 #include <atomic>
 #include <chrono>
@@ -386,6 +387,13 @@ void PointreceiverPOP::workerMain(std::stop_token stop_token) {
     return;
   }
 
+  // holds the last n frames we consider in the convert_ms mean value
+  constexpr std::size_t frame_ms_window_size = 120;
+  std::array<float, frame_ms_window_size> frame_ms_rolling_window{};
+  std::size_t frame_ms_rolling_write_index = 0;
+  std::size_t frame_ms_rolling_count = 0;
+  float frame_ms_rolling_sum = 0.0f;
+
   while (!stop_token.stop_requested()) {
     if (_reconfigure_requested.exchange(false, std::memory_order_acq_rel)) {
       if (auto pending = _pending_settings.load(std::memory_order_acquire)) {
@@ -419,6 +427,9 @@ void PointreceiverPOP::workerMain(std::stop_token stop_token) {
           static_cast<const void *>(in_frame.colours));
       continue;
     }
+
+    using namespace std::chrono;
+    const auto frame_dequeue_time = steady_clock::now();
 
     SharedState &st = *_state;
 
@@ -468,6 +479,36 @@ void PointreceiverPOP::workerMain(std::stop_token stop_token) {
         st.front_ptr.exchange(st.back_ptr, std::memory_order_acq_rel);
     st.back_ptr = previous_front;
     st.has_new.store(true, std::memory_order_release);
+
+    const auto frame_processing_duration =
+        steady_clock::now() - frame_dequeue_time;
+    const float frame_ms =
+        duration<float, std::milli>(frame_processing_duration).count();
+
+    const float oldest_frame_ms =
+        frame_ms_rolling_window[frame_ms_rolling_write_index];
+
+    if (frame_ms_rolling_count < frame_ms_window_size) {
+      // window not full yet
+      frame_ms_rolling_count += 1;
+      frame_ms_rolling_sum += frame_ms;
+    } else {
+      // window full: replace old with new
+      frame_ms_rolling_sum += frame_ms - oldest_frame_ms;
+    }
+
+    frame_ms_rolling_window[frame_ms_rolling_write_index] = frame_ms;
+    frame_ms_rolling_write_index =
+        (frame_ms_rolling_write_index + 1) % frame_ms_window_size;
+
+    const float mean_frame_ms =
+        (frame_ms_rolling_count > 0)
+            ? (frame_ms_rolling_sum /
+               static_cast<float>(frame_ms_rolling_count))
+            : 0.0f;
+
+    _worker_frame_last_ms.store(frame_ms, std::memory_order_relaxed);
+    _worker_frame_avg_ms.store(mean_frame_ms, std::memory_order_relaxed);
   }
 
   pc::logger()->trace("workerMain: exit");
@@ -728,7 +769,8 @@ void PointreceiverPOP::execute(TD::POP_Output *output,
 }
 
 int32_t PointreceiverPOP::getNumInfoCHOPChans(void * /*reserved*/) {
-  return 3; // executeCount, framesReceived, lastSequence
+  return 5; // executeCount, framesReceived, lastSequence, workerFrameLastMs,
+            // workerFrameAvgMs
 }
 
 void PointreceiverPOP::getInfoCHOPChan(int32_t index, TD::OP_InfoCHOPChan *chan,
@@ -745,14 +787,18 @@ void PointreceiverPOP::getInfoCHOPChan(int32_t index, TD::OP_InfoCHOPChan *chan,
   } else if (index == 2) {
     chan->name->setString("lastSequence");
     chan->value = static_cast<float>(_last_consumed_sequence);
+  } else if (index == 3) {
+    chan->name->setString("workerFrameLastMs");
+    chan->value = _worker_frame_last_ms.load(std::memory_order_relaxed);
+  } else if (index == 4) {
+    chan->name->setString("workerFrameAvgMs");
+    chan->value = _worker_frame_avg_ms.load(std::memory_order_relaxed);
   }
 }
 
-bool PointreceiverPOP::getInfoDATSize(TD::OP_InfoDATSize *info_size,
-                                      void * /*reserved*/) {
+bool PointreceiverPOP::getInfoDATSize(TD::OP_InfoDATSize *info_size, void *) {
   if (!info_size) return false;
-
-  info_size->rows = 6;
+  info_size->rows = 7;
   info_size->cols = 2;
   info_size->byColumn = false;
   return true;
@@ -776,18 +822,24 @@ void PointreceiverPOP::getInfoDATEntries(int32_t index, int32_t /*n_entries*/,
   };
 
   switch (index) {
-  case 0:
+  case 0: {
     set_row("executeCount", std::to_string(_execute_count).c_str());
     break;
-  case 1:
+  }
+  case 1: {
     set_row("framesReceived",
             std::to_string(_frames_received.load(std::memory_order_relaxed))
                 .c_str());
     break;
-  case 2:
+  }
+  case 2: {
     set_row("lastSequence", std::to_string(_last_consumed_sequence).c_str());
     break;
-  case 3: set_row("host", _cached_settings.host.c_str()); break;
+  }
+  case 3: {
+    set_row("host", _cached_settings.host.c_str());
+    break;
+  }
   case 4: {
     const std::string s = std::format("pointcloud={}, message={}",
                                       _cached_settings.pointcloud_port,
@@ -795,7 +847,20 @@ void PointreceiverPOP::getInfoDATEntries(int32_t index, int32_t /*n_entries*/,
     set_row("ports", s.c_str());
     break;
   }
-  case 5: set_row("active", _cached_settings.active ? "true" : "false"); break;
+  case 5: {
+    set_row("active", _cached_settings.active ? "true" : "false");
+    break;
+  }
+  case 6: {
+    auto last_ms = _worker_frame_last_ms.load(std::memory_order_relaxed);
+    set_row("workerFrameLastMs", std::to_string(last_ms).c_str());
+    break;
+  }
+  case 7: {
+    auto avg_ms = _worker_frame_avg_ms.load(std::memory_order_relaxed);
+    set_row("workerFrameAvgMs", std::to_string(avg_ms).c_str());
+    break;
+  }
   default: break;
   }
 }
