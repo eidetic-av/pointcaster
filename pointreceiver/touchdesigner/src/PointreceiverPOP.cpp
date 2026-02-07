@@ -14,24 +14,13 @@
 
 #include "PointreceiverPOP.h"
 
-#include <array>
 #include <assert.h>
-#include <atomic>
-#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <format>
-#include <memory>
-#include <string>
-#include <string_view>
-#include <thread>
-#include <utility>
-#include <vector>
-
-#include <windows.h>
-
 #include <logger.h>
-#include <pointclouds.h>
+#include <string>
+#include <windows.h>
 
 namespace {
 
@@ -41,14 +30,12 @@ constexpr const char *k_par_message_port = "Messageport";
 constexpr const char *k_par_active = "Active";
 constexpr const char *k_par_reconnect = "Reconnect";
 
-constexpr std::uint32_t k_log_every_n_frames = 60;
+constexpr const char *k_par_global_max_points_capacity = "Maxpointscapacity";
+constexpr const char *k_par_global_frame_pool_size = "Framepoolsize";
 
-constexpr std::uint32_t k_max_points_capacity = 500'000;
-
-inline std::string make_tcp_endpoint(std::string_view host,
-                                     std::uint16_t port) {
-  return std::format("tcp://{}:{}", host, port);
-}
+// Fallback if user enters nonsense (also avoids allocating 0)
+constexpr std::uint32_t k_min_points_capacity = 1024u;
+constexpr std::uint32_t k_max_points_capacity_hard = 5'000'000u;
 
 static TD::OP_SmartRef<TD::POP_Buffer>
 create_cpu_buffer(TD::POP_Context *context, TD::POP_BufferUsage usage,
@@ -62,18 +49,15 @@ create_cpu_buffer(TD::POP_Context *context, TD::POP_BufferUsage usage,
   return context->createBuffer(info, nullptr);
 }
 
+static std::uint32_t clamp_u32(std::uint32_t v, std::uint32_t lo,
+                               std::uint32_t hi) noexcept {
+  return (v < lo) ? lo : (v > hi) ? hi : v;
+}
+
 } // namespace
 
-// -------------------------
-// Shared state:
-// - MAIN THREAD: allocates POP buffers (once) inside execute().
-// - Worker thread: never calls createBuffer(), never resizes vectors.
-// - Worker writes into pre-sized staging arrays.
-// - Main thread memcpy staging -> POP buffer memory when publishing.
-// -------------------------
-
-struct PointreceiverPOP::SharedState final {
-  struct OutputBuffers final {
+struct PointreceiverPOP::SharedState {
+  struct OutputBuffers {
     TD::OP_SmartRef<TD::POP_Buffer> position_attribute_buffer;
     TD::OP_SmartRef<TD::POP_Buffer> colour_attribute_buffer;
     TD::OP_SmartRef<TD::POP_Buffer> index_buffer;
@@ -98,34 +82,8 @@ struct PointreceiverPOP::SharedState final {
     }
   };
 
-  struct StagingSlot final {
-    std::vector<float> positions_xyz;   // cap * 3
-    std::vector<float> colours_rgba;    // cap * 4
-    std::vector<std::uint32_t> indices; // cap
-
-    std::uint64_t sequence = 0;
-    std::uint32_t num_points = 0;
-
-    void reset_metadata() {
-      sequence = 0;
-      num_points = 0;
-    }
-  };
-
   OutputBuffers out{};
-
-  StagingSlot slot_a{};
-  StagingSlot slot_b{};
-
-  std::atomic<StagingSlot *> front_ptr{&slot_a};
-  StagingSlot *back_ptr = &slot_b;
-
-  std::atomic<bool> has_new{false};
 };
-
-// -------------------------
-// TD plugin entry points
-// -------------------------
 
 extern "C" {
 
@@ -133,7 +91,7 @@ DLLEXPORT void FillPOPPluginInfo(TD::POP_PluginInfo *info) {
   if (!info->setAPIVersion(TD::POPCPlusPlusAPIVersion)) { return; }
 
   info->customOPInfo.opType->setString("Pointreceiver");
-  info->customOPInfo.opLabel->setString("Pointreceiver");
+  info->customOPInfo.opLabel->setString("Pointcaster Cloud In");
   info->customOPInfo.opIcon->setString("PRC");
 
   info->customOPInfo.authorName->setString("Matt Hughes");
@@ -157,72 +115,36 @@ DLLEXPORT void DestroyPOPInstance(TD::POP_CPlusPlusBase *instance) {
 
 } // extern "C"
 
-// -------------------------
-// PointreceiverPOP
-// -------------------------
-
 PointreceiverPOP::PointreceiverPOP(const TD::OP_NodeInfo *node_info,
                                    TD::POP_Context *context)
     : _node_info(node_info), _context(context),
       _state(std::make_unique<SharedState>()) {
-  _execute_count = 0;
-
   pc::enable_file_logging("PointreceiverPOP");
-
-  // Make sure file sink exists for ctor logs too.
-
   pc::logger()->trace(
       "CTOR this={} node_info={} context={}", static_cast<void *>(this),
       static_cast<const void *>(node_info), static_cast<void *>(context));
-
-  ensureContextCreated();
-
-  // Only allocate *staging* here (main thread) - no TD buffer allocations here.
-  {
-    SharedState &st = *_state;
-    const std::uint32_t cap = k_max_points_capacity;
-
-    auto init_slot = [&](SharedState::StagingSlot &s) {
-      s.positions_xyz.resize(static_cast<std::size_t>(cap) * 3u);
-      s.colours_rgba.resize(static_cast<std::size_t>(cap) * 4u);
-      s.indices.resize(static_cast<std::size_t>(cap));
-      s.reset_metadata();
-    };
-
-    init_slot(st.slot_a);
-    init_slot(st.slot_b);
-
-    st.out.clear(); // buffers will be allocated in execute()
-    pc::logger()->trace("CTOR: staging prealloc done cap={}", cap);
-  }
-
-  ensureWorkerRunning();
 }
 
 PointreceiverPOP::~PointreceiverPOP() {
   pc::logger()->trace("DTOR begin this={}", static_cast<void *>(this));
-  stopWorker();
-  pointreceiver_destroy_context(_pointreceiver_context);
+  _connection_handle.reset();
   _state.reset();
   pc::logger()->trace("DTOR end this={}", static_cast<void *>(this));
 }
 
 void PointreceiverPOP::getGeneralInfo(TD::POP_GeneralInfo *general_info,
-                                      const TD::OP_Inputs * /*inputs*/,
-                                      void * /*reserved*/) {
+                                      const TD::OP_Inputs *, void *) {
   general_info->cookEveryFrameIfAsked = true;
 }
 
 void PointreceiverPOP::setupParameters(TD::OP_ParameterManager *manager,
-                                       void * /*reserved*/) {
-  pc::logger()->trace("setupParameters manager={}",
-                      static_cast<void *>(manager));
-
+                                       void *) {
   // Host
   {
     TD::OP_StringParameter sp;
     sp.name = k_par_host;
     sp.label = "Host";
+    sp.page = "Connection";
     sp.defaultValue = "127.0.0.1";
     const auto res = manager->appendString(sp);
     assert(res == TD::OP_ParAppendResult::Success);
@@ -233,6 +155,7 @@ void PointreceiverPOP::setupParameters(TD::OP_ParameterManager *manager,
     TD::OP_NumericParameter np;
     np.name = k_par_pointcloud_port;
     np.label = "Pointcloud Port";
+    np.page = "Connection";
     np.defaultValues[0] = 9992;
     np.minSliders[0] = 1;
     np.maxSliders[0] = 65535;
@@ -247,6 +170,7 @@ void PointreceiverPOP::setupParameters(TD::OP_ParameterManager *manager,
     TD::OP_NumericParameter np;
     np.name = k_par_message_port;
     np.label = "Message Port";
+    np.page = "Connection";
     np.defaultValues[0] = 9002;
     np.minSliders[0] = 1;
     np.maxSliders[0] = 65535;
@@ -261,6 +185,7 @@ void PointreceiverPOP::setupParameters(TD::OP_ParameterManager *manager,
     TD::OP_NumericParameter np;
     np.name = k_par_active;
     np.label = "Active";
+    np.page = "Connection";
     np.defaultValues[0] = 1.0;
     const auto res = manager->appendToggle(np);
     assert(res == TD::OP_ParAppendResult::Success);
@@ -271,264 +196,94 @@ void PointreceiverPOP::setupParameters(TD::OP_ParameterManager *manager,
     TD::OP_NumericParameter np;
     np.name = k_par_reconnect;
     np.label = "Reconnect";
+    np.page = "Connection";
     const auto res = manager->appendPulse(np);
+    assert(res == TD::OP_ParAppendResult::Success);
+  }
+
+  // Global page
+  {
+    TD::OP_NumericParameter np;
+    np.name = k_par_global_max_points_capacity;
+    np.label = "Max Points Capacity";
+    np.page = "Global";
+
+    np.defaultValues[0] = 500000;
+
+    np.minValues[0] = 1;
+    np.maxValues[0] = 2000000;
+    np.clampMins[0] = true;
+    np.clampMaxes[0] = true;
+
+    // slider range (fixes the "1 max" UI behaviour)
+    np.minSliders[0] = 1024;
+    np.maxSliders[0] = 2000000;
+
+    const auto res = manager->appendInt(np);
+    assert(res == TD::OP_ParAppendResult::Success);
+  }
+
+  {
+    TD::OP_NumericParameter np;
+    np.name = k_par_global_frame_pool_size;
+    np.label = "Frame Pool Size";
+    np.page = "Global";
+
+    np.defaultValues[0] = 4;
+
+    np.minValues[0] = 2;
+    np.maxValues[0] = 64;
+    np.clampMins[0] = true;
+    np.clampMaxes[0] = true;
+
+    np.minSliders[0] = 2;
+    np.maxSliders[0] = 64;
+
+    const auto res = manager->appendInt(np);
     assert(res == TD::OP_ParAppendResult::Success);
   }
 }
 
-PointreceiverPOP::ConnectionSettings
+PointreceiverPOP::OperatorSettings
 PointreceiverPOP::readSettings(const TD::OP_Inputs *inputs) const {
-  ConnectionSettings settings{};
+  OperatorSettings s{};
 
   if (const char *host_cstr = inputs->getParString(k_par_host);
       host_cstr && host_cstr[0] != '\0') {
-    settings.host = host_cstr;
-  }
-
-  settings.pointcloud_port =
-      static_cast<std::uint16_t>(inputs->getParInt(k_par_pointcloud_port));
-  settings.message_port =
-      static_cast<std::uint16_t>(inputs->getParInt(k_par_message_port));
-  settings.active = (inputs->getParInt(k_par_active) != 0);
-
-  return settings;
-}
-
-void PointreceiverPOP::requestReconfigure(ConnectionSettings new_settings) {
-  pc::logger()->trace(
-      "requestReconfigure host='{}' pc_port={} msg_port={} active={}",
-      new_settings.host, new_settings.pointcloud_port,
-      new_settings.message_port, new_settings.active);
-
-  _pending_settings.store(
-      std::make_shared<const ConnectionSettings>(std::move(new_settings)),
-      std::memory_order_release);
-
-  _reconfigure_requested.store(true, std::memory_order_release);
-}
-
-void PointreceiverPOP::ensureContextCreated() {
-  if (_pointreceiver_context) return;
-
-  pc::logger()->trace("ensureContextCreated: creating pointreceiver context");
-  _pointreceiver_context = pointreceiver_create_context();
-  if (_pointreceiver_context) {
-    pointreceiver_set_client_name(_pointreceiver_context, "touchdesigner");
-    pc::logger()->info("context created {}",
-                       static_cast<void *>(_pointreceiver_context));
+    s.connection.host = host_cstr;
   } else {
-    pc::logger()->error("ensureContextCreated: FAILED to create context");
+    s.connection.host = "127.0.0.1";
   }
+
+  s.connection.pointcloud_port =
+      static_cast<std::uint16_t>(inputs->getParInt(k_par_pointcloud_port));
+  s.connection.message_port =
+      static_cast<std::uint16_t>(inputs->getParInt(k_par_message_port));
+
+  s.active = (inputs->getParInt(k_par_active) != 0);
+
+  return s;
 }
 
-void PointreceiverPOP::ensureWorkerRunning() {
-  if (_worker_thread.joinable()) return;
+void PointreceiverPOP::syncGlobalSettings(const TD::OP_Inputs *inputs) {
+  auto &g = pr::td::global_config();
 
-  pc::logger()->info("starting worker thread");
-  _worker_thread = std::jthread([this](std::stop_token st) { workerMain(st); });
+  const std::uint32_t requested_cap = static_cast<std::uint32_t>(
+      inputs->getParInt(k_par_global_max_points_capacity));
+  const std::uint32_t requested_pool = static_cast<std::uint32_t>(
+      inputs->getParInt(k_par_global_frame_pool_size));
+
+  g.max_points_capacity.store(requested_cap, std::memory_order_relaxed);
+  g.frame_pool_size.store(requested_pool, std::memory_order_relaxed);
 }
 
-void PointreceiverPOP::stopWorker() {
-  if (_worker_thread.joinable()) {
-    pc::logger()->trace("stopWorker: request_stop + join");
-    _worker_thread.request_stop();
-    _worker_thread.join();
-  }
-  pc::logger()->info("worker thread stopped");
-}
-
-bool PointreceiverPOP::initialisePointreceiver(
-    const ConnectionSettings &settings) {
-  if (!_pointreceiver_context) {
-    pc::logger()->error("initialisePointreceiver: no context");
-    return false;
-  }
-
-  pc::logger()->trace("initialisePointreceiver: begin active={}",
-                      settings.active);
-
-  pointreceiver_stop_message_receiver(_pointreceiver_context);
-  pointreceiver_stop_point_receiver(_pointreceiver_context);
-
-  if (!settings.active) {
-    pc::logger()->trace(
-        "initialisePointreceiver: inactive -> receivers stopped");
-    return true;
-  }
-
-  const std::string pointcloud_endpoint =
-      make_tcp_endpoint(settings.host, settings.pointcloud_port);
-  const std::string message_endpoint =
-      make_tcp_endpoint(settings.host, settings.message_port);
-
-  pc::logger()->trace("initialisePointreceiver: pc='{}' msg='{}'",
-                      pointcloud_endpoint, message_endpoint);
-
-  const int pc_res = pointreceiver_start_point_receiver(
-      _pointreceiver_context, pointcloud_endpoint.c_str());
-  const int msg_res = pointreceiver_start_message_receiver(
-      _pointreceiver_context, message_endpoint.c_str());
-
-  pc::logger()->trace(
-      "initialisePointreceiver: start results pc_res={} msg_res={}", pc_res,
-      msg_res);
-  return (pc_res == 0) && (msg_res == 0);
-}
-
-void PointreceiverPOP::workerMain(std::stop_token stop_token) {
-  pc::logger()->trace("workerMain: enter this={} context={}",
-                      static_cast<void *>(this),
-                      static_cast<void *>(_pointreceiver_context));
-
-  ConnectionSettings applied = _cached_settings;
-  if (!initialisePointreceiver(applied)) {
-    pc::logger()->error(
-        "workerMain: unable to start pointreceiver (init failed)");
-    return;
-  }
-
-  // holds the last n frames we consider in the convert_ms mean value
-  constexpr std::size_t frame_ms_window_size = 120;
-  std::array<float, frame_ms_window_size> frame_ms_rolling_window{};
-  std::size_t frame_ms_rolling_write_index = 0;
-  std::size_t frame_ms_rolling_count = 0;
-  float frame_ms_rolling_sum = 0.0f;
-
-  while (!stop_token.stop_requested()) {
-    if (_reconfigure_requested.exchange(false, std::memory_order_acq_rel)) {
-      if (auto pending = _pending_settings.load(std::memory_order_acquire)) {
-        applied = *pending;
-        pc::logger()->trace(
-            "workerMain: applying reconfigure host='{}' pc_port={} "
-            "msg_port={} active={}",
-            applied.host, applied.pointcloud_port, applied.message_port,
-            applied.active);
-        const bool ok = initialisePointreceiver(applied);
-        pc::logger()->trace("workerMain: reconfigure initialise ok={}", ok);
-        _cached_settings = applied;
-      }
-    }
-
-    if (!_pointreceiver_context || !applied.active) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      continue;
-    }
-
-    pointreceiver_pointcloud_frame in_frame{};
-    const bool got =
-        pointreceiver_dequeue_point_cloud(_pointreceiver_context, &in_frame, 5);
-    if (!got) continue;
-
-    const int n = in_frame.point_count;
-    if (n <= 0 || !in_frame.positions || !in_frame.colours) {
-      pc::logger()->trace(
-          "workerMain: got frame but invalid n={} positions={} colours={}", n,
-          static_cast<const void *>(in_frame.positions),
-          static_cast<const void *>(in_frame.colours));
-      continue;
-    }
-
-    using namespace std::chrono;
-    const auto frame_dequeue_time = steady_clock::now();
-
-    SharedState &st = *_state;
-
-    const std::uint32_t cap = k_max_points_capacity;
-    const std::uint32_t num_points_in = static_cast<std::uint32_t>(n);
-    const std::uint32_t num_points =
-        (num_points_in <= cap) ? num_points_in : cap;
-
-    const auto *packed_pos =
-        static_cast<const bob::types::position *>(in_frame.positions);
-    const auto *packed_col =
-        static_cast<const bob::types::color *>(in_frame.colours);
-
-    SharedState::StagingSlot &out = *st.back_ptr;
-
-    float *pos_out = out.positions_xyz.data();
-    float *col_out = out.colours_rgba.data();
-    std::uint32_t *idx_out = out.indices.data();
-
-    for (std::uint32_t i = 0; i < num_points; ++i) {
-      const auto p = packed_pos[i];
-      pos_out[i * 3u + 0u] = static_cast<float>(p.x);
-      pos_out[i * 3u + 1u] = static_cast<float>(p.y);
-      pos_out[i * 3u + 2u] = static_cast<float>(p.z);
-
-      const auto c = packed_col[i];
-      col_out[i * 4u + 0u] = static_cast<float>(c.r) * (1.0f / 255.0f);
-      col_out[i * 4u + 1u] = static_cast<float>(c.g) * (1.0f / 255.0f);
-      col_out[i * 4u + 2u] = static_cast<float>(c.b) * (1.0f / 255.0f);
-      col_out[i * 4u + 3u] = static_cast<float>(c.a) * (1.0f / 255.0f);
-
-      idx_out[i] = i;
-    }
-
-    out.num_points = num_points;
-    const std::uint64_t seq =
-        _frames_received.fetch_add(1, std::memory_order_relaxed) + 1ull;
-    out.sequence = seq;
-
-    if ((seq % k_log_every_n_frames) == 0u) {
-      pc::logger()->trace(
-          "workerMain: publish seq={} num_points={} (in={} cap={})", seq,
-          num_points, num_points_in, cap);
-    }
-
-    SharedState::StagingSlot *previous_front =
-        st.front_ptr.exchange(st.back_ptr, std::memory_order_acq_rel);
-    st.back_ptr = previous_front;
-    st.has_new.store(true, std::memory_order_release);
-
-    const auto frame_processing_duration =
-        steady_clock::now() - frame_dequeue_time;
-    const float frame_ms =
-        duration<float, std::milli>(frame_processing_duration).count();
-
-    const float oldest_frame_ms =
-        frame_ms_rolling_window[frame_ms_rolling_write_index];
-
-    if (frame_ms_rolling_count < frame_ms_window_size) {
-      // window not full yet
-      frame_ms_rolling_count += 1;
-      frame_ms_rolling_sum += frame_ms;
-    } else {
-      // window full: replace old with new
-      frame_ms_rolling_sum += frame_ms - oldest_frame_ms;
-    }
-
-    frame_ms_rolling_window[frame_ms_rolling_write_index] = frame_ms;
-    frame_ms_rolling_write_index =
-        (frame_ms_rolling_write_index + 1) % frame_ms_window_size;
-
-    const float mean_frame_ms =
-        (frame_ms_rolling_count > 0)
-            ? (frame_ms_rolling_sum /
-               static_cast<float>(frame_ms_rolling_count))
-            : 0.0f;
-
-    _worker_frame_last_ms.store(frame_ms, std::memory_order_relaxed);
-    _worker_frame_avg_ms.store(mean_frame_ms, std::memory_order_relaxed);
-  }
-
-  pc::logger()->trace("workerMain: exit");
-
-  if (_pointreceiver_context) {
-    pc::logger()->trace("workerMain: shutdown stop receivers");
-    pointreceiver_stop_message_receiver(_pointreceiver_context);
-    pointreceiver_stop_point_receiver(_pointreceiver_context);
-  }
-}
-
-// Allocate (or re-allocate) POP buffers on the MAIN THREAD (inside execute()).
-// Also, validate mapping by calling getData() once; if it returns nullptr,
-// discard and re-create again. This specifically targets the failure you’re
-// seeing.
-void PointreceiverPOP::ensureMainThreadBuffersAllocated() {
-  if (!_state) return;
-
+void PointreceiverPOP::ensureMainThreadBuffersAllocated(
+    std::uint32_t required_capacity_points) {
   SharedState &st = *_state;
-  const std::uint32_t cap = k_max_points_capacity;
+
+  const std::uint32_t cap =
+      clamp_u32(required_capacity_points, k_min_points_capacity,
+                k_max_points_capacity_hard);
 
   auto allocate_handles = [&]() -> bool {
     const std::uint64_t pos_bytes =
@@ -559,60 +314,44 @@ void PointreceiverPOP::ensureMainThreadBuffersAllocated() {
         sizeof(TD::POP_TopologyInfo), TD::POP_BufferMode::ReadWrite);
 
     st.out.capacity_points = cap;
-
     return st.out.handles_valid();
   };
 
   auto mapping_ok = [&]() -> bool {
     if (!st.out.handles_valid()) return false;
-
-    // This is exactly what was failing for you:
-    // if these are nullptr, treat buffers as not actually ready.
     void *pos = st.out.position_attribute_buffer->getData(nullptr);
     void *col = st.out.colour_attribute_buffer->getData(nullptr);
     void *idx = st.out.index_buffer->getData(nullptr);
-
-    const bool ok = (pos != nullptr) && (col != nullptr) && (idx != nullptr);
-    if (!ok) {
-      pc::logger()->error(
-          "ensureMainThreadBuffersAllocated: mapping test failed pos={} "
-          "col={} idx={}",
-          pos, col, idx);
-    }
-    return ok;
+    return (pos != nullptr) && (col != nullptr) && (idx != nullptr);
   };
 
-  if (st.out.handles_valid() && mapping_ok()) { return; }
+  // Realloc if capacity changed or handles invalid
+  if (st.out.handles_valid() && st.out.capacity_points == cap && mapping_ok())
+    return;
 
-  pc::logger()->trace(
-      "ensureMainThreadBuffersAllocated: allocating cap={} (main thread)", cap);
-
-  // First attempt.
   bool ok = allocate_handles() && mapping_ok();
-
-  // One retry: some TD internals may only be ready once execute() is active.
   if (!ok) {
-    pc::logger()->warn(
-        "ensureMainThreadBuffersAllocated: retry allocate after mapping "
-        "failure");
-    ok = allocate_handles() && mapping_ok();
+    st.out.clear();
+    (void)(allocate_handles() && mapping_ok());
   }
-
-  pc::logger()->trace("ensureMainThreadBuffersAllocated: done ok={}", ok);
 }
 
 void PointreceiverPOP::outputLatestFrame(TD::POP_Output *output) {
   SharedState &st = *_state;
 
-  ensureMainThreadBuffersAllocated();
+  // Allocate per current global capacity (keeps POP buffers consistent with
+  // receiver cap)
+  const auto &g = pr::td::global_config();
+  const std::uint32_t desired_cap =
+      g.max_points_capacity.load(std::memory_order_relaxed);
+  ensureMainThreadBuffersAllocated(desired_cap);
+
   if (!st.out.handles_valid()) {
-    pc::logger()->warn("outputLatestFrame: output buffers not allocated/valid");
+    // nothing we can publish
     return;
   }
 
   auto publish_current = [&]() {
-    if (_last_published_num_points == 0) return;
-
     TD::POP_SetBufferInfo set_info{};
 
     // P
@@ -626,11 +365,10 @@ void PointreceiverPOP::outputLatestFrame(TD::POP_Output *output) {
       pos_info.qualifier = TD::POP_AttributeQualifier::None;
       pos_info.attribClass = TD::POP_AttributeClass::Point;
 
-      auto tmp = st.out.position_attribute_buffer;
-      output->setAttribute(&tmp, pos_info, set_info, nullptr);
+      output->setAttribute(&st.out.position_attribute_buffer, pos_info,
+                           set_info, nullptr);
     }
 
-    // Color
     {
       TD::POP_AttributeInfo col_info;
       col_info.name = "Color";
@@ -641,21 +379,33 @@ void PointreceiverPOP::outputLatestFrame(TD::POP_Output *output) {
       col_info.qualifier = TD::POP_AttributeQualifier::Color;
       col_info.attribClass = TD::POP_AttributeClass::Point;
 
-      auto tmp = st.out.colour_attribute_buffer;
-      output->setAttribute(&tmp, col_info, set_info, nullptr);
+      output->setAttribute(&st.out.colour_attribute_buffer, col_info, set_info,
+                           nullptr);
     }
 
-    // Index buffer
+    // Index
     {
       TD::POP_IndexBufferInfo index_info;
       index_info.type = TD::POP_IndexType::UInt32;
-
-      auto tmp = st.out.index_buffer;
-      output->setIndexBuffer(&tmp, index_info, set_info, nullptr);
+      output->setIndexBuffer(&st.out.index_buffer, index_info, set_info,
+                             nullptr);
     }
 
-    // Info buffers
+    // Info buffers (always publish, even when 0 points)
     {
+      if (auto *point_info = static_cast<TD::POP_PointInfo *>(
+              st.out.point_info_buffer->getData(nullptr))) {
+        std::memset(point_info, 0, sizeof(TD::POP_PointInfo));
+        point_info->numPoints = _last_published_num_points;
+      }
+
+      if (auto *topo_info = static_cast<TD::POP_TopologyInfo *>(
+              st.out.topo_info_buffer->getData(nullptr))) {
+        std::memset(topo_info, 0, sizeof(TD::POP_TopologyInfo));
+        topo_info->pointPrimitivesStartIndex = 0;
+        topo_info->pointPrimitivesCount = _last_published_num_points;
+      }
+
       TD::POP_InfoBuffers info_bufs;
       info_bufs.pointInfo = st.out.point_info_buffer;
       info_bufs.topoInfo = st.out.topo_info_buffer;
@@ -663,150 +413,147 @@ void PointreceiverPOP::outputLatestFrame(TD::POP_Output *output) {
     }
   };
 
-  const bool has_new = st.has_new.load(std::memory_order_acquire);
-  SharedState::StagingSlot *front =
-      st.front_ptr.load(std::memory_order_acquire);
+  // Default: publish whatever our last known count is (including 0)
+  if (!_connection_handle) {
+    _last_published_num_points = 0;
+    publish_current();
+    return;
+  }
 
-  const bool frame_ready = has_new && front && front->sequence != 0 &&
-                           front->sequence != _last_consumed_sequence;
+  pr::td::PointreceiverFrameView view{};
+  const bool got =
+      _connection_handle->try_get_latest_frame(_last_seen_sequence, view);
 
-  if (frame_ready) {
-    const std::uint32_t num_points = front->num_points;
+  if (!got || view.num_points == 0 ||
+      view.num_points > st.out.capacity_points) {
+    // If no new frame, keep publishing last known (does not silently drop to 0)
+    publish_current();
+    return;
+  }
 
-    if (num_points == 0 || num_points > st.out.capacity_points) {
-      pc::logger()->warn("outputLatestFrame: invalid num_points={} cap={}",
-                         num_points, st.out.capacity_points);
+  // Update state regardless of info-buffer mapping success
+  _last_seen_sequence = view.sequence;
+  _last_published_num_points = view.num_points;
+
+  float *pos_out =
+      static_cast<float *>(st.out.position_attribute_buffer->getData(nullptr));
+  float *col_out =
+      static_cast<float *>(st.out.colour_attribute_buffer->getData(nullptr));
+  std::uint32_t *idx_out =
+      static_cast<std::uint32_t *>(st.out.index_buffer->getData(nullptr));
+
+  if (!pos_out || !col_out || !idx_out) {
+    // Realloc once and retry mapping
+    st.out.clear();
+    ensureMainThreadBuffersAllocated(desired_cap);
+
+    pos_out = st.out.position_attribute_buffer
+                  ? static_cast<float *>(
+                        st.out.position_attribute_buffer->getData(nullptr))
+                  : nullptr;
+    col_out = st.out.colour_attribute_buffer
+                  ? static_cast<float *>(
+                        st.out.colour_attribute_buffer->getData(nullptr))
+                  : nullptr;
+    idx_out = st.out.index_buffer ? static_cast<std::uint32_t *>(
+                                        st.out.index_buffer->getData(nullptr))
+                                  : nullptr;
+
+    if (!pos_out || !col_out || !idx_out) {
+      // Don’t force count to 0 here — just publish whatever we last had
       publish_current();
       return;
     }
-
-    float *pos_out = static_cast<float *>(
-        st.out.position_attribute_buffer->getData(nullptr));
-    float *col_out =
-        static_cast<float *>(st.out.colour_attribute_buffer->getData(nullptr));
-    std::uint32_t *idx_out =
-        static_cast<std::uint32_t *>(st.out.index_buffer->getData(nullptr));
-
-    if (!pos_out || !col_out || !idx_out) {
-      // try realloc once (same as before)
-      st.out.clear();
-      ensureMainThreadBuffersAllocated();
-
-      pos_out = st.out.position_attribute_buffer
-                    ? static_cast<float *>(
-                          st.out.position_attribute_buffer->getData(nullptr))
-                    : nullptr;
-      col_out = st.out.colour_attribute_buffer
-                    ? static_cast<float *>(
-                          st.out.colour_attribute_buffer->getData(nullptr))
-                    : nullptr;
-      idx_out = st.out.index_buffer ? static_cast<std::uint32_t *>(
-                                          st.out.index_buffer->getData(nullptr))
-                                    : nullptr;
-
-      if (!pos_out || !col_out || !idx_out) {
-        publish_current();
-        return;
-      }
-    }
-
-    // memcpy, update info buffers, update cached counts
-    const std::size_t pos_count = static_cast<std::size_t>(num_points) * 3u;
-    const std::size_t col_count = static_cast<std::size_t>(num_points) * 4u;
-    const std::size_t idx_count = static_cast<std::size_t>(num_points);
-
-    std::memcpy(pos_out, front->positions_xyz.data(),
-                pos_count * sizeof(float));
-    std::memcpy(col_out, front->colours_rgba.data(), col_count * sizeof(float));
-    std::memcpy(idx_out, front->indices.data(),
-                idx_count * sizeof(std::uint32_t));
-
-    auto *point_info = static_cast<TD::POP_PointInfo *>(
-        st.out.point_info_buffer->getData(nullptr));
-    auto *topo_info = static_cast<TD::POP_TopologyInfo *>(
-        st.out.topo_info_buffer->getData(nullptr));
-
-    if (point_info && topo_info) {
-      std::memset(point_info, 0, sizeof(TD::POP_PointInfo));
-      std::memset(topo_info, 0, sizeof(TD::POP_TopologyInfo));
-      point_info->numPoints = num_points;
-      topo_info->pointPrimitivesStartIndex = 0;
-      topo_info->pointPrimitivesCount = num_points;
-
-      _last_published_num_points = num_points;
-      _last_consumed_sequence = front->sequence;
-      st.has_new.store(false, std::memory_order_release);
-    }
   }
+
+  const std::size_t pos_count = static_cast<std::size_t>(view.num_points) * 3u;
+  const std::size_t col_count = static_cast<std::size_t>(view.num_points) * 4u;
+  const std::size_t idx_count = static_cast<std::size_t>(view.num_points);
+
+  std::memcpy(pos_out, view.positions_xyz.data(), pos_count * sizeof(float));
+  std::memcpy(col_out, view.colours_rgba.data(), col_count * sizeof(float));
+  std::memcpy(idx_out, view.indices.data(), idx_count * sizeof(std::uint32_t));
 
   publish_current();
 }
 
 void PointreceiverPOP::execute(TD::POP_Output *output,
-                               const TD::OP_Inputs *inputs,
-                               void * /*reserved*/) {
+                               const TD::OP_Inputs *inputs, void *) {
   ++_execute_count;
 
-  ensureContextCreated();
-  ensureWorkerRunning();
+  syncGlobalSettings(inputs);
 
-  ensureMainThreadBuffersAllocated();
-
-  const ConnectionSettings new_settings = readSettings(inputs);
+  const OperatorSettings settings = readSettings(inputs);
   const bool reconnect_pulse = (inputs->getParInt(k_par_reconnect) != 0);
 
-  if (reconnect_pulse || (new_settings != _cached_settings)) {
-    pc::logger()->trace(
-        "execute: reconfigure requested reconnect_pulse={} host='{}' "
-        "pc_port={} msg_port={} active={}",
-        reconnect_pulse, new_settings.host, new_settings.pointcloud_port,
-        new_settings.message_port, new_settings.active);
-    _cached_settings = new_settings;
-    requestReconfigure(new_settings);
+  const bool config_changed = (settings.connection != _cached_connection);
+  const bool active_changed = (settings.active != _cached_active);
+
+  _cached_connection = settings.connection;
+  _cached_active = settings.active;
+
+  if (!settings.active) {
+    _connection_handle.reset();
+    _last_seen_sequence = 0;
+    _last_published_num_points = 0;
+    outputLatestFrame(output);
+    return;
+  }
+
+  if (!_connection_handle || reconnect_pulse || config_changed ||
+      active_changed) {
+    _connection_handle =
+        pr::td::PointreceiverConnectionRegistry::instance().acquire(
+            settings.connection);
+    _last_seen_sequence = 0;
+    // keep last_published_num_points as-is; outputLatestFrame will refresh
   }
 
   outputLatestFrame(output);
 }
 
-int32_t PointreceiverPOP::getNumInfoCHOPChans(void * /*reserved*/) {
-  return 5; // executeCount, framesReceived, lastSequence, workerFrameLastMs,
-            // workerFrameAvgMs
-}
+int32_t PointreceiverPOP::getNumInfoCHOPChans(void *) { return 5; }
 
 void PointreceiverPOP::getInfoCHOPChan(int32_t index, TD::OP_InfoCHOPChan *chan,
-                                       void * /*reserved*/) {
+                                       void *) {
   if (!chan) return;
 
   if (index == 0) {
     chan->name->setString("executeCount");
     chan->value = static_cast<float>(_execute_count);
-  } else if (index == 1) {
+    return;
+  }
+
+  const auto stats = _connection_handle
+                         ? _connection_handle->stats()
+                         : pr::td::PointreceiverConnectionHandle::Stats{};
+
+  if (index == 1) {
     chan->name->setString("framesReceived");
-    chan->value =
-        static_cast<float>(_frames_received.load(std::memory_order_relaxed));
+    chan->value = static_cast<float>(stats.frames_received);
   } else if (index == 2) {
     chan->name->setString("lastSequence");
-    chan->value = static_cast<float>(_last_consumed_sequence);
+    chan->value = static_cast<float>(_last_seen_sequence);
   } else if (index == 3) {
     chan->name->setString("workerFrameLastMs");
-    chan->value = _worker_frame_last_ms.load(std::memory_order_relaxed);
+    chan->value = stats.worker_last_ms;
   } else if (index == 4) {
     chan->name->setString("workerFrameAvgMs");
-    chan->value = _worker_frame_avg_ms.load(std::memory_order_relaxed);
+    chan->value = stats.worker_avg_ms;
   }
 }
 
 bool PointreceiverPOP::getInfoDATSize(TD::OP_InfoDATSize *info_size, void *) {
   if (!info_size) return false;
-  info_size->rows = 7;
+  info_size->rows = 6;
   info_size->cols = 2;
   info_size->byColumn = false;
   return true;
 }
 
-void PointreceiverPOP::getInfoDATEntries(int32_t index, int32_t /*n_entries*/,
+void PointreceiverPOP::getInfoDATEntries(int32_t index, int32_t,
                                          TD::OP_InfoDATEntries *entries,
-                                         void * /*reserved*/) {
+                                         void *) {
   if (!entries || !entries->values || !entries->values[0] ||
       !entries->values[1])
     return;
@@ -821,46 +568,29 @@ void PointreceiverPOP::getInfoDATEntries(int32_t index, int32_t /*n_entries*/,
     entries->values[1]->setString(val);
   };
 
+  const auto stats = _connection_handle
+                         ? _connection_handle->stats()
+                         : pr::td::PointreceiverConnectionHandle::Stats{};
+
   switch (index) {
-  case 0: {
+  case 0:
     set_row("executeCount", std::to_string(_execute_count).c_str());
     break;
-  }
-  case 1: {
-    set_row("framesReceived",
-            std::to_string(_frames_received.load(std::memory_order_relaxed))
-                .c_str());
+  case 1:
+    set_row("framesReceived", std::to_string(stats.frames_received).c_str());
     break;
-  }
-  case 2: {
-    set_row("lastSequence", std::to_string(_last_consumed_sequence).c_str());
+  case 2:
+    set_row("lastSequence", std::to_string(_last_seen_sequence).c_str());
     break;
-  }
-  case 3: {
-    set_row("host", _cached_settings.host.c_str());
-    break;
-  }
+  case 3: set_row("host", _cached_connection.host.c_str()); break;
   case 4: {
     const std::string s = std::format("pointcloud={}, message={}",
-                                      _cached_settings.pointcloud_port,
-                                      _cached_settings.message_port);
+                                      _cached_connection.pointcloud_port,
+                                      _cached_connection.message_port);
     set_row("ports", s.c_str());
     break;
   }
-  case 5: {
-    set_row("active", _cached_settings.active ? "true" : "false");
-    break;
-  }
-  case 6: {
-    auto last_ms = _worker_frame_last_ms.load(std::memory_order_relaxed);
-    set_row("workerFrameLastMs", std::to_string(last_ms).c_str());
-    break;
-  }
-  case 7: {
-    auto avg_ms = _worker_frame_avg_ms.load(std::memory_order_relaxed);
-    set_row("workerFrameAvgMs", std::to_string(avg_ms).c_str());
-    break;
-  }
+  case 5: set_row("active", _cached_active ? "true" : "false"); break;
   default: break;
   }
 }

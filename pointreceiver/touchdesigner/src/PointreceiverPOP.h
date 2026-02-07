@@ -15,16 +15,12 @@
 #pragma once
 
 #include "POP_CPlusPlusBase.h"
+#include "PointreceiverPlugin.h"
 
-#include <pointreceiver.h>
-
-#include <atomic>
 #include <cstdint>
 #include <memory>
-#include <string>
-#include <thread>
 
-class PointreceiverPOP final : public TD::POP_CPlusPlusBase {
+class PointreceiverPOP : public TD::POP_CPlusPlusBase {
 public:
   PointreceiverPOP(const TD::OP_NodeInfo *node_info, TD::POP_Context *context);
   ~PointreceiverPOP() override;
@@ -47,38 +43,15 @@ public:
                          void *reserved) override;
 
 private:
-  struct ConnectionSettings {
-    std::string host{"127.0.0.1"};
-    std::uint16_t pointcloud_port{9992};
-    std::uint16_t message_port{9002};
-    bool active{true};
-
-    bool operator==(const ConnectionSettings &other) const {
-      return host == other.host && pointcloud_port == other.pointcloud_port &&
-             message_port == other.message_port && active == other.active;
-    }
-    bool operator!=(const ConnectionSettings &other) const {
-      return !(*this == other);
-    }
+  struct OperatorSettings {
+    pr::td::PointreceiverConnectionConfig connection;
+    bool active = true;
   };
 
-  ConnectionSettings readSettings(const TD::OP_Inputs *inputs) const;
+  OperatorSettings readSettings(const TD::OP_Inputs *inputs) const;
 
-  void requestReconfigure(ConnectionSettings new_settings);
-
-  // pointreceiver C API lifetime
-  void ensureContextCreated();
-
-  // Worker thread lifecycle
-  void ensureWorkerRunning();
-  void stopWorker();
-  void workerMain(std::stop_token stop_token);
-
-  // Worker thread only
-  bool initialisePointreceiver(const ConnectionSettings &settings);
-
-  // TD thread only
-  void ensureMainThreadBuffersAllocated();
+  void syncGlobalSettings(const TD::OP_Inputs *inputs);
+  void ensureMainThreadBuffersAllocated(std::uint32_t required_capacity_points);
   void outputLatestFrame(TD::POP_Output *output);
 
 private:
@@ -86,20 +59,14 @@ private:
   TD::POP_Context *const _context = nullptr;
 
   int32_t _execute_count = 0;
-  std::atomic<std::uint64_t> _frames_received{0};
-  std::uint64_t _last_consumed_sequence = 0;
+
+  pr::td::PointreceiverConnectionConfig _cached_connection{};
+  bool _cached_active = true;
+
+  std::shared_ptr<pr::td::PointreceiverConnectionHandle> _connection_handle;
+
+  std::uint64_t _last_seen_sequence = 0;
   std::uint32_t _last_published_num_points = 0;
-
-  std::atomic<bool> _reconfigure_requested{false};
-  std::atomic<std::shared_ptr<const ConnectionSettings>> _pending_settings;
-  ConnectionSettings _cached_settings{};
-
-  std::atomic<float> _worker_frame_last_ms{0.0f};
-  std::atomic<float> _worker_frame_avg_ms{0.0f};
-
-  pointreceiver_context *_pointreceiver_context = nullptr;
-
-  std::jthread _worker_thread;
 
   struct SharedState;
   std::unique_ptr<SharedState> _state;
