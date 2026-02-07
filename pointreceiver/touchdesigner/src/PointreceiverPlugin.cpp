@@ -195,9 +195,9 @@ struct ConnectionState {
         pos_out[i * 3u + 2u] = static_cast<float>(p.z);
 
         const auto c = packed_col[i];
-        col_out[i * 4u + 0u] = static_cast<float>(c.r) * (1.0f / 255.0f);
+        col_out[i * 4u + 0u] = static_cast<float>(c.b) * (1.0f / 255.0f);
         col_out[i * 4u + 1u] = static_cast<float>(c.g) * (1.0f / 255.0f);
-        col_out[i * 4u + 2u] = static_cast<float>(c.b) * (1.0f / 255.0f);
+        col_out[i * 4u + 2u] = static_cast<float>(c.r) * (1.0f / 255.0f);
         col_out[i * 4u + 3u] = static_cast<float>(c.a) * (1.0f / 255.0f);
 
         idx_out[i] = i;
