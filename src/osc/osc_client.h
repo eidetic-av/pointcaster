@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../logger.h"
+#include "../logger/logger.h"
 #include "../publisher/publishable_traits.h"
 #include "../publisher/publisher_utils.h"
 #include "../string_utils.h"
@@ -67,7 +67,7 @@ public:
           {.address = publisher::construct_topic_string(topic, topic_nodes),
            .value = msg});
     } else {
-      pc::logger->error(
+      pc::logger()->error(
           "Attempting to publish an unimplemented type through OSC ({})",
           typeid(T).name());
     }

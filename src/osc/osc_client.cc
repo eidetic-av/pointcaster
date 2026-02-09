@@ -1,6 +1,6 @@
 #include "osc_client.h"
 #include "../gui/widgets.h"
-#include "../logger.h"
+#include "../logger/logger.h"
 #include "../parameters.h"
 #include "../publisher/publisher.h"
 #include "../string_utils.h"
@@ -29,19 +29,25 @@ void OscClient::send_messages(std::stop_token st) {
   using namespace std::chrono_literals;
 
   static constexpr auto thread_wait_time = 50ms;
-  lo::Address osc_client("localhost", "9000");
+  lo::Address osc_client(_config.address, _config.port);
 
   while (!st.stop_requested()) {
     try {
       OscMessage msg;
       while (_messages_to_publish.wait_dequeue_timed(msg, thread_wait_time)) {
-        osc_client.send(msg.address, msg.value);
+        auto &address = msg.address;
+        if (address.empty()) {
+          pc::logger()->error("empty OSC message address");
+          return;
+        }
+        // ensure that the osc address starts with a leading forward slash
+        if (address.front() != '/') { address.insert(address.begin(), '/'); }
+        osc_client.send(address, msg.value);
       }
     } catch (const std::exception &e) {
-      pc::logger->error("OSC client send failed: {}", e.what());
-    }
-    catch (...) { 
-      pc::logger->error("OSC client send failed with unknown exception");
+      pc::logger()->error("OSC client send failed: {}", e.what());
+    } catch (...) {
+      pc::logger()->error("OSC client send failed with unknown exception");
     }
   }
 }
