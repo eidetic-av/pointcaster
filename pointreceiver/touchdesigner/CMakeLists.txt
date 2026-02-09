@@ -1,52 +1,107 @@
-option(BUILD_TOUCHDESIGNER_LIB "Build dll for Pointreceiver lib integration in Derivative TouchDesigner" ON)
+option(BUILD_TOUCHDESIGNER_LIB "Build TouchDesigner POP/CHOP plugins" ON)
 
 if(NOT BUILD_TOUCHDESIGNER_LIB)
     return()
 endif()
 
-add_library(PointreceiverForTouchDesigner MODULE
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/PointreceiverPlugin.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/PointreceiverPOP.cpp"
-)
-
-target_compile_features(PointreceiverForTouchDesigner PRIVATE cxx_std_23)
-target_include_directories(PointreceiverForTouchDesigner PRIVATE 
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    "${CMAKE_SOURCE_DIR}/include"
-    # TODO move logger to public include directory
-    "${CMAKE_SOURCE_DIR}/src/logger"
-)
-
-# no dlls of any config should not have a lib prefix
-set_target_properties(PointreceiverForTouchDesigner PROPERTIES PREFIX "")
-
-set_property(TARGET PointreceiverForTouchDesigner PROPERTY
-    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL"
-)
-target_compile_options(PointreceiverForTouchDesigner PRIVATE 
-# TODO what are these flags? it was from the POP sample vcxproject
-    /EHsc
-    # utf-8 needed for pc::logger logging
-    /utf-8
-)
-
-# TODO wont be necessary when logger comes from a lib
-# when its merged from qt branch
 find_package(spdlog CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 
-target_link_libraries(PointreceiverForTouchDesigner PRIVATE
-    pointreceiver
-    bob::pointclouds
-    # TODO this should link to pointcaster::logger 
-    # lib here instead of spdlog
-    spdlog::spdlog fmt::fmt
-)
-
-# place the touchdesigner DLL next to pointreceiver.dll
 set(TOUCHDESIGNER_LIB_OUTPUT_DIR "$<TARGET_FILE_DIR:pointreceiver>")
 
-set_target_properties(PointreceiverForTouchDesigner PROPERTIES
+# Core shared DLL (owns singletons, registries, threads, etc.)
+add_library(PointreceiverTDCore SHARED
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/PointreceiverPlugin.cpp"
+)
+
+# export all symbols so POP/CHOP can link without declspecs
+set_target_properties(PointreceiverTDCore PROPERTIES
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+)
+
+target_compile_features(PointreceiverTDCore PRIVATE cxx_std_23)
+
+target_include_directories(PointreceiverTDCore PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/src/logger"
+)
+
+target_compile_options(PointreceiverTDCore PRIVATE
+    /EHsc
+    /utf-8
+)
+
+target_link_libraries(PointreceiverTDCore
+    PRIVATE
+    pointreceiver
+    bob::pointclouds
+# TODO i think PUBLIC is only necessary here because the logger isnt a library like it is in the qt branch
+    PUBLIC 
+    spdlog::spdlog
+    fmt::fmt
+)
+
+set_target_properties(PointreceiverTDCore PROPERTIES
+    PREFIX ""
+    RUNTIME_OUTPUT_DIRECTORY "${TOUCHDESIGNER_LIB_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TOUCHDESIGNER_LIB_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TOUCHDESIGNER_LIB_OUTPUT_DIR}"
+)
+
+# POP plugin DLL
+add_library(PointreceiverCloudInPOP MODULE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/PointreceiverCloudInPOP.cpp"
+)
+
+target_compile_features(PointreceiverCloudInPOP PRIVATE cxx_std_23)
+
+target_include_directories(PointreceiverCloudInPOP PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/src/logger"
+)
+
+target_compile_options(PointreceiverCloudInPOP PRIVATE
+    /EHsc
+    /utf-8
+)
+
+target_link_libraries(PointreceiverCloudInPOP PRIVATE
+    PointreceiverTDCore
+)
+
+set_target_properties(PointreceiverCloudInPOP PROPERTIES
+    PREFIX ""
+    RUNTIME_OUTPUT_DIRECTORY "${TOUCHDESIGNER_LIB_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TOUCHDESIGNER_LIB_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TOUCHDESIGNER_LIB_OUTPUT_DIR}"
+)
+
+# CHOP plugin DLL
+add_library(PointreceiverMessageInCHOP MODULE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/PointreceiverMessageInCHOP.cpp"
+)
+
+target_compile_features(PointreceiverMessageInCHOP PRIVATE cxx_std_23)
+
+target_include_directories(PointreceiverMessageInCHOP PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/src/logger"
+)
+
+target_compile_options(PointreceiverMessageInCHOP PRIVATE
+    /EHsc
+    /utf-8
+)
+
+target_link_libraries(PointreceiverMessageInCHOP PRIVATE
+    PointreceiverTDCore
+)
+
+set_target_properties(PointreceiverMessageInCHOP PROPERTIES
+    PREFIX ""
     RUNTIME_OUTPUT_DIRECTORY "${TOUCHDESIGNER_LIB_OUTPUT_DIR}"
     RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TOUCHDESIGNER_LIB_OUTPUT_DIR}"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TOUCHDESIGNER_LIB_OUTPUT_DIR}"

@@ -6,6 +6,8 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
+#include <variant>
 #include <vector>
 
 namespace pr::td {
@@ -29,8 +31,7 @@ struct PointreceiverConnectionConfigHash {
 };
 
 // Process-wide config shared across all instances.
-// TODO this doesn't hot-reload, need to remove POPs and recreate to have these
-// as new creation args
+// TODO: these are only read once per connection at construction time...
 struct PointreceiverGlobalConfig {
   std::atomic<std::uint32_t> max_points_capacity{500'000};
   std::atomic<std::uint32_t> frame_pool_size{4};
@@ -38,6 +39,10 @@ struct PointreceiverGlobalConfig {
 
 // Accessor for process-wide global config.
 PointreceiverGlobalConfig &global_config() noexcept;
+
+// ---------------------------
+// Point cloud streams
+// ---------------------------
 
 // Backing storage for one published point-cloud frame.
 // Reader code pins lifetime by holding a shared_ptr to this object.
@@ -73,6 +78,89 @@ private:
   std::shared_ptr<const PointreceiverPointCloudFrame> _frame;
 };
 
+// ---------------------------
+// Messages
+// ---------------------------
+
+struct PointreceiverFloat2 {
+  float x = 0.0f;
+  float y = 0.0f;
+};
+
+struct PointreceiverFloat3 {
+  float x = 0.0f;
+  float y = 0.0f;
+  float z = 0.0f;
+};
+
+struct PointreceiverFloat4 {
+  float x = 0.0f;
+  float y = 0.0f;
+  float z = 0.0f;
+  float w = 0.0f;
+};
+
+struct PointreceiverAabb {
+  float min[3]{0.0f, 0.0f, 0.0f};
+  float max[3]{0.0f, 0.0f, 0.0f};
+};
+
+struct PointreceiverEndpointUpdate {
+  std::size_t port = 0;
+  bool active = false;
+};
+
+using PointreceiverFloat2List = std::vector<PointreceiverFloat2>;
+using PointreceiverFloat3List = std::vector<PointreceiverFloat3>;
+using PointreceiverFloat4List = std::vector<PointreceiverFloat4>;
+using PointreceiverAabbList = std::vector<PointreceiverAabb>;
+using PointreceiverContour = std::vector<PointreceiverFloat2>;
+using PointreceiverContoursList = std::vector<PointreceiverContour>;
+
+// “Signal-only” message types (Connected, Heartbeat, etc.) can be represented
+// as a simple tag, while parameter updates carry a typed payload.
+enum class PointreceiverMessageSignal {
+  Unknown = 0,
+  Connected,
+  ClientHeartbeat,
+  ClientHeartbeatResponse,
+  ParameterRequest,
+};
+
+// Payload for parameter updates (and endpoint updates).
+using PointreceiverMessageValue =
+    std::variant<std::monostate,             // no payload / not applicable
+                 PointreceiverMessageSignal, // signal-only message
+                 float, int, PointreceiverFloat2, PointreceiverFloat3,
+                 PointreceiverFloat4, PointreceiverFloat2List,
+                 PointreceiverFloat3List, PointreceiverFloat4List,
+                 PointreceiverAabbList, PointreceiverContoursList,
+                 PointreceiverEndpointUpdate>;
+
+struct PointreceiverMessageValueView {
+  std::uint64_t revision = 0;
+  std::string_view id; // valid while this view lives (it holds shared_ptr)
+  const PointreceiverMessageValue *value = nullptr;
+
+  void reset() noexcept {
+    revision = 0;
+    id = {};
+    value = nullptr;
+    _value.reset();
+    _id_storage.reset();
+  }
+
+private:
+  friend class PointreceiverConnectionHandle;
+  // Pin lifetime of payload and id storage.
+  std::shared_ptr<const PointreceiverMessageValue> _value;
+  std::shared_ptr<const std::string> _id_storage;
+};
+
+// ---------------------------
+// Connection handle + registry
+// ---------------------------
+
 class PointreceiverConnectionHandle
     : public std::enable_shared_from_this<PointreceiverConnectionHandle> {
 public:
@@ -82,15 +170,31 @@ public:
 
   const PointreceiverConnectionConfig &config() const noexcept;
 
+  // Pointclouds
   bool try_get_latest_frame(std::uint64_t last_seen_sequence,
                             PointreceiverFrameView &out_view) const noexcept;
 
   std::uint64_t latest_sequence() const noexcept;
 
+  // Messages
+  // - returns false if id not known or no newer revision since
+  // last_seen_revision
+  bool try_get_latest_message(std::string_view id,
+                              std::uint64_t last_seen_revision,
+                              PointreceiverMessageValueView &out_view) const;
+
+  std::vector<std::string> known_message_ids() const;
+
   struct Stats {
-    std::uint64_t frames_received = 0;
-    float worker_last_ms = 0.0f;
-    float worker_avg_ms = 0.0f;
+    // Pointcloud worker stats
+    std::uint64_t pointcloud_frames_received = 0;
+    float pointcloud_worker_last_ms = 0.0f;
+    float pointcloud_worker_avg_ms = 0.0f;
+
+    // Message worker stats
+    std::uint64_t messages_received = 0;
+    float message_worker_last_ms = 0.0f;
+    float message_worker_avg_ms = 0.0f;
   };
 
   Stats stats() const noexcept;

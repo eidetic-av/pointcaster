@@ -12,7 +12,7 @@
  * prior written permission from Derivative.
  */
 
-#include "PointreceiverPOP.h"
+#include "PointreceiverCloudInPOP.h"
 
 #include <assert.h>
 #include <cstdint>
@@ -56,7 +56,7 @@ static std::uint32_t clamp_u32(std::uint32_t v, std::uint32_t lo,
 
 } // namespace
 
-struct PointreceiverPOP::SharedState {
+struct PointreceiverCloudInPOP::SharedState {
   struct OutputBuffers {
     TD::OP_SmartRef<TD::POP_Buffer> position_attribute_buffer;
     TD::OP_SmartRef<TD::POP_Buffer> colour_attribute_buffer;
@@ -106,38 +106,38 @@ DLLEXPORT void FillPOPPluginInfo(TD::POP_PluginInfo *info) {
 
 DLLEXPORT TD::POP_CPlusPlusBase *CreatePOPInstance(const TD::OP_NodeInfo *info,
                                                    TD::POP_Context *context) {
-  return new PointreceiverPOP(info, context);
+  return new PointreceiverCloudInPOP(info, context);
 }
 
 DLLEXPORT void DestroyPOPInstance(TD::POP_CPlusPlusBase *instance) {
-  delete static_cast<PointreceiverPOP *>(instance);
+  delete static_cast<PointreceiverCloudInPOP *>(instance);
 }
 
 } // extern "C"
 
-PointreceiverPOP::PointreceiverPOP(const TD::OP_NodeInfo *node_info,
+PointreceiverCloudInPOP::PointreceiverCloudInPOP(const TD::OP_NodeInfo *node_info,
                                    TD::POP_Context *context)
     : _node_info(node_info), _context(context),
       _state(std::make_unique<SharedState>()) {
-  pc::enable_file_logging("PointreceiverPOP");
+  pc::enable_file_logging("PointreceiverCloudInPOP");
   pc::logger()->trace(
       "CTOR this={} node_info={} context={}", static_cast<void *>(this),
       static_cast<const void *>(node_info), static_cast<void *>(context));
 }
 
-PointreceiverPOP::~PointreceiverPOP() {
+PointreceiverCloudInPOP::~PointreceiverCloudInPOP() {
   pc::logger()->trace("DTOR begin this={}", static_cast<void *>(this));
   _connection_handle.reset();
   _state.reset();
   pc::logger()->trace("DTOR end this={}", static_cast<void *>(this));
 }
 
-void PointreceiverPOP::getGeneralInfo(TD::POP_GeneralInfo *general_info,
+void PointreceiverCloudInPOP::getGeneralInfo(TD::POP_GeneralInfo *general_info,
                                       const TD::OP_Inputs *, void *) {
   general_info->cookEveryFrameIfAsked = true;
 }
 
-void PointreceiverPOP::setupParameters(TD::OP_ParameterManager *manager,
+void PointreceiverCloudInPOP::setupParameters(TD::OP_ParameterManager *manager,
                                        void *) {
   // Host
   {
@@ -244,8 +244,8 @@ void PointreceiverPOP::setupParameters(TD::OP_ParameterManager *manager,
   }
 }
 
-PointreceiverPOP::OperatorSettings
-PointreceiverPOP::readSettings(const TD::OP_Inputs *inputs) const {
+PointreceiverCloudInPOP::OperatorSettings
+PointreceiverCloudInPOP::readSettings(const TD::OP_Inputs *inputs) const {
   OperatorSettings s{};
 
   if (const char *host_cstr = inputs->getParString(k_par_host);
@@ -265,7 +265,7 @@ PointreceiverPOP::readSettings(const TD::OP_Inputs *inputs) const {
   return s;
 }
 
-void PointreceiverPOP::syncGlobalSettings(const TD::OP_Inputs *inputs) {
+void PointreceiverCloudInPOP::syncGlobalSettings(const TD::OP_Inputs *inputs) {
   auto &g = pr::td::global_config();
 
   const std::uint32_t requested_cap = static_cast<std::uint32_t>(
@@ -277,7 +277,7 @@ void PointreceiverPOP::syncGlobalSettings(const TD::OP_Inputs *inputs) {
   g.frame_pool_size.store(requested_pool, std::memory_order_relaxed);
 }
 
-void PointreceiverPOP::ensureMainThreadBuffersAllocated(
+void PointreceiverCloudInPOP::ensureMainThreadBuffersAllocated(
     std::uint32_t required_capacity_points) {
   SharedState &st = *_state;
 
@@ -336,7 +336,7 @@ void PointreceiverPOP::ensureMainThreadBuffersAllocated(
   }
 }
 
-void PointreceiverPOP::outputLatestFrame(TD::POP_Output *output) {
+void PointreceiverCloudInPOP::outputLatestFrame(TD::POP_Output *output) {
   SharedState &st = *_state;
 
   // Allocate per current global capacity (keeps POP buffers consistent with
@@ -477,7 +477,7 @@ void PointreceiverPOP::outputLatestFrame(TD::POP_Output *output) {
   publish_current();
 }
 
-void PointreceiverPOP::execute(TD::POP_Output *output,
+void PointreceiverCloudInPOP::execute(TD::POP_Output *output,
                                const TD::OP_Inputs *inputs, void *) {
   ++_execute_count;
 
@@ -512,9 +512,9 @@ void PointreceiverPOP::execute(TD::POP_Output *output,
   outputLatestFrame(output);
 }
 
-int32_t PointreceiverPOP::getNumInfoCHOPChans(void *) { return 5; }
+int32_t PointreceiverCloudInPOP::getNumInfoCHOPChans(void *) { return 5; }
 
-void PointreceiverPOP::getInfoCHOPChan(int32_t index, TD::OP_InfoCHOPChan *chan,
+void PointreceiverCloudInPOP::getInfoCHOPChan(int32_t index, TD::OP_InfoCHOPChan *chan,
                                        void *) {
   if (!chan) return;
 
@@ -530,20 +530,20 @@ void PointreceiverPOP::getInfoCHOPChan(int32_t index, TD::OP_InfoCHOPChan *chan,
 
   if (index == 1) {
     chan->name->setString("framesReceived");
-    chan->value = static_cast<float>(stats.frames_received);
+    chan->value = static_cast<float>(stats.pointcloud_frames_received);
   } else if (index == 2) {
     chan->name->setString("lastSequence");
     chan->value = static_cast<float>(_last_seen_sequence);
   } else if (index == 3) {
     chan->name->setString("workerFrameLastMs");
-    chan->value = stats.worker_last_ms;
+    chan->value = stats.pointcloud_worker_last_ms;
   } else if (index == 4) {
     chan->name->setString("workerFrameAvgMs");
-    chan->value = stats.worker_avg_ms;
+    chan->value = stats.pointcloud_worker_avg_ms;
   }
 }
 
-bool PointreceiverPOP::getInfoDATSize(TD::OP_InfoDATSize *info_size, void *) {
+bool PointreceiverCloudInPOP::getInfoDATSize(TD::OP_InfoDATSize *info_size, void *) {
   if (!info_size) return false;
   info_size->rows = 6;
   info_size->cols = 2;
@@ -551,7 +551,7 @@ bool PointreceiverPOP::getInfoDATSize(TD::OP_InfoDATSize *info_size, void *) {
   return true;
 }
 
-void PointreceiverPOP::getInfoDATEntries(int32_t index, int32_t,
+void PointreceiverCloudInPOP::getInfoDATEntries(int32_t index, int32_t,
                                          TD::OP_InfoDATEntries *entries,
                                          void *) {
   if (!entries || !entries->values || !entries->values[0] ||
@@ -577,7 +577,7 @@ void PointreceiverPOP::getInfoDATEntries(int32_t index, int32_t,
     set_row("executeCount", std::to_string(_execute_count).c_str());
     break;
   case 1:
-    set_row("framesReceived", std::to_string(stats.frames_received).c_str());
+    set_row("framesReceived", std::to_string(stats.pointcloud_frames_received).c_str());
     break;
   case 2:
     set_row("lastSequence", std::to_string(_last_seen_sequence).c_str());
