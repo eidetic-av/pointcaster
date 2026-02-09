@@ -1,4 +1,4 @@
-#include "../logger.h"
+#include "../logger/logger.h"
 #include "../math.h"
 #include "../profiling.h"
 
@@ -10,11 +10,13 @@
 #include "rotate_operator.cuh"
 #include "sample_filter_operator.cuh"
 #include "session_operator_host.h"
+#include "shape_filters/cylinder_filter_operator.cuh"
 #include "transform_cuda/rgb_gain_operator.cuh"
 #include "transform_cuda/translate_operator.cuh"
 
 #include "minmax_extremes.cuh"
 #include "pcl/cluster_extraction_operator.gen.h"
+#include "pcl/floor_plane_alignment_operator.gen.h"
 #include "transform_cuda/uniform_gain_operator.cuh"
 
 #include <algorithm>
@@ -288,7 +290,7 @@ operator_in_out_t SessionOperatorHost::run_operators(
               }
             }
 
-            // pc::logger->debug("input new frame");
+            // pc::logger()->debug("input new frame");
 
             // TODO move these to draw function in session_operator_host.cc
 
@@ -297,8 +299,28 @@ operator_in_out_t SessionOperatorHost::run_operators(
                 duration_cast<microseconds>(end_time - start_time);
             auto duration_ms = duration_us.count() / 1000.0f;
 
-            // pc::logger->debug("pcl main took {:.2f}ms", duration_ms);
+            // pc::logger()->debug("pcl main took {:.2f}ms", duration_ms);
 
+          }
+
+          else if constexpr (
+              std::is_same_v<
+                  T, pcl_cpu::FloorPlaneAlignmentOperatorConfiguration>) {
+
+            static thread_local std::unordered_map<
+                uid, std::unique_ptr<pcl_cpu::FloorPlaneAlignmentOperator>>
+                floor_alignment_operators;
+
+            auto &floor_alignment_operator =
+                floor_alignment_operators[config.id];
+
+            if (!floor_alignment_operator) {
+              floor_alignment_operator =
+                  std::make_unique<pcl_cpu::FloorPlaneAlignmentOperator>(
+                      config);
+            }
+
+            floor_alignment_operator->update(begin, end);
           }
 
           // Filters
@@ -506,6 +528,10 @@ operator_in_out_t SessionOperatorHost::run_operators(
                 }
               }
             }
+          } else if constexpr (std::is_same_v<
+                                   T, CylinderFilterOperatorConfiguration>) {
+            end = thrust::copy_if(begin, end, begin,
+                                  CylinderFilterOperator(config));
           }
         },
         operator_config);

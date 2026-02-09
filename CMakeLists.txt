@@ -389,9 +389,19 @@ if (WITH_POINTCASTER)
     src/operators/sample_filter_operator.cc
     src/operators/range_filter_operator.cc
     src/operators/pcl/cluster_extraction_operator.cc
+    src/operators/pcl/floor_plane_alignment_operator.cc
+    src/operators/pcl/floor_plane_alignment_operator_gui.cc
+    src/operators/shape_filters/cylinder_filter_operator.cc
     ${THIRDPARTY_SRC}
     ${POINTCASTER_SRC}
     ${OPTIONAL_SRC})
+
+# some c++ files that have static resources and are linked to by cu files
+# require to be explicitly compiled by nvcc
+  set_source_files_properties(
+    src/operators/pcl/floor_plane_alignment_operator.cc
+    PROPERTIES LANGUAGE CUDA
+)
 
 # ----- Resources -----
 

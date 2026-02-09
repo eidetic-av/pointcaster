@@ -5,10 +5,12 @@
 #include "noise_operator.gen.h"
 #include "operator.h"
 #include "pcl/cluster_extraction_operator.gen.h"
+#include "pcl/floor_plane_alignment_operator.gen.h"
 #include "rake_operator.gen.h"
 #include "range_filter_operator.gen.h"
 #include "rotate_operator.gen.h"
 #include "sample_filter_operator.gen.h"
+#include "shape_filters/cylinder_filter_operator.gen.h"
 #include "transform_cuda/rgb_gain_operator.gen.h"
 #include "transform_cuda/translate_operator.gen.h"
 #include "transform_cuda/uniform_gain_operator.gen.h"
@@ -22,7 +24,9 @@ using OperatorConfigurationVariant = std::variant<
     RangeFilterOperatorConfiguration, RotateOperatorConfiguration,
     cuda::TranslateOperatorConfiguration, cuda::RGBGainOperatorConfiguration,
     cuda::UniformGainOperatorConfiguration, RakeOperatorConfiguration,
-    pcl_cpu::ClusterExtractionConfiguration>;
+    pcl_cpu::ClusterExtractionConfiguration,
+    pcl_cpu::FloorPlaneAlignmentOperatorConfiguration,
+    CylinderFilterOperatorConfiguration>;
 
 // Extract types from variant into a tuple
 template <typename Variant> struct VariantTypes;
