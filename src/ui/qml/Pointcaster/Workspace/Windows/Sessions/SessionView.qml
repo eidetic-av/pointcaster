@@ -48,20 +48,6 @@ Item {
         return Qt.quaternion(Number(r.scalar) || 1, Number(r.x) || 0, Number(r.y) || 0, Number(r.z) || 0);
     }
 
-    function applyCameraTransformFromConfig() {
-        if (!root.cameraAdapter)
-            return;
-
-        root._applyingConfigCameraTransform = true;
-        orbitOrigin.position = _vector3dFromAdapterPosition(root.cameraAdapter.position);
-        orbitOrigin.rotation = _quaternionFromAdapterRotation(root.cameraAdapter.rotation);
-
-        // drop the guard next tick so any bindings/animations settle first
-        Qt.callLater(function () {
-            root._applyingConfigCameraTransform = false;
-        });
-    }
-
     function applyCameraTogglesFromConfig() {
         if (!root.cameraAdapter)
             return;
@@ -78,6 +64,21 @@ Item {
         });
     }
 
+    function applyCameraTransformFromConfig() {
+        if (!root.cameraAdapter)
+            return;
+
+        root._applyingConfigCameraTransform = true;
+        orbitOrigin.position = _vector3dFromAdapterPosition(root.cameraAdapter.position);
+        orbitOrigin.rotation = _quaternionFromAdapterRotation(root.cameraAdapter.rotation);
+        camera.z = root.cameraAdapter.distance;
+
+        // drop the guard next tick so any bindings/animations settle first
+        Qt.callLater(function () {
+            root._applyingConfigCameraTransform = false;
+        });
+    }
+
     function commitCameraTransformToConfig() {
         if (!root.cameraAdapter)
             return;
@@ -91,6 +92,7 @@ Item {
 
         root.cameraAdapter.set_position(orbitOrigin.position);
         root.cameraAdapter.set_rotation(orbitOrigin.rotation);
+        root.cameraAdapter.set_distance(camera.z);
     }
 
     function refreshFromAdapter() {
@@ -136,6 +138,11 @@ Item {
         }
 
         function onRotationChanged() {
+            if (root._committing_config) return;
+            applyCameraTransformFromConfig();
+        }
+
+        function onDistanceChanged() {
             if (root._committing_config) return;
             applyCameraTransformFromConfig();
         }
@@ -348,6 +355,11 @@ Item {
             onMouseHeldChanged: {
                 if (mouseHeld || sessionCameraControls.orbitRotationRunning) return;
                 // on release:
+                root.commitCameraTransformToConfig();
+            }
+
+            onScrollingChanged: {
+                if (scrolling || sessionCameraControls.orbitRotationRunning) return;
                 root.commitCameraTransformToConfig();
             }
         }

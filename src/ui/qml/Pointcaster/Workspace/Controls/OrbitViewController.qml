@@ -20,6 +20,7 @@ Item {
     property bool automaticClipping: true
 
     property bool mouseHeld: false
+    property bool scrolling: false;
 
     property alias acceptedButtons: dragHandler.acceptedButtons
 
@@ -131,6 +132,9 @@ Item {
         onWheel: event => {
             let delta = -event.angleDelta.y * 0.01;
             root.camera.z += root.camera.z * 0.1 * delta
+        }
+        onActiveChanged: {
+            root.scrolling = wheelHandler.active;
         }
     }
 
