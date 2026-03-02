@@ -262,6 +262,13 @@ Item {
                                     smooth: true
                                     mipmap: true
                                 }
+
+
+                                InfoToolTip {
+                                    delay: 800
+                                    textValue: lockCameraButton.checked ? "Unlock camera" : "Lock camera"
+                                }
+
                             }
 
                             ToolButton {
@@ -277,6 +284,11 @@ Item {
                                 icon.height: Math.round(18 * Scaling.uiScale)
 
                                 onClicked: root.requestHomeCamera()
+
+                                InfoToolTip {
+                                    delay: 800
+                                    textValue: "Home orientation"
+                                }
                             }
 
                             ToolButton {
@@ -299,6 +311,11 @@ Item {
                                     smooth: true
                                     mipmap: true
                                 }
+
+                                InfoToolTip {
+                                    delay: 800
+                                    textValue: guidesButton.checked ? "Hide floor plane" : "Show floor plane"
+                                }
                             }
 
                             ToolButton {
@@ -320,6 +337,11 @@ Item {
                                     anchors.centerIn: parent
                                     smooth: true
                                     mipmap: true
+                                }
+
+                                InfoToolTip {
+                                    delay: 800
+                                    textValue: projectionButton.checked ? "Disable orthographic projection" : "Enable orthographic projection"
                                 }
                             }
                         }
