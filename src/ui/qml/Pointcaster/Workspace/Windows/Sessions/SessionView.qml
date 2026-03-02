@@ -31,9 +31,10 @@ Item {
         return qYaw.times(qPitch);
     }
 
-    // Guards to prevent config->UI updates from immediately re-committing UI->config (undo/redo feedback loops)
+    // guards to prevent config<->UI updates from immediately re-committing (causing undo/redo feedback loops)
     property bool _applyingConfigCameraTransform: false
     property bool _applyingConfigCameraToggles: false
+    property bool _committing_config: false
 
     function _vector3dFromAdapterPosition(p) {
         // p is expected to be QVector3D-ish in QML (has x/y/z)
@@ -83,11 +84,17 @@ Item {
         if (root._applyingConfigCameraTransform)
             return;
 
+        root._committing_config = true;
+        Qt.callLater(function() {
+            root._committing_config = false;
+        });
+
         root.cameraAdapter.set_position(orbitOrigin.position);
         root.cameraAdapter.set_rotation(orbitOrigin.rotation);
     }
 
     function refreshFromAdapter() {
+        console.log("running refresh from adapter");
         cameraAdapter = sessionAdapter ? sessionAdapter.cameraAdapter : null;
         if (!cameraAdapter)
             return;
@@ -124,10 +131,12 @@ Item {
         }
 
         function onPositionChanged() {
+            if (root._committing_config) return;
             applyCameraTransformFromConfig();
         }
 
         function onRotationChanged() {
+            if (root._committing_config) return;
             applyCameraTransformFromConfig();
         }
     }
@@ -478,23 +487,13 @@ Item {
                 return;
 
             focusAnimation.stop();
-            homeOrbitOriginPositionAnim.stop();
-            homeOrbitOriginRotationAnim.stop();
-            homeCameraZAnim.stop();
+            homeOrbitOriginAnim.stop();
 
             homeOrbitOriginPositionAnim.from = orbitOrigin.position;
-            homeOrbitOriginPositionAnim.to = root.defaultOrbitOriginPosition;
-            homeOrbitOriginPositionAnim.start();
-
             homeOrbitOriginRotationAnim.from = orbitOrigin.rotation;
-            homeOrbitOriginRotationAnim.to = root.defaultOrbitOriginRotation;
-            homeOrbitOriginRotationAnim.start();
+            homeOrbitOriginDistanceAnim.from = camera.z;
 
-            camera.x = 0;
-            camera.y = 0;
-            homeCameraZAnim.from = camera.z;
-            homeCameraZAnim.to = root.defaultCameraDistance;
-            homeCameraZAnim.start();
+            homeOrbitOriginAnim.start();
         }
     }
 
@@ -506,27 +505,41 @@ Item {
         duration: 350
         easing.type: Easing.OutQuart
     }
-    Vector3dAnimation {
-        id: homeOrbitOriginPositionAnim
-        target: orbitOrigin
-        property: "position"
-        duration: 420
-        easing.type: Easing.OutCubic
-    }
-    PropertyAnimation {
-        id: homeOrbitOriginRotationAnim
-        target: orbitOrigin
-        property: "rotation"
-        duration: 420
-        easing.type: Easing.OutCubic
-        onStopped: root.commitCameraTransformToConfig()
-    }
-    NumberAnimation {
-        id: homeCameraZAnim
-        target: camera
-        property: "z"
-        duration: 420
-        easing.type: Easing.OutCubic
+
+    ParallelAnimation {
+        id: homeOrbitOriginAnim
+        alwaysRunToEnd: true
+        onFinished: {
+            orbitOrigin.position = root.defaultOrbitOriginPosition;
+            orbitOrigin.rotation = root.defaultOrbitOriginRotation;
+            camera.z = root.defaultCameraDistance;
+            root.commitCameraTransformToConfig()
+        }
+
+        Vector3dAnimation {
+            id: homeOrbitOriginPositionAnim
+            to: root.defaultOrbitOriginPosition
+            target: orbitOrigin
+            property: "position"
+            duration: 420
+            easing.type: Easing.OutCubic
+        }
+        PropertyAnimation {
+            id: homeOrbitOriginRotationAnim
+            to: root.defaultOrbitOriginRotation
+            target: orbitOrigin
+            property: "rotation"
+            duration: 420
+            easing.type: Easing.OutCubic
+        }
+        NumberAnimation {
+            id: homeOrbitOriginDistanceAnim
+            to: root.defaultCameraDistance
+            target: camera
+            property: "z"
+            duration: 420
+            easing.type: Easing.OutCubic
+        }
     }
 
     // border overlay
