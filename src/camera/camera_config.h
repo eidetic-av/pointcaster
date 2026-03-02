@@ -13,6 +13,7 @@ struct CameraConfiguration {
   bool show_grid = true;
 
   pc::float3 position;
+  pc::quaternion rotation;
 };
 
 } // namespace pc

@@ -87,6 +87,9 @@ def is_float3_type(type_name: str) -> bool:
     t = type_name.strip()
     return t in ("pc::float3", "float3")
 
+def is_quaternion_type(type_name: str) -> bool:
+    t = type_name.strip()
+    return t in ("pc::quaternion", "quaternion")
 
 def format_struct_name(name: str) -> str:
     name = name.replace("Configuration", "")
@@ -217,6 +220,9 @@ def _is_simple_comparable_type(type_name: str) -> bool:
     if is_float3_type(t):
         return True
 
+    if is_quaternion_type(t):
+        return True
+
     if INTLIKE_RE.fullmatch(t):
         return True
 
@@ -244,6 +250,9 @@ def default_value_case_cpp(member: Member) -> str:
 
     if is_float3_type(member.type):
         return "return QVariant::fromValue(QVector3D(0.0f, 0.0f, 0.0f));"
+
+    if is_quaternion_type(member.type):
+        return "return QVariant::fromValue(QQuaternion(1, 0, 0, 0));"
 
     if isinstance(v, bool):
         return f"return QVariant({'true' if v else 'false'});"
@@ -307,7 +316,7 @@ def _scan_structs_in_header(input_text: str) -> list[str]:
 
 def _is_nested_config_member(member: Member) -> bool:
     """
-    "Nested" means: endswith Configuration AND has an adapter generated (i.e. not a scalar/string/bool/enum/float3/simple).
+    "Nested" means: endswith Configuration AND has an adapter generated (i.e. not a scalar/string/bool/enum/float3/quaternion/simple).
     """
     if not member.type.endswith("Configuration"):
         return False
@@ -315,7 +324,7 @@ def _is_nested_config_member(member: Member) -> bool:
         return False
     if member.is_enum:
         return False
-    if is_float3_type(member.type) or _is_simple_comparable_type(member.type):
+    if is_float3_type(member.type) or is_quaternion_type(member.type) or _is_simple_comparable_type(member.type):
         return False
     return True
 
@@ -371,6 +380,7 @@ def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[
     members_body = VERBATIM_RE.sub("", stripped_struct_body)
 
     needs_qvector3d = False
+    needs_qquaternion = False
     members: list[Member] = []
 
     for raw_type, raw_name, init_eq, init_brace, raw_comment in MEMBER_RE.findall(members_body):
@@ -379,6 +389,9 @@ def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[
 
         if is_float3_type(raw_type):
             needs_qvector3d = True
+
+        if is_quaternion_type(raw_type):
+            needs_qquaternion = True
 
         init_value_raw = (init_eq or "").strip() or (init_brace or "").strip() or ""
         init_value_raw = init_value_raw.replace("{", "").replace("}", "").strip()
@@ -406,7 +419,7 @@ def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[
             )
         )
 
-    return members, needs_qvector3d
+    return members, needs_qvector3d, needs_qquaternion
 
 
 # ----------------------------
@@ -428,12 +441,17 @@ def process_cpp_header(
     is_device_namespace = namespace_name == "pc::devices"
 
     needs_qvector3d = False
+    needs_qquaternion = False
     rendered_structs: list[dict[str, Any]] = []
 
     for struct_name, struct_body in structs:
-        members, struct_needs_qvector3d = _parse_members_for_struct(struct_name, struct_body)
+        members, struct_needs_qvector3d, struct_needs_qquaternion = _parse_members_for_struct(struct_name, struct_body)
+
         if struct_needs_qvector3d:
             needs_qvector3d = True
+
+        if struct_needs_qquaternion:
+            needs_qquaternion = True
 
         # Adapter class name
         adapter_class_base = struct_name
@@ -463,6 +481,7 @@ def process_cpp_header(
                 "members": members,
                 "any_enums": any(m.is_enum for m in members),
                 "any_float3": any(is_float3_type(m.type) for m in members),
+                "any_quaternion": any(is_quaternion_type(m.type) for m in members),
                 "nested_adapter_includes": nested_adapter_includes,
                 "flattened_paths": flattened_paths,
             }
@@ -478,6 +497,7 @@ def process_cpp_header(
         header_include_path=header_include_path,
         namespace_name=namespace_name,
         needs_qvector3d=needs_qvector3d,
+        needs_qquaternion=needs_qquaternion,
         structs=rendered_structs,
     )
 
@@ -535,6 +555,7 @@ def main() -> int:
     )
 
     env.globals["is_float3_type"] = is_float3_type
+    env.globals["is_quaternion_type"] = is_quaternion_type
     env.globals["is_simple_comparable_type"] = _is_simple_comparable_type
     env.globals["default_value_case_cpp"] = default_value_case_cpp
     env.globals["minmax_case_cpp"] = minmax_case_cpp
@@ -561,7 +582,7 @@ def main() -> int:
             struct_to_adapter_include.setdefault(struct_name, adapter_include)
 
             # struct->members mapping (for recursion)
-            members, _ = _parse_members_for_struct(struct_name, struct_body)
+            members, _, __ = _parse_members_for_struct(struct_name, struct_body)
             struct_members_map.setdefault(struct_name, members)
 
     # ---------- Pass 2: render + write ----------

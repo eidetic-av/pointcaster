@@ -9,6 +9,9 @@
 {% if needs_qvector3d -%}
 #include <QVector3D>
 {% endif -%}
+{% if needs_qquaternion -%}
+#include <QQuaternion>
+{% endif -%}
 #include <variant>
 
 #include <ui/models/config_adapter.h>

@@ -96,7 +96,6 @@ ApplicationWindow {
                 affinities: ["view"]
 
                 SessionView {
-                    // bind directly to the DockWidget property; don't rely on parent lookup
                     sessionAdapter: sessionDockWidget.sessionAdapter
                 }
             }

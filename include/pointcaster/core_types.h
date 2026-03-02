@@ -24,6 +24,49 @@ constexpr bool operator!=(const float3 &lhs, const float3 &rhs) {
   return !(rhs == lhs);
 }
 
+struct float4 {
+  float x = 0;
+  float y = 0;
+  float z = 0;
+  float w = 0;
+
+  constexpr float &operator[](std::size_t index) {
+    return index == 0 ? x : (index == 1 ? y : (index == 2 ? z : w));
+  }
+  constexpr const float &operator[](std::size_t index) const {
+    return index == 0 ? x : (index == 1 ? y : (index == 2 ? z : w));
+  }
+};
+
+constexpr bool operator==(const float4 &lhs, const float4 &rhs) {
+  return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+constexpr bool operator!=(const float4 &lhs, const float4 &rhs) {
+  return !(rhs == lhs);
+}
+
+struct quaternion {
+  float scalar = 1;
+  float x = 0;
+  float y = 0;
+  float z = 0;
+
+  constexpr float &operator[](std::size_t index) {
+    return index == 0 ? scalar : (index == 1 ? x : (index == 2 ? y : z));
+  }
+  constexpr const float &operator[](std::size_t index) const {
+    return index == 0 ? scalar : (index == 1 ? x : (index == 2 ? y : z));
+  }
+};
+
+constexpr bool operator==(const quaternion &lhs, const quaternion &rhs) {
+  return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z &&
+         lhs.scalar == rhs.scalar;
+}
+constexpr bool operator!=(const quaternion &lhs, const quaternion &rhs) {
+  return !(rhs == lhs);
+}
+
 struct uint2 {
   unsigned int x, y = 0;
 

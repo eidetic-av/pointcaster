@@ -32,7 +32,7 @@ Item {
     }
 
     // Guards to prevent config->UI updates from immediately re-committing UI->config (undo/redo feedback loops)
-    property bool _applyingConfigCameraPosition: false
+    property bool _applyingConfigCameraTransform: false
     property bool _applyingConfigCameraToggles: false
 
     function _vector3dFromAdapterPosition(p) {
@@ -42,16 +42,22 @@ Item {
         return Qt.vector3d(Number(p.x) || 0, Number(p.y) || 0, Number(p.z) || 0);
     }
 
-    function applyCameraPositionFromConfig() {
+    function _quaternionFromAdapterRotation(r) {
+        if (!r) return Qt.quaternion(1, 0, 0, 0);
+        return Qt.quaternion(Number(r.scalar) || 1, Number(r.x) || 0, Number(r.y) || 0, Number(r.z) || 0);
+    }
+
+    function applyCameraTransformFromConfig() {
         if (!root.cameraAdapter)
             return;
 
-        root._applyingConfigCameraPosition = true;
+        root._applyingConfigCameraTransform = true;
         orbitOrigin.position = _vector3dFromAdapterPosition(root.cameraAdapter.position);
+        orbitOrigin.rotation = _quaternionFromAdapterRotation(root.cameraAdapter.rotation);
 
         // drop the guard next tick so any bindings/animations settle first
         Qt.callLater(function () {
-            root._applyingConfigCameraPosition = false;
+            root._applyingConfigCameraTransform = false;
         });
     }
 
@@ -71,14 +77,14 @@ Item {
         });
     }
 
-    function commitCameraPositionToConfig() {
+    function commitCameraTransformToConfig() {
         if (!root.cameraAdapter)
             return;
-        if (root._applyingConfigCameraPosition)
+        if (root._applyingConfigCameraTransform)
             return;
 
-        // QML vector3d -> C++ QVariant should marshal to QVector3D
         root.cameraAdapter.set_position(orbitOrigin.position);
+        root.cameraAdapter.set_rotation(orbitOrigin.rotation);
     }
 
     function refreshFromAdapter() {
@@ -88,7 +94,7 @@ Item {
 
         // initial pull: config -> UI
         applyCameraTogglesFromConfig();
-        applyCameraPositionFromConfig();
+        applyCameraTransformFromConfig();
 
         // snap projection immediately on startup / adapter swap
         camera.setBlend(sessionCameraControls.orthographicEnabled ? 1.0 : 0.0, false);
@@ -118,7 +124,11 @@ Item {
         }
 
         function onPositionChanged() {
-            applyCameraPositionFromConfig();
+            applyCameraTransformFromConfig();
+        }
+
+        function onRotationChanged() {
+            applyCameraTransformFromConfig();
         }
     }
 
@@ -317,7 +327,7 @@ Item {
             value: view.orbitToGizmoRotation(camera.sceneRotation.conjugated())
         }
 
-        OrbitCameraController {
+        OrbitViewController {
             anchors.fill: parent
             camera: camera
             origin: orbitOrigin
@@ -325,6 +335,12 @@ Item {
             xSpeed: 0.5
             ySpeed: 0.5
             enabled: !sessionCameraControls.orbitRotationRunning && !sessionCameraControls.viewLocked
+
+            onMouseHeldChanged: {
+                if (mouseHeld || sessionCameraControls.orbitRotationRunning) return;
+                // on release:
+                root.commitCameraTransformToConfig();
+            }
         }
 
         // RMB drag = pan
@@ -341,7 +357,7 @@ Item {
                     lastY = translation.y;
                 } else {
                     // Commit once when the interaction finishes.
-                    root.commitCameraPositionToConfig();
+                    root.commitCameraTransformToConfig();
                 }
             }
 
@@ -488,7 +504,6 @@ Item {
         property: "position"
         duration: 350
         easing.type: Easing.OutQuart
-        onStopped: root.commitCameraPositionToConfig()
     }
     Vector3dAnimation {
         id: homeOrbitOriginPositionAnim
@@ -496,7 +511,6 @@ Item {
         property: "position"
         duration: 420
         easing.type: Easing.OutCubic
-        onStopped: root.commitCameraPositionToConfig()
     }
     PropertyAnimation {
         id: homeOrbitOriginRotationAnim
@@ -504,6 +518,7 @@ Item {
         property: "rotation"
         duration: 420
         easing.type: Easing.OutCubic
+        onStopped: root.commitCameraTransformToConfig()
     }
     NumberAnimation {
         id: homeCameraZAnim

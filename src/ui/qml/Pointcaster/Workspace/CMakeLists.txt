@@ -26,6 +26,7 @@ qt_add_qml_module(PointcasterWorkspace
         Controls/IconButton.qml
         Controls/InfoToolTip.qml
         Controls/OriginGizmo.qml
+        Controls/OrbitViewController.qml
         Editors/ConfigurationEditor.qml
         Windows/TabBar.qml
         Windows/TabBarBase.qml
