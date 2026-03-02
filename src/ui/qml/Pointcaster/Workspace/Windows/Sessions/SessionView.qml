@@ -470,6 +470,7 @@ Item {
         view3d: view
         gizmoTarget: gizmoTarget
         orbitOrigin: orbitOrigin
+        sessionView: root
         z: 120
 
         onRequestHomeCamera: {

@@ -12,6 +12,7 @@ Item {
     required property View3D view3d
     required property Node gizmoTarget
     required property Node orbitOrigin
+    required property Item sessionView
 
     readonly property bool orbitRotationRunning: orbitRotationAnim.running
 
@@ -334,5 +335,9 @@ Item {
         property: "rotation"
         duration: 220
         easing.type: Easing.OutCubic
+        onStopped: {
+            if (root.sessionView == null || root.sessionView == undefined) return;
+            root.sessionView.commitCameraTransformToConfig();
+        }
     }
 }
