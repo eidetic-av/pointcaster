@@ -12,16 +12,21 @@
 #include <QtAwesome/QtAwesomeQuickImageProvider.h>
 #include <core/logger/logger.h>
 #include <kddockwidgets/Config.h>
+#include <kddockwidgets/LayoutSaver.h>
 #include <kddockwidgets/core/DockRegistry.h>
 #include <kddockwidgets/core/FloatingWindow.h>
 #include <kddockwidgets/core/TitleBar.h>
 #include <kddockwidgets/core/views/MainWindowViewInterface.h>
 #include <kddockwidgets/qtquick/Platform.h>
+#include <optional>
 #include <print>
+#include <string>
 
 namespace pc::ui {
 
-QQmlApplicationEngine *initialise(QGuiApplication *app) {
+QQmlApplicationEngine *
+initialise(QGuiApplication *app,
+           const std::optional<std::string> &loaded_session_path) {
 
   // qml boilerplate
   pc::ui::register_qml_uncreatable_types();
@@ -43,6 +48,32 @@ QQmlApplicationEngine *initialise(QGuiApplication *app) {
   static fa::QtAwesome awesome(app);
   awesome.initFontAwesome();
   engine.addImageProvider("fa", new QtAwesomeQuickImageProvider(&awesome));
+
+  // if we auto-loaded a session, find any adjacent layout file to load the UI
+  if (loaded_session_path.has_value()) {
+    std::filesystem::path session_file_path{loaded_session_path.value()};
+    auto layout_file_path = session_file_path;
+    layout_file_path.replace_filename(session_file_path.stem().string() +
+                                      "_layout.json");
+
+    if (std::filesystem::exists(layout_file_path)) {
+
+      // wait until we load all the windows before manipulating the layout
+      QObject::connect(
+          &engine, &QQmlApplicationEngine::objectCreated, app,
+          [fp = layout_file_path.string()]() {
+            const auto restore_options = KDDockWidgets::RestoreOption_None;
+            KDDockWidgets::LayoutSaver saver(restore_options);
+            saver.restoreFromFile(fp.c_str());
+          },
+          Qt::QueuedConnection);
+    }
+  }
+
+  // terminate the application if qml can't initialise
+  QObject::connect(
+      &engine, &QQmlApplicationEngine::objectCreationFailed, app,
+      []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 
   return &engine;
 }
@@ -69,7 +100,7 @@ void load_main_window(Workspace *workspace, QGuiApplication *app,
       engine->load(QUrl::fromLocalFile(mainQmlInfo.absoluteFilePath()));
     } else {
       pc::logger()->error("POINTCASTER_MAIN_QML points to missing file: {}",
-                        dev_main_qml.toStdString());
+                          dev_main_qml.toStdString());
       QCoreApplication::exit(-1);
     }
   } else {

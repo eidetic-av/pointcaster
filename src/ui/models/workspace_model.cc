@@ -11,7 +11,9 @@
 #include <QVariant>
 #include <core/logger/logger.h>
 #include <core/uuid/uuid.h>
+#include <filesystem>
 #include <functional>
+#include <kddockwidgets/LayoutSaver.h>
 #include <plugins/devices/device_variants.h>
 #include <plugins/devices/orbbec/orbbec_device_adapter.gen.h>
 #include <plugins/devices/orbbec/orbbec_device_config.h>
@@ -161,10 +163,8 @@ void WorkspaceModel::applyWorkspaceConfigAndRebuild(
 
 // ----------------- WorkspaceModel -----------------
 
-WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent,
-                               std::function<void()> quit_callback)
-    : QObject(parent), _workspace(*workspace),
-      _quit_callback(std::move(quit_callback)) {
+WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
+    : QObject(parent), _workspace(*workspace) {
   if (workspace->auto_loaded_config) {
     const auto path = AppSettings::instance()->lastSessionPath();
     setSaveFileUrl(QUrl::fromLocalFile(path));
@@ -174,7 +174,7 @@ WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent,
 
 void WorkspaceModel::close() {
   _workspace.devices.clear();
-  _quit_callback();
+  QCoreApplication::exit();
 }
 
 void WorkspaceModel::loadFromFile(const QUrl &file) {
@@ -192,6 +192,22 @@ void WorkspaceModel::loadFromFile(const QUrl &file) {
           AppSettings::instance()->setLastSessionPath(local_path);
         },
         Qt::QueuedConnection);
+
+    std::filesystem::path session_file_path{local_path.toStdString()};
+    auto layout_file_path = session_file_path;
+    layout_file_path.replace_filename(session_file_path.stem().string() +
+                                      "_layout.json");
+
+    if (std::filesystem::exists(layout_file_path)) {
+      QMetaObject::invokeMethod(
+          this,
+          [fp = layout_file_path.string()] {
+            const auto restore_options = KDDockWidgets::RestoreOption_None;
+            KDDockWidgets::LayoutSaver saver(restore_options);
+            saver.restoreFromFile(fp.c_str());
+          },
+          Qt::QueuedConnection);
+    }
   }).detach();
 }
 
@@ -217,6 +233,16 @@ void WorkspaceModel::save(bool update_last_session_path) {
     save_workspace_to_file(workspace_config, local_path.toStdString());
     if (update_last_session_path) {
       AppSettings::instance()->setLastSessionPath(local_path);
+    }
+
+    constexpr bool save_adjacent_layout_file = true;
+    if (save_adjacent_layout_file) {
+      std::filesystem::path session_file_path{local_path.toStdString()};
+      auto layout_file_path = session_file_path;
+      layout_file_path.replace_filename(session_file_path.stem().string() +
+                                        "_layout.json");
+      KDDockWidgets::LayoutSaver saver;
+      const bool result = saver.saveToFile(layout_file_path.string().c_str());
     }
   }).detach();
 }

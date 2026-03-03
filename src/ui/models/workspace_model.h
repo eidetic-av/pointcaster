@@ -44,8 +44,7 @@ class WorkspaceModel : public QObject {
   Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl)
 
 public:
-  explicit WorkspaceModel(pc::Workspace *workspace, QObject *parent,
-                          std::function<void()> quit_callback);
+  explicit WorkspaceModel(pc::Workspace *workspace, QObject *parent);
 
   Q_INVOKABLE void close();
   Q_INVOKABLE void loadFromFile(const QUrl &file);
@@ -105,8 +104,6 @@ private:
 
   int _selectedDeviceIndex = 0;
   QUrl _saveFileUrl;
-
-  std::function<void()> _quit_callback;
 
   // applies a new config and syncs adapters on the UI thread
   void applyWorkspaceConfigAndRebuild(pc::WorkspaceConfiguration new_config);
