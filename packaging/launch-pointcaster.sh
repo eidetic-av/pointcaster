@@ -9,7 +9,10 @@ export QT_QPA_PLATFORM_PLUGIN_PATH="$install_dir/plugins/platforms"
 export QT_PLUGIN_PATH="$install_dir/plugins"
 export QML2_IMPORT_PATH="$install_dir/qml"
 
-# force XWayland for now...
+# force X11/XWayland
+# - wayland isn't able to restore the state of floating window layouts
+# - it always draws application title bars with kddockwidgets
+# https://github.com/KDAB/KDDockWidgets/blob/main/docs/book/src/qpa-wayland.md
 export QT_QPA_PLATFORM=xcb
 
 set +x
