@@ -243,8 +243,8 @@ Item {
                 z: root.defaultCameraDistance
 
                 // Perspective params
-                property real nearPlane: 50
-                property real farPlane: 15000
+                property real nearPlane: 120
+                property real farPlane: 250000
                 property real fovYRadians: 60.0 * Math.PI / 180.0
 
                 // ortho params
@@ -275,8 +275,11 @@ Item {
 
                     const o00 = 2.0 / (right - left);
                     const o11 = 2.0 / (top - bottom);
-                    const o22 = -2.0 / (farPlane - nearPlane);
-                    const o23 = -(farPlane + nearPlane) / (farPlane - nearPlane);
+
+                    // handles clipping dist, make it pretty much infinite for ortho
+                    const o22 = -0.00000001;
+                    const o23 = 0.0;
+
                     const o32 = 0.0;
                     const o33 = 1.0;
 
@@ -348,7 +351,7 @@ Item {
             camera: camera
             origin: orbitOrigin
             acceptedButtons: Qt.LeftButton
-            xSpeed: 0.5
+            xSpeed: 0.1
             ySpeed: 0.5
             enabled: !sessionCameraControls.orbitRotationRunning && !sessionCameraControls.viewLocked
 
