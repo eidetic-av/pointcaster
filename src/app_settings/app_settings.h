@@ -22,10 +22,10 @@ namespace pc {
 class APP_SETTINGS_API AppSettings final : public QObject {
   Q_OBJECT
 
-  Q_PROPERTY(bool restoreLastSession READ restoreLastSession WRITE
-                 setRestoreLastSession NOTIFY restoreLastSessionChanged)
-  Q_PROPERTY(QString lastSessionPath READ lastSessionPath WRITE
-                 setLastSessionPath NOTIFY lastSessionPathChanged)
+  Q_PROPERTY(bool restoreLastWorkspace READ restoreLastWorkspace WRITE
+                 setrestoreLastWorkspace NOTIFY restoreLastWorkspaceChanged)
+  Q_PROPERTY(QString lastWorkspacePath READ lastWorkspacePath WRITE
+                 setlastWorkspacePath NOTIFY lastWorkspacePathChanged)
 
   Q_PROPERTY(
       LogLevel logLevel READ logLevel WRITE setLogLevel NOTIFY logLevelChanged)
@@ -46,11 +46,11 @@ public:
 
   // -- General
 
-  bool restoreLastSession() const;
-  void setRestoreLastSession(bool value);
+  bool restoreLastWorkspace() const;
+  void setrestoreLastWorkspace(bool value);
 
-  QString lastSessionPath() const;
-  void setLastSessionPath(const QString &value);
+  QString lastWorkspacePath() const;
+  void setlastWorkspacePath(const QString &value);
 
   enum class LogLevel : int {
     Trace = static_cast<int>(spdlog::level::trace),
@@ -88,8 +88,8 @@ public:
   Q_INVOKABLE void sync();
 
 signals:
-  void restoreLastSessionChanged();
-  void lastSessionPathChanged();
+  void restoreLastWorkspaceChanged();
+  void lastWorkspacePathChanged();
 
   void logLevelChanged();
 
@@ -112,8 +112,8 @@ private:
 
   QSettings m_settings;
 
-  bool m_restoreLastSession = true;
-  QString m_lastSessionPath;
+  bool m_restoreLastWorkspace = true;
+  QString m_lastWorkspacePath;
 
   LogLevel m_logLevel = LogLevel::Info;
 

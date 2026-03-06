@@ -166,7 +166,7 @@ void WorkspaceModel::applyWorkspaceConfigAndRebuild(
 WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
     : QObject(parent), _workspace(*workspace) {
   if (workspace->auto_loaded_config) {
-    const auto path = AppSettings::instance()->lastSessionPath();
+    const auto path = AppSettings::instance()->lastWorkspacePath();
     setSaveFileUrl(QUrl::fromLocalFile(path));
   }
   syncAdapters();
@@ -189,7 +189,7 @@ void WorkspaceModel::loadFromFile(const QUrl &file) {
         [this, file, local_path, cfg = std::move(loaded_config)]() mutable {
           setSaveFileUrl(file);
           applyWorkspaceConfigAndRebuild(std::move(cfg));
-          AppSettings::instance()->setLastSessionPath(local_path);
+          AppSettings::instance()->setlastWorkspacePath(local_path);
         },
         Qt::QueuedConnection);
 
@@ -232,7 +232,7 @@ void WorkspaceModel::save(bool update_last_session_path) {
                 update_last_session_path] {
     save_workspace_to_file(workspace_config, local_path.toStdString());
     if (update_last_session_path) {
-      AppSettings::instance()->setLastSessionPath(local_path);
+      AppSettings::instance()->setlastWorkspacePath(local_path);
     }
 
     constexpr bool save_adjacent_layout_file = true;

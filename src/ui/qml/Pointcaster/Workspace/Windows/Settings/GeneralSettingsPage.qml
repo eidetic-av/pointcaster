@@ -51,10 +51,10 @@ Item {
                         spacing: 10 * Scaling.uiScale
 
                         CheckBox {
-                            text: "Restore previous session on startup"
+                            text: "Restore previous workspace on startup"
                             font: Scaling.uiFont
-                            checked: AppSettings.restoreLastSession
-                            onToggled: AppSettings.restoreLastSession = checked
+                            checked: AppSettings.restoreLastWorkspace
+                            onToggled: AppSettings.restoreLastWorkspace = checked
                         }
 
                         RowLayout {

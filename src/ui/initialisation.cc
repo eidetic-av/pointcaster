@@ -25,14 +25,15 @@
 namespace pc::ui {
 
 QQmlApplicationEngine *
-initialise(QGuiApplication *app,
-           const std::optional<std::string> &loaded_session_path) {
+initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
+           const std::optional<std::string> &loaded_workspace_path) {
 
   // qml boilerplate
   pc::ui::register_qml_uncreatable_types();
 
   // create single ApplicationEngine instance
   static QQmlApplicationEngine engine;
+  engine.rootContext()->setContextProperty("workspaceModel", workspace_model);
 
   // initialise kddw
   KDDockWidgets::initFrontend(KDDockWidgets::FrontendType::QtQuick);
@@ -49,11 +50,11 @@ initialise(QGuiApplication *app,
   awesome.initFontAwesome();
   engine.addImageProvider("fa", new QtAwesomeQuickImageProvider(&awesome));
 
-  // if we auto-loaded a session, find any adjacent layout file to load the UI
-  if (loaded_session_path.has_value()) {
-    std::filesystem::path session_file_path{loaded_session_path.value()};
-    auto layout_file_path = session_file_path;
-    layout_file_path.replace_filename(session_file_path.stem().string() +
+  // if we auto-loaded a workspace, find any adjacent layout file to load the UI
+  if (loaded_workspace_path.has_value()) {
+    std::filesystem::path workspace_file_path{loaded_workspace_path.value()};
+    auto layout_file_path = workspace_file_path;
+    layout_file_path.replace_filename(workspace_file_path.stem().string() +
                                       "_layout.json");
 
     if (std::filesystem::exists(layout_file_path)) {

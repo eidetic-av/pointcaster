@@ -24,8 +24,8 @@ AppSettings::AppSettings(QObject *parent)
                                   QCoreApplication::organizationName(),
                                   QCoreApplication::applicationName()) {
   // Load initial cache
-  m_restoreLastSession = m_settings.value("restoreLastSession", true).toBool();
-  m_lastSessionPath = m_settings.value("lastSessionPath", "").toString();
+  m_restoreLastWorkspace = m_settings.value("restoreLastWorkspace", true).toBool();
+  m_lastWorkspacePath = m_settings.value("lastWorkspacePath", "").toString();
 
   // Store as string in QSettings, e.g. "debug", "info", ...
   const auto logLevelText =
@@ -122,42 +122,42 @@ void AppSettings::setUiScale(double value) {
   emit uiScaleChanged();
 }
 
-bool AppSettings::restoreLastSession() const {
-  return m_restoreLastSession;
+bool AppSettings::restoreLastWorkspace() const {
+  return m_restoreLastWorkspace;
 }
 
-void AppSettings::setRestoreLastSession(bool value) {
-  if (value == m_restoreLastSession) return;
+void AppSettings::setrestoreLastWorkspace(bool value) {
+  if (value == m_restoreLastWorkspace) return;
 
   if (!onObjectThread(this)) {
     QMetaObject::invokeMethod(
-        this, [this, value] { setRestoreLastSession(value); },
+        this, [this, value] { setrestoreLastWorkspace(value); },
         Qt::QueuedConnection);
     return;
   }
 
-  m_restoreLastSession = value;
-  write("restoreLastSession", m_restoreLastSession);
-  emit restoreLastSessionChanged();
+  m_restoreLastWorkspace = value;
+  write("restoreLastWorkspace", m_restoreLastWorkspace);
+  emit restoreLastWorkspaceChanged();
 }
 
-QString AppSettings::lastSessionPath() const {
-  return m_lastSessionPath;
+QString AppSettings::lastWorkspacePath() const {
+  return m_lastWorkspacePath;
 }
 
-void AppSettings::setLastSessionPath(const QString &value) {
-  if (value == m_lastSessionPath) return;
+void AppSettings::setlastWorkspacePath(const QString &value) {
+  if (value == m_lastWorkspacePath) return;
 
   if (!onObjectThread(this)) {
     QMetaObject::invokeMethod(
-        this, [this, value] { setLastSessionPath(value); },
+        this, [this, value] { setlastWorkspacePath(value); },
         Qt::QueuedConnection);
     return;
   }
 
-  m_lastSessionPath = value;
-  write("lastSessionPath", m_lastSessionPath);
-  emit lastSessionPathChanged();
+  m_lastWorkspacePath = value;
+  write("lastWorkspacePath", m_lastWorkspacePath);
+  emit lastWorkspacePathChanged();
 }
 
 bool AppSettings::enablePrometheusMetrics() const {

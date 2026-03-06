@@ -31,13 +31,14 @@ int main(int argc, char *argv[]) {
   pc::logger()->trace("Initialising Workspace...");
 
   WorkspaceConfiguration workspace_config;
-  std::optional<std::string> loaded_session_path;
-  if (app_settings->restoreLastSession() &&
-      !app_settings->lastSessionPath().isEmpty()) {
-    const auto last_session_path =
-        app_settings->lastSessionPath().toStdString();
-    if (load_workspace_from_file(workspace_config, last_session_path)) {
-      loaded_session_path = last_session_path;
+
+  std::optional<std::string> loaded_workspace_path;
+  if (app_settings->restoreLastWorkspace() &&
+      !app_settings->lastWorkspacePath().isEmpty()) {
+    const auto last_workspace_path =
+        app_settings->lastWorkspacePath().toStdString();
+    if (load_workspace_from_file(workspace_config, last_workspace_path)) {
+      loaded_workspace_path = last_workspace_path;
     };
   }
 
@@ -48,10 +49,7 @@ int main(int argc, char *argv[]) {
   pc::ui::WorkspaceModel workspace_model{&workspace, &app};
 
   pc::logger()->trace("Starting QQmlApplicationEngine...");
-  auto *gui_engine = pc::ui::initialise(&app, loaded_session_path);
-
-  gui_engine->rootContext()->setContextProperty("workspaceModel",
-                                                &workspace_model);
+  auto *gui_engine = pc::ui::initialise(&app, &workspace_model, loaded_workspace_path);
 
   pc::ui::load_main_window(&workspace, &app, gui_engine);
 
