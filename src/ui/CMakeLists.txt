@@ -6,6 +6,8 @@ add_library(pointcaster_ui
     models/settings_page_registry.cc
     models/commands/device_config_commands.cc
     window/view_factory.cc
+    # geometry/point_cloud_geometry.h
+    # geometry/point_cloud_geometry.cc
 )
 add_library(pointcaster::ui ALIAS pointcaster_ui)
 
@@ -15,6 +17,7 @@ target_include_directories(pointcaster_ui PRIVATE
 )
 
 add_subdirectory(qml/Pointcaster/Workspace)
+add_subdirectory(qml/Pointcaster/Geometry)
 
 find_package(Corrade CONFIG REQUIRED REQUIRED Main Utility)
 find_package(QtAwesome CONFIG REQUIRED)
@@ -27,6 +30,7 @@ target_link_libraries(pointcaster_ui PRIVATE
     Qt6::Quick Qt6::QuickControls2 Qt6::Quick3D
     KDAB::kddockwidgets 
     PointcasterWorkspace
+    PointcasterGeometry
     QtAwesome::QtAwesome
 )
 
@@ -41,6 +45,7 @@ set(CONFIG_ADAPTER_INPUTS
     ${CMAKE_SOURCE_DIR}/src/camera/camera_config.h
     ${CMAKE_SOURCE_DIR}/src/plugins/devices/orbbec/orbbec_device_config.h
 )
+
 add_qml_adapters(
     TARGETS pointcaster_ui
     CONFIG_INPUTS ${CONFIG_ADAPTER_INPUTS}
@@ -63,4 +68,6 @@ target_precompile_headers(pointcaster_ui PRIVATE
   <QThread>
   <QMetaObject>
   <QUndoCommand>
+  <QByteArray>
+  <QQuick3DGeometry>
 )

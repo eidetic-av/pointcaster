@@ -76,6 +76,8 @@ initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
       &engine, &QQmlApplicationEngine::objectCreationFailed, app,
       []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 
+  // connect qt point cloud rendering to our session instances
+
   return &engine;
 }
 

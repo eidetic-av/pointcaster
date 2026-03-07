@@ -97,6 +97,7 @@ ApplicationWindow {
 
                 SessionView {
                     sessionAdapter: sessionDockWidget.sessionAdapter
+                    deviceAdapters: workspaceModel.deviceAdapters
                 }
             }
         }
@@ -105,20 +106,20 @@ ApplicationWindow {
         property var sessionDockById: ({})
 
         function syncSessionWindows() {
-            const adapters = workspaceModel.sessionAdapters;
-            console.log(`syncSessionWindows: adapters length=${adapters.length}`);
+            const sessionAdapters = workspaceModel.sessionAdapters;
+            console.log(`syncSessionWindows: sessionAdapters length=${sessionAdapters.length}`);
 
             // Mark all existing as unseen initially
             const seen = ({});
             for (const key in sessionDockById)
                 seen[key] = false;
 
-            for (let i = 0; i < adapters.length; ++i) {
-                const adapter = adapters[i];
-                if (!adapter)
+            for (let i = 0; i < sessionAdapters.length; ++i) {
+                const sessionAdapter = sessionAdapters[i];
+                if (!sessionAdapter)
                     continue;
 
-                const idStr = String(adapter.id);
+                const idStr = String(sessionAdapter.id);
                 if (idStr.length === 0)
                     continue;
 
@@ -127,11 +128,11 @@ ApplicationWindow {
                 let dock = sessionDockById[idStr];
                 if (dock) {
                     // Update existing dock
-                    const newTitle = String(adapter.label);
+                    const newTitle = String(sessionAdapter.label);
                     if (dock.title !== newTitle)
                         dock.title = newTitle;
 
-                    dock.sessionAdapter = adapter;
+                    dock.sessionAdapter = sessionAdapter;
 
                     continue;
                 }
@@ -139,8 +140,8 @@ ApplicationWindow {
                 // Create new dock
                 const newDock = sessionWindowComponent.createObject(dockingArea, {
                     dockUniqueName: idStr,
-                    dockTitle: String(adapter.label),
-                    sessionAdapter: adapter
+                    dockTitle: String(sessionAdapter.label),
+                    sessionAdapter: sessionAdapter
                 });
 
                 if (!newDock) {

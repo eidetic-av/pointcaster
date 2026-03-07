@@ -51,8 +51,7 @@ qt_add_qml_module(PointcasterWorkspace
         Resources/Fonts/AtkinsonHyperlegibleNext-Medium.otf
         Resources/Fonts/AtkinsonHyperlegibleNext-Bold.otf
     SOURCES
-        # TODO this is really annoying, but MOC fails when cpp
-        # headers aren't right beside this CMakeLists.txt...
+        # TODO need to be able to add from a subdir but atm this doesn't work
         net_utils.h
         net_utils.cc
 )
@@ -68,9 +67,8 @@ target_link_libraries(PointcasterWorkspace PRIVATE
     QtAwesome::QtAwesome
 )
 
-# for pointcaster::core headers in public include dir
 target_include_directories(PointcasterWorkspace 
-    PRIVATE "${CMAKE_SOURCE_DIR}/include")
+    PRIVATE "${CMAKE_SOURCE_DIR}/include" "${CMAKE_SOURCE_DIR}/src")
 
 install(DIRECTORY "${QT_QML_OUTPUT_DIRECTORY}/Pointcaster/Workspace"
 	DESTINATION "${CMAKE_INSTALL_QMLDIR}/Pointcaster"
@@ -91,5 +89,9 @@ target_precompile_headers(PointcasterWorkspace PRIVATE
   <QString>
   <QVariant>
   <QUrl>
+  <QByteArray>
+  <QVector3D>
+  <QQuick3DGeometry>
+  <QtQmlIntegration/qqmlintegration.h>
   <QCoreApplication>
 )

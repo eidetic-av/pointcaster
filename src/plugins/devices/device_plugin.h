@@ -90,7 +90,7 @@ public:
 
   virtual void on_config_field_changed(int deviceIndex, int fieldIndex) {}
 
-  // virtual pc::PointCloud point_cloud() const = 0;
+  virtual std::optional<PointCloudRef> point_cloud() { return std::nullopt; }
 
   virtual void start() = 0;
   virtual void stop() = 0;

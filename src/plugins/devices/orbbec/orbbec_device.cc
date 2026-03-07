@@ -477,6 +477,13 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
   }
 }
 
+std::optional<PointCloudRef> OrbbecDevice::point_cloud() {
+  static PointCloud result{
+      .positions = {{-1000, -1000, 0}, {1000, -1000, 0}, {0, 1000, 0}},
+      .colors = {{255, 255, 0}, {0, 255, 255}, {255, 0, 255}}};
+  return std::ref(result);
+};
+
 // TODO in cuda
 bool OrbbecDevice::init_device_memory(std::size_t incoming_point_count) {
   return true;

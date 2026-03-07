@@ -3,6 +3,7 @@
 #include "core_types.h"
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace pc {
@@ -26,6 +27,15 @@ private:
 
 PointCloud operator+(PointCloud const &lhs, PointCloud const &rhs);
 PointCloud operator+=(PointCloud &lhs, const PointCloud &rhs);
+
+using PointCloudRef = std::reference_wrapper<PointCloud>;
+
+constexpr bool operator==(const PointCloudRef &lhs, const PointCloudRef &rhs) {
+  return std::addressof(lhs.get()) == std::addressof(rhs.get());
+}
+constexpr bool operator!=(const PointCloudRef &lhs, const PointCloudRef &rhs) {
+  return !(rhs == lhs);
+}
 
 struct PointCloudPacket {
   // out packet needs these explicitly sized types to ensure portability

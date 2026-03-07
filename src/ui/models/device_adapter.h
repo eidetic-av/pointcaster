@@ -7,8 +7,11 @@
 #include <QStringList>
 #include <QVariant>
 
+#include <optional>
+
 #include <plugins/devices/device_plugin.h>
 #include <plugins/devices/device_variants.h>
+#include <pointcaster/point_cloud.h>
 
 class DeviceAdapter : public ConfigAdapter {
   Q_OBJECT
@@ -61,6 +64,11 @@ public:
     if (!_plugin) return;
     _plugin->restart();
   }
+
+  std::optional<pc::PointCloudRef> point_cloud() {
+    if (_plugin == nullptr) return std::nullopt;
+    return _plugin->point_cloud();
+  };
 
 signals:
   void statusChanged();

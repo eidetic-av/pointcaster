@@ -78,8 +78,8 @@ Item {
 
                     Rectangle {
                         id: statusCircle
-                        width: Math.round(10 * Scaling.uiScale)
-                        height: Math.round(10 * Scaling.uiScale)
+                        width: Math.round(9 * Scaling.uiScale)
+                        height: Math.round(9 * Scaling.uiScale)
                         radius: Math.round(5 * Scaling.uiScale)
                         anchors.verticalCenter: parent.verticalCenter
                         color: {

@@ -46,6 +46,8 @@ public:
 
   DeviceStatus status() const override;
 
+  std::optional<PointCloudRef> point_cloud() override;
+
   // TODO: maybe it would better to return a constant reference to the
   // pointcloud here so its decided at the call site if a copy is required
   // pc::PointCloud point_cloud() const override;
