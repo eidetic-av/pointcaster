@@ -1,12 +1,12 @@
 #include "orbbec_device.h"
 #include "orbbec_context.h"
 #include "orbbec_device_config.h"
+#include "pointcaster/point_cloud.h"
 
 #include <atomic>
 #include <chrono>
 #include <core/logger/logger.h>
 #include <cstring>
-#include <iostream>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/h/ObTypes.h>
 #include <libobsensor/hpp/Context.hpp>
@@ -15,7 +15,8 @@
 #include <libobsensor/hpp/Utils.hpp>
 #include <memory>
 #include <mutex>
-#include <print>
+#include <ranges>
+#include <span>
 #include <thread>
 
 #include <metrics/metrics.h>
@@ -382,6 +383,11 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
     point_cloud_filter.setCreatePointFormat(OB_FORMAT_RGB_POINT);
 
+    // grab a ptr to the typed config to have access to device info while
+    // processing
+    OrbbecDeviceConfiguration *device_config;
+    std::visit([&](auto &&c) { device_config = &c; }, config());
+
     // processing loop
     while (!stop_token.stop_requested()) {
       std::shared_ptr<ob::FrameSet> frame_set;
@@ -418,12 +424,47 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       }
 
       if (point_cloud_frame && point_cloud_frame->data()) {
-        std::lock_guard buffer_lock(_point_buffer_access);
-        _point_buffer.resize(point_count);
-        std::memcpy(_point_buffer.data(), point_cloud_frame->data(),
-                    point_count * sizeof(OBColorPoint));
-        _buffer_updated = true;
-        set_updated_time(steady_clock::now());
+        // std::lock_guard buffer_lock(_point_buffer_access);
+        // _point_buffer.resize(point_count);
+        // std::memcpy(_point_buffer.data(), point_cloud_frame->data(),
+        //             point_count * sizeof(OBColorPoint));
+        // _buffer_updated = true;
+
+        // convert from orbbec pointcloud to our own Pointcloud
+        PointCloud point_cloud;
+        point_cloud.resize(point_count);
+
+        const auto *ob_frame_ptr =
+            reinterpret_cast<OBColorPoint *>(point_cloud_frame->getData());
+
+        const auto indexed_points = std::ranges::zip_view(
+            std::span{ob_frame_ptr, point_count},
+            std::views::iota(0, static_cast<int>(point_count - 1)));
+
+        // TODO probs should be parallelised if over a certain point count
+        // add profiling zone
+
+        for (const auto [ob_point, i] : indexed_points) {
+          auto &pos = point_cloud.positions[i];
+          // pc::logger()->trace(point_index);
+          pos.x = static_cast<int16_t>(ob_point.x);
+          pos.y = -static_cast<int16_t>(ob_point.y);
+          pos.z = -static_cast<int16_t>(ob_point.z);
+          auto &color = point_cloud.colors[i];
+          color.r = static_cast<uint8_t>(ob_point.r);
+          color.g = static_cast<uint8_t>(ob_point.g);
+          color.b = static_cast<uint8_t>(ob_point.b);
+        }
+
+        bool success = _frame_buffer.try_enqueue(point_cloud);
+        if (success) {
+          _buffer_updated = true;
+          set_updated_time(steady_clock::now());
+        } else {
+          pc::logger()->warn("Dropped incoming pointcloud frame from "
+                             "OrbbecDevice '{}' (ip: {})",
+                             device_config->id, device_config->ip);
+        }
       }
     }
   } catch (const std::exception &e) {
@@ -478,10 +519,21 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
 }
 
 std::optional<PointCloudRef> OrbbecDevice::point_cloud() {
-  static PointCloud result{
-      .positions = {{-1000, -1000, 0}, {1000, -1000, 0}, {0, 1000, 0}},
-      .colors = {{255, 255, 0}, {0, 255, 255}, {255, 0, 255}}};
-  return std::ref(result);
+
+  // TODO
+
+  static PointCloud _current_point_cloud{};
+
+  if (_buffer_updated.load(std::memory_order_relaxed)) {
+
+    _frame_buffer.try_dequeue(_current_point_cloud);
+
+    _buffer_updated = false;
+    // result.resize(_)
+    // _point_buffer
+  }
+
+  return std::ref(_current_point_cloud);
 };
 
 // TODO in cuda

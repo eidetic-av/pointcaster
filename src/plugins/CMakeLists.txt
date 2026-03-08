@@ -10,7 +10,11 @@ target_link_libraries(pointcaster_plugins PRIVATE
     Corrade::Main Corrade::PluginManager
 )
 
-target_include_directories(pointcaster_plugins PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(pointcaster_plugins 
+    PRIVATE 
+        ${CMAKE_SOURCE_DIR}/src 
+        ${CMAKE_SOURCE_DIR}/include
+)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     find_package(cpplocate CONFIG REQUIRED)

@@ -16,6 +16,11 @@ public:
   auto size() const { return positions.size(); }
   auto empty() const { return positions.empty(); }
 
+  void resize(std::size_t new_size) {
+    positions.resize(new_size);
+    colors.resize(new_size);
+  }
+
   std::vector<std::byte> serialize(bool compress = false) const;
   static PointCloud deserialize(const std::vector<std::byte> &buffer);
 

@@ -19,6 +19,7 @@
 #include <pointcaster/point_cloud.h>
 #include <print>
 #include <profiling/profiling_mutex.h>
+#include <readerwriterqueue/readerwritercircularbuffer.h>
 #include <thread>
 
 namespace pc::devices {
@@ -62,6 +63,10 @@ public:
   }
 
 private:
+  // TODO maybe not the best data structure for a standard triple buffer?
+  // capacity can't even technically be 3 (must be pow of 2)
+  moodycamel::BlockingReaderWriterCircularBuffer<PointCloud> _frame_buffer{3};
+
   std::vector<OBColorPoint> _point_buffer;
   std::mutex _point_buffer_access;
   std::atomic_bool _buffer_updated{false};
@@ -78,8 +83,6 @@ private:
 
   PC_PROFILING_MUTEX(_process_current_cloud_access);
   std::uint64_t _last_processed_frame_index{0};
-
-  pc::PointCloud _current_point_cloud;
 
   OrbbecImplDeviceMemory *_device_memory;
   std::atomic_bool _device_memory_ready{false};

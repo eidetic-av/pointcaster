@@ -29,7 +29,14 @@ target_link_libraries(OrbbecDevice PRIVATE
   Qt6::Gui 
 )
 
-target_include_directories(OrbbecDevice PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/include")
+find_path(READERWRITERQUEUE_INCLUDE_DIR "readerwriterqueue/readerwriterqueue.h")
+
+target_include_directories(OrbbecDevice 
+  PRIVATE 
+    "${CMAKE_SOURCE_DIR}/src" 
+    "${CMAKE_SOURCE_DIR}/include"
+    "${READERWRITERQUEUE_INCLUDE_DIR}"
+)
 
 add_custom_command(TARGET OrbbecDevice POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}"

@@ -21,8 +21,10 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
     auto devicePointCloud = _deviceAdapter->plugin()->point_cloud();
     if (!devicePointCloud.has_value()) return;
 
-    const bool localGeometryNeedsUpdating =
+    bool localGeometryNeedsUpdating =
         !_lastPointCloud.has_value() || *_lastPointCloud != *devicePointCloud;
+
+    localGeometryNeedsUpdating = true;
 
     if (localGeometryNeedsUpdating) {
       const auto &inputCloud = devicePointCloud.value().get();
@@ -49,7 +51,7 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
         *p++ = char_to_norm(col.g);
         *p++ = char_to_norm(col.b);
         *p++ = 1.0f; // alpha
-        *p++ = 0; // padding
+        *p++ = 0;    // padding
       }
 
       setVertexData(v);
@@ -64,7 +66,6 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
 
       setBounds(QVector3D(-500, -500, 0.0f), QVector3D(+500, +500, 0.0f));
 
-      pc::logger()->trace("Updated point cloud geometry");
       update();
     }
 

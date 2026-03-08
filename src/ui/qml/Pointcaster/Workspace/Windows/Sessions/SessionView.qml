@@ -15,7 +15,7 @@ Item {
     property var cameraAdapter: null
     property bool showBorder: false
     property color borderColor: ThemeColors.highlight
-    readonly property real defaultCameraDistance: 500
+    readonly property real defaultCameraDistance: 250
     readonly property vector3d defaultOrbitOriginPosition: Qt.vector3d(0, 0, 0)
     readonly property quaternion defaultOrbitOriginRotation: {
         const pitch = -17;
@@ -289,7 +289,7 @@ Item {
                     materials: [
                         PrincipledMaterial {
                             lighting: PrincipledMaterial.NoLighting
-                            pointSize: 30
+                            pointSize: 5
                         }
                     ]
                 }
@@ -543,7 +543,6 @@ Item {
 
     ParallelAnimation {
         id: homeOrbitOriginAnim
-
         alwaysRunToEnd: true
         onFinished: {
             orbitOrigin.position = root.defaultOrbitOriginPosition;
@@ -554,7 +553,6 @@ Item {
 
         Vector3dAnimation {
             id: homeOrbitOriginPositionAnim
-
             to: root.defaultOrbitOriginPosition
             target: orbitOrigin
             property: "position"
@@ -564,7 +562,6 @@ Item {
 
         PropertyAnimation {
             id: homeOrbitOriginRotationAnim
-
             to: root.defaultOrbitOriginRotation
             target: orbitOrigin
             property: "rotation"
@@ -574,7 +571,6 @@ Item {
 
         NumberAnimation {
             id: homeOrbitOriginDistanceAnim
-
             to: root.defaultCameraDistance
             target: camera
             property: "z"

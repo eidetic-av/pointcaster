@@ -14,7 +14,7 @@ struct CameraConfiguration {
 
   pc::float3 position;
   pc::quaternion rotation{0.989016, -0.147809};
-  float distance = 500;
+  float distance = 250;
 };
 
 } // namespace pc
