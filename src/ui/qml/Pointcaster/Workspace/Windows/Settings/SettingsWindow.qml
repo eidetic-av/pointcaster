@@ -104,7 +104,7 @@ Dialog {
 
     Component.onCompleted: {
         SettingsPageRegistry.addPage("general", "General", "qrc:/qt/qml/Pointcaster/Workspace/Windows/Settings/GeneralSettingsPage.qml");
-        SettingsPageRegistry.addPage("network", "Network", "qrc:/qt/qml/Pointcaster/Workspace/Windows/Settings/NetworkSettingsPage.qml");
+        SettingsPageRegistry.addPage("metrics", "Metrics", "qrc:/qt/qml/Pointcaster/Workspace/Windows/Settings/MetricsSettingsPage.qml");
 
         sidebar.currentIndex = 0;
         const initialUrl = SettingsPageRegistry.pageUrlAt(0);

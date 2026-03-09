@@ -38,7 +38,7 @@ qt_add_qml_module(PointcasterWorkspace
         Windows/MainWindow.qml
         Windows/Settings/SettingsWindow.qml
         Windows/Settings/GeneralSettingsPage.qml
-        Windows/Settings/NetworkSettingsPage.qml
+        Windows/Settings/MetricsSettingsPage.qml
         Windows/Devices/DeviceSelectionList.qml
         Windows/Devices/DevicesToolBar.qml
         Windows/Devices/DevicesWindow.qml

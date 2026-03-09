@@ -1,11 +1,11 @@
 #pragma once
 #include <mutex>
+#include <tracy/Tracy.hpp>
 
 namespace pc::profiling {
 
 #ifdef TRACY_ENABLE
 #ifndef __CUDACC__
-#include <tracy/Tracy.hpp>
 
 // when Tracy is enabled (and this isn’t a CUDA TU), use the real Tracy lockable
 template <typename T> using Lockable = tracy::Lockable<T>;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <concurrentqueue/blockingconcurrentqueue.h>
+#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
 
 #include <memory>
 #include <string>

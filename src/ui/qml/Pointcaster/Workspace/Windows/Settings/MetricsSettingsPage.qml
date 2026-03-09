@@ -39,7 +39,7 @@ Item {
                     spacing: 4 * Scaling.uiScale
 
                     Label {
-                        text: "Network"
+                        text: "Metrics"
                         font: Scaling.uiHeaderFont
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
@@ -47,7 +47,7 @@ Item {
                     }
 
                     Label {
-                        text: "Network-related preferences"
+                        text: "Settings for gathering session telemtry and performance data"
                         font: Scaling.uiFont
                         opacity: 0.7
                         wrapMode: Text.WordWrap
@@ -141,6 +141,39 @@ Item {
                                     onEditingFinished: validate(text, true)
                                 }
                             }
+                        }
+                    }
+                }
+
+                GroupBox {
+                    title: "Tracy"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    font: Scaling.uiFont
+
+                    ColumnLayout {
+                        spacing: 10 * Scaling.uiScale
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+
+                        Label {
+                            text: "Tracy can be used to profile Pointcaster workspaces, gather frame times, and help track down performance issues within the session pipeline."
+                            font: Scaling.uiFont
+                            opacity: 0.7
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                            elide: Text.ElideNone
+                        }
+
+                        CheckBox {
+                            id: enableTracyCheckbox
+                            text: "Enable profiling endpoint"
+                            font: Scaling.uiFont
+                            checked: !!AppSettings.enableTracyProfiling
+                            onToggled: AppSettings.enableTracyProfiling = checked
+
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                         }
                     }
                 }

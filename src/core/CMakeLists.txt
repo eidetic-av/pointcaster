@@ -1,11 +1,16 @@
 include(GenerateExportHeader)
 
+# the core library is a shared library so that singletons like 
+# the logger and  the profiler can be accessed from inside 
+# other shared libraries, like dynamically loaded device plugins
 add_library(pointcaster_core SHARED
     point_cloud.cc
     codec/draco.cc
     uuid/uuid.cc
     uuid/wtf/wtf.cc
     logger/logger.cc
+    profiling/profiling_zone.cc
+    profiling/profiler.cc
 )
 
 add_library(pointcaster::core ALIAS pointcaster_core)
@@ -20,6 +25,9 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 target_link_libraries(pointcaster_core PUBLIC spdlog::spdlog fmt::fmt)
 
+find_package(Tracy CONFIG REQUIRED)
+target_link_libraries(pointcaster_core PUBLIC Tracy::TracyClient)
+
 target_include_directories(pointcaster_core
     ${WARNING_GUARD}
     PUBLIC
@@ -27,6 +35,8 @@ target_include_directories(pointcaster_core
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/include
 )
 
 set_target_properties(pointcaster_core
@@ -59,4 +69,5 @@ target_precompile_headers(pointcaster_core PRIVATE
   <span>
   <cstddef>
   <cstdint>
+  <tracy/Tracy.hpp>
 )

@@ -4,6 +4,7 @@
 #include <QQmlContext>
 #include <app_settings/app_settings.h>
 #include <core/logger/logger.h>
+#include <core/profiling/profiler.h>
 #include <optional>
 #include <print>
 #include <ui/initialisation.h>
@@ -34,9 +35,20 @@ int main(int argc, char *argv[]) {
                    app_settings, toggle_file_logging);
 
   pc::set_log_level(app_settings->spdlogLogLevel());
-  QObject::connect(
-      app_settings, &pc::AppSettings::logLevelChanged, app_settings,
-      [] { pc::set_log_level(pc::AppSettings::instance()->spdlogLogLevel()); });
+  QObject::connect(app_settings, &pc::AppSettings::logLevelChanged,
+                   app_settings,
+                   [&] { pc::set_log_level(app_settings->spdlogLogLevel()); });
+
+  if (app_settings->enableTracyProfiling()) {
+    pc::profiling::start_profiler();
+  }
+  QObject::connect(app_settings, &pc::AppSettings::enableTracyProfilingChanged,
+                   app_settings, [&] {
+                     if (app_settings->enableTracyProfiling())
+                       pc::profiling::start_profiler();
+                     else
+                       pc::profiling::stop_profiler();
+                   });
 
   pc::logger()->debug("Starting QGuiApplication...");
   QGuiApplication app(argc, argv);

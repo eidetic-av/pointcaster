@@ -461,7 +461,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
           _buffer_updated = true;
           set_updated_time(steady_clock::now());
         } else {
-          pc::logger()->warn("Dropped incoming pointcloud frame from "
+          pc::logger()->warn("Dropped frame from "
                              "OrbbecDevice '{}' (ip: {})",
                              device_config->id, device_config->ip);
         }
@@ -520,7 +520,10 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
 
 std::optional<PointCloudRef> OrbbecDevice::point_cloud() {
 
-  // TODO
+  // TODO this is a mess, device should just hold point cloud and provide
+  // a ref to it when consumers try to access. we definitely shouldn't be
+  // dequeuing our main queu here cause we might have multiple consumers
+  // requiring the same frame
 
   static PointCloud _current_point_cloud{};
 

@@ -41,7 +41,8 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
         return static_cast<float>(color) / 255.0f;
       };
 
-      // TODO
+      // TODO profile this, its probs really expensive with large clouds
+
       float *p = reinterpret_cast<float *>(v.data());
       for (const auto &[pos, col] : std::views::zip(positions, colors)) {
         *p++ = mm_to_cm(pos.x);

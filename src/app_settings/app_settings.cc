@@ -41,6 +41,8 @@ AppSettings::AppSettings(QObject *parent)
       m_settings
           .value("metrics/prometheusAddress", QStringLiteral("0.0.0.0:8080"))
           .toString();
+
+  m_enableTracyProfiling = m_settings.value("profiling/enabled", true).toBool();
 }
 
 AppSettings::LogLevel AppSettings::logLevel() const {
@@ -121,7 +123,6 @@ void AppSettings::setLogToFile(bool value) {
   write("logToFile", m_logToFile);
   emit logToFileChanged();
 }
-
 
 double AppSettings::uiScale() const {
   return m_uiScale;
@@ -216,6 +217,25 @@ void AppSettings::setPrometheusAddress(const QString &value) {
   m_prometheusAddress = value;
   write("metrics/prometheusAddress", m_prometheusAddress);
   emit prometheusAddressChanged();
+}
+
+bool AppSettings::enableTracyProfiling() const {
+  return m_enableTracyProfiling;
+}
+
+void AppSettings::setEnableTracyProfiling(bool value) {
+  if (value == m_enableTracyProfiling) return;
+
+  if (!onObjectThread(this)) {
+    QMetaObject::invokeMethod(
+        this, [this, value] { setEnableTracyProfiling(value); },
+        Qt::QueuedConnection);
+    return;
+  }
+
+  m_enableTracyProfiling = value;
+  write("profiling/enabled", m_enableTracyProfiling);
+  emit enableTracyProfilingChanged();
 }
 
 QVariant AppSettings::value(const QString &key,

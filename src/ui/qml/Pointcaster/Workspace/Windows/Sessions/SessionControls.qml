@@ -161,6 +161,9 @@ Item {
                     iconColor: !pressed ? ThemeColors.mid : ThemeColors.midlight
                     opacity: 0.75
 
+                    topLeftRadius: 0
+                    topRightRadius: 0
+
                     leftPadding: Math.round(3 * Scaling.uiScale)
                     rightPadding: Math.round(3 * Scaling.uiScale)
 
@@ -199,6 +202,9 @@ Item {
                     iconSize: Math.round(9 * Scaling.uiScale)
                     iconColor: !pressed ? ThemeColors.mid : ThemeColors.midlight
                     opacity: 0.75
+
+                    topRightRadius: 0
+                    bottomRightRadius: 0
 
                     topPadding: Math.round(3 * Scaling.uiScale)
                     bottomPadding: Math.round(3 * Scaling.uiScale)

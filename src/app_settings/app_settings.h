@@ -6,15 +6,15 @@
 #include <QString>
 #include <QVariant>
 #include <spdlog/common.h>
- 
+
 #if defined(_WIN32)
-  #if defined(APP_SETTINGS_DLL)
-    #define APP_SETTINGS_API __declspec(dllexport)
-  #else
-    #define APP_SETTINGS_API __declspec(dllimport)
-  #endif
+#if defined(APP_SETTINGS_DLL)
+#define APP_SETTINGS_API __declspec(dllexport)
 #else
-  #define APP_SETTINGS_API 
+#define APP_SETTINGS_API __declspec(dllimport)
+#endif
+#else
+#define APP_SETTINGS_API
 #endif
 
 namespace pc {
@@ -40,6 +40,9 @@ class APP_SETTINGS_API AppSettings final : public QObject {
 
   Q_PROPERTY(QString prometheusAddress READ prometheusAddress WRITE
                  setPrometheusAddress NOTIFY prometheusAddressChanged)
+
+  Q_PROPERTY(bool enableTracyProfiling READ enableTracyProfiling WRITE
+                 setEnableTracyProfiling NOTIFY enableTracyProfilingChanged)
 
 public:
   static AppSettings *instance();
@@ -77,13 +80,16 @@ public:
   double uiScale() const;
   void setUiScale(double value);
 
-  // -- Network
+  // -- Metrics
 
   bool enablePrometheusMetrics() const;
   void setEnablePrometheusMetrics(bool value);
 
   QString prometheusAddress() const;
   void setPrometheusAddress(const QString &value);
+
+  bool enableTracyProfiling() const;
+  void setEnableTracyProfiling(bool value);
 
   // -- for plugins that lookup values from a map
 
@@ -103,6 +109,8 @@ signals:
 
   void enablePrometheusMetricsChanged();
   void prometheusAddressChanged();
+
+  void enableTracyProfilingChanged();
 
   void valueChanged(const QString &key);
 
@@ -128,6 +136,8 @@ private:
 
   bool m_enablePrometheusMetrics = true;
   QString m_prometheusAddress;
+
+  bool m_enableTracyProfiling = false;
 };
 
 } // namespace pc

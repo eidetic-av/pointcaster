@@ -8,7 +8,7 @@ ARG QT_VERSION=6.11.0
 ARG APPIMAGETOOL_VERSION=1.9.1
 ARG APPIMAGETOOL_SHA256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
 
-ARG VCPKG_COMMIT=1dce60b00170a48594cdb9adbcecf03a26066fec
+ARG VCPKG_COMMIT=8eed1d644672846105716dc1c21926b20d928584
 
 # install build toolchain
 RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
@@ -36,7 +36,9 @@ RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
         libxkbcommon-dev libxkbcommon-x11-dev libxext-dev \
         libglib2.0-bin libopengl-dev libglx-dev \
         libfontconfig-dev libfreetype6-dev libdbus-1-dev \
-        libtinfo6 libzstd1 zlib1g; \
+        libxinerama-dev libxcursor-dev libxrandr-dev \
+        xorg-dev libglu1-mesa-dev libsystemd-dev \
+        libdbus-1-dev libtinfo6 libzstd1 zlib1g; \
     rm -rf /var/lib/apt/lists/*
 
 # download and install cmake

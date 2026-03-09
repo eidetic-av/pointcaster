@@ -1,7 +1,7 @@
 {
 	"name": "pointcaster",
 	"version-string": "0.2.0",
-	"builtin-baseline": "1dce60b00170a48594cdb9adbcecf03a26066fec",
+	"builtin-baseline": "8eed1d644672846105716dc1c21926b20d928584",
 	"dependencies": [
 		"corrade",
 		"concurrentqueue",
@@ -23,6 +23,14 @@
 			]
 		},
 		"spdlog",
+		{
+			"name": "tracy",
+			"features": [
+				"crash-handler",
+				"on-demand",
+				"gui-tools"
+			]
+		},
 		"yaml-cpp",
 		"zpp-bits"
 	]
