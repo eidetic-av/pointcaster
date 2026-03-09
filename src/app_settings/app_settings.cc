@@ -24,7 +24,8 @@ AppSettings::AppSettings(QObject *parent)
                                   QCoreApplication::organizationName(),
                                   QCoreApplication::applicationName()) {
   // Load initial cache
-  m_restoreLastWorkspace = m_settings.value("restoreLastWorkspace", true).toBool();
+  m_restoreLastWorkspace =
+      m_settings.value("restoreLastWorkspace", true).toBool();
   m_lastWorkspacePath = m_settings.value("lastWorkspacePath", "").toString();
 
   // Store as string in QSettings, e.g. "debug", "info", ...
@@ -102,6 +103,25 @@ QString AppSettings::logLevelToString(LogLevel level) {
 spdlog::level::level_enum AppSettings::spdlogLogLevel() const {
   return static_cast<spdlog::level::level_enum>(static_cast<int>(m_logLevel));
 }
+
+bool AppSettings::logToFile() const {
+  return m_logToFile;
+}
+
+void AppSettings::setLogToFile(bool value) {
+  if (value == m_logToFile) return;
+
+  if (!onObjectThread(this)) {
+    QMetaObject::invokeMethod(
+        this, [this, value] { setLogToFile(value); }, Qt::QueuedConnection);
+    return;
+  }
+
+  m_logToFile = value;
+  write("logToFile", m_logToFile);
+  emit logToFileChanged();
+}
+
 
 double AppSettings::uiScale() const {
   return m_uiScale;

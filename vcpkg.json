@@ -5,6 +5,7 @@
 	"dependencies": [
 		"corrade",
 		"concurrentqueue",
+		"readerwriterqueue",
 		"draco",
 		"fmt",
 		"kddockwidgets",
@@ -12,7 +13,6 @@
 			"name": "libcpplocate",
 			"platform": "windows"
 		},
-		"concurrentqueue",
 		"orbbecsdk",
 		"prometheus-cpp",
 		"qtawesome",

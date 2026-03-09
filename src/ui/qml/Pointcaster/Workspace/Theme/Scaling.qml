@@ -18,4 +18,7 @@ QtObject {
     readonly property font uiFont: Qt.font({ pointSize: pointSize })
     readonly property font uiSmallFont: Qt.font({ pointSize: smallPointSize, weight: Font.Bold })
     readonly property font uiHeaderFont: Qt.font({ pointSize: headerPointSize, weight: Font.Medium })
+
+    readonly property real monoFontSize: basePointSize * 0.90 * uiScale
+    readonly property font monoFont: Qt.font({ pointSize: monoFontSize, family: "Atkinson Hyperlegible Mono", weight: Font.Medium })
 }

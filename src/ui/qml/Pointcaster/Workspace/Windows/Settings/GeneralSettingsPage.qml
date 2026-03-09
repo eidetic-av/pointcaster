@@ -125,6 +125,13 @@ Item {
                             }
                         }
 
+                        CheckBox {
+                            text: "Log pointcaster output to a file"
+                            font: Scaling.uiFont
+                            checked: AppSettings.logToFile
+                            onToggled: AppSettings.logToFile = checked
+                        }
+
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 10 * Scaling.uiScale

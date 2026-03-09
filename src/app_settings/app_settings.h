@@ -29,6 +29,8 @@ class APP_SETTINGS_API AppSettings final : public QObject {
 
   Q_PROPERTY(
       LogLevel logLevel READ logLevel WRITE setLogLevel NOTIFY logLevelChanged)
+  Q_PROPERTY(
+      bool logToFile READ logToFile WRITE setLogToFile NOTIFY logToFileChanged)
 
   Q_PROPERTY(double uiScale READ uiScale WRITE setUiScale NOTIFY uiScaleChanged)
 
@@ -67,6 +69,9 @@ public:
   void setLogLevel(LogLevel level);
   spdlog::level::level_enum spdlogLogLevel() const;
 
+  bool logToFile() const;
+  void setLogToFile(bool value);
+
   // -- User interface
 
   double uiScale() const;
@@ -92,6 +97,7 @@ signals:
   void lastWorkspacePathChanged();
 
   void logLevelChanged();
+  void logToFileChanged();
 
   void uiScaleChanged();
 
@@ -116,6 +122,7 @@ private:
   QString m_lastWorkspacePath;
 
   LogLevel m_logLevel = LogLevel::Info;
+  bool m_logToFile = true;
 
   double m_uiScale = 1.0;
 

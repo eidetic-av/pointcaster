@@ -43,6 +43,10 @@ class WorkspaceModel : public QObject {
 
   Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl)
 
+  //
+  Q_PROPERTY(QVariantList consoleOverlayEntries READ consoleOverlayEntries NOTIFY consoleOverlayEntriesChanged)
+  Q_PROPERTY(QVariantList consoleHistoryEntries READ consoleHistoryEntries NOTIFY consoleHistoryEntriesChanged)
+
 public:
   explicit WorkspaceModel(pc::Workspace *workspace, QObject *parent);
 
@@ -77,8 +81,12 @@ public:
   QUrl saveFileUrl() const { return _saveFileUrl; }
   void setSaveFileUrl(const QUrl &url) { _saveFileUrl = url; }
 
+  QVariantList consoleOverlayEntries() const;
+  QVariantList consoleHistoryEntries() const;
+
 public slots:
   void syncAdapters();
+  void syncConsole();
 
 signals:
   void openSaveAsDialog();
@@ -89,6 +97,9 @@ signals:
   void deviceVariantNamesChanged();
   void addDeviceMenuEntriesChanged();
   void selectedDeviceIndexChanged();
+
+  void consoleOverlayEntriesChanged();
+  void consoleHistoryEntriesChanged();
 
 private:
   pc::Workspace &_workspace;

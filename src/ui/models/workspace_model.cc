@@ -9,6 +9,7 @@
 #include <QString>
 #include <QUndoCommand>
 #include <QVariant>
+#include <chrono>
 #include <core/logger/logger.h>
 #include <core/uuid/uuid.h>
 #include <filesystem>
@@ -19,6 +20,7 @@
 #include <plugins/devices/orbbec/orbbec_device_config.h>
 #include <session/session_config.h>
 #include <session/session_config_adapter.gen.h>
+#include <spdlog/common.h>
 #include <string>
 #include <thread>
 #include <variant>
@@ -337,6 +339,61 @@ void WorkspaceModel::deleteSelectedDevice() {
   applyWorkspaceConfigAndRebuild(std::move(new_cfg));
 }
 
+QVariantMap generateConsoleEntryVariant(const LogEntry &entry) {
+  QVariantMap item;
+  switch (entry.level) {
+  case spdlog::level::trace:
+    item["logLevel"] = "trace";
+    item["logLevelColor"] = "midlight";
+    break;
+  case spdlog::level::debug:
+    item["logLevel"] = "debug";
+    item["logLevelColor"] = "blue";
+    break;
+  case spdlog::level::info:
+    item["logLevel"] = "info";
+    item["logLevelColor"] = "text";
+    break;
+  case spdlog::level::warn:
+    item["logLevel"] = "warning";
+    item["logLevelColor"] = "yellow";
+    break;
+  case spdlog::level::err:
+    item["logLevel"] = "error";
+    item["logLevelColor"] = "red";
+    break;
+  case spdlog::level::critical:
+    item["logLevel"] = "critical";
+    item["logLevelColor"] = "red";
+    break;
+  default:
+    item["logLevel"] = "";
+    item["logLevelColor"] = "text";
+    break;
+  }
+  item["message"] = QString::fromStdString(entry.message);
+  return item;
+}
+
+QVariantList WorkspaceModel::consoleOverlayEntries() const {
+  QVariantList entries;
+  using namespace std::chrono_literals;
+  for (auto log_entry : pc::logger_lines(6, 10s)) {
+    entries.push_back(generateConsoleEntryVariant(log_entry));
+  }
+  return entries;
+}
+
+QVariantList WorkspaceModel::consoleHistoryEntries() const {
+  QVariantList entries;
+  using namespace std::chrono_literals;
+  constexpr auto consoleHistoryMax = 200;
+  for (auto log_entry : pc::logger_lines(consoleHistoryMax)) {
+    entries.push_back(generateConsoleEntryVariant(log_entry));
+  }
+  return entries;
+}
+
 void WorkspaceModel::initSessionAdapter(SessionConfigurationAdapter *adapter) {
   if (!adapter) return;
 
@@ -621,6 +678,16 @@ void WorkspaceModel::syncAdapters() {
   }
 
   pc::logger()->trace("Finished syncing adapters");
+}
+
+void WorkspaceModel::syncConsole() {
+  static QVariantList last_entries(6);
+  auto current_entries = consoleOverlayEntries();
+  if (last_entries != current_entries) {
+    emit consoleOverlayEntriesChanged();
+    emit consoleHistoryEntriesChanged();
+    last_entries = current_entries;
+  }
 }
 
 void WorkspaceModel::triggerDeviceDiscovery() {

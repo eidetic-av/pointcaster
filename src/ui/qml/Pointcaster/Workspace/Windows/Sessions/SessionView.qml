@@ -10,11 +10,11 @@ import Pointcaster.Geometry 1.0
 Item {
     id: root
 
+    required property var workspace
     required property var sessionAdapter
     required property var deviceAdapters
     property var cameraAdapter: null
-    property bool showBorder: false
-    property color borderColor: ThemeColors.highlight
+
     readonly property real defaultCameraDistance: 250
     readonly property vector3d defaultOrbitOriginPosition: Qt.vector3d(0, 0, 0)
     readonly property quaternion defaultOrbitOriginRotation: {
@@ -26,6 +26,10 @@ Item {
         const qYaw = Qt.quaternion(Math.cos(yawRad * 0.5), 0, Math.sin(yawRad * 0.5), 0);
         return qYaw.times(qPitch);
     }
+
+    property bool showBorder: false
+    property color borderColor: ThemeColors.highlight
+
     // guards to prevent config<->UI updates from immediately re-committing (causing undo/redo feedback loops)
     property bool _applyingConfigCameraTransform: false
     property bool _applyingConfigCameraToggles: false
@@ -51,9 +55,9 @@ Item {
             return;
 
         root._applyingConfigCameraToggles = true;
-        sessionCameraControls.viewLocked = !!root.cameraAdapter.locked;
-        sessionCameraControls.gridEnabled = !!root.cameraAdapter.show_grid;
-        sessionCameraControls.orthographicEnabled = !!root.cameraAdapter.orthographic;
+        sessionControls.viewLocked = !!root.cameraAdapter.locked;
+        sessionControls.gridEnabled = !!root.cameraAdapter.show_grid;
+        sessionControls.orthographicEnabled = !!root.cameraAdapter.orthographic;
         // drop the guard next tick so any bindings/animations settle first
         Qt.callLater(function () {
             root._applyingConfigCameraToggles = false;
@@ -100,7 +104,7 @@ Item {
         applyCameraTogglesFromConfig();
         applyCameraTransformFromConfig();
         // snap projection immediately on startup / adapter swap
-        camera.setBlend(sessionCameraControls.orthographicEnabled ? 1 : 0, false);
+        camera.setBlend(sessionControls.orthographicEnabled ? 1 : 0, false);
     }
 
     anchors.fill: parent
@@ -120,7 +124,7 @@ Item {
         function onOrthographicChanged() {
             applyCameraTogglesFromConfig();
             // config-driven change gets no animation
-            camera.setBlend(sessionCameraControls.orthographicEnabled ? 1 : 0, false);
+            camera.setBlend(sessionControls.orthographicEnabled ? 1 : 0, false);
         }
 
         function onPositionChanged() {
@@ -154,7 +158,7 @@ Item {
             if (!root.cameraAdapter || root._applyingConfigCameraToggles)
                 return;
 
-            const desired = !!sessionCameraControls.viewLocked;
+            const desired = !!sessionControls.viewLocked;
             const current = !!root.cameraAdapter.locked;
             if (desired === current)
                 return;
@@ -166,7 +170,7 @@ Item {
             if (!root.cameraAdapter || root._applyingConfigCameraToggles)
                 return;
 
-            const desired = !!sessionCameraControls.gridEnabled;
+            const desired = !!sessionControls.gridEnabled;
             const current = !!root.cameraAdapter.show_grid;
             if (desired === current)
                 return;
@@ -176,12 +180,12 @@ Item {
 
         function onOrthographicEnabledChanged() {
             // Animate only for user-driven toggles; config-driven updates should snap.
-            const targetBlend = sessionCameraControls.orthographicEnabled ? 1 : 0;
+            const targetBlend = sessionControls.orthographicEnabled ? 1 : 0;
             camera.setBlend(targetBlend, !root._applyingConfigCameraToggles);
             if (!root.cameraAdapter || root._applyingConfigCameraToggles)
                 return;
 
-            const desired = !!sessionCameraControls.orthographicEnabled;
+            const desired = !!sessionControls.orthographicEnabled;
             const current = !!root.cameraAdapter.orthographic;
             if (desired === current)
                 return;
@@ -189,7 +193,7 @@ Item {
             root.cameraAdapter.set_orthographic(desired);
         }
 
-        target: sessionCameraControls
+        target: sessionControls
     }
 
     View3D {
@@ -296,7 +300,7 @@ Item {
 
                 Timer {
                     // update the point cloud geometry every frame
-                    interval: 1
+                    interval: 12
                     running: true
                     repeat: true
                     onTriggered: geo.updateGeometry()
@@ -305,24 +309,25 @@ Item {
         }
 
         // -------- TESTS -------
-        // -------- LIGHT RIG --------
-        DirectionalLight {
-            eulerRotation: Qt.vector3d(-35, 35, 0)
-            brightness: 55
-            ambientColor: Qt.rgba(0.18, 0.18, 0.18, 1)
-        }
 
-        DirectionalLight {
-            eulerRotation: Qt.vector3d(-5, -120, 0)
-            brightness: 40
-            ambientColor: Qt.rgba(0.26, 0.26, 0.26, 1)
-        }
+        // // -------- LIGHT RIG --------
+        // DirectionalLight {
+        //     eulerRotation: Qt.vector3d(-35, 35, 0)
+        //     brightness: 55
+        //     ambientColor: Qt.rgba(0.18, 0.18, 0.18, 1)
+        // }
 
-        DirectionalLight {
-            eulerRotation: Qt.vector3d(25, 160, 0)
-            brightness: 45
-            ambientColor: Qt.rgba(0.2, 0.2, 0.2, 1)
-        }
+        // DirectionalLight {
+        //     eulerRotation: Qt.vector3d(-5, -120, 0)
+        //     brightness: 40
+        //     ambientColor: Qt.rgba(0.26, 0.26, 0.26, 1)
+        // }
+
+        // DirectionalLight {
+        //     eulerRotation: Qt.vector3d(25, 160, 0)
+        //     brightness: 45
+        //     ambientColor: Qt.rgba(0.2, 0.2, 0.2, 1)
+        // }
 
         // ---------- CAMERA ----------
         Node {
@@ -337,7 +342,7 @@ Item {
                 // 0 = fully perspective, 1 = fully orthographic
                 property real blend: 0
                 // Perspective params
-                property real nearPlane: 100
+                property real nearPlane: 1
                 property real farPlane: 250000
                 property real fovYRadians: 60 * Math.PI / 180
                 // ortho params
@@ -427,18 +432,17 @@ Item {
             acceptedButtons: Qt.LeftButton
             xSpeed: 0.1
             ySpeed: 0.5
-            enabled: !sessionCameraControls.orbitRotationRunning && !sessionCameraControls.viewLocked
+            enabled: !sessionControls.orbitRotationRunning && !sessionControls.viewLocked
             onMouseHeldChanged: {
-                if (mouseHeld || sessionCameraControls.orbitRotationRunning)
+                if (mouseHeld || sessionControls.orbitRotationRunning)
                     return;
 
                 // on release:
                 root.commitCameraTransformToConfig();
             }
             onScrollingChanged: {
-                if (scrolling || sessionCameraControls.orbitRotationRunning)
+                if (scrolling || sessionControls.orbitRotationRunning)
                     return;
-
                 root.commitCameraTransformToConfig();
             }
         }
@@ -449,7 +453,7 @@ Item {
             property real lastY: 0
 
             acceptedButtons: Qt.RightButton
-            enabled: !sessionCameraControls.viewLocked
+            enabled: !sessionControls.viewLocked
             onActiveChanged: {
                 if (active) {
                     lastX = translation.x;
@@ -481,7 +485,7 @@ Item {
                 view.selectedObject = hit || null;
             }
             onDoubleTapped: (p, b) => {
-                if (sessionCameraControls.viewLocked)
+                if (sessionControls.viewLocked)
                     return;
 
                 const result = view.pick(p.position.x, p.position.y);
@@ -504,22 +508,23 @@ Item {
 
                 gridInterval: 100
                 gridAxes: true
-                visible: sessionCameraControls.gridEnabled
+                visible: sessionControls.gridEnabled
             }
         }
     }
 
-    // ---------------- CAMERA CONTROLS OVERLAY ----------------
-    SessionCameraControls {
-        id: sessionCameraControls
-
+    // session window GUI overlaid on top of the View3D
+    SessionControls {
+        id: sessionControls
+        workspace: root.workspace
+        sessionView: root
+        anchors.fill: parent
         view3d: view
         gizmoTarget: gizmoTarget
         orbitOrigin: orbitOrigin
-        sessionView: root
         z: 120
         onRequestHomeCamera: {
-            if (sessionCameraControls.viewLocked)
+            if (sessionControls.viewLocked)
                 return;
 
             focusAnimation.stop();
@@ -579,7 +584,7 @@ Item {
         }
     }
 
-    // border overlay
+    // view border is inset on top of content
     Rectangle {
         anchors.fill: view
         color: "transparent"

@@ -109,6 +109,7 @@ ApplicationWindow {
                 affinities: ["view"]
 
                 SessionView {
+                    workspace: workspaceModel
                     sessionAdapter: sessionDockWidget.sessionAdapter
                     deviceAdapters: workspaceModel.deviceAdapters
                 }

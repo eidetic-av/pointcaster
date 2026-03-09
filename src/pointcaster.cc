@@ -20,6 +20,19 @@ int main(int argc, char *argv[]) {
   qmlRegisterSingletonInstance("Pointcaster", 1, 0, "AppSettings",
                                app_settings);
 
+  if (app_settings->logToFile()) {
+    pc::enable_file_logging("pointcaster-qt");
+  }
+  const auto toggle_file_logging = [&] {
+    if (app_settings->logToFile()) {
+      pc::enable_file_logging("pointcaster-qt");
+    } else {
+      pc::disable_file_logging();
+    }
+  };
+  QObject::connect(app_settings, &pc::AppSettings::logToFileChanged,
+                   app_settings, toggle_file_logging);
+
   pc::set_log_level(app_settings->spdlogLogLevel());
   QObject::connect(
       app_settings, &pc::AppSettings::logLevelChanged, app_settings,
@@ -49,7 +62,8 @@ int main(int argc, char *argv[]) {
   pc::ui::WorkspaceModel workspace_model{&workspace, &app};
 
   pc::logger()->trace("Starting QQmlApplicationEngine...");
-  auto *gui_engine = pc::ui::initialise(&app, &workspace_model, loaded_workspace_path);
+  auto *gui_engine =
+      pc::ui::initialise(&app, &workspace_model, loaded_workspace_path);
 
   pc::ui::load_main_window(&workspace, &app, gui_engine);
 

@@ -9,6 +9,8 @@ import Pointcaster.Workspace 1.0
 Item {
     id: root
 
+    required property var workspace
+
     required property View3D view3d
     required property Node gizmoTarget
     required property Node orbitOrigin
@@ -23,39 +25,34 @@ Item {
     property bool originGizmoCollapsed: false
     property bool cameraToolbarCollapsed: false
 
+    property bool consolePanelCollapsed: true
+    property bool consolePanelWidthExpanded: false
+
     readonly property int originGizmoPanelSize: Math.round(92 * Scaling.uiScale)
     readonly property int panelMargin: Math.round(4 * Scaling.uiScale)
 
+    readonly property int consolePanelHeight: Math.round(200 * Scaling.uiScale)
+
+    property int consolePanelWidth: Math.round(500 * Scaling.uiScale)
+    readonly property int consolePanelWidthMin: Math.round(200 * Scaling.uiScale)
+
     signal requestHomeCamera
 
-    width: originGizmoPanelSize
-    implicitWidth: width
-    implicitHeight: controlsLayout.implicitHeight
-
-    x: parent ? (parent.width - width) : 0
-    y: 0
-
-    onWidthChanged: {
-        if (parent)
-            x = parent.width - width;
-    }
-
-    Connections {
-        target: root.parent
-        function onWidthChanged() {
-            root.x = root.parent.width - root.width;
-        }
-    }
+    anchors.fill: parent
 
     ColumnLayout {
-        id: controlsLayout
+        id: cameraControlsLayout
         spacing: Math.round(13 * Scaling.uiScale)
         Layout.alignment: Qt.AlignRight | Qt.AlignTop
+
+        width: parent.width
+        height: parent.height
 
         Item {
             id: originGizmoCollapser
             width: root.originGizmoPanelSize
             implicitWidth: width
+            Layout.alignment: Qt.AlignRight | Qt.AlignTop
 
             implicitHeight: originGizmoPanel.height + toggleOriginGizmoButton.implicitHeight
             height: implicitHeight
@@ -263,12 +260,10 @@ Item {
                                     mipmap: true
                                 }
 
-
                                 InfoToolTip {
                                     delay: 800
                                     textValue: lockCameraButton.checked ? "Unlock camera" : "Lock camera"
                                 }
-
                             }
 
                             ToolButton {
@@ -349,6 +344,233 @@ Item {
                 }
             }
         }
+
+        Item {
+            id: workspaceControls
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            readonly property int consoleRowHeight: 20 * Scaling.uiScale
+
+            Component {
+                id: consoleRow
+
+                ItemDelegate {
+                    required property var modelData
+
+                    width: root.consolePanelWidth
+                    height: workspaceControls.consoleRowHeight
+
+                    background: Rectangle {
+                        color: "transparent"
+                    }
+
+                    contentItem: Row {
+                        height: parent.height
+                        spacing: 0
+
+                        Text {
+                            text: "["
+                            font: Scaling.monoFont
+                            color: ThemeColors.text
+                        }
+
+                        Text {
+                            text: modelData.logLevel
+                            font: Scaling.monoFont
+                            color: ThemeColors[modelData.logLevelColor]
+                        }
+
+                        Text {
+                            text: "]"
+                            font: Scaling.monoFont
+                            color: ThemeColors.text
+                        }
+
+                        Text {
+                            text: modelData.message
+                            leftPadding: 6 * Scaling.uiScale
+                            font: Scaling.monoFont
+                            color: ThemeColors.text
+                        }
+                    }
+                }
+            }
+
+            Column {
+                id: consoleColumn
+                height: toggleConsoleButton.height + consolePanel.height
+                width: root.consolePanelWidthExpanded ? root.width : root.consolePanelWidth
+
+                x: parent.width - width
+                y: parent.height - height
+
+                IconButton {
+                    id: toggleConsoleButton
+                    z: 99
+                    width: Math.round(16 * Scaling.uiScale)
+                    implicitHeight: Math.round(11 * Scaling.uiScale)
+
+                    anchors.right: parent.right
+                    anchors.rightMargin: root.panelMargin
+
+                    iconSource: FontAwesome.icon(root.consolePanelCollapsed ? "solid/caret-up" : "solid/caret-down")
+                    iconSize: Math.round(9 * Scaling.uiScale)
+                    iconColor: !pressed ? ThemeColors.mid : ThemeColors.midlight
+                    opacity: 0.75
+
+                    leftPadding: Math.round(3 * Scaling.uiScale)
+                    rightPadding: Math.round(3 * Scaling.uiScale)
+
+                    bottomLeftRadius: 0
+                    bottomRightRadius: 0
+
+                    backgroundColor: ThemeColors.dark
+                    hoverColor: ThemeColors.middark
+                    pressedColor: ThemeColors.mid
+
+                    borderWidth: 0
+                    onClicked: root.consolePanelCollapsed = !root.consolePanelCollapsed
+                }
+
+                Item {
+                    id: consolePanel
+
+                    width: parent.width
+                    height: root.consolePanelCollapsed ? 0 : consolePanelHeight
+
+                    opacity: root.consolePanelCollapsed ? 0.66 : 1
+
+                    Behavior on height {
+                        NumberAnimation {
+                            duration: 160
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+
+                    Rectangle {
+                        color: ThemeColors.dark
+                        opacity: 0.75
+                        topLeftRadius: root.consolePanelWidthExpanded ? 0 : Math.round(7 * Scaling.uiScale)
+                        width: parent.width
+                        height: parent.height
+                    }
+
+                    ScrollView {
+                        id: consolePanelScrollView
+                        width: parent.width
+                        height: parent.height
+                        clip: true
+
+                        wheelEnabled: !root.consolePanelCollapsed
+                        ScrollBar.vertical.policy: root.consolePanelCollapsed ? ScrollBar.AlwaysOff : ScrollBar.AlwaysOn
+
+                        ListView {
+                            boundsBehavior: Flickable.StopAtBounds
+                            spacing: 0
+
+                            model: root.workspace ? root.workspace.consoleHistoryEntries : []
+                            delegate: consoleRow
+                        }
+                    }
+
+                    Connections {
+                        target: workspace
+                        function onConsoleHistoryEntriesChanged() {
+                            // scroll to bottom when new console entries added
+                            consolePanelScrollView.ScrollBar.vertical.position = consolePanelScrollView.contentHeight;
+                        }
+                    }
+                }
+            }
+
+            Item {
+                id: consoleOverlay
+                visible: consoleColumn.height == toggleConsoleButton.height
+
+                height: consoleOverlayColumn.height
+                width: root.consolePanelWidth
+
+                x: parent.width - width
+                y: parent.height - height - toggleConsoleButton.height
+
+                Rectangle {
+                    color: ThemeColors.dark
+                    opacity: 0.35
+                    width: parent.width
+                    height: parent.height
+                }
+
+                Column {
+                    id: consoleOverlayColumn
+                    spacing: 0
+
+                    Repeater {
+                        model: root.workspace ? root.workspace.consoleOverlayEntries : []
+                        delegate: consoleRow
+                    }
+                }
+            }
+
+            Item {
+                id: consoleResizeBar
+                y: consoleColumn.y + toggleConsoleButton.height
+                height: consolePanel.height
+
+                width: Math.round(10 * Scaling.uiScale)
+                x: consoleColumn.x - Math.round(width / 2)
+
+                Rectangle {
+                    width: parent.width
+                    height: parent.height
+                    color: "transparent"
+
+                    MouseArea {
+                        id: consoleResizeDrag
+                        z: 50
+                        width: parent.width
+                        height: parent.height
+                        hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton
+                        cursorShape: Qt.SplitHCursor
+                        property bool dragging: false
+                        onPressed: dragging = true
+                        onReleased: dragging = false
+                        onCanceled: dragging = false
+                        preventStealing: true
+                        onPositionChanged: {
+                            if (!dragging)
+                                return;
+                            let newWidth = Math.round(root.consolePanelWidth - mouseX);
+                            newWidth = Math.max(newWidth, root.consolePanelWidthMin);
+                            newWidth = Math.min(newWidth, root.width);
+                            root.consolePanelWidth = newWidth;
+                            root.consolePanelWidthExpanded = newWidth >= root.width - consoleResizeBar.width;
+                        }
+                    }
+                }
+
+                Connections {
+                    target: root
+                    function onWidthChanged() {
+                        if (root.consolePanelWidthExpanded) {
+                            root.consolePanelWidth = root.width
+                        }
+                    }
+                }
+            }
+
+            Timer {
+                // update the console every 100ms
+                interval: 100
+                running: true
+                repeat: true
+                onTriggered: {
+                    root.workspace.syncConsole();
+                    // console.log(root.workspace.consoleOverlayEntries())
+                }
+            }
+        }
     }
 
     PropertyAnimation {
@@ -358,7 +580,8 @@ Item {
         duration: 220
         easing.type: Easing.OutCubic
         onStopped: {
-            if (root.sessionView == null || root.sessionView == undefined) return;
+            if (root.sessionView == null || root.sessionView == undefined)
+                return;
             root.sessionView.commitCameraTransformToConfig();
         }
     }

@@ -44,7 +44,7 @@ qt_add_qml_module(PointcasterWorkspace
         Windows/Devices/DevicesWindow.qml
         Windows/Sessions/SessionView.qml
         Windows/Sessions/CentralSessionView.qml
-        Windows/Sessions/SessionCameraControls.qml
+        Windows/Sessions/SessionControls.qml
     RESOURCES
         Resources/Fonts/AtkinsonHyperlegibleNext-Light.otf
         Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf
