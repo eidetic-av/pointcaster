@@ -50,6 +50,10 @@ qt_add_qml_module(PointcasterWorkspace
         Resources/Fonts/AtkinsonHyperlegibleNext-Regular.otf
         Resources/Fonts/AtkinsonHyperlegibleNext-Medium.otf
         Resources/Fonts/AtkinsonHyperlegibleNext-Bold.otf
+        Resources/Fonts/AtkinsonHyperlegibleMono-Light.otf
+        Resources/Fonts/AtkinsonHyperlegibleMono-Regular.otf
+        Resources/Fonts/AtkinsonHyperlegibleMono-Medium.otf
+        Resources/Fonts/AtkinsonHyperlegibleMono-Bold.otf
     SOURCES
         # TODO need to be able to add from a subdir but atm this doesn't work
         net_utils.h

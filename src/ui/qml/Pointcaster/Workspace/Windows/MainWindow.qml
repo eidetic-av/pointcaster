@@ -31,6 +31,19 @@ ApplicationWindow {
         source: "../Resources/Fonts/AtkinsonHyperlegibleNext-Bold.otf"
     }
 
+    FontLoader {
+        source: "../Resources/Fonts/AtkinsonHyperlegibleMono-Light.otf"
+    }
+    FontLoader {
+        source: "../Resources/Fonts/AtkinsonHyperlegibleMono-Regular.otf"
+    }
+    FontLoader {
+        source: "../Resources/Fonts/AtkinsonHyperlegibleMono-Medium.otf"
+    }
+    FontLoader {
+        source: "../Resources/Fonts/AtkinsonHyperlegibleMono-Bold.otf"
+    }
+
     font.family: "Atkinson Hyperlegible Next"
 
     FileDialog {
