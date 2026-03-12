@@ -8,16 +8,16 @@ namespace pc::profiling {
 #ifdef TRACY_ENABLE
 
 void start_profiler() {
-  pc::logger()->info("Starting Tracy profiling session");
+  pc::logger()->trace("Starting Tracy profiling session");
   // TracySetProgramName("pointcaster");
   tracy::StartupProfiler();
-  pc::logger()->info("Started");
+  pc::logger()->info("Started Tracy profiling session");
 }
 
 void stop_profiler() {
-  pc::logger()->info("Stopping Tracy profiling session");
+  pc::logger()->trace("Stopping Tracy profiling session");
   tracy::ShutdownProfiler();
-  pc::logger()->info("Stopped");
+  pc::logger()->info("Stopped Tracy profiling session");
 }
 
 #else

@@ -264,8 +264,10 @@ void PrometheusServer::set_enabled(bool enabled,
   std::scoped_lock lock(server_host_access);
 
   if (!enabled) {
-    server_host.reset();
-    pc::logger()->info("Disabled prometheus endpoint");
+    if (server_host.has_value()) {
+      server_host.reset();
+      pc::logger()->info("Stopped prometheus endpoint");
+    }
     return;
   }
 

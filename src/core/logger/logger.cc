@@ -133,12 +133,12 @@ void enable_file_logging(std::string_view target) {
 
     logger->flush_on(spdlog::level::trace);
 
-    logger->info("enabled file logging: {}", path.string());
+    logger->info("Logging output to '{}'", path.string());
   } catch (const std::exception &e) {
-    logger->error("failed to enable file logging {}: {}", path.string(),
+    logger->error("Failed to enable file logging to '{}': {}", path.string(),
                   e.what());
   } catch (...) {
-    logger->error("failed to enable file logging {}: <unknown error>",
+    logger->error("Failed to enable file logging to '{}': <unknown error>",
                   path.string());
   }
 }

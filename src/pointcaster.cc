@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
                        pc::profiling::stop_profiler();
                    });
 
-  pc::logger()->debug("Starting QGuiApplication...");
+  pc::logger()->trace("Starting QGuiApplication...");
   QGuiApplication app(argc, argv);
 
   pc::logger()->trace("Initialising Workspace...");
@@ -71,11 +71,18 @@ int main(int argc, char *argv[]) {
   // auto-loaded or empty
   Workspace workspace(workspace_config);
 
+  pc::logger()->trace("Initialised Workspace");
+  pc::logger()->trace("Initialising Workspace model");
+
   pc::ui::WorkspaceModel workspace_model{&workspace, &app};
+
+  pc::logger()->trace("Initialised Workspace model");
 
   pc::logger()->trace("Starting QQmlApplicationEngine...");
   auto *gui_engine =
       pc::ui::initialise(&app, &workspace_model, loaded_workspace_path);
+
+  pc::logger()->trace("Loading main window");
 
   pc::ui::load_main_window(&workspace, &app, gui_engine);
 
