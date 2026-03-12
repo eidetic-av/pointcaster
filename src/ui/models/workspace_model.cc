@@ -518,7 +518,6 @@ DeviceAdapter *WorkspaceModel::makeDeviceAdapterForPlugin(
     pc::devices::DevicePlugin *plugin,
     pc::devices::DeviceConfigurationVariant &config_variant) {
   DeviceAdapter *result = nullptr;
-
   std::visit(
       [this, plugin, &result](auto &device_config) {
         using ConfigType = std::decay_t<decltype(device_config)>;
@@ -606,8 +605,14 @@ void WorkspaceModel::syncAdapters() {
 
   // ---------------- devices ----------------
   {
+    pc::logger()->trace("Starting device adapter sync");
+    pc::logger()->trace("Workspace device count: {}",
+                        _workspace.devices.size());
+
     QHash<QString, DeviceAdapter *> existing_by_id;
     existing_by_id.reserve(_deviceAdapters.size());
+
+    // TODO ** we are crashing here
 
     for (QObject *obj : _deviceAdapters) {
       auto *a = qobject_cast<DeviceAdapter *>(obj);
@@ -621,49 +626,61 @@ void WorkspaceModel::syncAdapters() {
 
     std::scoped_lock lock(_workspace.config_access);
 
-    auto device_id_from_variant =
-        [](pc::devices::DeviceConfigurationVariant &v) -> QString {
-      return std::visit(
-          [](auto &cfg) -> QString { return QString::fromStdString(cfg.id); },
-          v);
-    };
-
-    pc::logger()->trace("Device count: {}", _workspace.devices.size());
     for (auto &device_plugin : _workspace.devices) {
       auto *plugin = device_plugin.get();
-      if (!plugin) continue;
+      DeviceAdapter *adapter;
 
-      auto &cfg_variant = plugin->config();
-      const QString id = device_id_from_variant(cfg_variant);
-      if (id.isEmpty()) continue;
+      using DeviceConfigVariantRef =
+          std::reference_wrapper<devices::DeviceConfigurationVariant>;
+      std::optional<DeviceConfigVariantRef> device_config;
 
-      DeviceAdapter *adapter = existing_by_id.take(id);
-
-      if (adapter) {
-        if (!adapter->setConfig(cfg_variant)) {
-          adapter->deleteLater();
-          adapter = nullptr;
+      if (plugin) device_config = plugin->config();
+      if (device_config.has_value()) {
+        auto config = device_config.value();
+        auto [device_id, _] = devices::device_info_from_variant(config);
+        const QString id(device_id.data());
+        if (!id.isEmpty()) {
+          // try an existing adapter
+          adapter = existing_by_id.take(id);
+          if (adapter) {
+            // if an adapter already exists, set config, and if it fails, its
+            // not the right config type, so delete this existing adapter
+            bool sync_success = adapter->setConfig(config);
+            if (!sync_success) {
+              adapter->deleteLater();
+              adapter = nullptr;
+            }
+          }
+        }
+        if (!adapter) {
+          adapter = makeDeviceAdapterForPlugin(plugin, config);
+        }
+        if (adapter) {
+          // TODO what is this for
+          plugin->set_status_callback(
+              [adapterPtr = QPointer<DeviceAdapter>(adapter)](
+                  pc::devices::DeviceStatus status) {
+                if (!adapterPtr) return;
+                QMetaObject::invokeMethod(
+                    adapterPtr.data(),
+                    [adapterPtr, status]() {
+                      if (!adapterPtr) return;
+                      adapterPtr->setStatusFromCore(status);
+                    },
+                    Qt::QueuedConnection);
+              });
         }
       }
 
-      if (!adapter) {
-        adapter = makeDeviceAdapterForPlugin(plugin, cfg_variant);
-      } else {
-        plugin->set_status_callback(
-            [adapterPtr = QPointer<DeviceAdapter>(adapter)](
-                pc::devices::DeviceStatus status) {
-              if (!adapterPtr) return;
-              QMetaObject::invokeMethod(
-                  adapterPtr.data(),
-                  [adapterPtr, status]() {
-                    if (!adapterPtr) return;
-                    adapterPtr->setStatusFromCore(status);
-                  },
-                  Qt::QueuedConnection);
-            });
+      // if we managed to construct or get an existing valid apater,
+      // add this to our new devices list
+      if (adapter)
+        new_ordered_devices.append(adapter);
+      else {
+        pc::logger()->error("no adapter");
+        // we we didn't finish this loop with a valid adapter, we need one in
+        // a null state adapter = makeDeviceAdapterForPlugin(nullptr);
       }
-
-      if (adapter) new_ordered_devices.append(adapter);
     }
 
     for (auto it = existing_by_id.begin(); it != existing_by_id.end(); ++it) {
@@ -678,6 +695,7 @@ void WorkspaceModel::syncAdapters() {
   }
 
   pc::logger()->trace("Finished syncing adapters");
+  pc::logger()->trace("Workspace device count: {}", _workspace.devices.size());
 }
 
 void WorkspaceModel::syncConsole() {

@@ -17,7 +17,6 @@
 #include <mutex>
 #include <optional>
 #include <pointcaster/point_cloud.h>
-#include <print>
 #include <profiling/profiling_mutex.h>
 #include <readerwriterqueue/readerwritercircularbuffer.h>
 #include <thread>
@@ -40,6 +39,8 @@ public:
   OrbbecDevice(OrbbecDevice &&) = delete;
   OrbbecDevice &operator=(OrbbecDevice &&) = delete;
 
+  void init() override;
+
   std::vector<DiscoveredDevice> discovered_devices() const override;
   void refresh_discovery() override;
   void add_discovery_change_callback(std::function<void()> cb) override;
@@ -47,7 +48,7 @@ public:
 
   DeviceStatus status() const override;
 
-  std::optional<PointCloudRef> point_cloud() override;
+  const PointCloud &point_cloud() override;
 
   // TODO: maybe it would better to return a constant reference to the
   // pointcloud here so its decided at the call site if a copy is required
@@ -66,6 +67,8 @@ private:
   // TODO maybe not the best data structure for a standard triple buffer?
   // capacity can't even technically be 3 (must be pow of 2)
   moodycamel::BlockingReaderWriterCircularBuffer<PointCloud> _frame_buffer{3};
+
+  PointCloud _current_point_cloud{{}, {}};
 
   std::vector<OBColorPoint> _point_buffer;
   std::mutex _point_buffer_access;

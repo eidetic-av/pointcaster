@@ -1,5 +1,6 @@
 #include "plugin_loader.h"
 #include "devices/device_plugin.h"
+#include "devices/null/null_device.h"
 
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
@@ -13,6 +14,11 @@
 #include <filesystem>
 #include <windows.h>
 #endif
+
+// import static macros need to be used in global namespace
+static void import_static_plugins() {
+  CORRADE_PLUGIN_IMPORT(NullDevice)
+}
 
 namespace pc::plugins {
 
@@ -61,6 +67,8 @@ load_device_plugins(pc::Workspace &workspace) {
   configure_search_paths(plugin_root_directory);
 #endif
 
+  import_static_plugins();
+
   auto device_plugin_manager =
       std::make_unique<Manager<devices::DevicePlugin>>();
 
@@ -70,23 +78,29 @@ load_device_plugins(pc::Workspace &workspace) {
     const auto plugin_status = device_plugin_manager->load(plugin_name);
     if (plugin_status & LoadState::Loaded) {
       workspace.loaded_device_plugin_names.push_back(plugin_name);
-      pc::logger()->info("Loaded plugin: {}", std::string(plugin_name));
+
+      if (plugin_name == "NullDevice") continue;
+
+      pc::logger()->info("Loaded plugin '{}'", std::string(plugin_name));
 
       // create an instance of the plugin that handles device discovery and
       // other static single plugin context things...
       if (!workspace.discovery_plugins.contains(plugin_name)) {
+        pc::logger()->trace("Initialising '{}' discovery instance",
+                            std::string(plugin_name));
         auto discovery_instance =
             device_plugin_manager->instantiate(plugin_name);
         if (discovery_instance) {
           // start discovery
           discovery_instance->set_is_discovery_instance(true);
-          // and pass it over to the workspace that from now on owns the plugin
-          // instance
+          // and pass it over to the workspace that from now on owns the
+          // plugin instance
           workspace.discovery_plugins.emplace(std::string(plugin_name),
                                               std::move(discovery_instance));
+          pc::logger()->trace("{} discovery instance added to workspace",
+                              std::string(plugin_name));
         }
       }
-
     }
   }
 

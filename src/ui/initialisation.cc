@@ -32,12 +32,13 @@ initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
   pc::ui::register_qml_uncreatable_types();
 
   // create single ApplicationEngine instance
-  static QQmlApplicationEngine engine;
-  engine.rootContext()->setContextProperty("workspaceModel", workspace_model);
+  static QQmlApplicationEngine qml_engine;
+  qml_engine.rootContext()->setContextProperty("workspaceModel",
+                                               workspace_model);
 
   // initialise kddw
   KDDockWidgets::initFrontend(KDDockWidgets::FrontendType::QtQuick);
-  KDDockWidgets::QtQuick::Platform::instance()->setQmlEngine(&engine);
+  KDDockWidgets::QtQuick::Platform::instance()->setQmlEngine(&qml_engine);
   auto &docking_config = KDDockWidgets::Config::self();
   docking_config.setViewFactory(new pc::ui::CustomViewFactory());
   using KDDockWidgets::Config;
@@ -48,7 +49,7 @@ initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
   // initialise our font awesome singleton
   static fa::QtAwesome awesome(app);
   awesome.initFontAwesome();
-  engine.addImageProvider("fa", new QtAwesomeQuickImageProvider(&awesome));
+  qml_engine.addImageProvider("fa", new QtAwesomeQuickImageProvider(&awesome));
 
   // if we auto-loaded a workspace, find any adjacent layout file to load the UI
   if (loaded_workspace_path.has_value()) {
@@ -61,7 +62,7 @@ initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
 
       // wait until we load all the windows before manipulating the layout
       QObject::connect(
-          &engine, &QQmlApplicationEngine::objectCreated, app,
+          &qml_engine, &QQmlApplicationEngine::objectCreated, app,
           [fp = layout_file_path.string()]() {
             const auto restore_options = KDDockWidgets::RestoreOption_None;
             KDDockWidgets::LayoutSaver saver(restore_options);
@@ -71,14 +72,18 @@ initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
     }
   }
 
-  // terminate the application if qml can't initialise
+  // log to console if qml engine can't initialise
   QObject::connect(
-      &engine, &QQmlApplicationEngine::objectCreationFailed, app,
-      []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
+      &qml_engine, &QQmlApplicationEngine::objectCreationFailed, app,
+      []() {
+        pc::logger()->error("Failed to initialise QML engine! Pointcaster will "
+                            "run without a GUI");
+      },
+      Qt::QueuedConnection);
 
   // connect qt point cloud rendering to our session instances
 
-  return &engine;
+  return &qml_engine;
 }
 
 void load_main_window(Workspace *workspace, QGuiApplication *app,
@@ -109,7 +114,11 @@ void load_main_window(Workspace *workspace, QGuiApplication *app,
   } else {
     pc::logger()->trace("Loading compiled QML...");
     // normal packaged/built module path
-    engine->loadFromModule("Pointcaster.Workspace", "MainWindow");
+    try {
+      engine->loadFromModule("Pointcaster.Workspace", "MainWindow");
+    } catch (...) {
+      pc::logger()->error("Failed to load main window");
+    }
   }
 }
 

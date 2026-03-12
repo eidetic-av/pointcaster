@@ -15,14 +15,14 @@ add_library(pointcaster::metrics ALIAS pointcaster_metrics)
 find_package(prometheus-cpp CONFIG REQUIRED)
 
 # lock free queues
-find_package(unofficial-concurrentqueue CONFIG REQUIRED)
+find_package(concurrentqueue CONFIG REQUIRED)
 
 target_link_libraries(pointcaster_metrics PRIVATE
   pointcaster::core
   pointcaster::app_settings
   prometheus-cpp::core 
   prometheus-cpp::pull
-  unofficial::concurrentqueue::concurrentqueue
+  concurrentqueue::concurrentqueue
 )
 
 target_compile_definitions(pointcaster_metrics PRIVATE METRICS_DLL)

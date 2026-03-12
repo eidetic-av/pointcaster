@@ -136,7 +136,7 @@ RUN set -eux; \
     aqt install-qt \
         --outputdir "${QT_INSTALL_DIR}" \
         linux desktop ${QT_VERSION} linux_gcc_64 \
-        -m qtshadertools qtquick3d
+        -m qtshadertools qtquick3d qttasktree
 
 ENV CMAKE_PREFIX_PATH="${QT_INSTALL_DIR}/${QT_VERSION}/gcc_64"
 

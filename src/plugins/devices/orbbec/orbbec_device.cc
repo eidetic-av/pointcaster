@@ -6,6 +6,7 @@
 #include <atomic>
 #include <chrono>
 #include <core/logger/logger.h>
+#include <core/profiling/profiling_zone.h>
 #include <cstring>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/h/ObTypes.h>
@@ -39,13 +40,25 @@ namespace pc::devices {
 OrbbecDevice::OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
                            Corrade::Containers::StringView plugin)
     : DevicePlugin(manager, plugin) {
+  pc::logger()->trace("Creating new OrbbecDevice");
   try {
     orbbec_context().retain_user();
     orbbec_context().discover_devices_async();
   } catch (...) {
     pc::logger()->error("Exception during Orbbec context initialisation");
   }
+  pc::logger()->trace("Created OrbbecDevice");
+}
 
+OrbbecDevice::~OrbbecDevice() {
+  stop_sync();
+  _timeout_thread.request_stop();
+  orbbec_context().release_user();
+  pc::logger()->trace("Destroyed OrbbecDevice{}",
+                      _is_discovery_instance ? " discovery instance" : "");
+}
+
+void OrbbecDevice::init() {
   // do our device initialisation / start procedure when
   // the context is known to be ready
   orbbec_context().run_on_ready([this] {
@@ -56,15 +69,6 @@ OrbbecDevice::OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
       timeout_thread_work(stop_token);
     });
   });
-
-  pc::logger()->trace("Created OrbbecDevice");
-}
-
-OrbbecDevice::~OrbbecDevice() {
-  stop_sync();
-  _timeout_thread.request_stop();
-  orbbec_context().release_user();
-  pc::logger()->trace("Destroyed OrbbecDevice");
 }
 
 std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
@@ -405,6 +409,9 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       auto depth_frame = frame_set->depthFrame();
       if (!colour_frame || !depth_frame) continue;
 
+      pc::profiling::ProfilingZone receive_frame_zone(
+          "orbbec_frame_in_to_pointcloud");
+
       const uint32_t width = colour_frame->width();
       const uint32_t height = colour_frame->height();
       const size_t point_count = static_cast<size_t>(width) * height;
@@ -518,24 +525,11 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
   }
 }
 
-std::optional<PointCloudRef> OrbbecDevice::point_cloud() {
-
-  // TODO this is a mess, device should just hold point cloud and provide
-  // a ref to it when consumers try to access. we definitely shouldn't be
-  // dequeuing our main queu here cause we might have multiple consumers
-  // requiring the same frame
-
-  static PointCloud _current_point_cloud{};
-
+const PointCloud &OrbbecDevice::point_cloud() {
   if (_buffer_updated.load(std::memory_order_relaxed)) {
-
     _frame_buffer.try_dequeue(_current_point_cloud);
-
     _buffer_updated = false;
-    // result.resize(_)
-    // _point_buffer
   }
-
   return std::ref(_current_point_cloud);
 };
 

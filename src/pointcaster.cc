@@ -7,6 +7,7 @@
 #include <core/profiling/profiler.h>
 #include <optional>
 #include <print>
+#include <tracy/Tracy.hpp>
 #include <ui/initialisation.h>
 #include <ui/models/workspace_model.h>
 #include <workspace/workspace.h>
@@ -14,7 +15,6 @@
 using namespace pc;
 
 int main(int argc, char *argv[]) {
-
   std::println("This is pointcaster 0.2.0");
 
   auto *app_settings = AppSettings::instance();

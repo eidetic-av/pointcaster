@@ -22,6 +22,7 @@ Dialog {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     footer: Item {
+        id: footerContent
         implicitHeight: footerLayout.implicitHeight
         width: parent.width
 
@@ -39,13 +40,16 @@ Dialog {
         }
     }
 
-    contentItem: RowLayout {
+    contentItem: Row {
+        id: windowContent
+        width: root.width
+        height: root.height - footerContent.height
         spacing: 0
 
         ListView {
             id: sidebar
-            Layout.preferredWidth: Math.round(180 * Scaling.uiScale)
-            Layout.fillHeight: true
+            width: Math.round(180 * Scaling.uiScale)
+            height: windowContent.height
             clip: true
 
             model: SettingsPageRegistry
@@ -57,23 +61,21 @@ Dialog {
                 font: Scaling.uiFont
                 highlighted: ListView.isCurrentItem
                 padding: Math.round(8 * Scaling.uiScale)
-
                 onClicked: root.setPageIndex(index)
             }
         }
 
         Rectangle {
             width: Math.max(1, Math.round(1 * Scaling.uiScale))
-            Layout.fillHeight: true
+            height: root.height - footerContent.height
             color: Qt.darker(palette.window, 1.15)
         }
 
         StackView {
             id: stack
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            width: windowContent.width - sidebar.width
+            height: root.height - footerContent.height
             clip: true
-
             replaceEnter: Transition {}
             replaceExit: Transition {}
         }

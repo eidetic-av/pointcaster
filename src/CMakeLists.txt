@@ -35,6 +35,12 @@ find_package(reflectcpp CONFIG REQUIRED)
 # - application settings initialisation requires Qml dependency linked in the main application
 find_package(Qt6 REQUIRED COMPONENTS Qml)
 
+# we set qt automoc off because QObjects we include should be
+# rendered inside the ui lib not the exe itself (otherwise Qt MOC runs twice)
+set_target_properties(pointcaster PROPERTIES
+  AUTOMOC OFF
+)
+
 target_link_libraries(pointcaster PRIVATE 
   pointcaster::core 
   pointcaster::plugins
@@ -53,6 +59,7 @@ target_precompile_headers(pointcaster PRIVATE
   <string>
   <string_view>
   <vector>
+  <tuple>
   <memory>
   <mutex>
   <thread>
@@ -62,12 +69,6 @@ target_precompile_headers(pointcaster PRIVATE
   <Corrade/Containers/StringView.h>
   <QCoreApplication>
   <QUrl>
-)
-
-# we set qt automoc off because QObjects we include should be
-# rendered inside the ui lib not the exe itself (otherwise Qt MOC runs twice)
-set_target_properties(pointcaster PROPERTIES
-  AUTOMOC OFF
 )
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")

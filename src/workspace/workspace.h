@@ -27,11 +27,11 @@ public:
 
   std::unique_ptr<Corrade::PluginManager::Manager<devices::DevicePlugin>>
       device_plugin_manager;
-  std::vector<std::string> loaded_device_plugin_names;
-  std::vector<Corrade::Containers::Pointer<devices::DevicePlugin>> devices;
+  std::vector<std::string> loaded_device_plugin_names{};
+  std::vector<Corrade::Containers::Pointer<devices::DevicePlugin>> devices{};
   std::unordered_map<std::string,
                      Corrade::Containers::Pointer<pc::devices::DevicePlugin>>
-      discovery_plugins;
+      discovery_plugins{};
 
   std::unique_ptr<metrics::PrometheusServer> prometheus_server;
 

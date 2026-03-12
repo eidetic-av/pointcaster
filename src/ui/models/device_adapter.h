@@ -19,6 +19,8 @@ class DeviceAdapter : public ConfigAdapter {
   Q_PROPERTY(pc::devices::ui::WorkspaceDeviceStatus status READ status NOTIFY
                  statusChanged)
 
+  Q_PROPERTY(bool pluginNullState READ pluginNullState)
+
 public:
   explicit DeviceAdapter(pc::devices::DevicePlugin *plugin,
                          QObject *parent = nullptr)
@@ -37,6 +39,11 @@ public:
   // ----------------- identity -----------------
   int deviceIndex() const { return _deviceIndex; }
   void setDeviceIndex(int index) { _deviceIndex = index; }
+
+  bool pluginNullState() const {
+    if (!_plugin) return false;
+    return _plugin->plugin_null_state();
+  }
 
   pc::devices::DevicePlugin *plugin() const { return _plugin; }
 
@@ -65,10 +72,7 @@ public:
     _plugin->restart();
   }
 
-  std::optional<pc::PointCloudRef> point_cloud() {
-    if (_plugin == nullptr) return std::nullopt;
-    return _plugin->point_cloud();
-  };
+  const pc::PointCloud &point_cloud() { return _plugin->point_cloud(); };
 
 signals:
   void statusChanged();

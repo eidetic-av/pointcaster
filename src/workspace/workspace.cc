@@ -18,6 +18,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -67,23 +68,14 @@ void Workspace::apply_new_config(const WorkspaceConfiguration &new_config) {
 }
 
 void Workspace::sync_devices() {
-  std::vector<devices::DeviceConfigurationVariant> desired_device_configs;
+  pc::logger()->trace("Syncing devices");
+  std::vector<devices::DeviceConfigurationVariant> device_configs;
   {
     std::scoped_lock lock(config_access);
-    desired_device_configs = config.devices;
+    device_configs = config.devices;
   }
 
-  auto device_id_from_variant =
-      [](const devices::DeviceConfigurationVariant &v) -> std::string {
-    return std::visit([](const auto &cfg) { return cfg.id; }, v);
-  };
-
-  auto plugin_name_from_variant =
-      [](const devices::DeviceConfigurationVariant &v) -> std::string_view {
-    return std::visit(
-        [](const auto &cfg) -> std::string_view { return cfg.PluginName; }, v);
-  };
-
+  // check for duplicates
   std::unordered_map<std::string, std::size_t> existing_index_by_id;
   existing_index_by_id.reserve(devices.size());
 
@@ -91,18 +83,18 @@ void Workspace::sync_devices() {
     auto &p = devices[i];
     if (!p) continue;
 
-    const std::string id = device_id_from_variant(p->config());
+    const auto [id, _] = device_info_from_variant(p->config());
     if (id.empty()) continue;
 
-    // If duplicates exist, keep the first and let the rest fall through
-    // cleanup.
+    // If duplicates exist, keep the first
     if (!existing_index_by_id.contains(id)) {
       existing_index_by_id.emplace(id, i);
     }
   }
 
+  // the result collection of device plugins
   std::vector<Pointer<pc::devices::DevicePlugin>> new_devices;
-  new_devices.reserve(desired_device_configs.size());
+  new_devices.reserve(device_configs.size());
 
   auto stop_plugin_best_effort = [](pc::devices::DevicePlugin *plugin) {
     if (!plugin) return;
@@ -113,26 +105,32 @@ void Workspace::sync_devices() {
     }
   };
 
-  for (auto &desired_variant : desired_device_configs) {
-    const std::string desired_id = device_id_from_variant(desired_variant);
-    if (desired_id.empty()) {
+  for (auto &device_variant : device_configs) {
+
+    auto [device_id, device_plugin_name] =
+        device_info_from_variant(device_variant);
+
+    if (device_id.empty()) {
       pc::logger()->warn("Device config missing id; skipping device entry");
       continue;
     }
 
-    const std::string_view desired_plugin_name =
-        plugin_name_from_variant(desired_variant);
+    bool plugin_loaded =
+        plugins::is_loaded(*device_plugin_manager, device_plugin_name);
 
-    if (!plugins::is_loaded(*device_plugin_manager, desired_plugin_name)) {
-      pc::logger()->warn(
-          "Device plugin '{}' not loaded; skipping device id='{}'",
-          std::string(desired_plugin_name), desired_id);
-      continue;
+    if (!plugin_loaded) {
+      pc::logger()->error(
+          "Device plugin '{}' not loaded when syncing device '{}'",
+          device_plugin_name, device_id);
+      // treat the device plugin as NullDevice
+      device_plugin_name = "NullDevice";
+      plugin_loaded = true;
     }
 
-    Pointer<pc::devices::DevicePlugin> keep_or_new;
+    Pointer<pc::devices::DevicePlugin> device_plugin = nullptr;
+    bool new_device_instance = false;
 
-    auto it = existing_index_by_id.find(desired_id);
+    auto it = existing_index_by_id.find(device_id);
     if (it != existing_index_by_id.end()) {
       // Reuse existing plugin instance for this id if variant type matches.
       const std::size_t existing_index = it->second;
@@ -142,47 +140,53 @@ void Workspace::sync_devices() {
         auto &existing_ptr = devices[existing_index];
         auto *existing_plugin = existing_ptr.get();
 
-        const std::string_view existing_plugin_name =
-            plugin_name_from_variant(existing_plugin->config());
+        const auto [_, existing_plugin_name] =
+            device_info_from_variant(existing_plugin->config());
 
-        const bool plugin_type_matches =
-            (existing_plugin_name == desired_plugin_name);
-
-        if (plugin_type_matches) {
+        if (existing_plugin_name == device_plugin_name) {
           // Update config in-place (does not restart pipelines by itself).
-          existing_plugin->update_config(desired_variant);
-          keep_or_new = std::move(existing_ptr);
+          existing_plugin->update_config(device_variant);
+          device_plugin = std::move(existing_ptr);
         } else {
-          // Same id but different variant type: replace plugin instance.
-          pc::logger()->warn("Device id='{}' changed plugin type '{}' -> '{}'; "
-                             "replacing plugin",
-                             desired_id, std::string(existing_plugin_name),
-                             std::string(desired_plugin_name));
+          // Same id but different variant type (device type changed), so
+          // replace plugin instance
+          pc::logger()->info("Device id='{}' changed plugin type '{}' -> '{}'",
+                             device_id, existing_plugin_name,
+                             device_plugin_name);
 
           stop_plugin_best_effort(existing_plugin);
           existing_ptr = nullptr;
 
-          keep_or_new =
-              device_plugin_manager->instantiate(desired_plugin_name.data());
-          if (keep_or_new) {
-            keep_or_new->set_is_discovery_instance(false);
-            keep_or_new->update_config(desired_variant);
+          if (plugin_loaded) {
+            device_plugin =
+                device_plugin_manager->instantiate(device_plugin_name);
+            new_device_instance = true;
+          } else {
+            device_plugin = device_plugin_manager->instantiate("NullDevice");
           }
+          device_plugin->set_is_discovery_instance(false);
+          device_plugin->update_config(device_variant);
         }
       }
     } else {
-      // New id: instantiate fresh.
-      keep_or_new =
-          device_plugin_manager->instantiate(desired_plugin_name.data());
-      if (keep_or_new) {
-        keep_or_new->set_is_discovery_instance(false);
-        keep_or_new->update_config(desired_variant);
+      if (plugin_loaded) {
+        pc::logger()->trace("Instantiating a new device plugin instance");
+        device_plugin = device_plugin_manager->instantiate(device_plugin_name);
+        new_device_instance = true;
+      }
+      if (device_plugin) {
+        std::visit(
+            [](auto &&config) {
+              pc::logger()->debug("Applying device configuration: {}",
+                                  config.ip);
+            },
+            device_variant);
+        device_plugin->set_is_discovery_instance(false);
+        device_plugin->update_config(device_variant);
       }
     }
-
-    if (keep_or_new) {
-      new_devices.push_back(std::move(keep_or_new));
-    }
+    if (new_device_instance) device_plugin->init();
+    new_devices.push_back(std::move(device_plugin));
   }
 
   // Remaining entries in existing_index_by_id are deletions.
@@ -196,7 +200,6 @@ void Workspace::sync_devices() {
     devices[idx] = nullptr;
   }
 
-  // Replace with the new ordered list.
   devices = std::move(new_devices);
 }
 

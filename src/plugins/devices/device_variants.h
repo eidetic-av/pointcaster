@@ -26,4 +26,10 @@ constexpr void for_each_device_config_type(Callback cb) {
   }(std::make_index_sequence<device_config_count>{});
 }
 
+constexpr auto device_info_from_variant(const DeviceConfigurationVariant &v) {
+  return std::visit(
+      [](const auto &cfg) { return std::make_tuple(cfg.id, cfg.PluginName); },
+      v);
+}
+
 } // namespace pc::devices

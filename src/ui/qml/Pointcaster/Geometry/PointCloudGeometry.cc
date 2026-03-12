@@ -18,16 +18,14 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
   // if this geometry has a device plugin assigned to render
   if (_deviceAdapter && _deviceAdapter->plugin()) {
 
-    auto devicePointCloud = _deviceAdapter->plugin()->point_cloud();
-    if (!devicePointCloud.has_value()) return;
+    const auto &inputCloud = _deviceAdapter->plugin()->point_cloud();
 
     bool localGeometryNeedsUpdating =
-        !_lastPointCloud.has_value() || *_lastPointCloud != *devicePointCloud;
+        _lastPointCloud == nullptr || _lastPointCloud != &inputCloud;
 
     localGeometryNeedsUpdating = true;
 
     if (localGeometryNeedsUpdating) {
-      const auto &inputCloud = devicePointCloud.value().get();
       const auto &positions = inputCloud.positions;
       const auto &colors = inputCloud.colors;
 
@@ -70,6 +68,6 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
       update();
     }
 
-    _lastPointCloud = {*devicePointCloud};
+    _lastPointCloud = &inputCloud;
   }
 }

@@ -1,7 +1,7 @@
 #include "orbbec_context.h"
 
 #include <chrono>
-#include <concurrentqueue/concurrentqueue.h>
+#include <concurrentqueue/moodycamel/concurrentqueue.h>
 #include <core/logger/logger.h>
 #include <libobsensor/ObSensor.hpp>
 #include <mutex>
@@ -27,6 +27,8 @@ void ObContext::init_async() {
     // another thread just started initialisation...
     return;
   }
+
+  pc::logger()->trace("Initialising ObContext");
 
   ObContext *self = this;
 

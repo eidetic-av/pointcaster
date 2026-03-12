@@ -1,0 +1,55 @@
+#pragma once
+
+#include "../device_plugin.h"
+#include "plugins/devices/device_status.h"
+
+#include <Corrade/Containers/Array.h>
+#include <Corrade/Containers/String.h>
+#include <Corrade/Containers/StringView.h>
+#include <Corrade/PluginManager/AbstractManager.h>
+#include <Corrade/PluginManager/AbstractPlugin.h>
+
+namespace pc::devices {
+
+class NullDevice final : public DevicePlugin {
+public:
+  explicit NullDevice(Corrade::PluginManager::AbstractManager &manager,
+                      Corrade::Containers::StringView plugin)
+      : DevicePlugin(manager, plugin) {}
+
+  ~NullDevice() override {}
+
+  NullDevice(const NullDevice &) = delete;
+  NullDevice &operator=(const NullDevice &) = delete;
+  NullDevice(NullDevice &&) = delete;
+  NullDevice &operator=(NullDevice &&) = delete;
+
+  std::vector<DiscoveredDevice> discovered_devices() const override {
+    return {};
+  };
+  void refresh_discovery() override {};
+  void add_discovery_change_callback(
+      [[maybe_unused]] std::function<void()> cb) override {};
+  bool has_discovery_change_callback() const override { return false; };
+
+  bool plugin_null_state() const override { return true; }
+
+  DeviceStatus status() const override { return DeviceStatus::Unloaded; };
+
+  const PointCloud &point_cloud() override {
+    static PointCloud empty{{}, {}};
+    return empty;
+  };
+
+  void start() override {};
+  void stop() override {};
+  void restart() override {};
+
+  void on_config_field_changed([[maybe_unused]] int deviceIndex,
+                               [[maybe_unused]] int fieldIndex) override {}
+};
+
+} // namespace pc::devices
+
+CORRADE_PLUGIN_REGISTER(NullDevice, pc::devices::NullDevice,
+                        "net.pointcaster.DevicePlugin/1.0")

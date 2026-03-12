@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Pointcaster
-Exec=pointcaster
+Exec=pointcaster.sh
 Icon=pointcaster-icon
 Categories=Development
 Terminal=false

@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QQuick3DGeometry>
 #include <QtQmlIntegration/qqmlintegration.h>
+#include <functional>
 #include <optional>
 #include <pointcaster/point_cloud.h>
 
@@ -33,7 +34,7 @@ signals:
 
 private:
   DeviceAdapter *_deviceAdapter = nullptr;
-  std::optional<PointCloudRef> _lastPointCloud = std::nullopt;
+  const PointCloud *_lastPointCloud = nullptr;
 };
 
 } // namespace pc::ui::qml

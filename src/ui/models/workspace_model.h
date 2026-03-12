@@ -44,8 +44,10 @@ class WorkspaceModel : public QObject {
   Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl)
 
   //
-  Q_PROPERTY(QVariantList consoleOverlayEntries READ consoleOverlayEntries NOTIFY consoleOverlayEntriesChanged)
-  Q_PROPERTY(QVariantList consoleHistoryEntries READ consoleHistoryEntries NOTIFY consoleHistoryEntriesChanged)
+  Q_PROPERTY(QVariantList consoleOverlayEntries READ consoleOverlayEntries
+                 NOTIFY consoleOverlayEntriesChanged)
+  Q_PROPERTY(QVariantList consoleHistoryEntries READ consoleHistoryEntries
+                 NOTIFY consoleHistoryEntriesChanged)
 
 public:
   explicit WorkspaceModel(pc::Workspace *workspace, QObject *parent);
@@ -124,14 +126,12 @@ private:
   static QString adapterStableId(ConfigAdapter *adapter);
   static QString adapterStableId(DeviceAdapter *adapter);
 
-  template <typename AdapterT>
-  void initDeviceAdapter(AdapterT *adapter, pc::devices::DevicePlugin *plugin);
+  void initDeviceAdapter(auto *adapter, pc::devices::DevicePlugin *plugin);
+  void initSessionAdapter(pc::SessionConfigurationAdapter *adapter);
 
   DeviceAdapter *makeDeviceAdapterForPlugin(
       pc::devices::DevicePlugin *plugin,
       pc::devices::DeviceConfigurationVariant &config_variant);
-
-  void initSessionAdapter(pc::SessionConfigurationAdapter *adapter);
 };
 
 } // namespace pc::ui

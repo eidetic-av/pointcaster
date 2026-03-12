@@ -85,6 +85,9 @@ Item {
                         color: {
                             if (!modelData || modelData.status === undefined)
                                 return ThemeColors.inactive;
+                            if (modelData.pluginNullState)
+                                return ThemeColors.error;
+
                             switch (modelData.status) {
                             case UiEnums.WorkspaceDeviceStatus.Loaded:
                                 return ThemeColors.neutralSuccess;
@@ -111,9 +114,9 @@ Item {
                         id: deviceTypeText
                         anchors.verticalCenter: parent.verticalCenter
                         elide: Text.ElideRight
-                        text: modelData.displayName()
+                        text: modelData.displayName() + (modelData.pluginNullState ? " (Unloaded)" : "");
                         color: ThemeColors.text
-                        opacity: .5
+                        opacity: modelData.pluginNullState ? .25 : .5
                         font: Scaling.uiFont
                     }
                 }

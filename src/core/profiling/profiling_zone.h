@@ -1,9 +1,10 @@
 #pragma once
+#include <pointcaster/core.h>
 #include <string_view>
 
 namespace pc::profiling {
 
-class ProfilingZone {
+class POINTCASTER_CORE_EXPORT ProfilingZone {
 public:
   explicit ProfilingZone(std::string_view name);
   ~ProfilingZone();

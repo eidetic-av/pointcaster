@@ -67,6 +67,8 @@ public:
 
   virtual ~DevicePlugin() = default;
 
+  virtual void init() {};
+
   void set_is_discovery_instance(bool v) { _is_discovery_instance = v; }
   bool is_discovery_instance() { return _is_discovery_instance; };
 
@@ -88,9 +90,12 @@ public:
     _config = config;
   }
 
-  virtual void on_config_field_changed(int deviceIndex, int fieldIndex) {}
+  virtual void on_config_field_changed([[maybe_unused]] int deviceIndex,
+                                       [[maybe_unused]] int fieldIndex) {}
 
-  virtual std::optional<PointCloudRef> point_cloud() { return std::nullopt; }
+  virtual bool plugin_null_state() const { return false; }
+
+  virtual const PointCloud &point_cloud() = 0;
 
   virtual void start() = 0;
   virtual void stop() = 0;

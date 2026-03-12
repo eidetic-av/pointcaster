@@ -16,14 +16,12 @@ set_target_properties(OrbbecDevice PROPERTIES
 )
 
 find_package(OrbbecSDK CONFIG REQUIRED)
-find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 
 target_link_libraries(OrbbecDevice PRIVATE
   pointcaster::core
   pointcaster::metrics
   Corrade::PluginManager
   ob::OrbbecSDK
-  unofficial::concurrentqueue::concurrentqueue
   # TODO: this gui inclusion is wierd, it seems to require it for 
   # deserialization of pc::float3 into QVector3D?
   Qt6::Gui 
@@ -61,6 +59,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   )
 
 else()
+
+  # TODO this is moving waaaaaay too many dependencies
 
   add_custom_command(TARGET OrbbecDevice POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/orbbec"

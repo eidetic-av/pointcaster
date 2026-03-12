@@ -21,11 +21,14 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_link_libraries(pointcaster_plugins PRIVATE cpplocate::cpplocate)
 endif()
 
-# subdirectories are the dynamic corrade plugins
+# subdirectories are the corrade plugins
 add_subdirectory(devices/orbbec)
+add_subdirectory(devices/null)
 
 # the $CORRADE_PLUGINS list should be populated after adding subdirectories
 add_dependencies(pointcaster ${CORRADE_PLUGINS})
+
+target_link_libraries(pointcaster_plugins PRIVATE NullDevice)
 
 target_precompile_headers(pointcaster_plugins PRIVATE
   <string>
