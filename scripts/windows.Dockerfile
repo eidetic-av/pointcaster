@@ -26,6 +26,7 @@ ARG PythonVersion=3.14.3
 ARG QtInstallDirectory="C:\\Qt"
 # ARG QtVersion=6.11.0
 ARG QtVersion=6.10.3
+ENV Qt6_DIR="$($Env:QtInstallDirectory)\\$($Env:QtVersion)\\lib\\cmake\\Qt6"
 
 RUN Invoke-WebRequest -Uri https://www.python.org/ftp/python/$($Env:PythonVersion)/python-$($Env:PythonVersion)-amd64.exe -OutFile python_installer.exe; \
     Start-Process -FilePath .\\python_installer.exe -Wait -ArgumentList \
@@ -35,6 +36,12 @@ RUN pip install aqtinstall
 RUN aqt install-qt \
       --outputdir $($Env:QtInstallDirectory) \
       windows desktop $($Env:QtVersion) win64_msvc2022_64 \
-      -m qtshadertools qtquick3d; \
-      # -m qtshadertools qtquick3d qttasktree; \
-    [Environment]::SetEnvironmentVariable('Qt6_DIR', "$($Env:QtInstallDirectory)\\$($Env:QtVersion)\\lib\\cmake\\Qt6", 'Machine')
+      -m qtshadertools qtquick3d
+      # -m qtshadertools qtquick3d qttasktree
+
+# entry point to the docker container is our visual studio dev shell
+# so env with build tools is properly configured
+
+ENV VsDevShell="C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\Launch-VsDevShell.ps1"
+
+ENTRYPOINT [ "powershell", "-Command", "& $($Env:VsDevShell);& " ]
