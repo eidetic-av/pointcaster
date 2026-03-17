@@ -1,18 +1,22 @@
+set(ORBBEC_PLUGIN_DIR ${DEVICES_PLUGIN_DIR}/orbbec)
+
 corrade_add_plugin(OrbbecDevice
-  ${DEVICES_PLUGIN_DIR}
-  ${DEVICES_PLUGIN_DIR}
+  ${ORBBEC_PLUGIN_DIR}
+  ${ORBBEC_PLUGIN_DIR}
   OrbbecDevice.conf
   orbbec_device.cc
   orbbec_context.cc
+  orbbec_kernels.cc
   ${CMAKE_SOURCE_DIR}/src/ui/models/device_status.h
 )
 
 set_target_properties(OrbbecDevice PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY ${DEVICES_PLUGIN_DIR}
-  LIBRARY_OUTPUT_DIRECTORY ${DEVICES_PLUGIN_DIR}
-  ARCHIVE_OUTPUT_DIRECTORY ${DEVICES_PLUGIN_DIR}
+  RUNTIME_OUTPUT_DIRECTORY ${ORBBEC_PLUGIN_DIR}
+  LIBRARY_OUTPUT_DIRECTORY ${ORBBEC_PLUGIN_DIR}
+  ARCHIVE_OUTPUT_DIRECTORY ${ORBBEC_PLUGIN_DIR}
   BUILD_RPATH "\$ORIGIN;\$ORIGIN/orbbec"
   INSTALL_RPATH "\$ORIGIN;\$ORIGIN/orbbec"
+  AUTOMOC OFF
 )
 
 find_package(OrbbecSDK CONFIG REQUIRED)
@@ -22,9 +26,6 @@ target_link_libraries(OrbbecDevice PRIVATE
   pointcaster::metrics
   Corrade::PluginManager
   ob::OrbbecSDK
-  # TODO: this gui inclusion is wierd, it seems to require it for 
-  # deserialization of pc::float3 into QVector3D?
-  Qt6::Gui 
 )
 
 find_path(READERWRITERQUEUE_INCLUDE_DIR "readerwriterqueue/readerwriterqueue.h")
@@ -34,59 +35,26 @@ target_include_directories(OrbbecDevice
     "${CMAKE_SOURCE_DIR}/src" 
     "${CMAKE_SOURCE_DIR}/include"
     "${READERWRITERQUEUE_INCLUDE_DIR}"
+    "$ENV{TBBROOT}/include"
 )
 
 add_custom_command(TARGET OrbbecDevice POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${ORBBEC_PLUGIN_DIR}"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
   "${CMAKE_CURRENT_SOURCE_DIR}/OrbbecDevice.conf"
-  "${DEVICES_PLUGIN_DIR}/OrbbecDevice.conf"
+  "${ORBBEC_PLUGIN_DIR}/OrbbecDevice.conf"
 )
 
+set(ORBBEC_INSTALLED_LIB_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-
-  # add_custom_command(TARGET OrbbecDevice POST_BUILD
-  #   COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/extensions"
-  #   COMMAND ${CMAKE_COMMAND} -E copy_directory
-  #   "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/extensions"
-  #   "${DEVICES_PLUGIN_DIR}/extensions"
-  # )
-  # message(FATAL_ERROR ${CMAKE_CURRENT_BINARY_DIR})
-
-  install(DIRECTORY
-    "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/extensions"
-    DESTINATION "${DEVICES_PLUGIN_DIR}"
-  )
-
-else()
-
-  # TODO this is moving waaaaaay too many dependencies
-
-  add_custom_command(TARGET OrbbecDevice POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/orbbec"
-    COMMAND ${CMAKE_COMMAND}
-    -DINPUT_EXECUTABLE="$<TARGET_FILE:OrbbecDevice>"
-    -DOUTPUT_DIRECTORY="${DEVICES_PLUGIN_DIR}/orbbec"
-    -DVCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR}"
-    -DVCPKG_TARGET_TRIPLET="${VCPKG_TARGET_TRIPLET}"
-    -DMOVE_EXISTING_DEPS=ON
-    -P "${CMAKE_SOURCE_DIR}/cmake/CopyRuntimeDependencies.cmake"
-  )
-
-  add_custom_command(TARGET OrbbecDevice POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/extensions"
-    "${DEVICES_PLUGIN_DIR}/orbbec/extensions"
-  )
-
-  install(DIRECTORY
-    "${CMAKE_CURRENT_BINARY_DIR}/${DEVICES_PLUGIN_DIR}/orbbec/"
-    DESTINATION "${DEVICES_PLUGIN_DIR}/orbbec"
-  )
-
+  set(ORBBEC_INSTALLED_LIB_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
 endif()
 
+file(GLOB ORBBEC_RUNTIME_DEPENDENCIES "${ORBBEC_INSTALLED_LIB_DIR}/*OrbbecSDK*")
+
+install(FILES ${ORBBEC_RUNTIME_DEPENDENCIES} DESTINATION ${ORBBEC_PLUGIN_DIR})
+
+install(DIRECTORY "${ORBBEC_INSTALLED_LIB_DIR}/extensions" DESTINATION ${ORBBEC_PLUGIN_DIR})
 
 set(CORRADE_PLUGINS ${CORRADE_PLUGINS} OrbbecDevice PARENT_SCOPE)
 
@@ -101,8 +69,9 @@ target_precompile_headers(OrbbecDevice PRIVATE
   <atomic>
   <optional>
   <libobsensor/ObSensor.hpp>
+  <libobsensor/h/ObTypes.h>
   <libobsensor/hpp/Context.hpp>
-  <QObject>
-  <QString>
-  <QVariant>
+  <libobsensor/hpp/Error.hpp>
+  <libobsensor/hpp/Pipeline.hpp>
+  <libobsensor/hpp/Utils.hpp>
 )

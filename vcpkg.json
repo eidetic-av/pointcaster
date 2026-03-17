@@ -9,10 +9,7 @@
 		"draco",
 		"fmt",
 		"kddockwidgets",
-		{
-			"name": "libcpplocate",
-			"platform": "windows"
-		},
+		"libcpplocate",
 		"orbbecsdk",
 		"prometheus-cpp",
 		"qtawesome",

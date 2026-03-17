@@ -2,11 +2,8 @@ vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO fmtlib/fmt
     REF "${VERSION}"
-    SHA512 27df90c681ec37e55625062a79e3b83589b6d7e94eff37a3b412bb8c1473f757a8adb727603acc9185c3490628269216843b7d7bd5a3cb37f0029da5d1495ffa
+    SHA512 f0da82c545b01692e9fd30fdfb613dbb8dd9716983dcd0ff19ac2a8d36f74beb5540ef38072fdecc1e34191b3682a8542ecbf3a61ef287dbba0a2679d4e023f2
     HEAD_REF master
-    PATCHES
-        fix-visibility.patch
-        fix-write-batch.patch
 )
 
 vcpkg_cmake_configure(
@@ -22,14 +19,7 @@ vcpkg_cmake_config_fixup()
 vcpkg_fixup_pkgconfig()
 vcpkg_copy_pdbs()
 
-if(VCPKG_LIBRARY_LINKAGE STREQUAL dynamic)
-    vcpkg_replace_string(${CURRENT_PACKAGES_DIR}/include/fmt/core.h
-        "defined(FMT_SHARED)"
-        "1"
-    )
-endif()
-
-file(REMOVE_RECURSE 
+file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/debug/include"
     "${CURRENT_PACKAGES_DIR}/debug/share"
 )

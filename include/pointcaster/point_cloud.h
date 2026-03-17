@@ -21,6 +21,11 @@ public:
     colors.resize(new_size);
   }
 
+  void reserve(std::size_t new_capacity) {
+    positions.reserve(new_capacity);
+    colors.reserve(new_capacity);
+  }
+
   std::vector<std::byte> serialize(bool compress = false) const;
   static PointCloud deserialize(const std::vector<std::byte> &buffer);
 

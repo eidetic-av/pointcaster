@@ -15,6 +15,12 @@ qt_add_executable(pointcaster
     workspace/workspace_config.cc
 )
 
+# we set qt automoc off because QObjects we include should be
+# rendered inside the ui lib not the exe itself (otherwise Qt MOC runs twice)
+set_target_properties(pointcaster PROPERTIES
+  AUTOMOC OFF
+)
+
 add_subdirectory(ui)
 add_subdirectory(app_settings)
 add_subdirectory(metrics)
@@ -35,11 +41,7 @@ find_package(reflectcpp CONFIG REQUIRED)
 # - application settings initialisation requires Qml dependency linked in the main application
 find_package(Qt6 REQUIRED COMPONENTS Qml)
 
-# we set qt automoc off because QObjects we include should be
-# rendered inside the ui lib not the exe itself (otherwise Qt MOC runs twice)
-set_target_properties(pointcaster PROPERTIES
-  AUTOMOC OFF
-)
+find_package(TBB REQUIRED HINTS $ENV{TBBROOT})
 
 target_link_libraries(pointcaster PRIVATE 
   pointcaster::core 
@@ -50,6 +52,8 @@ target_link_libraries(pointcaster PRIVATE
   Corrade::Main 
   Corrade::PluginManager
   reflectcpp::reflectcpp
+  TBB::tbb
+  ## TODO why
   Qt6::Qml
 )
 

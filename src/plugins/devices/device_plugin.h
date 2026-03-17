@@ -3,18 +3,17 @@
 #include "device_status.h"
 #include "device_variants.h"
 #include <Corrade/Containers/Array.h>
+#include <Corrade/Containers/GrowableArray.h>
 #include <Corrade/Containers/String.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
-#include <functional>
-#include <pointcaster/point_cloud.h>
-#include <string>
-
-#ifdef _WIN32
+#include <Corrade/Tags.h>
 #include <cpplocate/cpplocate.h>
 #include <filesystem>
-#include <print>
-#endif
+#include <functional>
+#include <logger/logger.h>
+#include <pointcaster/point_cloud.h>
+#include <string>
 
 namespace pc::devices {
 
@@ -33,26 +32,40 @@ public:
 
   static Corrade::Containers::Array<Corrade::Containers::String>
   pluginSearchPaths() {
-#ifdef _WIN32
-    auto exe_dir_canonical = cpplocate::getModulePath();
-    std::filesystem::path exe_dir(exe_dir_canonical);
+    std::filesystem::path exe_dir(cpplocate::getModulePath());
     auto plugin_dir = exe_dir.parent_path() / "plugins";
 
-    // convert C:\style\path into /style/path used by corrade
-    const auto to_posix_path = [](std::filesystem::path path) -> std::string {
-      auto result = path.string();
+    std::vector<Corrade::Containers::String> search_paths;
+
+    for (auto &recursive_file_node :
+         std::filesystem::recursive_directory_iterator(plugin_dir)) {
+      if (recursive_file_node.path().extension().string() == ".conf") {
+        // for each subdirectory that contains a file named .conf,
+        // treat it as a plugin directory
+        search_paths.emplace_back(
+            recursive_file_node.path().parent_path().c_str());
+      }
+    }
+
+#ifdef _WIN32
+    // convert C:\style\path into posix /style/path used by corrade
+    for (auto &path_entry : search_paths) {
+      std::string result(path_entry.data());
       result.erase(0, 2);
       std::replace(result.begin(), result.end(), '\\', '/');
-      return result;
-    };
-
-    auto devices_plugin_path = to_posix_path(plugin_dir / "devices");
-    auto orbbec_plugin_path = to_posix_path(plugin_dir / "devices" / "orbbec");
-
-    return {Corrade::InPlaceInit, { devices_plugin_path, orbbec_plugin_path }};
-#else
-    return {Corrade::InPlaceInit, {"../plugins/devices"}};
+      path_entry = result;
+    }
 #endif
+
+    // return results in a corrade array
+    static Corrade::Containers::Array<Corrade::Containers::String> results;
+    arrayClear(results);
+    arrayReserve(results, search_paths.size());
+    for (auto &path_string : search_paths) {
+      arrayAppend(results, path_string);
+    }
+
+    return {Corrade::InPlaceInit, results};
   }
 
   explicit DevicePlugin(Corrade::PluginManager::AbstractManager &manager,

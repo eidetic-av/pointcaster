@@ -5,7 +5,6 @@
 #include <core/logger/logger.h>
 #include <libobsensor/ObSensor.hpp>
 #include <mutex>
-#include <print>
 #include <thread>
 
 namespace {

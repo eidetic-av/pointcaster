@@ -10,25 +10,22 @@ target_link_libraries(pointcaster_plugins PRIVATE
     Corrade::Main Corrade::PluginManager
 )
 
-target_include_directories(pointcaster_plugins 
-    PRIVATE 
-        ${CMAKE_SOURCE_DIR}/src 
-        ${CMAKE_SOURCE_DIR}/include
+target_include_directories(pointcaster_plugins PRIVATE 
+    ${CMAKE_SOURCE_DIR}/src 
+    ${CMAKE_SOURCE_DIR}/include
 )
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    find_package(cpplocate CONFIG REQUIRED)
-    target_link_libraries(pointcaster_plugins PRIVATE cpplocate::cpplocate)
-endif()
+find_package(cpplocate CONFIG REQUIRED)
+target_link_libraries(pointcaster_plugins PRIVATE cpplocate::cpplocate)
 
 # subdirectories are the corrade plugins
 add_subdirectory(devices/orbbec)
 add_subdirectory(devices/null)
 
-# the $CORRADE_PLUGINS list should be populated after adding subdirectories
+# the $CORRADE_PLUGINS and $CORRADE_STATIC_PLUGINS lists should 
+# be populated after adding plugin subdirectories
 add_dependencies(pointcaster ${CORRADE_PLUGINS})
-
-target_link_libraries(pointcaster_plugins PRIVATE NullDevice)
+target_link_libraries(pointcaster_plugins PRIVATE ${CORRADE_STATIC_PLUGINS})
 
 target_precompile_headers(pointcaster_plugins PRIVATE
   <string>

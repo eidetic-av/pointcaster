@@ -62,6 +62,7 @@ void configure_search_paths(
 
 std::unique_ptr<Manager<devices::DevicePlugin>>
 load_device_plugins(pc::Workspace &workspace) {
+
 #ifdef _WIN32
   const auto plugin_root_directory = default_plugin_root_directory();
   configure_search_paths(plugin_root_directory);

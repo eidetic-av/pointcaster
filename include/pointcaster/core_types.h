@@ -99,4 +99,15 @@ struct color {
   }
   bool operator!=(const color other) const { return !operator==(other); }
 };
+
+struct color_rgb {
+  unsigned char r = 0;
+  unsigned char g = 0;
+  unsigned char b = 0;
+
+  bool operator==(const color other) const {
+    return r == other.r && g == other.g && b == other.b;
+  }
+  bool operator!=(const color other) const { return !operator==(other); }
+};
 } // namespace pc

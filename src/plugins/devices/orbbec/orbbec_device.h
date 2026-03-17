@@ -64,9 +64,8 @@ public:
   }
 
 private:
-  // TODO maybe not the best data structure for a standard triple buffer?
-  // capacity can't even technically be 3 (must be pow of 2)
-  moodycamel::BlockingReaderWriterCircularBuffer<PointCloud> _frame_buffer{3};
+  // TODO just a double buffer for now...
+  moodycamel::BlockingReaderWriterCircularBuffer<PointCloud> _frame_buffer{2};
 
   PointCloud _current_point_cloud{{}, {}};
 

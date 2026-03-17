@@ -1,13 +1,17 @@
 #include "orbbec_device.h"
 #include "orbbec_context.h"
 #include "orbbec_device_config.h"
+#include "orbbec_kernels.h"
 #include "pointcaster/point_cloud.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <core/logger/logger.h>
 #include <core/profiling/profiling_zone.h>
+#include <cstdint>
 #include <cstring>
+#include <execution>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/h/ObTypes.h>
 #include <libobsensor/hpp/Context.hpp>
@@ -16,14 +20,23 @@
 #include <libobsensor/hpp/Utils.hpp>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <ranges>
 #include <span>
 #include <thread>
 
 #include <metrics/metrics.h>
 
+// This is a zip_view impl for C++20 that makes
+// the use of the zip view in our point cloud transform
+// compile with the AdaptiveCpp compiler (until it supports C++23)
+// #define ZIP_VIEW_INJECT_STD_VIEWS_NAMESPACE
+// #include "zip_view.h"
+
 using namespace std::chrono;
 using namespace std::chrono_literals;
+
+using pc::profiling::ProfilingZone;
 
 namespace {
 constexpr int colour_width = 1280;
@@ -47,7 +60,11 @@ OrbbecDevice::OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
   } catch (...) {
     pc::logger()->error("Exception during Orbbec context initialisation");
   }
+#ifdef __ACPP_ENABLE_LLVM_SSCP_TARGET__
+  pc::logger()->debug("Created OrbbecDevice with sscp target");
+#else
   pc::logger()->trace("Created OrbbecDevice");
+#endif
 }
 
 OrbbecDevice::~OrbbecDevice() {
@@ -301,6 +318,9 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
     auto ob_config = std::make_shared<ob::Config>();
 
+    OrbbecDeviceConfiguration *device_config;
+    std::visit([&](auto &&c) { device_config = &c; }, config());
+
     auto colour_profile_list = pipeline.getStreamProfileList(OB_SENSOR_COLOR);
     // TODO enable without colour too
     if (!colour_profile_list) {
@@ -311,7 +331,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     std::shared_ptr<ob::VideoStreamProfile> colour_profile;
     try {
       colour_profile = colour_profile_list->getVideoStreamProfile(
-          colour_width, colour_height, OB_FORMAT_MJPG, fps);
+          colour_width, colour_height, OB_FORMAT_RGB, fps);
     } catch (const ob::Error &e) {
       pc::logger()->error("Failed to get colour profile: {}", e.what());
       set_error_state(true);
@@ -378,19 +398,36 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       return;
     }
 
+    auto ob_camera_parameters = pipeline.getCameraParam();
+    auto ob_calibration_parameters = pipeline.getCalibrationParam(ob_config);
+
+    // the xy_table converts depths at certain indices to
+    uint32_t xy_table_size = depth_width * depth_height * 2;
+    std::vector<float> xy_table_data(xy_table_size);
+    OBXYTables ob_xy_tables{};
+    if (device_config->conversion_mode ==
+        OrbbecDeviceConfiguration::PointConversionMode::Custom) {
+      bool table_init =
+          ob::CoordinateTransformHelper::transformationInitXYTables(
+              ob_calibration_parameters, OB_SENSOR_DEPTH, xy_table_data.data(),
+              &xy_table_size, &ob_xy_tables);
+      if (!table_init) {
+        pc::logger()->error("Failed to initialise XY transformation tables. "
+                            "Switching to OrbbecSDK conversion.");
+        // TODO is this thread safe? or a race condition
+        device_config->conversion_mode =
+            OrbbecDeviceConfiguration::PointConversionMode::OrbbecSDK;
+      }
+    }
+
     ob::PointCloudFilter point_cloud_filter;
-    point_cloud_filter.setCameraParam(pipeline.getCameraParam());
+    point_cloud_filter.setCameraParam(ob_camera_parameters);
 
     // TODO: query actual depth unit scale from device
     constexpr float depth_position_scale = 1.0f;
     point_cloud_filter.setPositionDataScaled(depth_position_scale);
 
     point_cloud_filter.setCreatePointFormat(OB_FORMAT_RGB_POINT);
-
-    // grab a ptr to the typed config to have access to device info while
-    // processing
-    OrbbecDeviceConfiguration *device_config;
-    std::visit([&](auto &&c) { device_config = &c; }, config());
 
     // processing loop
     while (!stop_token.stop_requested()) {
@@ -409,59 +446,25 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       auto depth_frame = frame_set->depthFrame();
       if (!colour_frame || !depth_frame) continue;
 
-      pc::profiling::ProfilingZone receive_frame_zone(
-          "orbbec_frame_in_to_pointcloud");
+      {
+        ProfilingZone receive_frame_zone("OrbbecDevice::receive_frame");
+        receive_frame_zone.text(device_config->id);
 
-      const uint32_t width = colour_frame->width();
-      const uint32_t height = colour_frame->height();
-      const size_t point_count = static_cast<size_t>(width) * height;
+        const uint32_t width = colour_frame->width();
+        const uint32_t height = colour_frame->height();
+        const size_t point_count = static_cast<size_t>(width) * height;
 
-      std::shared_ptr<ob::Frame> point_cloud_frame;
-      try {
-        point_cloud_frame = point_cloud_filter.process(frame_set);
-      } catch (const ob::Error &e) {
-        pc::logger()->error("Failed to process Orbbec frame: {}", e.what());
-        continue;
-      } catch (const std::exception &e) {
-        pc::logger()->error("Failed to process Orbbec frame: {}", e.what());
-        continue;
-      } catch (...) {
-        pc::logger()->error("Unknown exception in Orbbec process()");
-        continue;
-      }
-
-      if (point_cloud_frame && point_cloud_frame->data()) {
-        // std::lock_guard buffer_lock(_point_buffer_access);
-        // _point_buffer.resize(point_count);
-        // std::memcpy(_point_buffer.data(), point_cloud_frame->data(),
-        //             point_count * sizeof(OBColorPoint));
-        // _buffer_updated = true;
-
-        // convert from orbbec pointcloud to our own Pointcloud
-        PointCloud point_cloud;
+        thread_local static PointCloud point_cloud;
         point_cloud.resize(point_count);
 
-        const auto *ob_frame_ptr =
-            reinterpret_cast<OBColorPoint *>(point_cloud_frame->getData());
+        const auto *ob_depth_frame_ptr =
+            reinterpret_cast<const uint16_t *>(depth_frame->getData());
+        const auto *ob_color_frame_ptr =
+            reinterpret_cast<const color_rgb *>(colour_frame->getData());
 
-        const auto indexed_points = std::ranges::zip_view(
-            std::span{ob_frame_ptr, point_count},
-            std::views::iota(0, static_cast<int>(point_count - 1)));
-
-        // TODO probs should be parallelised if over a certain point count
-        // add profiling zone
-
-        for (const auto [ob_point, i] : indexed_points) {
-          auto &pos = point_cloud.positions[i];
-          // pc::logger()->trace(point_index);
-          pos.x = static_cast<int16_t>(ob_point.x);
-          pos.y = -static_cast<int16_t>(ob_point.y);
-          pos.z = -static_cast<int16_t>(ob_point.z);
-          auto &color = point_cloud.colors[i];
-          color.r = static_cast<uint8_t>(ob_point.r);
-          color.g = static_cast<uint8_t>(ob_point.g);
-          color.b = static_cast<uint8_t>(ob_point.b);
-        }
+        pc::devices::orbbec::transform(ob_depth_frame_ptr, ob_color_frame_ptr,
+                                       point_cloud, *device_config,
+                                       ob_calibration_parameters);
 
         bool success = _frame_buffer.try_enqueue(point_cloud);
         if (success) {

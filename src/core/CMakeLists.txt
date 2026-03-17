@@ -44,6 +44,7 @@ set_target_properties(pointcaster_core
         VERSION ${PROJECT_VERSION}
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN YES
+        AUTOMOC OFF
 )
 
 generate_export_header(pointcaster_core
