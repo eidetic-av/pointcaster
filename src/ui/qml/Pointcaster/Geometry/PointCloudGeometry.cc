@@ -16,9 +16,8 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
       float3_stride + float4_stride + sizeof(float); // pos + col + padding
 
   // if this geometry has a device plugin assigned to render
-  if (_deviceAdapter && _deviceAdapter->plugin()) {
-
-    const auto &inputCloud = _deviceAdapter->plugin()->point_cloud();
+  if (_pointCloudAdapter) {
+    const auto &inputCloud = _pointCloudAdapter->point_cloud();
 
     bool localGeometryNeedsUpdating =
         _lastPointCloud == nullptr || _lastPointCloud != &inputCloud;

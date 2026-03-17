@@ -287,7 +287,7 @@ Item {
 
                     geometry: PointCloudGeometry {
                         id: geo
-                        deviceAdapter: modelData
+                        pointCloudAdapter: modelData
                     }
 
                     materials: [

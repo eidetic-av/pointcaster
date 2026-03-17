@@ -77,8 +77,10 @@ void transform(const uint16_t *depth_frame_data_ptr,
                       }
                     });
 
-  std::transform(std::execution::par_unseq, indexed_points.begin(),
-                 indexed_points.end(), output_points.begin(), transform_point);
+pc::logger()->error("Orbbec Kernel Not Implemented");
+//   std::transform(std::execution::par_unseq, indexed_points.begin(),
+//                  indexed_points.end(), output_points.begin(), transform_point);
+
 }
 
 } // namespace pc::devices::orbbec

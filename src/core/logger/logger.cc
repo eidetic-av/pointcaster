@@ -31,10 +31,10 @@ static std::filesystem::path logs_dir(std::string_view target_name) {
 #if defined(_WIN32)
   // %LOCALAPPDATA%\matth\<app>
   if (auto p = get_env_path("LOCALAPPDATA"))
-    return (*p) / "matth" / std::string(app);
+    return (*p) / "matth" / std::string(target_name);
   if (auto p = get_env_path("APPDATA"))
-    return (*p) / "matth" / std::string(app);
-  return std::filesystem::current_path() / "Log" / std::string(app);
+    return (*p) / "matth" / std::string(target_name);
+  return std::filesystem::current_path() / "Log" / std::string(target_name);
 #else
   // $XDG_STATE_HOME/matth/<app>
   // else ~/.local/state/matth/<app>

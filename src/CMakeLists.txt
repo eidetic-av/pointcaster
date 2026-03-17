@@ -1,6 +1,7 @@
 include(GNUInstallDirs)
 
-qt_standard_project_setup(REQUIRES 6.11)
+# qt_standard_project_setup(REQUIRES 6.11)
+qt_standard_project_setup(REQUIRES 6.10.3)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_INSTALL_PREFIX "/usr")
@@ -41,7 +42,7 @@ find_package(reflectcpp CONFIG REQUIRED)
 # - application settings initialisation requires Qml dependency linked in the main application
 find_package(Qt6 REQUIRED COMPONENTS Qml)
 
-find_package(TBB REQUIRED HINTS $ENV{TBBROOT})
+find_package(TBB REQUIRED)
 
 target_link_libraries(pointcaster PRIVATE 
   pointcaster::core 

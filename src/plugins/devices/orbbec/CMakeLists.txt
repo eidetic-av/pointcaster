@@ -20,12 +20,14 @@ set_target_properties(OrbbecDevice PROPERTIES
 )
 
 find_package(OrbbecSDK CONFIG REQUIRED)
+find_package(TBB REQUIRED)
 
 target_link_libraries(OrbbecDevice PRIVATE
   pointcaster::core
   pointcaster::metrics
   Corrade::PluginManager
   ob::OrbbecSDK
+  TBB::tbb
 )
 
 find_path(READERWRITERQUEUE_INCLUDE_DIR "readerwriterqueue/readerwriterqueue.h")
@@ -35,7 +37,7 @@ target_include_directories(OrbbecDevice
     "${CMAKE_SOURCE_DIR}/src" 
     "${CMAKE_SOURCE_DIR}/include"
     "${READERWRITERQUEUE_INCLUDE_DIR}"
-    "$ENV{TBBROOT}/include"
+    "$ENV{TBB_DIR}/include"
 )
 
 add_custom_command(TARGET OrbbecDevice POST_BUILD

@@ -18,30 +18,49 @@ RUN Invoke-WebRequest -Uri https://aka.ms/vs/17/release/vs_BuildTools.exe -OutFi
       --add Microsoft.VisualStudio.Component.VC.CMake.Project \
       --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
       --add Microsoft.VisualStudio.Component.Vcpkg \
-      --add Microsoft.VisualStudio.Component.Windows11SDK.26100'; \
+      --add Microsoft.VisualStudio.Component.Windows11SDK.26100 \
+      --add Microsoft.VisualStudio.Component.VC.ATL \
+      --add Microsoft.VisualStudio.Component.VC.ATLMFC'; \
     Remove-Item -Force vs_BuildTools.exe
 
 # python+pip, the aqt installer and Qt 6 libs
 ARG PythonVersion=3.14.3
-ARG QtInstallDirectory="C:\\Qt"
-# ARG QtVersion=6.11.0
-ARG QtVersion=6.10.3
-ENV Qt6_DIR="$($Env:QtInstallDirectory)\\$($Env:QtVersion)\\lib\\cmake\\Qt6"
-
-RUN Invoke-WebRequest -Uri https://www.python.org/ftp/python/$($Env:PythonVersion)/python-$($Env:PythonVersion)-amd64.exe -OutFile python_installer.exe; \
+RUN Invoke-WebRequest -Uri https://www.python.org/ftp/python/$Env:PythonVersion/python-$Env:PythonVersion-amd64.exe -OutFile python_installer.exe; \
     Start-Process -FilePath .\\python_installer.exe -Wait -ArgumentList \
       '/quiet InstallAllUsers=1 PrependPath=1 Include_test=0'; \
     Remove-Item -Force python_installer.exe
-RUN pip install aqtinstall
+
+ARG QtInstallDirectory="C:\\Qt"
+# ARG QtVersion=6.11.0
+ARG QtVersion=6.10.3
+ENV Qt6_DIR="C:\\Qt\\6.10.3\\msvc2022_64\\lib\\cmake\\Qt6"
+ENV QT_DIR="C:\\Qt\\6.10.3\\msvc2022_64\\lib\\cmake\\Qt6"
+
+ARG AqtInstallVersion=3.3
+RUN pip install "aqtinstall==$Env:AqtInstallVersion"
 RUN aqt install-qt \
-      --outputdir $($Env:QtInstallDirectory) \
-      windows desktop $($Env:QtVersion) win64_msvc2022_64 \
+      --outputdir "$Env:QtInstallDirectory" \
+      windows desktop "$Env:QtVersion" win64_msvc2022_64 \
       -m qtshadertools qtquick3d
       # -m qtshadertools qtquick3d qttasktree
+
+# oneTBB
+ARG TbbVersion=2022.3.0
+ARG TbbInstallDir="C:\\TBB"
+ENV TBB_DIR="C:\\TBB\\oneapi-tbb-2022.3.0"
+RUN mkdir "$Env:TbbInstallDir"; \
+      Invoke-WebRequest "https://github.com/uxlfoundation/oneTBB/releases/download/v$Env:TbbVersion/oneapi-tbb-$Env:TbbVersion-win.zip" \
+            -OutFile "$Env:TbbInstallDir\\oneapi-tbb-$Env:TbbVersion-win.zip"; \
+      Expand-Archive -Path "$Env:TbbInstallDir\\oneapi-tbb-$Env:TbbVersion-win.zip" \
+            -DestinationPath "$Env:TbbInstallDir"; \
+      rm "$Env:TbbInstallDir\\oneapi-tbb-$Env:TbbVersion-win.zip"
+
+# jinja is used for reflection / templated code generation scripts
+ARG Jinja2Version=3.1.6
+RUN pip install "jinja2==$Env:Jinja2Version"
 
 # entry point to the docker container is our visual studio dev shell
 # so env with build tools is properly configured
 
 ENV VsDevShell="C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\Launch-VsDevShell.ps1"
-
-ENTRYPOINT [ "powershell", "-Command", "& $($Env:VsDevShell);& " ]
+ENTRYPOINT [ "powershell", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", "& $Env:VsDevShell -Arch amd64 -HostArch amd64;& " ]

@@ -1,7 +1,7 @@
 {
 	"name": "pointcaster",
 	"version-string": "0.2.0",
-	"builtin-baseline": "8eed1d644672846105716dc1c21926b20d928584",
+	"builtin-baseline": "6f932b9730b65d28cba7dca7326dca4d3247d305",
 	"dependencies": [
 		"corrade",
 		"concurrentqueue",

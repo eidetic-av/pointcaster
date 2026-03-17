@@ -2,6 +2,7 @@
 
 #include "config_adapter.h"
 #include "device_status.h"
+#include "point_cloud_adapter.h"
 
 #include <QObject>
 #include <QStringList>
@@ -13,7 +14,7 @@
 #include <plugins/devices/device_variants.h>
 #include <pointcaster/point_cloud.h>
 
-class DeviceAdapter : public ConfigAdapter {
+class DeviceAdapter : public ConfigAdapter, public PointCloudAdapter {
   Q_OBJECT
 
   Q_PROPERTY(pc::devices::ui::WorkspaceDeviceStatus status READ status NOTIFY

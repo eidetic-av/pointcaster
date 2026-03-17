@@ -34,13 +34,11 @@
 			"inherits": "default-preset",
 			"displayName": "Pointcaster Release build for Windows x64",
 			"environment": {
-				"Qt6_DIR": "C:/Qt/6.10.3/msvc2022_64/lib/cmake/Qt6",
-				"VCPKG_KEEP_ENV_VARS": "Qt6_DIR"
+				"VCPKG_KEEP_ENV_VARS": "Qt6_DIR;QT_DIR;TBB_DIR"
 			},
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": "Release",
-				"VCPKG_TARGET_TRIPLET": "x64-windows-static-md-custom-release",
-				"CMAKE_PREFIX_PATH": "C:/Qt/6.10.3/msvc2022_64/lib/cmake/Qt6"
+				"VCPKG_TARGET_TRIPLET": "x64-windows-static-md-custom-release"
 			}
 		},
 		{

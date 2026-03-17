@@ -41,9 +41,8 @@ public:
          std::filesystem::recursive_directory_iterator(plugin_dir)) {
       if (recursive_file_node.path().extension().string() == ".conf") {
         // for each subdirectory that contains a file named .conf,
-        // treat it as a plugin directory
-        search_paths.emplace_back(
-            recursive_file_node.path().parent_path().c_str());
+        // treat it as a plugin directory and add it to our search paths...
+        search_paths.emplace_back(recursive_file_node.path().parent_path().string());
       }
     }
 
@@ -57,7 +56,7 @@ public:
     }
 #endif
 
-    // return results in a corrade array
+    // return results in a corrade array (required instead of vector)
     static Corrade::Containers::Array<Corrade::Containers::String> results;
     arrayClear(results);
     arrayReserve(results, search_paths.size());

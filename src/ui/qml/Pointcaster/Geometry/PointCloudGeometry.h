@@ -8,7 +8,7 @@
 #include <optional>
 #include <pointcaster/point_cloud.h>
 
-#include <ui/models/device_adapter.h>
+#include <ui/models/point_cloud_adapter.h>
 
 namespace pc::ui::qml {
 
@@ -16,24 +16,22 @@ class PointCloudGeometry : public QQuick3DGeometry {
   Q_OBJECT
   QML_NAMED_ELEMENT(PointCloudGeometry)
 
-  // TODO the device stuff being here means it probs should
-  // be a specialised class, not inside generic point cloud geo
-  Q_PROPERTY(DeviceAdapter *deviceAdapter READ deviceAdapter WRITE
-                 setDeviceAdapter NOTIFY deviceAdapterChanged)
+  Q_PROPERTY(PointCloudAdapter *pointCloudAdapter READ pointCloudAdapter WRITE
+                 setPointCloudAdapter NOTIFY pointCloudAdapterChanged)
 
 public:
   PointCloudGeometry();
 
-  DeviceAdapter *deviceAdapter() const { return _deviceAdapter; };
-  void setDeviceAdapter(DeviceAdapter *adapter) { _deviceAdapter = adapter; };
+  PointCloudAdapter *pointCloudAdapter() const { return _pointCloudAdapter; };
+  void setPointCloudAdapter(PointCloudAdapter *adapter) { _pointCloudAdapter = adapter; };
 
   Q_INVOKABLE void updateGeometry();
 
 signals:
-  void deviceAdapterChanged();
+  void pointCloudAdapterChanged();
 
 private:
-  DeviceAdapter *_deviceAdapter = nullptr;
+  PointCloudAdapter *_pointCloudAdapter = nullptr;
   const PointCloud *_lastPointCloud = nullptr;
 };
 
