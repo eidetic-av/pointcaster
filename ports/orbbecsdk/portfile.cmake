@@ -2,7 +2,7 @@ vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO orbbec/OrbbecSDK_v2
     REF v${VERSION}
-    SHA512 e8927b211d2d6d01483568d745b21e044f3486e7c1da9bcec1715651cfa8f26d671f2a30e2adfeddc5d54541a0d5c39ee8e01fc5b8c84fe25ff2a90985bf8ee4
+    SHA512 8ab6f25d3933011f2a9f049b21d7fbd4ffde14c26791a4e92ba0e07b09feda1197504257542380a1c8a9f6277301039e726399f3c1a02575d7e3edd69c1b4aef
     PATCHES
         cmake-package-install.patch
         ros-initialisation-for-gcc.patch
