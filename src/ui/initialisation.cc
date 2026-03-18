@@ -76,12 +76,10 @@ initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
   QObject::connect(
       &qml_engine, &QQmlApplicationEngine::objectCreationFailed, app,
       []() {
-        pc::logger()->error("Failed to initialise QML engine! Pointcaster will "
-                            "run without a GUI");
+        pc::logger()->error("Failed to initialise QML engine!");
+        QCoreApplication::exit(-1);
       },
       Qt::QueuedConnection);
-
-  // connect qt point cloud rendering to our session instances
 
   return &qml_engine;
 }
