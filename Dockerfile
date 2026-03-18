@@ -3,16 +3,6 @@ FROM docker.io/zhongruoyu/gcc-ports:15.2-bookworm
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV ARCH=x86_64
 
-ARG CMAKE_VERSION=4.2.1
-ARG QT_VERSION=6.11.0
-ARG TBB_VERSION=2022.3
-ARG CLANG_VERSION=21
-
-ARG APPIMAGETOOL_VERSION=1.9.1
-ARG APPIMAGETOOL_SHA256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
-
-ARG VCPKG_COMMIT=6f932b9730b65d28cba7dca7326dca4d3247d305
-
 ARG DEV_USERNAME=dev
 ARG DEV_USER_UID=1000
 ARG DEV_USER_GID=1000
@@ -49,6 +39,7 @@ RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
     rm -rf /var/lib/apt/lists/*
 
 # download and install cmake
+ARG CMAKE_VERSION=4.2.1
 RUN set -eux; \
     BASE_URL="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}"; \
     curl -fsSLO "${BASE_URL}/cmake-${CMAKE_VERSION}-SHA-256.txt"; \
@@ -59,6 +50,7 @@ RUN set -eux; \
     rm -f cmake-${CMAKE_VERSION}-linux-x86_64.sh cmake-${CMAKE_VERSION}-SHA-256.txt cmake.sha256
 
 # install clang tools
+ARG CLANG_VERSION=21
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates wget gnupg; \
@@ -79,6 +71,9 @@ RUN --mount=type=cache,id=root-cache-pip,target=/root/.cache/pip \
     python3 -m pip install --no-input aqtinstall --break-system-packages
 
 # install onetbb parallel lib and its deps
+ARG TBB_VERSION=2022.3
+ENV TBB_DIR=/opt/intel/oneapi/tbb/${TBB_VERSION}
+
 RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
     --mount=type=cache,id=var-lib-apt,target=/var/lib/apt \
     set -eux; \
@@ -91,21 +86,14 @@ RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
         hwloc intel-oneapi-tbb-devel-${TBB_VERSION}; \
     rm -rf /var/lib/apt/lists/*
 
-# set up any env vars
-
+# set up directories for dependency locations that need to be manipulated by the dev user
 ENV USERBIN_DIR=/opt/bin
-ENV VCPKG_ROOT=/opt/vcpkg
-ENV QT_INSTALL_DIR=/opt/qt
-ENV Qt6_DIR=${QT_INSTALL_DIR}/${QT_VERSION}
-ENV APPIMAGETOOL_DIR=${USERBIN_DIR}
-ENV TBB_DIR=/opt/intel/oneapi/tbb/${TBB_VERSION}
 
-ENV PATH="${USERBIN_DIR}:${VCPKG_ROOT}:${Qt6_DIR}/gcc_64/bin:${PATH}"
-
-# set up extra directories for dependency locations that need to be manipulated by the dev user
 RUN set -eux; \
     mkdir -p /opt ${USERBIN_DIR}; \
     chown "${DEV_USER_UID}:${DEV_USER_GID}" /opt ${USERBIN_DIR}
+
+ENV PATH="${USERBIN_DIR}:${PATH}"
 
 # dev niceties
 RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
@@ -126,6 +114,10 @@ USER ${DEV_USERNAME}
 WORKDIR /pointcaster
 
 # install qt6 libs
+ARG QT_VERSION=6.11.0
+ENV QT_INSTALL_DIR=/opt/qt
+ENV Qt6_DIR=${QT_INSTALL_DIR}/${QT_VERSION}
+
 RUN set -eux; \
     aqt install-qt \
         --outputdir "${QT_INSTALL_DIR}" \
@@ -133,8 +125,12 @@ RUN set -eux; \
         -m qtshadertools qtquick3d qttasktree
 
 ENV CMAKE_PREFIX_PATH="${QT_INSTALL_DIR}/${QT_VERSION}/gcc_64"
+ENV PATH="${Qt6_DIR}/gcc_64/bin:${PATH}"
 
 # download and bootstrap vcpkg into the user's home dir
+ARG VCPKG_COMMIT=6f932b9730b65d28cba7dca7326dca4d3247d305
+
+ENV VCPKG_ROOT=/opt/vcpkg
 ENV VCPKG_DEFAULT_BINARY_CACHE=/home/${DEV_USERNAME}/.cache/vcpkg/archives
 ENV VCPKG_DOWNLOADS=${VCPKG_ROOT}-cache/downloads
 ENV VCPKG_BUILDTREES=${VCPKG_ROOT}-cache/buildtrees
@@ -148,7 +144,13 @@ RUN --mount=type=cache,id=vcpkg-downloads,target=${VCPKG_DOWNLOADS},uid=${DEV_US
     git reset --hard "${VCPKG_COMMIT}"; \
     ./bootstrap-vcpkg.sh -disableMetrics
 
+ENV PATH="${VCPKG_ROOT}:${PATH}"
+
 # install appimagetool for AppImage deployment
+ARG APPIMAGETOOL_VERSION=1.9.1
+ARG APPIMAGETOOL_SHA256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
+ENV APPIMAGETOOL_DIR=${USERBIN_DIR}
+
 RUN --mount=type=cache,id=user-downloads,target=/home/${DEV_USERNAME}/.cache/downloads,uid=${DEV_USER_UID},gid=${DEV_USER_GID} \
     set -eux; \
     mkdir -p "${APPIMAGETOOL_DIR}"; \
@@ -161,3 +163,4 @@ RUN --mount=type=cache,id=user-downloads,target=/home/${DEV_USERNAME}/.cache/dow
     chmod +x appimagetool-x86_64.AppImage; \
     mkdir -p appimagetool && cd appimagetool; \
     ../appimagetool-x86_64.AppImage --appimage-extract
+
