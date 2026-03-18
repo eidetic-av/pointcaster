@@ -10,10 +10,16 @@ set(QT_QML_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml")
 
 add_subdirectory(core)
 
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(app_icon_resource "${CMAKE_SOURCE_DIR}/packaging/icon.rc")
+endif()
+
 qt_add_executable(pointcaster 
+    #WIN32
     pointcaster.cc
     workspace/workspace.cc
     workspace/workspace_config.cc
+    ${app_icon_resource}
 )
 
 # we set qt automoc off because QObjects we include should be
