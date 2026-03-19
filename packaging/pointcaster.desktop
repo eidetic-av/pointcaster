@@ -2,6 +2,6 @@
 Type=Application
 Name=Pointcaster
 Exec=pointcaster.sh
-Icon=pointcaster-icon
+Icon=pointcaster
 Categories=Development
 Terminal=false

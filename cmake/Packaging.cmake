@@ -61,14 +61,14 @@ if(NOT WIN32)
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications"
     )
     install(FILES
-        "${CMAKE_SOURCE_DIR}/packaging/pointcaster-icon.png"
+        "${CMAKE_SOURCE_DIR}/packaging/pointcaster.png"
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps"
     )
 
     set(CPACK_GENERATOR "AppImage")
 
     set(CPACK_APPIMAGE_DESKTOP_FILE "pointcaster.desktop")
-    set(CPACK_PACKAGE_ICON "pointcaster-icon.png")
+    set(CPACK_PACKAGE_ICON "pointcaster.png")
 
     #set(CPACK_SET_DESTDIR ON)
     set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
