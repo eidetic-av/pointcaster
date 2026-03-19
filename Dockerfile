@@ -1,4 +1,4 @@
-FROM docker.io/zhongruoyu/gcc-ports:15.2-bookworm
+FROM docker.io/zhongruoyu/gcc-ports:15-bookworm
 
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV ARCH=x86_64
