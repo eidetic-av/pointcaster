@@ -44,10 +44,6 @@ add_subdirectory(plugins)
 # - reflectcpp is used for de/serialization of workspace configuration,
 find_package(reflectcpp CONFIG REQUIRED)
 
-# TODO this is probably not what we want re: qml?
-# - application settings initialisation requires Qml dependency linked in the main application
-find_package(Qt6 REQUIRED COMPONENTS Qml)
-
 find_package(TBB REQUIRED)
 
 target_link_libraries(pointcaster PRIVATE 
@@ -60,8 +56,6 @@ target_link_libraries(pointcaster PRIVATE
   Corrade::PluginManager
   reflectcpp::reflectcpp
   TBB::tbb
-  ## TODO why
-  Qt6::Qml
 )
 
 target_include_directories(pointcaster PRIVATE "${CMAKE_SOURCE_DIR}/src")

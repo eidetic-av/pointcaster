@@ -1,7 +1,5 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
-#include <QQmlApplicationEngine>
-#include <QQmlContext>
 #include <app_settings/app_settings.h>
 #include <core/logger/logger.h>
 #include <core/profiling/profiler.h>
@@ -18,8 +16,6 @@ int main(int argc, char *argv[]) {
   std::println("This is pointcaster 0.2.0");
 
   auto *app_settings = AppSettings::instance();
-  qmlRegisterSingletonInstance("Pointcaster", 1, 0, "AppSettings",
-                               app_settings);
 
   if (app_settings->logToFile()) {
     pc::enable_file_logging("pointcaster-qt");

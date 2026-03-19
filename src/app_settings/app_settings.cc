@@ -4,6 +4,7 @@
 #include <QMetaObject>
 #include <QThread>
 #include <QtGlobal>
+#include <QtQml/qqml.h>
 #include <qcoreapplication.h>
 
 namespace pc {
@@ -16,6 +17,7 @@ AppSettings *AppSettings::instance() {
   QCoreApplication::setOrganizationName("matth");
   QCoreApplication::setApplicationName("pointcaster");
   static AppSettings *s_instance = new AppSettings(qApp);
+  qmlRegisterSingletonInstance("Pointcaster", 1, 0, "AppSettings", s_instance);
   return s_instance;
 }
 
