@@ -27,6 +27,15 @@ add_subdirectory(devices/null)
 add_dependencies(pointcaster ${CORRADE_PLUGINS})
 target_link_libraries(pointcaster_plugins PRIVATE ${CORRADE_STATIC_PLUGINS})
 
+# TODO for some reason our static libs .a are being deployed with pointcaster install...
+# not sure of the CMAKE switch to turn this off... 
+# so after install step, just delete the installed files
+install(CODE [===[
+  foreach(plugin ${CORRADE_STATIC_PLUGINS})
+    file(REMOVE_RECURSE "${CMAKE_INSTALL_PREFIX}/${plugin}/")
+  endforeach()
+]===])
+
 target_precompile_headers(pointcaster_plugins PRIVATE
   <string>
   <string_view>
