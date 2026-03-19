@@ -1,5 +1,5 @@
-
-corrade_add_static_plugin(NullDevice
+corrade_add_static_plugin(
+  NullDevice
   NullDevice
   ""
   NullDevice.conf
