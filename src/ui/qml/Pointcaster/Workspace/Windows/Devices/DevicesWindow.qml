@@ -13,10 +13,9 @@ KDDW.DockWidget {
 
     uniqueName: "devicesWindow"
     title: "Devices"
-    Component.onCompleted: function() {
+    Component.onCompleted: function () {
         if (workspace)
             workspace.triggerDeviceDiscovery();
-
     }
 
     Item {
@@ -44,7 +43,6 @@ KDDW.DockWidget {
 
         DevicesToolBar {
             id: devicesToolBar
-
             workspace: root.workspace
         }
 
@@ -62,102 +60,28 @@ KDDW.DockWidget {
             height: Math.round(160 * Scaling.uiScale)
         }
 
-        Row {
-            id: controlRow
+        // Rectangle {
+        //     color: "green"
+        //     width: 200
+        //     anchors {
+        //         top: deviceSelectionList.bottom
+        //         bottom: devices.bottom
+        //     }
+        // }
 
-            spacing: Math.round(8 * Scaling.uiScale)
-            enabled: devices.currentAdapter !== null
-
+        DeviceConfigEditor {
+            id: configEditor
+            adapter: devices.currentAdapter
             anchors {
                 top: deviceSelectionList.bottom
-                left: parent.left
-                right: parent.right
+                bottom: devices.bottom
+                left: devices.left
+                right: devices.right
                 topMargin: Math.round(10 * Scaling.uiScale)
+                bottomMargin: Math.round(8 * Scaling.uiScale)
                 leftMargin: Math.round(8 * Scaling.uiScale)
                 rightMargin: Math.round(8 * Scaling.uiScale)
             }
-
-            IconButton {
-                id: startStopButton
-
-                font: Scaling.uiFont
-                tooltip: "Start/stop selected device"
-                text: {
-                    if (!devices.currentAdapter)
-                        return "Start";
-
-                    return devices.currentAdapter.status === UiEnums.WorkspaceDeviceStatus.Active ? "Stop" : "Start";
-                }
-                iconSource: {
-                    if (!devices.currentAdapter)
-                        return FontAwesome.icon("solid/play");
-
-                    return devices.currentAdapter.status === UiEnums.WorkspaceDeviceStatus.Active ? FontAwesome.icon("solid/stop") : FontAwesome.icon("solid/play");
-                }
-                enabled: devices.currentAdapter && devices.currentAdapter.status && devices.currentAdapter.status !== UiEnums.WorkspaceDeviceStatus.Loading
-                onClicked: {
-                    if (!devices.currentAdapter)
-                        return ;
-
-                    if (devices.currentAdapter.status === UiEnums.WorkspaceDeviceStatus.Active)
-                        devices.currentAdapter.stop();
-                    else
-                        devices.currentAdapter.start();
-                }
-            }
-
-            IconButton {
-                id: restartButton
-
-                font: Scaling.uiFont
-                tooltip: "Restart selected device"
-                text: "Restart"
-                iconSource: FontAwesome.icon("solid/rotate-right")
-                enabled: devices.currentAdapter && devices.currentAdapter.status && devices.currentAdapter.status === UiEnums.WorkspaceDeviceStatus.Active
-                onClicked: {
-                    if (devices.currentAdapter)
-                        devices.currentAdapter.restart();
-
-                }
-            }
-
-            Item {
-                width: 1
-                Layout.fillWidth: false
-            }
-
         }
-
-        ScrollView {
-            id: deviceConfigScrollView
-
-            Component.onCompleted: function() {
-                contentItem.boundsBehavior = Flickable.StopAtBounds;
-            }
-
-            anchors {
-                top: controlRow.bottom
-                topMargin: Math.round(6 * Scaling.uiScale)
-                bottom: parent.bottom
-                bottomMargin: Math.round(3 * Scaling.uiScale)
-                left: parent.left
-                right: parent.right
-            }
-
-            Column {
-                spacing: Math.round(6 * Scaling.uiScale)
-                width: deviceConfigScrollView.contentItem.width
-                height: parent.height
-
-                ConfigurationEditor {
-                    model: devices.currentAdapter
-                    flattenFields: false
-                }
-
-            }
-
-        }
-
     }
-
 }

@@ -253,7 +253,5 @@ ApplicationWindow {
 
     SettingsWindow {
         id: settingsWindow
-        x: root.x + (root.width - width) / 2
-        y: root.y + (root.height - height) / 2
     }
 }

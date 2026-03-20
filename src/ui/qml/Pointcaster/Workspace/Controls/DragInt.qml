@@ -6,11 +6,13 @@ SpinBox {
 
     property int boundValue: 0
     property bool boundEnabled: true
+    property bool commitOnEdit: false
     signal commitValue(int value)
 
     property var minValue: undefined
     property var maxValue: undefined
     property var defaultValue: undefined
+    property var stepSizeValue: 1
 
     property color focusBorderColor: ThemeColors.highlight
     property color unfocusBorderColor: "transparent"
@@ -22,7 +24,7 @@ SpinBox {
 
     editable: true
     enabled: boundEnabled
-    stepSize: 1
+    stepSize: stepSizeValue
 
     readonly property int effectiveFrom: {
         var n = Number(minValue);
@@ -83,6 +85,7 @@ SpinBox {
 
     onValueModified: {
         boundValue = value;
+        if (commitOnEdit) commitValue(value);
     }
 
     onActiveFocusChanged: {

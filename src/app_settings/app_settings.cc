@@ -36,6 +36,7 @@ AppSettings::AppSettings(QObject *parent)
   m_logLevel = logLevelFromString(logLevelText);
 
   m_uiScale = m_settings.value("ui/scale", 1.0).toDouble();
+  m_gridSizeMetres = m_settings.value("ui/gridSize", 10).toInt();
 
   m_enablePrometheusMetrics =
       m_settings.value("metrics/enabled", true).toBool();
@@ -143,6 +144,25 @@ void AppSettings::setUiScale(double value) {
   m_uiScale = v;
   write("ui/scale", m_uiScale);
   emit uiScaleChanged();
+}
+
+int AppSettings::gridSizeMetres() const {
+  return m_gridSizeMetres;
+}
+
+void AppSettings::setGridSizeMetres(int value) {
+  if (value == m_gridSizeMetres) return;
+
+  if (!onObjectThread(this)) {
+    QMetaObject::invokeMethod(
+        this, [this, v = value] { setGridSizeMetres(v); },
+        Qt::QueuedConnection);
+    return;
+  }
+
+  m_gridSizeMetres = value;
+  write("ui/gridSize", m_gridSizeMetres);
+  emit gridSizeMetresChanged();
 }
 
 bool AppSettings::restoreLastWorkspace() const {

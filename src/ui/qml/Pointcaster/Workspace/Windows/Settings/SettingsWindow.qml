@@ -9,9 +9,9 @@ Dialog {
     title: "Preferences"
 
     popupType: Popup.Window
-    modal: true
     focus: true
-    dim: true
+    modal: false
+    dim: false
     visible: false
 
     font: Scaling.uiFont

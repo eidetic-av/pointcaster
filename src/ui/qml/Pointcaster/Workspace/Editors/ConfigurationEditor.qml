@@ -605,13 +605,12 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.leftMargin: Math.round(10 * Scaling.uiScale)
-        anchors.rightMargin: Math.round(10 * Scaling.uiScale)
         anchors.topMargin: Math.round(3 * Scaling.uiScale)
         visible: !root.model
         text: "No device selected"
         font: Scaling.uiFont
         color: ThemeColors.text
+        opacity: 0.75
     }
 
     Column {

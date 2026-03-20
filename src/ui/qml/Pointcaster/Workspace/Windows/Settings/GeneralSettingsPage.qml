@@ -199,6 +199,32 @@ Item {
                                 onClicked: AppSettings.uiScale = pendingUiScale
                             }
                         }
+
+                        RowLayout {
+                            id: gridSizeRow
+                            Layout.fillWidth: true
+                            spacing: 10 * Scaling.uiScale
+
+                            Label {
+                                text: "Grid size (metres)"
+                                font: Scaling.uiFont
+                                Layout.preferredWidth: 120 * Scaling.uiScale
+                                opacity: 0.9
+                            }
+
+                            // TODO why isnt this dragging?
+                            DragInt {
+                                Layout.preferredWidth: 120 * Scaling.uiScale
+                                minValue: 1
+                                maxValue: 30
+                                defaultValue: 10
+                                boundValue: AppSettings.gridSizeMetres
+                                commitOnEdit: true
+                                onCommitValue: function (v) {
+                                    AppSettings.gridSizeMetres = v;
+                                }
+                            }
+                        }
                     }
                 }
 

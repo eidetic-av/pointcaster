@@ -33,6 +33,8 @@ class APP_SETTINGS_API AppSettings final : public QObject {
       bool logToFile READ logToFile WRITE setLogToFile NOTIFY logToFileChanged)
 
   Q_PROPERTY(double uiScale READ uiScale WRITE setUiScale NOTIFY uiScaleChanged)
+  Q_PROPERTY(int gridSizeMetres READ gridSizeMetres WRITE setGridSizeMetres
+                 NOTIFY gridSizeMetresChanged)
 
   Q_PROPERTY(
       bool enablePrometheusMetrics READ enablePrometheusMetrics WRITE
@@ -80,6 +82,9 @@ public:
   double uiScale() const;
   void setUiScale(double value);
 
+  int gridSizeMetres() const;
+  void setGridSizeMetres(int value);
+
   // -- Metrics
 
   bool enablePrometheusMetrics() const;
@@ -106,6 +111,7 @@ signals:
   void logToFileChanged();
 
   void uiScaleChanged();
+  void gridSizeMetresChanged();
 
   void enablePrometheusMetricsChanged();
   void prometheusAddressChanged();
@@ -133,6 +139,7 @@ private:
   bool m_logToFile = true;
 
   double m_uiScale = 1.0;
+  int m_gridSizeMetres = 10;
 
   bool m_enablePrometheusMetrics = true;
   QString m_prometheusAddress;
