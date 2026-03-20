@@ -81,7 +81,7 @@ ApplicationWindow {
     menuBar: TopMenuBar {}
 
     KDDW.DockingArea {
-        id: dockingArea
+        id: mainDockingArea
         anchors.fill: parent
         uniqueName: "MainDockingArea"
 
@@ -121,7 +121,6 @@ ApplicationWindow {
 
         function syncSessionWindows() {
             const sessionAdapters = workspaceModel.sessionAdapters;
-            console.log(`syncSessionWindows: sessionAdapters length=${sessionAdapters.length}`);
 
             // Mark all existing as unseen initially
             const seen = ({});
@@ -152,7 +151,7 @@ ApplicationWindow {
                 }
 
                 // Create new dock
-                const newDock = sessionWindowComponent.createObject(dockingArea, {
+                const newDock = sessionWindowComponent.createObject(mainDockingArea, {
                     dockUniqueName: idStr,
                     dockTitle: String(sessionAdapter.label),
                     sessionAdapter: sessionAdapter
@@ -192,13 +191,13 @@ ApplicationWindow {
 
         Component.onCompleted: {
             addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(400, 400));
-            dockingArea.syncSessionWindows();
+            mainDockingArea.syncSessionWindows();
         }
 
         Connections {
             target: workspaceModel
             function onSessionAdaptersChanged() {
-                dockingArea.syncSessionWindows();
+                mainDockingArea.syncSessionWindows();
             }
         }
     }
@@ -253,5 +252,7 @@ ApplicationWindow {
 
     SettingsWindow {
         id: settingsWindow
+        x: mainDockingArea.x + (mainDockingArea.width / 2) - (settingsWindow.width / 2)
+        y: mainDockingArea.y + (mainDockingArea.height / 2) - (settingsWindow.height / 2)
     }
 }

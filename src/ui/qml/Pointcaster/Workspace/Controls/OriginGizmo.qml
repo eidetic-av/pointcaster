@@ -137,7 +137,7 @@ Item {
         color: ballBackgroundHoverHandler.hovered ? stylePalette.background : "transparent"
 
         // slightly smaller balls
-        readonly property real subBallWidth: width / 5.25
+        readonly property real subBallWidth: Math.round(width / 5.5)
         readonly property real subBallHalfWidth: subBallWidth * 0.5
         readonly property real subBallOffset: radius - subBallWidth / 2
 
@@ -154,9 +154,6 @@ Item {
                 width: ballBackground.subBallWidth
                 offset: ballBackground.subBallOffset
                 labelText: "X"
-                labelColor: hovered ? stylePalette.white : stylePalette.black
-                labelOffsetX: 1
-                labelOffsetY: 1
                 color: stylePalette.red
                 initialPosition: Qt.vector3d(1, 0, 0)
                 onTapped: root.axisClicked(OriginGizmo.Axis.PositiveX)
@@ -175,9 +172,6 @@ Item {
                 width: ballBackground.subBallWidth
                 offset: ballBackground.subBallOffset
                 labelText: "Y"
-                labelColor: hovered ? stylePalette.white : stylePalette.black
-                labelOffsetX: -1
-                labelOffsetY: 1
                 color: stylePalette.green
                 initialPosition: Qt.vector3d(0, 1, 0)
                 onTapped: root.axisClicked(OriginGizmo.Axis.PositiveY)
@@ -194,9 +188,6 @@ Item {
                 width: ballBackground.subBallWidth
                 offset: ballBackground.subBallOffset
                 labelText: "Z"
-                labelColor: hovered ? stylePalette.white : stylePalette.black
-                labelOffsetX: 0
-                labelOffsetY: 1
                 color: stylePalette.blue
                 initialPosition: Qt.vector3d(0, 0, 1)
                 onTapped: root.axisClicked(OriginGizmo.Axis.PositiveZ)
@@ -211,9 +202,6 @@ Item {
                 targetNode: root.targetNode
                 width: ballBackground.subBallWidth
                 offset: ballBackground.subBallOffset
-                labelText: "-X"
-                labelColor: stylePalette.white
-                labelVisible: hovered
                 color: Qt.rgba(stylePalette.red.r, stylePalette.red.g, stylePalette.red.b, z + 1 * 0.5)
                 border.color: stylePalette.red
                 border.width: Math.round(2 * Scaling.uiScale)
@@ -225,9 +213,6 @@ Item {
                 targetNode: root.targetNode
                 width: ballBackground.subBallWidth
                 offset: ballBackground.subBallOffset
-                labelText: "-Y"
-                labelColor: stylePalette.white
-                labelVisible: hovered
                 color: Qt.rgba(stylePalette.green.r, stylePalette.green.g, stylePalette.green.b, z + 1 * 0.5)
                 border.color: stylePalette.green
                 border.width: Math.round(2 * Scaling.uiScale)
@@ -239,9 +224,6 @@ Item {
                 targetNode: root.targetNode
                 width: ballBackground.subBallWidth
                 offset: ballBackground.subBallOffset
-                labelText: "-Z"
-                labelColor: stylePalette.white
-                labelVisible: hovered
                 color: Qt.rgba(stylePalette.blue.r, stylePalette.blue.g, stylePalette.blue.b, z + 1 * 0.5)
                 border.color: stylePalette.blue
                 border.width: Math.round(2 * Scaling.uiScale)
@@ -282,7 +264,7 @@ Item {
         readonly property vector3d position: quaternionVectorMultiply(targetNode.rotation, initialPosition)
 
         property int labelOffsetX: 0
-        property int labelOffsetY: 0
+        property int labelOffsetY: Math.round(Scaling.uiScale * 1)
 
         signal tapped
 
@@ -317,7 +299,7 @@ Item {
             anchors.centerIn: parent
             anchors.horizontalCenterOffset: labelOffsetX
             anchors.verticalCenterOffset: labelOffsetY
-            font: Scaling.uiSmallFont
+            font: Scaling.monoFont
         }
     }
 }

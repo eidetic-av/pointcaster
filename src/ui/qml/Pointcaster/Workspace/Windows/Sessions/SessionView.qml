@@ -510,7 +510,7 @@ Item {
             id: groundGrid
             visible: sessionControls.gridEnabled
 
-            scale: Qt.vector3d(1000, 1000, 1)
+            scale: Qt.vector3d(1000, 1000, 0)
             eulerRotation: Qt.vector3d(90, 0, 0)
 
             property real metres: Math.round(AppSettings.gridSizeMetres)
@@ -521,47 +521,56 @@ Item {
 
             materials: [
                 PrincipledMaterial {
+                    baseColor: ThemeColors.midlight
                     lighting: PrincipledMaterial.NoLighting
-                    baseColor: ThemeColors.light
+                    lineWidth: Math.round(Scaling.uiScale * 2)
                 }
             ]
         }
 
         Model {
             id: xAxis
-            source: "#Cube"
-            position: Qt.vector3d(groundGrid.metres * 25, 0, 0)
-            scale: Qt.vector3d(groundGrid.metres / 2, .005, .005)
             visible: sessionControls.gridEnabled
-            materials: DefaultMaterial {
-                lighting: DefaultMaterial.NoLighting
-                diffuseColor: ThemeColors.red
-            }
-        }
+            eulerRotation: Qt.vector3d(90, 0, 0)
+            scale: Qt.vector3d(groundGrid.metres * 500, 0, 0)
+            x: groundGrid.metres * 25 
 
-        // Model {
-        //     id: yAxis
-        //     source: "#Cube"
-        //     position: Qt.vector3d(0, groundGrid.metres * 25, 0)
-        //     scale: Qt.vector3d(.005, groundGrid.metres / 2, .005)
-        //     visible: sessionControls.gridEnabled
-        //     materials: DefaultMaterial {
-        //         lighting: DefaultMaterial.NoLighting
-        //         diffuseColor: "green"
-        //     }
-        // }
+            geometry: GridGeometry {
+                horizontalLines: 2
+                verticalLines: 2
+            }
+
+            materials: [
+                PrincipledMaterial {
+                    baseColor: ThemeColors.red
+                    lighting: PrincipledMaterial.NoLighting
+                    lineWidth: Math.round(Scaling.uiScale * 4)
+                }
+            ]
+        }
 
         Model {
             id: zAxis
-            source: "#Cube"
-            position: Qt.vector3d(0, 0, groundGrid.metres * 25)
-            scale: Qt.vector3d(.005, .005, groundGrid.metres / 2)
             visible: sessionControls.gridEnabled
-            materials: DefaultMaterial {
-                lighting: DefaultMaterial.NoLighting
-                diffuseColor: ThemeColors.blue
+            eulerRotation: Qt.vector3d(90, 0, 00)
+            scale: Qt.vector3d(0, groundGrid.metres * 500, 0)
+            z: groundGrid.metres *  25
+
+            geometry: GridGeometry {
+                horizontalLines: 2
+                verticalLines: 2
             }
+
+            materials: [
+                PrincipledMaterial {
+                    baseColor: ThemeColors.blue
+                    lighting: PrincipledMaterial.NoLighting
+                    lineWidth: Math.round(Scaling.uiScale * 4)
+                }
+            ]
         }
+
+
     }
 
     // session window GUI overlaid on top of the View3D
