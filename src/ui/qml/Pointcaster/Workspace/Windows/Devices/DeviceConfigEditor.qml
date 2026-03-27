@@ -10,6 +10,11 @@ Item {
     id: root
     property var adapter: null
 
+    anchors {
+        leftMargin: Math.round(8 * Scaling.uiScale)
+        rightMargin: Math.round(8 * Scaling.uiScale)
+    }
+
     Row {
         id: controlRow
         spacing: Math.round(8 * Scaling.uiScale)

@@ -111,7 +111,7 @@ ApplicationWindow {
                 SessionView {
                     workspace: workspaceModel
                     sessionAdapter: sessionDockWidget.sessionAdapter
-                    deviceAdapters: workspaceModel.deviceAdapters
+                    deviceAdapters: workspaceModel ? workspaceModel.deviceAdapters : []
                 }
             }
         }
@@ -204,14 +204,6 @@ ApplicationWindow {
 
     KDDW.LayoutSaver {
         id: layoutSaver
-    }
-
-    Connections {
-        target: Qt.application
-        function onAboutToQuit() {
-            console.log("App is quitting");
-            // layoutSaver.saveToFile('mylayout.json');
-        }
     }
 
     Popup {

@@ -78,7 +78,12 @@ public:
     return {};
   }
 
-  void notifyFieldChanged(const QString &path) { emit fieldChanged(path); }
+  Q_INVOKABLE virtual bool isFileOpener(const QString &path) const {
+    Q_UNUSED(path);
+    return false;
+  }
+
+  virtual void notifyFieldChanged(const QString &path) { emit fieldChanged(path); }
 
   virtual bool setConfig(const pc::ConfigurationVariant &) = 0;
 

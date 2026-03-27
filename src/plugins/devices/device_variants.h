@@ -1,6 +1,7 @@
 #pragma once
 
 #include "orbbec/orbbec_device_config.h"
+#include "ply/ply_device_config.h"
 #include <concepts>
 #include <config/config_variant.h>
 #include <optional>
@@ -10,7 +11,13 @@
 
 namespace pc::devices {
 
-using DeviceConfigurationVariant = std::variant<OrbbecDeviceConfiguration>;
+// TODO we absolutely cannot be doing compile time variants for polymorphism,
+// when we need the DeviceConfigurations to be able to be dynamically loaded
+// from plugins
+
+// we can't garuntee that all variants live inside this codebase
+using DeviceConfigurationVariant =
+    std::variant<OrbbecDeviceConfiguration, PlyDeviceConfiguration>;
 
 // compile time utilities
 

@@ -21,6 +21,7 @@ class EnumEntry:
 class Member:
     type: str
     name: str
+    comment: str
     default_value: Any
     min_max: str
     optional: bool
@@ -413,6 +414,7 @@ def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[
                 optional=bool(OPTIONAL_RE.search(comment)),
                 disabled=bool(DISABLED_RE.search(comment)),
                 hidden=bool(HIDDEN_RE.search(comment)),
+                comment=comment,
                 is_enum=is_enum,
                 enum_qualified_type=enum_qualified_type,
                 enum_entries=enum_entries,

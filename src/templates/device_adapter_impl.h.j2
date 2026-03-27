@@ -330,6 +330,15 @@ public:
         return false;
     }
 
+    Q_INVOKABLE bool isFileOpener(const QString &path) const override {
+{% for m in s.members %}
+{% if '@file_opener' is in m.comment %}
+        if (path == QStringLiteral("{{ m.name }}")) return true;
+{% endif %}
+{% endfor %}
+        return false;
+    }
+
 {% if s.any_enums %}
     Q_INVOKABLE bool isEnum(const QString &path) const override {
 {% for m in s.members %}

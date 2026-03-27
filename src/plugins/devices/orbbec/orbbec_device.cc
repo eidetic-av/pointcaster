@@ -318,8 +318,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
     auto ob_config = std::make_shared<ob::Config>();
 
-    OrbbecDeviceConfiguration *device_config;
-    std::visit([&](auto &&c) { device_config = &c; }, config());
+    OrbbecDeviceConfiguration *device_config = &std::get<OrbbecDeviceConfiguration>(_config);
 
     auto colour_profile_list = pipeline.getStreamProfileList(OB_SENSOR_COLOR);
     // TODO enable without colour too

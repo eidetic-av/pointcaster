@@ -280,20 +280,25 @@ Item {
                 Model {
                     id: model
 
-                    property string model: "device_" + modelData.deviceIndex()
+                    property string model: modelData ? "device_" + modelData.deviceIndex : ""
                     property string geo: "geo_" + model
 
                     pickable: true
 
                     geometry: PointCloudGeometry {
                         id: geo
-                        pointCloudAdapter: modelData
+                        pointCloudAdapter: modelData.pointCloudAdapter() ?? []
                     }
 
                     materials: [
                         PrincipledMaterial {
                             lighting: PrincipledMaterial.NoLighting
-                            pointSize: 5
+                            pointSize: Math.round(5 * Scaling.uiScale)
+                            // TODO this pointSize needs to change based on the distance of the point to the camera...
+                            // we can achieve this with a custom vertex and/or fragment shader
+                        // CustomMaterial {
+                            // vertexShader: "material.vert"
+                            // fragmentShader: "material.frag"
                         }
                     ]
                 }

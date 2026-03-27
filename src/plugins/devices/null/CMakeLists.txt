@@ -20,5 +20,9 @@ target_include_directories(NullDevice
     "${CMAKE_SOURCE_DIR}/include"
 )
 
+install(CODE [===[
+  file(REMOVE_RECURSE "${CMAKE_INSTALL_PREFIX}/NullDevice/")
+]===])
+
 set(CORRADE_STATIC_PLUGINS ${CORRADE_STATIC_PLUGINS} NullDevice PARENT_SCOPE)
 set(CORRADE_PLUGINS ${CORRADE_PLUGINS} NullDevice PARENT_SCOPE)

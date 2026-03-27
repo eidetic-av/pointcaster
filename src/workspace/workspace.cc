@@ -178,7 +178,7 @@ void Workspace::sync_devices() {
         std::visit(
             [](auto &&config) {
               pc::logger()->debug("Applying device configuration: {}",
-                                  config.ip);
+                                  config.id);
             },
             device_variant);
         device_plugin->set_is_discovery_instance(false);

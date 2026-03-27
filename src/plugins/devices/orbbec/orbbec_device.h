@@ -58,11 +58,6 @@ public:
   void stop() override;
   void restart() override;
 
-  void on_config_field_changed(int deviceIndex, int fieldIndex) override {
-    pc::logger()->trace("Orbbec config changed deviceIndex={} fieldIndex={}",
-                        deviceIndex, fieldIndex);
-  }
-
 private:
   // TODO just a double buffer for now...
   moodycamel::BlockingReaderWriterCircularBuffer<PointCloud> _frame_buffer{2};

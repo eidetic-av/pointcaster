@@ -49,7 +49,7 @@ void SetDeviceConfigCommand::apply(
   if (device_index_u < _workspace.devices.size()) {
     if (auto *plugin = _workspace.devices[device_index_u].get()) {
       plugin->update_config(value);
-      plugin->on_config_field_changed(_device_index, _field_index);
+      plugin->on_config_field_changed();
     }
   }
 

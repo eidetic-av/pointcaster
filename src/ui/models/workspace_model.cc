@@ -2,6 +2,7 @@
 
 #include "app_settings/app_settings.h"
 #include "models/device_adapter.h"
+#include "plugins/devices/ply/ply_device_config.h"
 #include <QHash>
 #include <QMetaObject>
 #include <QObject>
@@ -26,11 +27,20 @@
 #include <variant>
 #include <workspace/workspace.h>
 
+// TODO these absolutely need to be polymorphic,
+// no way they can be defined at this compile stage
+#include <plugins/devices/orbbec/orbbec_device_adapter.gen.h>
+#include <plugins/devices/orbbec/orbbec_device_config.h>
+#include <plugins/devices/ply/ply_device_adapter.gen.h>
+#include <plugins/devices/ply/ply_device_config.h>
+
 namespace pc::ui {
 
 using pc::SessionConfiguration;
 using pc::SessionConfigurationAdapter;
+
 using pc::devices::OrbbecDeviceConfiguration;
+using pc::devices::PlyDeviceConfiguration;
 
 namespace {
 
@@ -272,18 +282,25 @@ QVariantList WorkspaceModel::addDeviceMenuEntries() const {
   QVariantList entries;
 
   for (auto plugin_name : _workspace.loaded_device_plugin_names) {
+
+    QVariantMap entry;
+    entry["plugin_name"] = QString::fromStdString(plugin_name);
+    entry["kind"] = "plugin";
+    entries.push_back(std::move(entry));
+
+    // any discovered network devices of this plugin type
     auto it = _workspace.discovery_plugins.find(plugin_name);
     if (it == _workspace.discovery_plugins.end() || !it->second) continue;
-
     const auto discovered_devices = it->second->discovered_devices();
     for (const auto &device : discovered_devices) {
-      QVariantMap item;
-      item["kind"] = "discovered";
-      item["plugin_name"] = QString::fromStdString(plugin_name);
-      item["ip"] = QString::fromStdString(device.ip);
-      item["id"] = QString::fromStdString(device.id);
-      item["label"] = QString::fromStdString(device.label);
-      entries.push_back(item);
+      QVariantMap discovered_device_entry;
+      discovered_device_entry["kind"] = "discovered";
+      discovered_device_entry["plugin_name"] =
+          QString::fromStdString(plugin_name);
+      discovered_device_entry["ip"] = QString::fromStdString(device.ip);
+      discovered_device_entry["id"] = QString::fromStdString(device.id);
+      discovered_device_entry["label"] = QString::fromStdString(device.label);
+      entries.push_back(std::move(discovered_device_entry));
     }
   }
 
@@ -292,17 +309,18 @@ QVariantList WorkspaceModel::addDeviceMenuEntries() const {
 
 void WorkspaceModel::addNewDevice(const QString &plugin_name,
                                   const QString &target_ip) {
+  // take a copy of current configuration to manipulate
+  auto result_config = _workspace.config;
+  // TODO this needs to be polymorphic runtime access
   if (plugin_name == OrbbecDeviceConfiguration::PluginName) {
-    auto config =
-        pc::devices::OrbbecDeviceConfiguration{.id = pc::uuid::word()};
-    if (!target_ip.isEmpty()) config.ip = target_ip.toStdString();
-
-    auto new_config = _workspace.config;
-    new_config.devices.push_back(std::move(config));
-    applyWorkspaceConfigAndRebuild(std::move(new_config));
-  } else {
-    syncAdapters();
+    result_config.devices.push_back(OrbbecDeviceConfiguration{
+        .id = pc::uuid::word(),
+        .ip = target_ip.isEmpty() ? "" : target_ip.toStdString()});
+  } else if (plugin_name == PlyDeviceConfiguration::PluginName) {
+    result_config.devices.push_back(
+        PlyDeviceConfiguration{.id = pc::uuid::word()});
   }
+  applyWorkspaceConfigAndRebuild(std::move(result_config));
 }
 
 void WorkspaceModel::deleteSelectedDevice() {

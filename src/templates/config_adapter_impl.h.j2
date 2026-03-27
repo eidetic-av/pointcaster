@@ -18,6 +18,8 @@
 #include <config/config_variant.h>
 #include <{{ header_include_path }}>
 
+#include <logger/logger.h>
+
 {% if structs|length > 0 %}
 {# Include nested config adapter headers so we can embed adapters by value. #}
 {% for s in structs %}
@@ -409,6 +411,16 @@ public:
 {% endfor %}
         return false;
     }
+
+    Q_INVOKABLE bool isFileOpener(const QString &path) const override {
+{% for m in s.members %}
+{% if '@file_opener' is in m.comment %}
+        if (path == QStringLiteral("{{ m.name }}")) return true;
+{% endif %}
+{% endfor %}
+        return false;
+    }
+
 
 {% if s.any_enums %}
     Q_INVOKABLE bool isEnum(const QString &path) const override {

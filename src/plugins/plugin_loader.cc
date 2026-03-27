@@ -18,6 +18,7 @@
 // import static macros need to be used in global namespace
 static void import_static_plugins() {
   CORRADE_PLUGIN_IMPORT(NullDevice)
+  CORRADE_PLUGIN_IMPORT(PlyDevice)
 }
 
 namespace pc::plugins {

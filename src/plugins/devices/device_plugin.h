@@ -42,7 +42,8 @@ public:
       if (recursive_file_node.path().extension().string() == ".conf") {
         // for each subdirectory that contains a file named .conf,
         // treat it as a plugin directory and add it to our search paths...
-        search_paths.emplace_back(recursive_file_node.path().parent_path().string());
+        search_paths.emplace_back(
+            recursive_file_node.path().parent_path().string());
       }
     }
 
@@ -84,11 +85,13 @@ public:
   void set_is_discovery_instance(bool v) { _is_discovery_instance = v; }
   bool is_discovery_instance() { return _is_discovery_instance; };
 
-  virtual std::vector<DiscoveredDevice> discovered_devices() const = 0;
-  virtual void refresh_discovery() = 0;
+  virtual std::vector<DiscoveredDevice> discovered_devices() const {
+    return {};
+  };
+  virtual void refresh_discovery() {};
 
-  virtual void add_discovery_change_callback(std::function<void()> cb) = 0;
-  virtual bool has_discovery_change_callback() const = 0;
+  virtual void add_discovery_change_callback(std::function<void()>){};
+  virtual bool has_discovery_change_callback() const { return false; };
 
   virtual DeviceStatus status() const = 0;
 
@@ -102,8 +105,7 @@ public:
     _config = config;
   }
 
-  virtual void on_config_field_changed([[maybe_unused]] int deviceIndex,
-                                       [[maybe_unused]] int fieldIndex) {}
+  virtual void on_config_field_changed(std::string_view path = "") {}
 
   virtual bool plugin_null_state() const { return false; }
 

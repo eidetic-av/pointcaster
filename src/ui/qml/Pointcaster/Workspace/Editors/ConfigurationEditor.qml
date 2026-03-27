@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Dialogs
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -17,7 +18,7 @@ Item {
     readonly property int labelColumnWidth: WorkspaceState.labelColumnWidth
     property int minLabelColumnWidth: Math.round(40 * Scaling.uiScale)
     property int minValueColumnWidth: Math.round(170 * Scaling.uiScale)
-    property int outerHorizontalMargin: Math.round(8 * Scaling.uiScale)
+    property int outerHorizontalMargin: 0
     property int outerTopMargin: Math.round(4 * Scaling.uiScale)
 
     // Spacing/padding tuning
@@ -358,34 +359,63 @@ Item {
 
                                     Component {
                                         id: stringEditor
-                                        TextField {
-                                            id: valueField
-                                            font: Scaling.uiFont
 
-                                            background: Rectangle {
-                                                color: "transparent"
-                                                border.color: valueField.focus ? ThemeColors.highlight : "transparent"
-                                                border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
-                                                radius: 0
-                                            }
+                                        Row {
+                                            width: parent.width
 
-                                            text: groupRoot.model ? String(groupRoot.model.value(path)) : ""
-                                            enabled: groupRoot.model ? !groupRoot.model.isDisabled(path) : false
-                                            opacity: enabled ? 1.0 : 0.66
+                                            TextField {
+                                                id: valueField
+                                                font: Scaling.uiFont
 
-                                            onEditingFinished: {
-                                                if (!groupRoot.model)
-                                                    return;
-                                                groupRoot.model.set(path, text);
-                                            }
+                                                width: parent.width - fileOpenButton.width - Math.round(Scaling.uiScale * 5)
 
-                                            Connections {
-                                                target: groupRoot.model
-                                                function onFieldChanged(changedPath) {
-                                                    if (String(changedPath) !== path)
-                                                        return;
-                                                    valueField.text = groupRoot.model ? String(groupRoot.model.value(path)) : "";
+                                                background: Rectangle {
+                                                    color: "transparent"
+                                                    border.color: valueField.focus ? ThemeColors.highlight : "transparent"
+                                                    border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
+                                                    radius: 0
                                                 }
+
+                                                text: groupRoot.model ? String(groupRoot.model.value(path)) : ""
+                                                enabled: groupRoot.model ? (!groupRoot.model.isDisabled(path) && !groupRoot.model.isFileOpener(path)) : false
+                                                opacity: enabled ? 1.0 : 0.66
+
+                                                onEditingFinished: {
+                                                    if (!groupRoot.model)
+                                                        return;
+                                                    groupRoot.model.set(path, text);
+                                                }
+
+                                                Connections {
+                                                    target: groupRoot.model
+                                                    function onFieldChanged(changedPath) {
+                                                        if (String(changedPath) !== path)
+                                                            return;
+                                                        valueField.text = groupRoot.model ? String(groupRoot.model.value(path)) : "";
+                                                    }
+                                                }
+
+                                                InfoToolTip {
+                                                    textValue: valueField.text
+                                                }
+                                            }
+
+                                            IconButton {
+                                                id: fileOpenButton
+                                                iconSource: FontAwesome.icon("solid/file-import")
+                                                iconSize: Math.round(12 * Scaling.uiScale)
+                                                topPadding: Math.round(4 * Scaling.uiScale)
+                                                bottomPadding: Math.round(4 * Scaling.uiScale)
+                                                leftPadding: Math.round(5 * Scaling.uiScale)
+                                                rightPadding: Math.round(5 * Scaling.uiScale)
+
+                                                onClicked: fileOpenDialog.open()
+                                            }
+
+                                            FileDialog {
+                                                id: fileOpenDialog
+                                                nameFilters: [qsTr("PLY files (*.ply)"), qsTr("All files (*)")]
+                                                onAccepted: groupRoot.model.set(path, selectedFile)
                                             }
                                         }
                                     }
@@ -646,8 +676,9 @@ Item {
             }
 
             onObjectRemoved: function (index, object) {
-                if (object)
+                if (object && object.objectName) {
                     object.destroy();
+                }
             }
         }
     }

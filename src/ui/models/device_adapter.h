@@ -8,11 +8,10 @@
 #include <QStringList>
 #include <QVariant>
 
-#include <optional>
-
 #include <plugins/devices/device_plugin.h>
 #include <plugins/devices/device_variants.h>
 #include <pointcaster/point_cloud.h>
+#include <qtmetamacros.h>
 
 class DeviceAdapter : public ConfigAdapter, public PointCloudAdapter {
   Q_OBJECT
@@ -20,7 +19,8 @@ class DeviceAdapter : public ConfigAdapter, public PointCloudAdapter {
   Q_PROPERTY(pc::devices::ui::WorkspaceDeviceStatus status READ status NOTIFY
                  statusChanged)
 
-  Q_PROPERTY(bool pluginNullState READ pluginNullState)
+  Q_PROPERTY(
+      bool pluginNullState READ pluginNullState NOTIFY pluginNullStateChanged)
 
 public:
   explicit DeviceAdapter(pc::devices::DevicePlugin *plugin,
@@ -73,10 +73,22 @@ public:
     _plugin->restart();
   }
 
-  const pc::PointCloud &point_cloud() { return _plugin->point_cloud(); };
+  Q_INVOKABLE const pc::PointCloud &point_cloud() override {
+    return _plugin->point_cloud();
+  };
+
+  Q_INVOKABLE PointCloudAdapter *pointCloudAdapter() {
+    return static_cast<PointCloudAdapter *>(this);
+  }
+
+  void notifyFieldChanged(const QString &path) override {
+    emit fieldChanged(path);
+    if (_plugin) _plugin->on_config_field_changed(path.toStdString());
+  }
 
 signals:
   void statusChanged();
+  void pluginNullStateChanged();
 
 protected:
   pc::devices::DevicePlugin *_plugin = nullptr; // non-owning

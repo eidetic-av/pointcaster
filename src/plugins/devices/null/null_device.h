@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../device_plugin.h"
-#include "plugins/devices/device_status.h"
 
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/String.h>
@@ -44,9 +43,6 @@ public:
   void start() override {};
   void stop() override {};
   void restart() override {};
-
-  void on_config_field_changed([[maybe_unused]] int deviceIndex,
-                               [[maybe_unused]] int fieldIndex) override {}
 };
 
 } // namespace pc::devices

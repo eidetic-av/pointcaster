@@ -38,8 +38,8 @@ class WorkspaceModel : public QObject {
                  deviceVariantNamesChanged)
   Q_PROPERTY(QVariantList addDeviceMenuEntries READ addDeviceMenuEntries NOTIFY
                  addDeviceMenuEntriesChanged)
-  Q_PROPERTY(int selectedDeviceIndex READ selectedDeviceIndex NOTIFY
-                 selectedDeviceIndexChanged)
+  Q_PROPERTY(int selectedDeviceIndex READ selectedDeviceIndex WRITE
+                 setSelectedDeviceIndex NOTIFY selectedDeviceIndexChanged)
 
   Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl)
 
