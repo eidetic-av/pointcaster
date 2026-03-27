@@ -95,11 +95,9 @@ Item {
     }
 
     function refreshFromAdapter() {
-        console.log("running refresh from adapter");
         cameraAdapter = sessionAdapter ? sessionAdapter.cameraAdapter : null;
         if (!cameraAdapter)
             return;
-
         // initial pull: config -> UI
         applyCameraTogglesFromConfig();
         applyCameraTransformFromConfig();
@@ -197,33 +195,6 @@ Item {
     }
 
     View3D {
-        // ---------- MODELS ----------
-        //     id: cubeMain
-        //     source: "#Cube"
-        //     pickable: true
-        //     materials: PrincipledMaterial {
-        //         lighting: PrincipledMaterial.FragmentLighting
-        //         baseColor: view.selectedObject === cubeMain ? ThemeColors.highlight : "red"
-        //         roughness: 0.85
-        //         metalness: 0.0
-        //         opacity: 0.5
-        //     }
-        // }
-        // Model {
-        //     id: cubeSmall
-        //     source: "#Cube"
-        //     pickable: true
-        //     x: -150
-        //     y: 60
-        //     scale: Qt.vector3d(0.5, 0.5, 0.5)
-        //     materials: PrincipledMaterial {
-        //         lighting: PrincipledMaterial.FragmentLighting
-        //         baseColor: view.selectedObject === cubeSmall ? ThemeColors.highlight : "deepskyblue"
-        //         roughness: 0.85
-        //         metalness: 0.0
-        //         opacity: 0.5
-        //     }
-        // }
         // Model {
         //     id: cubeWide
         //     source: "#Cube"
@@ -257,6 +228,40 @@ Item {
         // Device point clouds
 
         id: view
+        // ---------- MODELS ----------
+        //     id: cubeMain
+        //     source: "#Cube"
+        //     pickable: true
+        //     materials: PrincipledMaterial {
+        //         lighting: PrincipledMaterial.FragmentLighting
+        //         baseColor: view.selectedObject === cubeMain ? ThemeColors.highlight : "red"
+        //         roughness: 0.85
+        //         metalness: 0.0
+        //         opacity: 0.5
+        //     }
+        // }
+        Model {
+            id: cubeTest
+            source: "#Cube"
+            pickable: true
+
+            property var devicePos: root.workspace && root.deviceAdapters ? deviceAdapters[root.workspace.selectedDeviceIndex].value("transform/position") : Qt.vector3d(0, 0, 0)
+            property var deviceScale: root.workspace && root.deviceAdapters ? deviceAdapters[root.workspace.selectedDeviceIndex].value("transform/scale") : Qt.vector3d(1, 1, 1)
+
+            x: devicePos.x * 100
+            y: devicePos.y * 100
+            z: devicePos.z * 100
+
+            scale: deviceScale
+
+            materials: PrincipledMaterial {
+                lighting: PrincipledMaterial.NoLighting
+                baseColor: "deepskyblue"
+                roughness: 0.85
+                metalness: 0.0
+                opacity: 0.5
+            }
+        }
 
         property var selectedObject: null
         readonly property quaternion gizmoBasis: Qt.quaternion(1, 0, 0, 0)
@@ -508,7 +513,7 @@ Item {
             clearColor: ThemeColors.shadow
             backgroundMode: SceneEnvironment.Color
             // fog: Fog { enabled: false }
-            // antialiasingMode: SceneEnvironment.MSAA
+            // antialiasingMode: SceneEnvironment.SSAA
         }
 
         Model {
@@ -538,7 +543,7 @@ Item {
             visible: sessionControls.gridEnabled
             eulerRotation: Qt.vector3d(90, 0, 0)
             scale: Qt.vector3d(groundGrid.metres * 500, 0, 0)
-            x: groundGrid.metres * 25 
+            x: groundGrid.metres * 25
 
             geometry: GridGeometry {
                 horizontalLines: 2
@@ -559,7 +564,7 @@ Item {
             visible: sessionControls.gridEnabled
             eulerRotation: Qt.vector3d(90, 0, 00)
             scale: Qt.vector3d(0, groundGrid.metres * 500, 0)
-            z: groundGrid.metres *  25
+            z: groundGrid.metres * 25
 
             geometry: GridGeometry {
                 horizontalLines: 2
@@ -574,8 +579,6 @@ Item {
                 }
             ]
         }
-
-
     }
 
     // session window GUI overlaid on top of the View3D
