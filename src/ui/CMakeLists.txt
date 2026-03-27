@@ -43,7 +43,12 @@ set(CONFIG_ADAPTER_INPUTS
     ${CMAKE_SOURCE_DIR}/src/config/transform_config.h
     ${CMAKE_SOURCE_DIR}/src/session/session_config.h
     ${CMAKE_SOURCE_DIR}/src/camera/camera_config.h
+    # TODO we need some faculty to create these adapters
+    # without them being expressed in the main module here...
+    # i guess the UI adapters need to be generated inside the 
+    # device CMakeLists.txt not here
     ${CMAKE_SOURCE_DIR}/src/plugins/devices/orbbec/orbbec_device_config.h
+    ${CMAKE_SOURCE_DIR}/src/plugins/devices/ply/ply_device_config.h
 )
 
 add_qml_adapters(
