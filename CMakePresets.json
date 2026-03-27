@@ -30,6 +30,16 @@
 			}
 		},
 		{
+			"name": "linux-debug",
+			"inherits": "linux-release",
+			"displayName": "Pointcaster Debug build for Linux x64",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"VCPKG_TARGET_TRIPLET": "x64-linux-custom"
+			}
+
+		},
+		{
 			"name": "windows-release",
 			"inherits": "default-preset",
 			"displayName": "Pointcaster Release build for Windows x64",
