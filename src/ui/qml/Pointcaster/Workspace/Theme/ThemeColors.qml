@@ -32,7 +32,7 @@ QtObject {
     property color red: "#ff4151"
     // property color green: "#aecf7f"
     property color green: "#91d76f"
-    // property color blue: "#81a1c1"
+    property color greyBlue: "#81a1c1"
     property color blue: "#00b0ff"
     property color yellow: "#E6D38A"
 
@@ -49,6 +49,7 @@ QtObject {
     property color alternateBase: palette.alternateBase
     property color text: palette.text
     property color placeholderText: palette.placeholderText
+    property color readOnlyText: "#8691A7"
     property color button: palette.button
     property color buttonText: palette.buttonText
     property color highlight: palette.highlight

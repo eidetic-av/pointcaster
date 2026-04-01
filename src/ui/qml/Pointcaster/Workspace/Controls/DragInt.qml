@@ -139,7 +139,7 @@ SpinBox {
             targetTextInput: spinTextInput
             focusTarget: root
 
-            enabled: root.enabled
+            inputEnabled: root.enabled
             editable: root.editable
 
             dragThresholdPx: root.dragThresholdPx

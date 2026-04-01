@@ -31,6 +31,7 @@ MenuBar {
         Action {
             text: qsTr("&New Workspace")
             shortcut: StandardKey.New
+            onTriggered: workspaceModel.newWorkspace()
         }
 
         Action {

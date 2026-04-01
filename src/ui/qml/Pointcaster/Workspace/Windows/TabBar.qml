@@ -194,7 +194,7 @@ KDDW.TabBarBase {
                 readonly property bool isHovered: tabIndex === tabBarRow.hoveredIndex
                 readonly property bool isKeyboardFocused: root.keyboardFocusIndex === tabIndex
 
-                activeFocusOnTab: isKeyboardFocused
+                activeFocusOnTab: true
                 focus: isKeyboardFocused
 
                 Accessible.role: Accessible.PageTab
@@ -305,11 +305,6 @@ KDDW.TabBarBase {
                         tabContextMenu.popup(Qt.point(p.x, p.y));
                     }
                 }
-
-                Component.onCompleted: {
-                    console.log("dockWidgetModel keys:", Object.keys(modelData));
-                    console.log("title:", modelData.title, "affinities:", modelData.affinities);
-                }
             }
         }
 
@@ -326,7 +321,7 @@ KDDW.TabBarBase {
                 readonly property bool isHovered: addButtonMouseArea.containsMouse
                 readonly property bool isKeyboardFocused: root.keyboardFocusIndex === root.tabCount()
 
-                activeFocusOnTab: isKeyboardFocused
+                activeFocusOnTab: true
                 focus: isKeyboardFocused
 
                 Rectangle {

@@ -8,7 +8,7 @@ Item {
     required property TextInput targetTextInput
     property Item focusTarget: null
 
-    property bool enabled: true
+    property bool inputEnabled: true
     property bool editable: true
 
     property font font: Qt.font({ pointSize: 12 })
@@ -86,7 +86,7 @@ Item {
 
         Action {
             text: qsTr("Cut")
-            enabled: root.enabled && root.editable && root.targetTextInput.selectedText.length > 0
+            enabled: root.inputEnabled && root.editable && root.targetTextInput.selectedText.length > 0
             onTriggered: root.targetTextInput.cut()
         }
         Action {
@@ -96,7 +96,7 @@ Item {
         }
         Action {
             text: qsTr("Paste")
-            enabled: root.enabled && root.editable
+            enabled: root.inputEnabled && root.editable
             onTriggered: root.targetTextInput.paste()
         }
     }
@@ -113,7 +113,7 @@ Item {
         propagateComposedEvents: false
 
         onPressed: (mouse) => {
-            if (!root.enabled) {
+            if (!root.inputEnabled) {
                 mouse.accepted = false;
                 return;
             }
@@ -215,7 +215,7 @@ Item {
 
         onWheel: (wheel) => {
             var hasFocus = root.focusTarget ? root.focusTarget.activeFocus : root.activeFocus;
-            if (!hasFocus || !root.enabled) {
+            if (!hasFocus || !root.inputEnabled) {
                 wheel.accepted = false;
                 return;
             }

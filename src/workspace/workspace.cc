@@ -185,7 +185,10 @@ void Workspace::sync_devices() {
         device_plugin->update_config(device_variant);
       }
     }
-    if (new_device_instance) device_plugin->init();
+    if (new_device_instance) { 
+      pc::logger()->trace("Running init() for new device_plugin");
+      device_plugin->init();
+    }
     new_devices.push_back(std::move(device_plugin));
   }
 

@@ -26,7 +26,6 @@ bool load_workspace_from_file(WorkspaceConfiguration &config,
     config = rfl::yaml::read<WorkspaceFile, rfl::AddTagsToVariants>(yaml_string)
                  .value()
                  .workspace;
-
     pc::logger()->info("Loaded configuration from '{}'", file_path);
     pc::logger()->trace("Loaded Workspace:\n{}",
                         rfl::yaml::write<rfl::AddTagsToVariants>(

@@ -9,6 +9,7 @@
 #include <QUrl>
 #include <QVariant>
 #include <functional>
+#include <qtmetamacros.h>
 #include <session/session_config_adapter.gen.h>
 #include <workspace/workspace_config.h>
 
@@ -49,12 +50,17 @@ class WorkspaceModel : public QObject {
   Q_PROPERTY(QVariantList consoleHistoryEntries READ consoleHistoryEntries
                  NOTIFY consoleHistoryEntriesChanged)
 
+  Q_PROPERTY(QVariantMap foldedPropertyPaths READ foldedPropertyPaths NOTIFY
+                 foldedPropertyPathsChanged)
+
 public:
   explicit WorkspaceModel(pc::Workspace *workspace, QObject *parent);
 
   Q_INVOKABLE void close();
   Q_INVOKABLE void loadFromFile(const QUrl &file);
   Q_INVOKABLE void save(bool update_last_session_path = true);
+
+  Q_INVOKABLE void newWorkspace();
 
   QUndoStack *undoStack() const { return _undoStack; }
 
@@ -74,17 +80,22 @@ public:
   QVariantList addDeviceMenuEntries() const;
 
   int selectedDeviceIndex() const { return _selectedDeviceIndex; }
-  void setSelectedDeviceIndex(int index) {
-    if (_selectedDeviceIndex == index) return;
-    _selectedDeviceIndex = index;
-    emit selectedDeviceIndexChanged();
-  }
+  void setSelectedDeviceIndex(int index);
 
   QUrl saveFileUrl() const { return _saveFileUrl; }
   void setSaveFileUrl(const QUrl &url) { _saveFileUrl = url; }
 
   QVariantList consoleOverlayEntries() const;
   QVariantList consoleHistoryEntries() const;
+
+  Q_INVOKABLE QVariantMap foldedPropertyPaths() const {
+    return _foldedPropertyPaths;
+  }
+
+  Q_INVOKABLE void setFoldedProperty(const QString &path, bool folded) {
+    _foldedPropertyPaths[path] = folded;
+    foldedPropertyPathsChanged();
+  }
 
 public slots:
   void syncAdapters();
@@ -93,6 +104,8 @@ public slots:
 signals:
   void openSaveAsDialog();
 
+  void newWorkspaceLoaded();
+
   void sessionAdaptersChanged();
 
   void deviceAdaptersChanged();
@@ -100,8 +113,13 @@ signals:
   void addDeviceMenuEntriesChanged();
   void selectedDeviceIndexChanged();
 
+  void deviceAdded();
+  void deviceDeleted();
+
   void consoleOverlayEntriesChanged();
   void consoleHistoryEntriesChanged();
+
+  void foldedPropertyPathsChanged();
 
 private:
   pc::Workspace &_workspace;
@@ -114,6 +132,8 @@ private:
   // Tracks whether an existing SessionConfigurationAdapter is still bound to
   // a valid underlying SessionConfiguration object address.
   QHash<QString, const pc::SessionConfiguration *> _sessionConfigPtrById;
+
+  QVariantMap _foldedPropertyPaths;
 
   int _selectedDeviceIndex = 0;
   QUrl _saveFileUrl;

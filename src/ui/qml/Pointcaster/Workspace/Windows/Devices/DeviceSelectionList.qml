@@ -8,67 +8,65 @@ Item {
     id: root
 
     property var workspace: null
-    property int currentIndex: list.currentIndex
     property var currentItem: list.currentItem
+    property var selectedDevice: null
+
+    width: parent.width
 
     signal activated(int index)
 
-    height: Math.round(160 * Scaling.uiScale)
-    anchors.left: parent.left
-    anchors.right: parent.right
+    function setSelectedIndex(index) {
+        list.currentIndex = index;
+        workspace.selectedDeviceIndex = index;
+        selectedDevice = workspace.deviceAdapters[index];
+        activated(index);
+    }
 
-    Rectangle {
-        id: frame
-        anchors.fill: parent
-        color: ThemeColors.alternateBase
-        border.color: ThemeColors.mid
-        border.width: 1
-        clip: true
+    Component {
+        id: deviceDelegate
 
-        ListView {
-            id: list
-            anchors.fill: parent
-            anchors.margins: 1
+        MouseArea {
+            id: dragArea
 
-            model: root.workspace.deviceAdapters
-            focus: true
-            activeFocusOnTab: true
-            keyNavigationEnabled: true
-            boundsBehavior: Flickable.StopAtBounds
+            property bool held: false
 
-            ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AsNeeded
-            }
+            drag.target: held ? content : undefined
+            drag.axis: Drag.YAxis
 
-            // keyboard: up/down + enter/space activates
-            Keys.onPressed: event => {
-                if (event.key === Qt.Key_Up) {
-                    list.decrementCurrentIndex();
-                    list.positionViewAtIndex(list.currentIndex, ListView.Contain);
-                    event.accepted = true;
-                } else if (event.key === Qt.Key_Down) {
-                    list.incrementCurrentIndex();
-                    list.positionViewAtIndex(list.currentIndex, ListView.Contain);
-                    event.accepted = true;
-                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
-                    if (list.currentIndex >= 0) {
-                        root.activated(list.currentIndex);
-                        root.workspace.setSelectedDeviceIndex(list.currentIndex);
-                    }
-                    event.accepted = true;
-                }
-            }
+            onPressAndHold: held = true
+            onReleased: held = false
 
-            delegate: Rectangle {
-                id: row
+            height: content.height
+            width: content.width
+
+            Rectangle {
+                id: content
+
+                property bool selected: list.currentIndex === index
+                property bool hovered: mouse.containsMouse
+
                 width: list.width
                 height: Math.max(Math.round(30 * Scaling.uiScale), Math.ceil(Scaling.pointSize * 2.1))
 
-                property bool hovered: mouse.containsMouse
-                property bool selected: ListView.isCurrentItem
-
                 color: hovered ? ThemeColors.midlight : selected ? ThemeColors.mid : ThemeColors.almostdark
+
                 border.width: 0
+
+                states: State {
+                    when: dragArea.held
+
+                    ParentChange {
+                        target: content
+                        parent: root
+                    }
+                    AnchorChanges {
+                        target: content
+                        anchors {
+                            horizontalCenter: undefined
+                            verticalCenter: undefined
+                        }
+                    }
+                }
 
                 Row {
                     anchors.fill: parent
@@ -87,7 +85,6 @@ Item {
                                 return ThemeColors.inactive;
                             if (modelData.pluginNullState)
                                 return ThemeColors.error;
-
                             switch (modelData.status) {
                             case UiEnums.WorkspaceDeviceStatus.Loaded:
                                 return ThemeColors.neutralSuccess;
@@ -114,7 +111,7 @@ Item {
                         id: deviceTypeText
                         anchors.verticalCenter: parent.verticalCenter
                         elide: Text.ElideRight
-                        text: modelData.displayName() + (modelData.pluginNullState ? " (Unloaded)" : "");
+                        text: modelData.displayName() + (modelData.pluginNullState ? " (Unloaded)" : "")
                         color: ThemeColors.text
                         opacity: modelData.pluginNullState ? .25 : .5
                         font: Scaling.uiFont
@@ -127,12 +124,55 @@ Item {
                     hoverEnabled: true
                     onClicked: {
                         list.forceActiveFocus();
-                        list.currentIndex = index;
-                        root.activated(index);
-                        root.workspace.setSelectedDeviceIndex(list.currentIndex);
+                        setSelectedIndex(index);
                     }
                 }
             }
+        }
+    }
+
+    Rectangle {
+        id: frame
+        anchors.fill: parent
+        color: ThemeColors.alternateBase
+        border.color: ThemeColors.mid
+        border.width: 1
+        clip: true
+
+        ListView {
+            id: list
+            anchors.fill: parent
+            anchors.margins: 1
+
+            model: root.workspace ? root.workspace.deviceAdapters : []
+            focus: true
+            activeFocusOnTab: true
+            keyNavigationEnabled: true
+            boundsBehavior: Flickable.StopAtBounds
+
+            ScrollBar.vertical: ScrollBar {
+                policy: ScrollBar.AsNeeded
+            }
+
+            // keyboard: up/down + enter/space activates
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_Up) {
+                    list.decrementCurrentIndex();
+                    list.positionViewAtIndex(list.currentIndex, ListView.Contain);
+                    event.accepted = true;
+                } else if (event.key === Qt.Key_Down) {
+                    list.incrementCurrentIndex();
+                    list.positionViewAtIndex(list.currentIndex, ListView.Contain);
+                    event.accepted = true;
+                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                    if (list.currentIndex >= 0) {
+                        setSelectedIndex(list.currentIndex);
+                    }
+                    event.accepted = true;
+                }
+            }
+
+            delegate: deviceDelegate
         }
 
         // focus ring

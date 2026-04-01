@@ -1,4 +1,5 @@
 #include "initialisation.h"
+#include "layout_saver.h"
 #include "models/registrations.h"
 #include "models/workspace_model.h"
 #include "window/view_factory.h"
@@ -12,7 +13,6 @@
 #include <QtAwesome/QtAwesomeQuickImageProvider.h>
 #include <core/logger/logger.h>
 #include <kddockwidgets/Config.h>
-#include <kddockwidgets/LayoutSaver.h>
 #include <kddockwidgets/core/DockRegistry.h>
 #include <kddockwidgets/core/FloatingWindow.h>
 #include <kddockwidgets/core/TitleBar.h>
@@ -63,10 +63,9 @@ initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
       // wait until we load all the windows before manipulating the layout
       QObject::connect(
           &qml_engine, &QQmlApplicationEngine::objectCreated, app,
-          [fp = layout_file_path.string()]() {
-            const auto restore_options = KDDockWidgets::RestoreOption_None;
-            KDDockWidgets::LayoutSaver saver(restore_options);
-            saver.restoreFromFile(fp.c_str());
+          [fp = layout_file_path.string(), workspace_model]() {
+            pc::ui::LayoutSaver saver(workspace_model);
+            saver.load_file(fp.c_str());
           },
           Qt::QueuedConnection);
     }

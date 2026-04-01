@@ -116,6 +116,47 @@ public:
         return kPaths;
     }
 
+    Q_INVOKABLE QList<QStringList> childPaths() const override {
+        static const QList<QStringList> paths {
+            {
+{% for path in s.flattened_paths %}
+{% if "/" not in path %}
+                QStringLiteral("{{ path }}"){{ "," if not loop.last else "" }}
+{% endif %}
+{% endfor %}
+            },
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") %}
+            {
+{% for path in s.flattened_paths %}
+{% if path.startswith(m.name + "/") %}
+                QStringLiteral("{{ path }}"){{ "," if not loop.last else "" }}
+{% endif %}
+{% endfor %}
+            },
+{% endif %}
+{% endfor %}
+        };
+        return paths;
+    }
+
+    Q_INVOKABLE QString parentConfigurationName(const QString &path) const override {
+        static const QMap<QString, QString> parentConfigurationNames {
+{% for path in s.flattened_paths %}
+{% set path_nodes = path.split("/") %}
+{% set parent_idx = [path_nodes|length - 2, 0]|max %}
+{% set parent_name = path_nodes[parent_idx] %}
+{% if parent_name == path %}
+{% set parent_name = s.label + " Properties" %}
+{% else %}
+{% set parent_name = parent_name|title %}
+{% endif %}
+            { QStringLiteral("{{ path }}"), QStringLiteral("{{ parent_name }}") }{{ "," if not loop.last else "" }}
+{% endfor %}
+        };
+        return parentConfigurationNames.value(path);
+    }
+
 {# ---- Per-field strongly-typed accessors ---- #}
 {% for m in s.members %}
 {% if m.type == "std::string" %}
@@ -333,6 +374,15 @@ public:
     Q_INVOKABLE bool isFileOpener(const QString &path) const override {
 {% for m in s.members %}
 {% if '@file_opener' is in m.comment %}
+        if (path == QStringLiteral("{{ m.name }}")) return true;
+{% endif %}
+{% endfor %}
+        return false;
+    }
+
+    Q_INVOKABLE bool isButton(const QString &path) const override {
+{% for m in s.members %}
+{% if '@button' is in m.comment %}
         if (path == QStringLiteral("{{ m.name }}")) return true;
 {% endif %}
 {% endfor %}

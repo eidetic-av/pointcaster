@@ -60,11 +60,11 @@ OrbbecDevice::OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
   } catch (...) {
     pc::logger()->error("Exception during Orbbec context initialisation");
   }
-#ifdef __ACPP_ENABLE_LLVM_SSCP_TARGET__
-  pc::logger()->debug("Created OrbbecDevice with sscp target");
-#else
+  _timeout_thread = std::jthread([this](auto stop_token) {
+    // &OrbbecDevice::timeout_thread_work
+    timeout_thread_work(stop_token);
+  });
   pc::logger()->trace("Created OrbbecDevice");
-#endif
 }
 
 OrbbecDevice::~OrbbecDevice() {
@@ -76,16 +76,12 @@ OrbbecDevice::~OrbbecDevice() {
 }
 
 void OrbbecDevice::init() {
-  // do our device initialisation / start procedure when
-  // the context is known to be ready
-  orbbec_context().run_on_ready([this] {
-    notify_status_changed();
-    start_sync();
-    _timeout_thread = std::jthread([this](auto stop_token) {
-      // &OrbbecDevice::timeout_thread_work
-      timeout_thread_work(stop_token);
-    });
-  });
+  // // do our device initialisation / start procedure when
+  // // the context is known to be ready
+  // orbbec_context().run_on_ready([this] {
+  //   notify_status_changed();
+  //   start();
+  // });
 }
 
 std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
@@ -97,8 +93,11 @@ std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
   out.reserve(ctx.discovered_devices.size());
   for (const auto &d : ctx.discovered_devices) {
     out.push_back(
-        DiscoveredDevice{.label = d.name, .ip = d.ip, .id = d.serial_num});
+        DiscoveredDevice{.label = std::format("{} ({})", d.name, d.ip),
+                         .ip = d.ip,
+                         .id = d.serial_num});
   }
+
   return out;
 }
 
@@ -130,6 +129,7 @@ DeviceStatus OrbbecDevice::status() const {
 }
 
 void OrbbecDevice::start() {
+  pc::logger()->debug("Running 'start()'");
   _initialisation_thread = std::jthread([this](std::stop_token stop_token) {
     // TODO stop_token is currently unused,
     // should pass it in and check at different initialisation thread steps
@@ -152,11 +152,6 @@ void OrbbecDevice::restart() {
     stop_sync();
     start_sync();
   });
-}
-
-void OrbbecDevice::restart_sync() {
-  stop_sync();
-  start_sync();
 }
 
 void OrbbecDevice::start_sync() {
@@ -193,15 +188,16 @@ void OrbbecDevice::start_sync() {
   if (auto ob_device_list = ob_ctx->queryDeviceList()) {
     const size_t device_count = ob_device_list->deviceCount();
     for (size_t i = 0; i < device_count; ++i) {
-      auto device = ob_device_list->getDevice(i);
-      if (!device) continue;
-
-      auto info = device->getDeviceInfo();
-      if (!info) continue;
-
-      if (!config.ip.empty() && info->ipAddress()) {
-        if (std::strcmp(info->ipAddress(), config.ip.c_str()) == 0) {
-          ob_device = device;
+      auto ip = ob_device_list->getIpAddress(i);
+      if (!config.ip.empty() && ip) {
+        if (std::strcmp(ip, config.ip.c_str()) == 0) {
+          try {
+            pc::logger()->debug("Running getDevice(i)");
+            ob_device = ob_device_list->getDevice(i);
+            pc::logger()->debug("after getDevice(i)");
+          } catch (...) {
+            pc::logger()->warn("Unable to open device with matched IP");
+          }
           break;
         }
       }
@@ -318,7 +314,8 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
     auto ob_config = std::make_shared<ob::Config>();
 
-    OrbbecDeviceConfiguration *device_config = &std::get<OrbbecDeviceConfiguration>(_config);
+    OrbbecDeviceConfiguration *device_config =
+        &std::get<OrbbecDeviceConfiguration>(_config);
 
     auto colour_profile_list = pipeline.getStreamProfileList(OB_SENSOR_COLOR);
     // TODO enable without colour too
@@ -534,6 +531,14 @@ const PointCloud &OrbbecDevice::point_cloud() {
   }
   return std::ref(_current_point_cloud);
 };
+
+void OrbbecDevice::on_config_field_changed(std::string_view) {
+  auto &config = std::get<OrbbecDeviceConfiguration>(_config);
+  if (config.force_ip) {
+    pc::logger()->warn("Should be forcing a new ip");
+    config.force_ip = false;
+  }
+}
 
 // TODO in cuda
 bool OrbbecDevice::init_device_memory(std::size_t incoming_point_count) {

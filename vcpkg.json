@@ -3,6 +3,7 @@
 	"version-string": "0.2.0",
 	"builtin-baseline": "6f932b9730b65d28cba7dca7326dca4d3247d305",
 	"dependencies": [
+		"boost-interprocess",
 		"corrade",
 		"concurrentqueue",
 		"readerwriterqueue",
@@ -11,6 +12,7 @@
 		"happly",
 		"kddockwidgets",
 		"libcpplocate",
+		"llfio",
 		"orbbecsdk",
 		"prometheus-cpp",
 		"qtawesome",

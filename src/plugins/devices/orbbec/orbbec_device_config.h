@@ -14,6 +14,8 @@ struct OrbbecDeviceConfiguration {
   bool active = true; // @hidden
   std::string ip;     // @disabled
 
+  bool force_ip; // @button
+
   enum class DepthMode { Narrow, Wide };
   DepthMode depth_mode = DepthMode::Narrow;
 

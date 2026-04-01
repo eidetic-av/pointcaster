@@ -7,6 +7,8 @@
 #include <mutex>
 #include <thread>
 
+#include <experimental/scope>
+
 namespace {
 moodycamel::ConcurrentQueue<std::function<void()>> on_ready_callbacks{};
 }
@@ -108,8 +110,6 @@ void ObContext::discover_devices() {
     return;
   }
 
-  discovered_devices.clear();
-
   auto ctx = orbbec_context().get_if_ready();
   if (!ctx) {
     pc::logger()->trace("Orbbec context not initialised; skipping discovery");
@@ -119,31 +119,49 @@ void ObContext::discover_devices() {
 
   pc::logger()->trace("Discovering Orbbec devices...");
 
+  discovered_devices.clear();
   try {
     auto device_list = ctx->queryDeviceList();
     const auto count = device_list->deviceCount();
 
-    std::vector<ObDeviceInfo> local_found;
-    local_found.reserve(static_cast<std::size_t>(count));
+    pc::logger()->trace("Orbbec queryDeviceList found {} devices", count);
+
+    discovered_devices.reserve(count);
 
     for (std::size_t i = 0; i < count; ++i) {
-      auto device = device_list->getDevice(i);
-      auto info = device->getDeviceInfo();
-      if (std::strcmp(info->connectionType(), "Ethernet") == 0) {
-        local_found.push_back(
-            {info->ipAddress(), info->serialNumber(), info->name()});
+      if (std::strcmp(device_list->getConnectionType(i), "Ethernet") == 0) {
+        // NetDevice connection
+        std::string ip{}, serial{}, name{};
+        try {
+          ip = device_list->getIpAddress(i);
+        } catch (...) {
+        }
+        try {
+          serial = device_list->getSerialNumber(i);
+        } catch (...) {
+        }
+        try {
+          constexpr std::string_view prefix("Orbbec ");
+          const std::string_view full_name(device_list->getName(i));
+          name = full_name.substr(prefix.size());
+        } catch (...) {
+        }
+        discovered_devices.emplace_back(ip, serial, name);
+      } else {
+        // TODO
+        // USB connection found
+        pc::logger()->warn("USB device found.");
       }
     }
 
-    for (const auto &found_device : local_found) {
-      pc::logger()->trace("found: {} {} {}", found_device.name, found_device.ip,
-                        found_device.serial_num);
+    for (const auto &found_device : discovered_devices) {
+      pc::logger()->trace("{} {} {}", found_device.name, found_device.ip,
+                          found_device.serial_num);
     }
 
-    discovered_devices = std::move(local_found);
   } catch (const ob::Error &e) {
-    pc::logger()->error("Failed to discover Orbbec devices: [{}] {}", e.getName(),
-                      e.getMessage());
+    pc::logger()->error("Failed to discover Orbbec devices: [{}] {}",
+                        e.getName(), e.getMessage());
   } catch (const std::exception &e) {
     pc::logger()->error(
         "Unknown std::exception during Orbbec device discovery: {}", e.what());
@@ -151,12 +169,8 @@ void ObContext::discover_devices() {
     pc::logger()->error("Unknown error during Orbbec device discovery");
   }
 
-  std::vector<std::function<void()>> post_discovery_callbacks;
-  {
-    std::lock_guard lock(discovery_callbacks_access);
-    post_discovery_callbacks = discovery_callbacks;
-  }
-  for (auto &cb : post_discovery_callbacks) cb();
+  std::lock_guard lock(discovery_callbacks_access);
+  for (auto &cb : discovery_callbacks) cb();
 
   pc::logger()->trace("Finished discovering devices.");
   discovering_devices.store(false, std::memory_order_release);
@@ -183,7 +197,7 @@ void ObContext::release_user() {
 
 void ObContext::shutdown() {
   using namespace std::chrono_literals;
-    
+
   pc::logger()->trace("Shutting down ObContext...");
 
   // wait out any in-flight initialisation

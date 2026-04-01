@@ -7,6 +7,9 @@
 #include <QStringList>
 #include <QVariant>
 
+// pure virtual members in this abstract class are replaced by functions in
+// each generated adapter implementation
+
 class ConfigAdapter : public QObject {
   Q_OBJECT
 
@@ -21,6 +24,14 @@ public:
   //  - "id"
   //  - "camera/locked"
   Q_INVOKABLE virtual QStringList fieldPaths() const = 0;
+
+  // lists of paths sorted to child Configuration structs like:
+  // [["transform/position", "transform/rotation"],
+  //  ["camera/id", "camera/locked"]]
+  Q_INVOKABLE virtual QList<QStringList> childPaths() const = 0;
+
+  Q_INVOKABLE virtual QString
+  parentConfigurationName(const QString &path) const = 0;
 
   // ---- Path-based value access
   // Path segments use "/" as separator, e.g. "camera/locked".
@@ -83,7 +94,14 @@ public:
     return false;
   }
 
-  virtual void notifyFieldChanged(const QString &path) { emit fieldChanged(path); }
+  Q_INVOKABLE virtual bool isButton(const QString &path) const {
+    Q_UNUSED(path);
+    return false;
+  }
+
+  virtual void notifyFieldChanged(const QString &path) {
+    emit fieldChanged(path);
+  }
 
   virtual bool setConfig(const pc::ConfigurationVariant &) = 0;
 

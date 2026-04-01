@@ -58,6 +58,8 @@ public:
   void stop() override;
   void restart() override;
 
+  void on_config_field_changed(std::string_view path = "") override;
+
 private:
   // TODO just a double buffer for now...
   moodycamel::BlockingReaderWriterCircularBuffer<PointCloud> _frame_buffer{2};
@@ -93,7 +95,6 @@ private:
 
   void start_sync();
   void stop_sync();
-  void restart_sync();
 
   void set_running(bool running_pipeline) {
     _running_pipeline = running_pipeline;

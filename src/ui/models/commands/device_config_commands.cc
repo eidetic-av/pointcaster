@@ -37,6 +37,7 @@ bool SetDeviceConfigCommand::mergeWith(const QUndoCommand *other) {
 
 void SetDeviceConfigCommand::apply(
     const pc::devices::DeviceConfigurationVariant &value) {
+
   std::scoped_lock lock(_workspace.config_access);
 
   if (_device_index < 0) return;

@@ -13,10 +13,9 @@ ToolBar {
 
     font: Scaling.uiFont
 
+    width: parent.width
+
     anchors {
-        top: parent.top
-        left: parent.left
-        right: parent.right
         topMargin: Math.round(10 * Scaling.uiScale)
         leftMargin: Math.round(8 * Scaling.uiScale)
         rightMargin: Math.round(8 * Scaling.uiScale)
@@ -98,46 +97,9 @@ ToolBar {
             }
         }
 
-        Menu {
+        AddDeviceMenu {
             id: addDeviceMenu
-            width: Math.round(220 * Scaling.uiScale)
-
-            Instantiator {
-                model: root.workspace ? root.workspace.addDeviceMenuEntries : []
-
-                delegate: MenuItem {
-                    required property var modelData
-
-                    text: modelData.label + " (" + modelData.ip + ")"
-                    font: root.font
-
-                    contentItem: Text {
-                        text: parent.text
-                        color: ThemeColors.text
-                        font: parent.font
-                        elide: Text.ElideRight
-                        verticalAlignment: Text.AlignVCenter
-                    }
-
-                    background: Rectangle {
-                        color: hovered ? ThemeColors.mid : ThemeColors.almostdark
-                        border.width: 1
-                        border.color: ThemeColors.mid
-                    }
-
-                    onTriggered: {
-                        addDeviceMenu.close();
-                        if (modelData.kind === "discovered") {
-                            workspace.addNewDevice(modelData.plugin_name, modelData.ip);
-                        } else {
-                            workspace.addNewDevice(modelData.plugin_name);
-                        }
-                    }
-                }
-
-                onObjectAdded: (i, o) => addDeviceMenu.insertItem(i, o)
-                onObjectRemoved: (i, o) => addDeviceMenu.removeItem(o)
-            }
+            workspace: root.workspace
         }
 
         ToolButton {

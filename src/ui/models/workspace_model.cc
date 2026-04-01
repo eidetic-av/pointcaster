@@ -1,6 +1,7 @@
 #include "workspace_model.h"
 
 #include "app_settings/app_settings.h"
+#include "layout_saver.h"
 #include "models/device_adapter.h"
 #include "plugins/devices/ply/ply_device_config.h"
 #include <QHash>
@@ -15,15 +16,14 @@
 #include <core/uuid/uuid.h>
 #include <filesystem>
 #include <functional>
-#include <kddockwidgets/LayoutSaver.h>
+#include <nlohmann/json.hpp>
 #include <plugins/devices/device_variants.h>
-#include <plugins/devices/orbbec/orbbec_device_adapter.gen.h>
-#include <plugins/devices/orbbec/orbbec_device_config.h>
 #include <session/session_config.h>
 #include <session/session_config_adapter.gen.h>
 #include <spdlog/common.h>
 #include <string>
 #include <thread>
+#include <ui/layout_saver.h>
 #include <variant>
 #include <workspace/workspace.h>
 
@@ -185,8 +185,7 @@ WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
 }
 
 void WorkspaceModel::close() {
-  _workspace.devices.clear();
-  QCoreApplication::exit();
+  QCoreApplication::quit();
 }
 
 void WorkspaceModel::loadFromFile(const QUrl &file) {
@@ -213,14 +212,29 @@ void WorkspaceModel::loadFromFile(const QUrl &file) {
     if (std::filesystem::exists(layout_file_path)) {
       QMetaObject::invokeMethod(
           this,
-          [fp = layout_file_path.string()] {
-            const auto restore_options = KDDockWidgets::RestoreOption_None;
-            KDDockWidgets::LayoutSaver saver(restore_options);
-            saver.restoreFromFile(fp.c_str());
+          [fp = layout_file_path.string(), this] {
+            pc::ui::LayoutSaver saver(this);
+            saver.load_file(fp.c_str());
           },
           Qt::QueuedConnection);
     }
   }).detach();
+}
+
+void WorkspaceModel::newWorkspace() {
+  QMetaObject::invokeMethod(
+      this,
+      [this]() {
+        setSaveFileUrl({});
+        applyWorkspaceConfigAndRebuild(
+            {.sessions = {
+                 {.id = pc::uuid::word(),
+                  .label = "session_1",
+                  .camera = CameraConfiguration{.id = pc::uuid::word()}}}});
+        setSelectedDeviceIndex(-1);
+        emit newWorkspaceLoaded();
+      },
+      Qt::QueuedConnection);
 }
 
 void WorkspaceModel::save(bool update_last_session_path) {
@@ -241,7 +255,7 @@ void WorkspaceModel::save(bool update_last_session_path) {
   }
 
   std::jthread([workspace_config = _workspace.config, local_path,
-                update_last_session_path] {
+                update_last_session_path, this] {
     save_workspace_to_file(workspace_config, local_path.toStdString());
     if (update_last_session_path) {
       AppSettings::instance()->setlastWorkspacePath(local_path);
@@ -253,8 +267,13 @@ void WorkspaceModel::save(bool update_last_session_path) {
       auto layout_file_path = session_file_path;
       layout_file_path.replace_filename(session_file_path.stem().string() +
                                         "_layout.json");
-      KDDockWidgets::LayoutSaver saver;
-      const bool result = saver.saveToFile(layout_file_path.string().c_str());
+      QMetaObject::invokeMethod(
+          this,
+          [this, save_path = layout_file_path.string()]() {
+            pc::ui::LayoutSaver saver(this);
+            const bool result = saver.save_file(save_path.c_str());
+          },
+          Qt::QueuedConnection);
     }
   }).detach();
 }
@@ -283,6 +302,8 @@ QVariantList WorkspaceModel::addDeviceMenuEntries() const {
 
   for (auto plugin_name : _workspace.loaded_device_plugin_names) {
 
+    if (plugin_name == "NullDevice") continue;
+
     QVariantMap entry;
     entry["plugin_name"] = QString::fromStdString(plugin_name);
     entry["kind"] = "plugin";
@@ -307,6 +328,13 @@ QVariantList WorkspaceModel::addDeviceMenuEntries() const {
   return entries;
 }
 
+void WorkspaceModel::setSelectedDeviceIndex(int index) {
+  if (_selectedDeviceIndex == index) return;
+  _selectedDeviceIndex = index;
+  _workspace.config.selectedDeviceIndex = index;
+  emit selectedDeviceIndexChanged();
+}
+
 void WorkspaceModel::addNewDevice(const QString &plugin_name,
                                   const QString &target_ip) {
   // take a copy of current configuration to manipulate
@@ -321,6 +349,7 @@ void WorkspaceModel::addNewDevice(const QString &plugin_name,
         PlyDeviceConfiguration{.id = pc::uuid::word()});
   }
   applyWorkspaceConfigAndRebuild(std::move(result_config));
+  emit deviceAdded();
 }
 
 void WorkspaceModel::deleteSelectedDevice() {
@@ -430,7 +459,7 @@ void WorkspaceModel::initSessionAdapter(SessionConfigurationAdapter *adapter) {
                      QString command_text;
 
                      {
-                       std::scoped_lock lock2(_workspace.config_access);
+                       std::scoped_lock lock(_workspace.config_access);
                        base_snapshot = _workspace.config;
 
                        const int idx = find_session_index_by_id(
@@ -479,7 +508,7 @@ void WorkspaceModel::initDeviceAdapter(AdapterT *adapter,
         QString command_text;
 
         {
-          std::scoped_lock lock2(_workspace.config_access);
+          std::scoped_lock lock(_workspace.config_access);
           base_snapshot = _workspace.config;
 
           const int idx = find_device_index_by_id(_workspace.config,
@@ -497,7 +526,7 @@ void WorkspaceModel::initDeviceAdapter(AdapterT *adapter,
         after = p->config();
 
         {
-          std::scoped_lock lock3(_workspace.config_access);
+          std::scoped_lock lock(_workspace.config_access);
           const int idx = find_device_index_by_id(_workspace.config,
                                                   device_id_q.toStdString());
           if (idx < 0) return;
@@ -642,8 +671,6 @@ void WorkspaceModel::syncAdapters() {
     QList<QObject *> new_ordered_devices;
     new_ordered_devices.reserve(_deviceAdapters.size());
 
-    std::scoped_lock lock(_workspace.config_access);
-
     for (auto &device_plugin : _workspace.devices) {
       auto *plugin = device_plugin.get();
       DeviceAdapter *adapter;
@@ -706,6 +733,12 @@ void WorkspaceModel::syncAdapters() {
     }
 
     _deviceAdapters = new_ordered_devices;
+
+    int selectedDeviceIndex = _workspace.config.selectedDeviceIndex.value();
+    if (selectedDeviceIndex >= _deviceAdapters.size() ||
+        selectedDeviceIndex < 0)
+      selectedDeviceIndex = 0;
+    setSelectedDeviceIndex(selectedDeviceIndex);
 
     emit deviceAdaptersChanged();
     emit deviceVariantNamesChanged();

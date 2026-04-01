@@ -1,5 +1,6 @@
 #pragma once
 
+#include <config/file_config.h>
 #include <config/transform_config.h>
 #include <rfl/Literal.hpp>
 #include <string>
@@ -11,9 +12,13 @@ class PlyDevice;
 struct PlyDeviceConfiguration {
   std::string id;     // @hidden
   bool active = true; // @hidden
-  std::string file_path = ""; // @file_opener
 
+  FileConfiguration file;
   TransformConfiguration transform;
+  TransformConfiguration transform2;
+  TransformConfiguration transform3;
+  TransformConfiguration transform4;
+  TransformConfiguration transform5;
 
   using DeviceType = PlyDevice;
   using Tag = rfl::Literal<"ply">;

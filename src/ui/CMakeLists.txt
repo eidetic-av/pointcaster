@@ -1,5 +1,6 @@
 add_library(pointcaster_ui
     initialisation.cc
+    layout_saver.cc
     models/workspace_model.cc
     models/device_status.h
     models/settings_page_registry.h
@@ -40,6 +41,7 @@ qt_import_qml_plugins(pointcaster)
 
 # for our generated headers that connect configuration structs <-> qml
 set(CONFIG_ADAPTER_INPUTS
+    ${CMAKE_SOURCE_DIR}/src/config/file_config.h
     ${CMAKE_SOURCE_DIR}/src/config/transform_config.h
     ${CMAKE_SOURCE_DIR}/src/session/session_config.h
     ${CMAKE_SOURCE_DIR}/src/camera/camera_config.h

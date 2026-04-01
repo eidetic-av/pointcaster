@@ -2,6 +2,7 @@
 
 #include <plugins/devices/device_variants.h>
 #include <session/session_config.h>
+#include <rfl/DefaultVal.hpp>
 
 namespace pc {
 
@@ -9,6 +10,8 @@ namespace pc {
 // simulation state for the running application.
 struct WorkspaceConfiguration {
   std::string id;
+  rfl::DefaultVal<int> selectedDeviceIndex = 0;
+  rfl::DefaultVal<int> selectedSessionIndex = 0;
   std::vector<devices::DeviceConfigurationVariant> devices{};
   std::vector<SessionConfiguration> sessions{};
 };

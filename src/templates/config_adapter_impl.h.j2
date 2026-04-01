@@ -6,6 +6,7 @@
 #include <QString>
 #include <QStringList>
 #include <QMetaType>
+#include <QMap>
 {% if needs_qvector3d -%}
 #include <QVector3D>
 {% endif -%}
@@ -119,6 +120,48 @@ public:
 {% endfor %}
         };
         return kPaths;
+    }
+
+
+    Q_INVOKABLE QList<QStringList> childPaths() const override {
+        static const QList<QStringList> paths {
+            {
+{% for path in s.flattened_paths %}
+{% if "/" not in path %}
+                QStringLiteral("{{ path }}"){{ "," if not loop.last else "" }}
+{% endif %}
+{% endfor %}
+            },
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") %}
+            {
+{% for path in s.flattened_paths %}
+{% if path.startswith(m.name + "/") %}
+                QStringLiteral("{{ path }}"){{ "," if not loop.last else "" }}
+{% endif %}
+{% endfor %}
+            },
+{% endif %}
+{% endfor %}
+        };
+        return paths;
+    }
+
+    Q_INVOKABLE QString parentConfigurationName(const QString &path) const override {
+        static const QMap<QString, QString> parentConfigurationNames {
+{% for path in s.flattened_paths %}
+{% set path_nodes = path.split("/") %}
+{% set parent_idx = [path_nodes|length - 2, 0]|max %}
+{% set parent_name = path_nodes[parent_idx] %}
+{% if parent_name == path %}
+{% set parent_name = s.label + " Properties" %}
+{% else %}
+{% set parent_name = parent_name|title %}
+{% endif %}
+            { QStringLiteral("{{ path }}"), QStringLiteral("{{ parent_name }}") }{{ "," if not loop.last else "" }}
+{% endfor %}
+        };
+        return parentConfigurationNames.value(path);
     }
 
 {# ---- Per-field strongly-typed accessors ---- #}
