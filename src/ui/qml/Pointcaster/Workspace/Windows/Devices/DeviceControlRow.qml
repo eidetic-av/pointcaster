@@ -29,9 +29,9 @@ Row {
                 return FontAwesome.icon("solid/play");
             return root.adapter.status === UiEnums.WorkspaceDeviceStatus.Active ? FontAwesome.icon("solid/stop") : FontAwesome.icon("solid/play");
         }
-        enabled: root.adapter && root.adapter.status && root.adapter.status !== UiEnums.WorkspaceDeviceStatus.Loading
+        enabled: root.adapter != null && root.adapter.status != null && root.adapter.status !== UiEnums.WorkspaceDeviceStatus.Loading
         onClicked: {
-            if (!root.adapter)
+            if (root.adapter == null)
                 return;
             if (root.adapter.status === UiEnums.WorkspaceDeviceStatus.Active)
                 root.adapter.stop();
@@ -47,10 +47,11 @@ Row {
         tooltip: "Restart selected device"
         text: "Restart"
         iconSource: FontAwesome.icon("solid/rotate-right")
-        enabled: root.adapter && root.adapter.status && root.adapter.status === UiEnums.WorkspaceDeviceStatus.Active
+        enabled: root.adapter != null && root.adapter.status != null && root.adapter.status === UiEnums.WorkspaceDeviceStatus.Active
         onClicked: {
-            if (root.adapter)
+            if (root.adapter != null) {
                 root.adapter.restart();
+            }
         }
     }
 

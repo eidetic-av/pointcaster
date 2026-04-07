@@ -66,7 +66,8 @@ public:
 
   Q_INVOKABLE void triggerDeviceDiscovery();
   Q_INVOKABLE void addNewDevice(const QString &plugin_name,
-                                const QString &target_ip = "");
+                                const QString &target_ip = "",
+                                const QString &target_id = "");
   Q_INVOKABLE void deleteSelectedDevice();
 
   QList<QObject *> sessionAdapters() const;

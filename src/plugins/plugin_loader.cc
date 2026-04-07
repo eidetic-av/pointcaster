@@ -2,6 +2,7 @@
 #include "devices/device_plugin.h"
 #include "devices/null/null_device.h"
 
+#include <Corrade/Containers/Pointer.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/Manager.h>
@@ -90,20 +91,29 @@ load_device_plugins(pc::Workspace &workspace) {
       if (!workspace.discovery_plugins.contains(plugin_name)) {
         pc::logger()->trace("Initialising '{}' discovery instance",
                             std::string(plugin_name));
-
-        // auto discovery_instance =
-        //     device_plugin_manager->instantiate(plugin_name);
-
-        // if (discovery_instance) {
-        //   // start discovery
-        //   discovery_instance->set_is_discovery_instance(true);
-        //   // and pass it over to the workspace that from now on owns the
-        //   // plugin instance
-        //   workspace.discovery_plugins.emplace(std::string(plugin_name),
-        //                                       std::move(discovery_instance));
-        //   pc::logger()->trace("{} discovery instance added to workspace",
-        //                       std::string(plugin_name));
-        // }
+        Corrade::Containers::Pointer<devices::DevicePlugin> discovery_instance;
+        try {
+          discovery_instance =
+              device_plugin_manager->instantiate(plugin_name);
+        } catch (...) {
+          pc::logger()->error(
+              "{} discovery instance failed to instantiate (unknown exception)",
+              std::string(plugin_name));
+        }
+        if (discovery_instance) {
+          // start discovery
+          discovery_instance->set_is_discovery_instance(true);
+          // and pass it over to the workspace that from now on owns the
+          // plugin instance
+          workspace.discovery_plugins.emplace(std::string(plugin_name),
+                                              std::move(discovery_instance));
+          pc::logger()->trace("{} discovery instance added to workspace",
+                              std::string(plugin_name));
+        } else {
+          pc::logger()->error(
+              "{} discovery instance failed to instantiate (uncaught error)",
+              std::string(plugin_name));
+        }
       }
     }
   }

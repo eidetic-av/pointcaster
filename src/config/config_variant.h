@@ -1,6 +1,7 @@
 #pragma once
 
 #include "file_config.h"
+#include "network_config.h"
 #include "transform_config.h"
 #include <concepts>
 #include <type_traits>
@@ -14,7 +15,8 @@
 namespace pc {
 
 using ConfigurationVariant =
-    std::variant<TransformConfiguration, FileConfiguration, CameraConfiguration,
+    std::variant<TransformConfiguration, FileConfiguration,
+                 NetworkConfiguration, CameraConfiguration,
                  SessionConfiguration>;
 
 // compile time utilities

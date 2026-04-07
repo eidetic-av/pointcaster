@@ -39,16 +39,18 @@ class {{ s.adapter_name }} : public ConfigAdapter {
 
 {# ---- Per-field Q_PROPERTY generation ---- #}
 {% for m in s.members %}
-{% if m.type == "std::string" or m.type == "QString" %}
-    Q_PROPERTY(QString {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
-{% elif m.type == "bool" %}
-    Q_PROPERTY(bool {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
-{% elif m.is_enum %}
+{% if m.is_enum %}
     Q_PROPERTY(int {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
 {% elif is_float3_type(m.type) %}
     Q_PROPERTY(QVector3D {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
 {% elif is_quaternion_type(m.type) %}
     Q_PROPERTY(QQuaternion {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
+{% elif "std::string" in m.type or "QString" in m.type %}
+    Q_PROPERTY(QString {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
+{% elif "rfl::" in m.type %}
+    {% set basetype = m.type.split('<')[1].split('>')[0] %}
+    {% if basetype == "std::string" %} {% set basetype = "QString" %} {% endif %}
+    Q_PROPERTY({{ basetype }} {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
 {% elif is_simple_comparable_type(m.type) %}
     Q_PROPERTY({{ m.type }} {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
 {% elif m.type.endswith("Configuration") %}
@@ -190,6 +192,15 @@ public:
         return QQuaternion(v.scalar, v.x, v.y, v.z);
     }
     Q_INVOKABLE void set_{{ m.name }}(const QQuaternion &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant::fromValue(value)); }
+{% elif "rfl::" in m.type %}
+    {% set basetype = m.type.split('<')[1].split('>')[0] %}
+    {% if basetype == "std::string" %} 
+    Q_INVOKABLE QString {{ m.name }}() const { return QString::fromStdString(m_config.{{ m.name }}.value()); }
+    Q_INVOKABLE void set_{{ m.name }}(const QString &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
+    {% else %}
+    Q_INVOKABLE {{ basetype }} {{ m.name }}() const { return m_config.{{ m.name }}.value(); }
+    Q_INVOKABLE void set_{{ m.name }}({{ basetype }} value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant::fromValue(value)); }
+    {% endif %}
 {% elif is_simple_comparable_type(m.type) %}
     Q_INVOKABLE {{ m.type }} {{ m.name }}() const { return m_config.{{ m.name }}; }
     Q_INVOKABLE void set_{{ m.name }}({{ m.type }} value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant::fromValue(value)); }
@@ -253,6 +264,14 @@ public:
             const auto &v = m_config.{{ m.name }};
             return QVariant::fromValue(QQuaternion(v.scalar, v.x, v.y, v.z));
         }
+{% elif "rfl::" in m.type %}
+    {% if "std::string" in m.type %}
+        if (path == QStringLiteral("{{ m.name }}"))
+            return QVariant(QString::fromStdString(m_config.{{ m.name }}.value()));
+    {% else %}
+        if (path == QStringLiteral("{{ m.name }}"))
+            return QVariant::fromValue(m_config.{{ m.name }}.value());
+    {% endif %}
 {% else %}
         if (path == QStringLiteral("{{ m.name }}"))
             return QVariant::fromValue(m_config.{{ m.name }});
@@ -322,6 +341,28 @@ public:
             if (m_config.{{ m.name }} == newValue)
                 return false;
             m_config.{{ m.name }} = newValue;
+            emit {{ m.name }}Changed();
+            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+            return true;
+{% elif m.type == "bool" %}
+            const bool newValue = value.toBool();
+            if (m_config.{{ m.name }} == newValue)
+                return false;
+            m_config.{{ m.name }} = newValue;
+            emit {{ m.name }}Changed();
+            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+            return true;
+{% elif "rfl::" in m.type %}
+    {% if "std::string" in m.type %}
+            const std::string newValue = value.toString().toStdString();
+    {% elif "bool" in m.type %}
+            const bool newValue = value.toBool();
+    {% elif "int" in m.type %}
+            const bool newValue = value.toInt();
+    {% endif %}
+            if (m_config.{{ m.name }}.value() == newValue)
+                return false;
+            m_config.{{ m.name }}.set(newValue);
             emit {{ m.name }}Changed();
             notifyFieldChanged(QStringLiteral("{{ m.name }}"));
             return true;

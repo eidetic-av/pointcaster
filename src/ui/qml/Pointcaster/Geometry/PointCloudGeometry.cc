@@ -1,5 +1,6 @@
 #include "PointCloudGeometry.h"
 #include <QVector3D>
+#include <cmath>
 #include <core/logger/logger.h>
 #include <random>
 #include <ranges>
@@ -35,7 +36,9 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
         return static_cast<float>(millimetre_value) / 10.0f;
       };
       constexpr auto char_to_norm = [](unsigned char color) -> float {
-        return static_cast<float>(color) / 255.0f;
+        // the incoming point colour elemented are 0-255 in gamma space but we
+        // want 0-1 in linear space
+        return std::pow(static_cast<float>(color) / 255.0f, 2.2f);
       };
 
       // TODO profile this, its probs really expensive with large clouds
@@ -62,6 +65,7 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
       addAttribute(QQuick3DGeometry::Attribute::ColorSemantic, float3_stride,
                    QQuick3DGeometry::Attribute::F32Type);
 
+      // TODO calc bounds from position min maxes
       setBounds(QVector3D(-500, -500, 0.0f), QVector3D(+500, +500, 0.0f));
 
       update();

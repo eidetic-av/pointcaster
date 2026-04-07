@@ -23,6 +23,7 @@ enum class ObContextState : std::uint8_t {
 
 struct ObDeviceInfo {
   std::string ip;
+  std::string id;
   std::string serial_num;
   std::string name;
 };

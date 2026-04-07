@@ -65,21 +65,21 @@ void transform(const uint16_t *depth_frame_data_ptr,
     color c;
     c.r = static_cast<uint8_t>(ob_color.r);
     c.g = static_cast<uint8_t>(ob_color.g);
-    c.b = static_cast<uint8_t>(255);
+    c.b = static_cast<uint8_t>(ob_color.b);
 
     return std::make_tuple(p, c);
   };
 
-  tbb::parallel_for(oneapi::tbb::blocked_range<int>(0, point_count - 1),
-                    [&](auto range) {
-                      for (int i = range.begin(); i < range.end(); i++) {
-                        std::cout << i << "\n";
-                      }
-                    });
+//   tbb::parallel_for(oneapi::tbb::blocked_range<int>(0, point_count - 1),
+//                     [&](auto range) {
+//                       for (int i = range.begin(); i < range.end(); i++) {
+//                         std::cout << i << "\n";
+//                       }
+//                     });
 
-pc::logger()->error("Orbbec Kernel Not Implemented");
-//   std::transform(std::execution::par_unseq, indexed_points.begin(),
-//                  indexed_points.end(), output_points.begin(), transform_point);
+// pc::logger()->error("Orbbec Kernel Not Implemented");
+  std::transform(std::execution::seq, indexed_points.begin(),
+                 indexed_points.end(), output_points.begin(), transform_point);
 
 }
 

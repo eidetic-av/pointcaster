@@ -232,7 +232,7 @@ Column {
                                     return floatEditor;
                                 if (typeName === "pc::float3" || typeName === "float3")
                                     return float3Editor;
-                                if (typeName === "bool")
+                                if (typeName === "bool" || typeName === "rfl::skip<bool>")
                                     return boolEditor;
                                 return stringEditor;
                             }
@@ -283,6 +283,7 @@ Column {
                         if (String(changedPath) !== path)
                             return;
                         valueField.text = root.configAdapter ? String(root.configAdapter.value(path)) : "";
+                        // root.configAdapter["restart"]();
                     }
                 }
 
@@ -426,7 +427,7 @@ Column {
             enabled: root.configAdapter ? !root.configAdapter.isDisabled(path) : true
             opacity: enabled ? 1.0 : 0.66
 
-            options: root.configAdapter.enumOptions(path)
+            options: root.configAdapter ? root.configAdapter.enumOptions(path) : undefined
             boundValue: {
                 var n = Number(root.configAdapter.value(path));
                 return isNaN(n) ? 0 : Math.trunc(n);
@@ -458,6 +459,10 @@ Column {
             checked: !!root.configAdapter.value(path)
             onCheckedChanged: function () {
                 root.configAdapter.set(path, checked);
+                // if its a button, we only want it to be momentarily checked
+                if (root.configAdapter.isButton(path)) {
+                    boolCheckBox.checked = false;
+                }
             }
             Connections {
                 target: root.configAdapter

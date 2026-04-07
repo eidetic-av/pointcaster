@@ -11,6 +11,7 @@ add_library(pointcaster_core SHARED
     logger/logger.cc
     profiling/profiling_zone.cc
     profiling/profiler.cc
+    util/string_utils.cc
 )
 
 add_library(pointcaster::core ALIAS pointcaster_core)
@@ -70,5 +71,7 @@ target_precompile_headers(pointcaster_core PRIVATE
   <span>
   <cstddef>
   <cstdint>
+  <ranges>
+  <expected>
   <tracy/Tracy.hpp>
 )

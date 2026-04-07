@@ -11,6 +11,7 @@
 #include <QString>
 #include <QUndoCommand>
 #include <QVariant>
+#include <algorithm>
 #include <chrono>
 #include <core/logger/logger.h>
 #include <core/uuid/uuid.h>
@@ -18,6 +19,7 @@
 #include <functional>
 #include <nlohmann/json.hpp>
 #include <plugins/devices/device_variants.h>
+#include <ranges>
 #include <session/session_config.h>
 #include <session/session_config_adapter.gen.h>
 #include <spdlog/common.h>
@@ -298,7 +300,22 @@ QStringList WorkspaceModel::deviceVariantNames() const {
 }
 
 QVariantList WorkspaceModel::addDeviceMenuEntries() const {
-  QVariantList entries;
+  QVariantList menu_entries;
+
+  auto &existing_devices = _workspace.devices;
+
+  const auto existing_device_ids =
+      std::ranges::transform_view(existing_devices, [](auto &device) {
+        return std::visit(
+            [&](auto &device_config) -> std::string_view {
+              return device_config.id;
+            },
+            device->config());
+      });
+
+  for (auto id : existing_device_ids) {
+    pc::logger()->debug("Existing id: {}", id);
+  }
 
   for (auto plugin_name : _workspace.loaded_device_plugin_names) {
 
@@ -307,25 +324,34 @@ QVariantList WorkspaceModel::addDeviceMenuEntries() const {
     QVariantMap entry;
     entry["plugin_name"] = QString::fromStdString(plugin_name);
     entry["kind"] = "plugin";
-    entries.push_back(std::move(entry));
+    menu_entries.push_back(std::move(entry));
 
     // any discovered network devices of this plugin type
     auto it = _workspace.discovery_plugins.find(plugin_name);
     if (it == _workspace.discovery_plugins.end() || !it->second) continue;
     const auto discovered_devices = it->second->discovered_devices();
     for (const auto &device : discovered_devices) {
+
+      // skip devices we're already connected to
+      if (std::ranges::any_of(existing_device_ids,
+                              [&](auto id) { return id == device.id; })) {
+        continue;
+      }
+
       QVariantMap discovered_device_entry;
+
       discovered_device_entry["kind"] = "discovered";
       discovered_device_entry["plugin_name"] =
           QString::fromStdString(plugin_name);
       discovered_device_entry["ip"] = QString::fromStdString(device.ip);
       discovered_device_entry["id"] = QString::fromStdString(device.id);
       discovered_device_entry["label"] = QString::fromStdString(device.label);
-      entries.push_back(std::move(discovered_device_entry));
+
+      menu_entries.push_back(std::move(discovered_device_entry));
     }
   }
 
-  return entries;
+  return menu_entries;
 }
 
 void WorkspaceModel::setSelectedDeviceIndex(int index) {
@@ -336,14 +362,16 @@ void WorkspaceModel::setSelectedDeviceIndex(int index) {
 }
 
 void WorkspaceModel::addNewDevice(const QString &plugin_name,
-                                  const QString &target_ip) {
+                                  const QString &target_ip,
+                                  const QString &target_id) {
   // take a copy of current configuration to manipulate
   auto result_config = _workspace.config;
   // TODO this needs to be polymorphic runtime access
   if (plugin_name == OrbbecDeviceConfiguration::PluginName) {
     result_config.devices.push_back(OrbbecDeviceConfiguration{
-        .id = pc::uuid::word(),
-        .ip = target_ip.isEmpty() ? "" : target_ip.toStdString()});
+        .id = target_id.isEmpty() ? pc::uuid::word() : target_id.toStdString(),
+        .network = {.ip_address =
+                        target_ip.isEmpty() ? "" : target_ip.toStdString()}});
   } else if (plugin_name == PlyDeviceConfiguration::PluginName) {
     result_config.devices.push_back(
         PlyDeviceConfiguration{.id = pc::uuid::word()});
@@ -493,6 +521,10 @@ void WorkspaceModel::initSessionAdapter(SessionConfigurationAdapter *adapter) {
 template <typename AdapterT>
 void WorkspaceModel::initDeviceAdapter(AdapterT *adapter,
                                        pc::devices::DevicePlugin *plugin) {
+  const auto &config =
+      std::get<typename AdapterT::config_type>(plugin->config());
+  pc::logger()->trace("Initialising device adapter '{}' for plugin '{}'",
+                      config.id, adapter->displayName().toStdString());
   QObject::connect(
       adapter, &ConfigAdapter::editRequested, this,
       [this, adapter](const QString &path, const QVariant &value) {
@@ -682,16 +714,33 @@ void WorkspaceModel::syncAdapters() {
       if (plugin) device_config = plugin->config();
       if (device_config.has_value()) {
         auto config = device_config.value();
-        auto [device_id, _] = devices::device_info_from_variant(config);
+        auto [device_id, plugin_name] =
+            devices::device_info_from_variant(config);
         const QString id(device_id.data());
         if (!id.isEmpty()) {
           // try an existing adapter
           adapter = existing_by_id.take(id);
           if (adapter) {
+            pc::logger()->debug("before crash");
             // if an adapter already exists, set config, and if it fails, its
             // not the right config type, so delete this existing adapter
-            bool sync_success = adapter->setConfig(config);
+
+            // TODO crash is here...
+            bool sync_success = false;
+            try {
+              sync_success = adapter->setConfig(config);
+            } catch (...) {
+              pc::logger()->error(
+                  "Exception thrown setting config for '{}' '{}'", plugin_name,
+                  device_id);
+            }
+            pc::logger()->debug("after set config");
+
             if (!sync_success) {
+              pc::logger()->trace(
+                  "Existing device adapter with id '{}' failed to set new "
+                  "configuration. Recreating...",
+                  device_id);
               adapter->deleteLater();
               adapter = nullptr;
             }

@@ -123,7 +123,7 @@ KDDW.DockWidget {
                     }
 
                     Repeater {
-                        model: root.workspace.deviceAdapters
+                        model: root.workspace ? root.workspace.deviceAdapters : 0
 
                         ConfigurationEditor {
                             required property var modelData

@@ -17,9 +17,11 @@
 #include <mutex>
 #include <optional>
 #include <pointcaster/point_cloud.h>
-#include <profiling/profiling_mutex.h>
 #include <readerwriterqueue/readerwritercircularbuffer.h>
 #include <thread>
+
+// TODO profiling mutex not working if tracy is disabled on plugin startup
+// #include <profiling/profiling_mutex.h>
 
 namespace pc::devices {
 // this device memory structure hides CUDA types, allowing OrbbecDriver to have
@@ -50,10 +52,6 @@ public:
 
   const PointCloud &point_cloud() override;
 
-  // TODO: maybe it would better to return a constant reference to the
-  // pointcloud here so its decided at the call site if a copy is required
-  // pc::PointCloud point_cloud() const override;
-
   void start() override;
   void stop() override;
   void restart() override;
@@ -80,7 +78,9 @@ private:
   std::atomic<std::chrono::steady_clock::time_point> _pipeline_last_tick{
       std::chrono::steady_clock::time_point{}};
 
-  PC_PROFILING_MUTEX(_process_current_cloud_access);
+  // TODO profiling mutex not working if tracy is disabled on plugin startup
+  // PC_PROFILING_MUTEX(_process_current_cloud_access);
+  std::mutex _process_current_cloud_access;
   std::uint64_t _last_processed_frame_index{0};
 
   OrbbecImplDeviceMemory *_device_memory;
@@ -95,6 +95,9 @@ private:
 
   void start_sync();
   void stop_sync();
+
+  void set_ip(std::string_view ip_address, std::string_view subnet_mask,
+              std::string_view gateway_address);
 
   void set_running(bool running_pipeline) {
     _running_pipeline = running_pipeline;

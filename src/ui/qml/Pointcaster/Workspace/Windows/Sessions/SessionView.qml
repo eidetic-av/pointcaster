@@ -245,14 +245,16 @@ Item {
             source: "#Cube"
             pickable: true
 
-            property var devicePos: root.workspace && root.deviceAdapters ? deviceAdapters[root.workspace.selectedDeviceIndex].value("transform/position") : Qt.vector3d(0, 0, 0)
-            property var deviceScale: root.workspace && root.deviceAdapters ? deviceAdapters[root.workspace.selectedDeviceIndex].value("transform/scale") : Qt.vector3d(1, 1, 1)
+            property var selectedDeviceAdapter: (root.workspace && root.deviceAdapters) ? root.deviceAdapters[root.workspace.selectedDeviceIndex] : null
 
-            x: devicePos.x * 100
-            y: devicePos.y * 100
-            z: devicePos.z * 100
+            property var devicePos: selectedDeviceAdapter ? selectedDeviceAdapter.value("transform/position") : Qt.vector3d(0, 0, 0)
+            property var deviceScale: selectedDeviceAdapter ? selectedDeviceAdapter.value("transform/scale") : Qt.vector3d(1, 1, 1)
 
-            scale: deviceScale
+            x: devicePos ? devicePos.x * 100 : 0
+            y: devicePos ? devicePos.y * 100 : 0
+            z: devicePos ? devicePos.z * 100 : 0
+
+            scale: deviceScale || Qt.vector3d(1, 1, 1)
 
             materials: PrincipledMaterial {
                 lighting: PrincipledMaterial.NoLighting
@@ -301,7 +303,7 @@ Item {
                             pointSize: Math.round(5 * Scaling.uiScale)
                             // TODO this pointSize needs to change based on the distance of the point to the camera...
                             // we can achieve this with a custom vertex and/or fragment shader
-                        // CustomMaterial {
+                            // CustomMaterial {
                             // vertexShader: "material.vert"
                             // fragmentShader: "material.frag"
                         }
@@ -339,6 +341,14 @@ Item {
         //     ambientColor: Qt.rgba(0.2, 0.2, 0.2, 1)
         // }
 
+        environment: SceneEnvironment {
+            clearColor: ThemeColors.shadow
+            backgroundMode: SceneEnvironment.Color
+            depthPrePassEnabled: true
+            // fog: Fog { enabled: false }
+            // antialiasingMode: SceneEnvironment.SSAA
+        }
+
         // ---------- CAMERA ----------
         Node {
             id: orbitOrigin
@@ -352,7 +362,7 @@ Item {
                 // 0 = fully perspective, 1 = fully orthographic
                 property real blend: 0
                 // Perspective params
-                property real nearPlane: 0
+                property real nearPlane: 1
                 property real farPlane: 250000
                 property real fovYRadians: 60 * Math.PI / 180
                 // ortho params
@@ -507,13 +517,6 @@ Item {
                 focusAnimation.to = hit.position;
                 focusAnimation.start();
             }
-        }
-
-        environment: SceneEnvironment {
-            clearColor: ThemeColors.shadow
-            backgroundMode: SceneEnvironment.Color
-            // fog: Fog { enabled: false }
-            // antialiasingMode: SceneEnvironment.SSAA
         }
 
         Model {

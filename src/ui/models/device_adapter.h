@@ -70,6 +70,7 @@ public:
 
   Q_INVOKABLE void restart() {
     if (!_plugin) return;
+    pc::logger()->debug("Running restart from the device adapter i.e. qml");
     _plugin->restart();
   }
 

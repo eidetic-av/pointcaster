@@ -2,8 +2,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 namespace pc {
+
+using int2 = std::pair<int, int>;
 
 struct float3 {
   float x = 0;

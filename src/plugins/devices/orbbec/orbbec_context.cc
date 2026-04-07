@@ -131,9 +131,13 @@ void ObContext::discover_devices() {
     for (std::size_t i = 0; i < count; ++i) {
       if (std::strcmp(device_list->getConnectionType(i), "Ethernet") == 0) {
         // NetDevice connection
-        std::string ip{}, serial{}, name{};
+        std::string ip{}, id{}, serial{}, name{};
         try {
           ip = device_list->getIpAddress(i);
+        } catch (...) {
+        }
+        try {
+          id = device_list->getUid(i);
         } catch (...) {
         }
         try {
@@ -146,7 +150,7 @@ void ObContext::discover_devices() {
           name = full_name.substr(prefix.size());
         } catch (...) {
         }
-        discovered_devices.emplace_back(ip, serial, name);
+        discovered_devices.emplace_back(ip, id, serial, name);
       } else {
         // TODO
         // USB connection found

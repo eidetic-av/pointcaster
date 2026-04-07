@@ -42,6 +42,7 @@ qt_import_qml_plugins(pointcaster)
 # for our generated headers that connect configuration structs <-> qml
 set(CONFIG_ADAPTER_INPUTS
     ${CMAKE_SOURCE_DIR}/src/config/file_config.h
+    ${CMAKE_SOURCE_DIR}/src/config/network_config.h
     ${CMAKE_SOURCE_DIR}/src/config/transform_config.h
     ${CMAKE_SOURCE_DIR}/src/session/session_config.h
     ${CMAKE_SOURCE_DIR}/src/camera/camera_config.h
