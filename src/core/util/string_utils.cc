@@ -20,7 +20,7 @@ parse_ip_string(std::string_view sv) {
       return std::unexpected("empty address node");
 
     int node_value = 0;
-    auto parse_result = std::from_chars(node.begin(), node.end(), node_value);
+    auto parse_result = std::from_chars(node, node_value);
 
     if (parse_result.ec != std::errc{} || parse_result.ptr != node.end())
       return std::unexpected(
