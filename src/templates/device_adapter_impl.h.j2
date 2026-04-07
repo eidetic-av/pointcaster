@@ -278,7 +278,7 @@ public:
     {% elif "bool" in m.type %}
             const bool newValue = value.toBool();
     {% elif "int" in m.type %}
-            const bool newValue = value.toInt();
+            const int newValue = value.toInt();
     {% endif %}
             if (m_config.{{ m.name }}.value() == newValue)
                 return false;
