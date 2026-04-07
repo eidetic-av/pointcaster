@@ -35,8 +35,10 @@ ARG QtVersion=6.11.0
 ENV Qt6_DIR="C:\\Qt\\6.11.0\\msvc2022_64\\lib\\cmake\\Qt6"
 ENV QT_DIR="C:\\Qt\\6.11.0\\msvc2022_64\\lib\\cmake\\Qt6"
 
-ARG AqtInstallVersion=3.3
-RUN pip install "aqtinstall==$Env:AqtInstallVersion"
+# ARG AqtInstallVersion=3.3
+# RUN pip install "aqtinstall==$Env:AqtInstallVersion"
+# temporary workaround for 6.11.0
+RUN pip install git+https://github.com/miurahr/aqtinstall.git@refs/pull/1000/head
 RUN aqt install-qt \
       --outputdir "$Env:QtInstallDirectory" \
       windows desktop "$Env:QtVersion" win64_msvc2022_64 \
