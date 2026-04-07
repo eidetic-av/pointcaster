@@ -1,7 +1,6 @@
 include(GNUInstallDirs)
 
-# qt_standard_project_setup(REQUIRES 6.11)
-qt_standard_project_setup(REQUIRES 6.10.3)
+qt_standard_project_setup(REQUIRES 6.11)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_INSTALL_PREFIX "/usr")
