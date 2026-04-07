@@ -24,12 +24,11 @@ RUN Invoke-WebRequest -Uri https://aka.ms/vs/17/release/vs_BuildTools.exe -OutFi
     Remove-Item -Force vs_BuildTools.exe
 
 # Git
-ARG GIT_ZIP_URL https://github.com/git-for-windows/git/releases/download/v2.53.0.windows.2/MinGit-2.53.0-64-bit.zip  
-RUN Invoke-WebRequest -Uri  $env:GIT_ZIP_URL -OutFile 'Git.zip'; \
+RUN Invoke-WebRequest -Uri "https://github.com/git-for-windows/git/releases/download/v2.53.0.windows.2/MinGit-2.53.0.2-64-bit.zip" -OutFile 'Git.zip'; \
     Expand-Archive -Path 'Git.zip' -DestinationPath 'C:\\Git'; \
     Remove-Item Git.zip -Force; \
     $env:PATH = 'C:\\Git\\cmd;C:\\Git\\bin;C:\\Git\\usr\\bin;{0}' -f $env:PATH; \
-    [Environment]::SetEnvironmentVariable('PATH', $env:PATH, [EnvironmentVariableTarget]::Machine);
+    	[Environment]::SetEnvironmentVariable('PATH', $env:PATH, [EnvironmentVariableTarget]::Machine);
 
 # python+pip, the aqt installer and Qt 6 libs
 ARG PythonVersion=3.14.3
