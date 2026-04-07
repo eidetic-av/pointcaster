@@ -31,18 +31,18 @@ RUN Invoke-WebRequest -Uri https://www.python.org/ftp/python/$Env:PythonVersion/
     Remove-Item -Force python_installer.exe
 
 ARG QtInstallDirectory="C:\\Qt"
-# ARG QtVersion=6.11.0
-ARG QtVersion=6.10.3
-ENV Qt6_DIR="C:\\Qt\\6.10.3\\msvc2022_64\\lib\\cmake\\Qt6"
-ENV QT_DIR="C:\\Qt\\6.10.3\\msvc2022_64\\lib\\cmake\\Qt6"
+ARG QtVersion=6.11.0
+ENV Qt6_DIR="C:\\Qt\\6.11.0\\msvc2022_64\\lib\\cmake\\Qt6"
+ENV QT_DIR="C:\\Qt\\6.11.0\\msvc2022_64\\lib\\cmake\\Qt6"
 
-ARG AqtInstallVersion=3.3
-RUN pip install "aqtinstall==$Env:AqtInstallVersion"
+# ARG AqtInstallVersion=3.3
+# RUN pip install "aqtinstall==$Env:AqtInstallVersion"
+# temporary workaround for 6.11.0
+RUN pip install git+https://github.com/miurahr/aqtinstall.git@refs/pull/1000/head
 RUN aqt install-qt \
       --outputdir "$Env:QtInstallDirectory" \
       windows desktop "$Env:QtVersion" win64_msvc2022_64 \
-      -m qtshadertools qtquick3d
-      # -m qtshadertools qtquick3d qttasktree
+      -m qtshadertools qtquick3d qttasktree
 
 # oneTBB
 ARG TbbVersion=2022.3.0
