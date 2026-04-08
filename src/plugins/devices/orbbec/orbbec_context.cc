@@ -7,8 +7,6 @@
 #include <mutex>
 #include <thread>
 
-#include <experimental/scope>
-
 namespace {
 moodycamel::ConcurrentQueue<std::function<void()>> on_ready_callbacks{};
 }

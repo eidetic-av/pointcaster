@@ -26,8 +26,8 @@ void transform(const uint16_t *depth_frame_data_ptr,
   const auto color_intrinsic =
       calibration_parameters.intrinsics[OB_SENSOR_COLOR];
 
-  // we dont need an extrinsic for the 2d->3d conversion because D2C has already
-  // been performed on hardware
+  // we dont need an extrinsic for the 2d->3d conversion because frame alignment has already
+  // been performed within orbbec sdk
   constexpr static OBExtrinsic identity_extrinsic{
       {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f},
       {0.0f, 0.0f, 0.0f},
@@ -39,36 +39,38 @@ void transform(const uint16_t *depth_frame_data_ptr,
           ? 1920
           : 1280;
 
-  const auto indexed_points =
-      std::ranges::zip_view(depth_data, color_data,
-                            std::views::iota(0, static_cast<int>(point_count)));
-
-  const auto output_points =
-      std::ranges::zip_view(output_cloud.positions, output_cloud.colors);
-
-  const auto transform_point = [&](auto point) {
-    const auto [ob_depth, ob_color, i] = point;
+  const auto transform_point = [&](const auto i) {
     const auto x = i % frame_width;
     const auto y = i / frame_width;
 
-    position p;
+    const auto ob_depth = depth_data[i];
+    const auto ob_color = color_data[i];
+
     OBPoint3f result;
 
     ob::CoordinateTransformHelper::transformation2dto3d(
         OBPoint2f(x, y), ob_depth, color_intrinsic, identity_extrinsic,
         &result);
 
-    p.x = static_cast<int16_t>(result.x);
-    p.y = -static_cast<int16_t>(result.y);
-    p.z = -static_cast<int16_t>(result.z);
+    output_cloud.positions[i] = {
+        .x = static_cast<int16_t>(result.x),
+        .y = -static_cast<int16_t>(result.y),
+        .z = -static_cast<int16_t>(result.z)
+    };
 
-    color c;
-    c.r = static_cast<uint8_t>(ob_color.r);
-    c.g = static_cast<uint8_t>(ob_color.g);
-    c.b = static_cast<uint8_t>(ob_color.b);
-
-    return std::make_tuple(p, c);
+    output_cloud.colors[i] = {
+        .r = static_cast<uint8_t>(ob_color.r),
+        .g = static_cast<uint8_t>(ob_color.g),
+        .b = static_cast<uint8_t>(ob_color.b)
+    };
   };
+
+  const auto index_sequence = std::views::iota(0, static_cast<int>(point_count));
+
+  // par_unseq here is 3-5ms
+  // seq is ~22ms
+
+  std::for_each(std::execution::par_unseq, index_sequence.begin(), index_sequence.end(), transform_point);
 
 //   tbb::parallel_for(oneapi::tbb::blocked_range<int>(0, point_count - 1),
 //                     [&](auto range) {
@@ -78,8 +80,9 @@ void transform(const uint16_t *depth_frame_data_ptr,
 //                     });
 
 // pc::logger()->error("Orbbec Kernel Not Implemented");
-  std::transform(std::execution::seq, indexed_points.begin(),
-                 indexed_points.end(), output_points.begin(), transform_point);
+
+//   std::transform(std::execution::seq, indexed_points.begin(),
+//                  indexed_points.end(), output_points.begin(), transform_point);
 
 }
 

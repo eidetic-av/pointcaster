@@ -691,8 +691,6 @@ void WorkspaceModel::syncAdapters() {
     QHash<QString, DeviceAdapter *> existing_by_id;
     existing_by_id.reserve(_deviceAdapters.size());
 
-    // TODO ** we are crashing here
-
     for (QObject *obj : _deviceAdapters) {
       auto *a = qobject_cast<DeviceAdapter *>(obj);
       if (!a) continue;
@@ -721,11 +719,6 @@ void WorkspaceModel::syncAdapters() {
           // try an existing adapter
           adapter = existing_by_id.take(id);
           if (adapter) {
-            pc::logger()->debug("before crash");
-            // if an adapter already exists, set config, and if it fails, its
-            // not the right config type, so delete this existing adapter
-
-            // TODO crash is here...
             bool sync_success = false;
             try {
               sync_success = adapter->setConfig(config);
@@ -734,7 +727,6 @@ void WorkspaceModel::syncAdapters() {
                   "Exception thrown setting config for '{}' '{}'", plugin_name,
                   device_id);
             }
-            pc::logger()->debug("after set config");
 
             if (!sync_success) {
               pc::logger()->trace(
@@ -750,10 +742,24 @@ void WorkspaceModel::syncAdapters() {
           adapter = makeDeviceAdapterForPlugin(plugin, config);
         }
         if (adapter) {
+          auto adapterPtr = QPointer<DeviceAdapter>(adapter);
+
+          // hook up the qt signal so that when the plugin updates its
+          // pointcloud, quick3d can react to this event and update geometry
+
+          plugin->set_point_cloud_updated_callback([adapterPtr]() {
+            QMetaObject::invokeMethod(adapterPtr.data(), [adapterPtr]() {
+              if (!adapterPtr) {
+                pc::logger()->error("Invalid point cloud plugin ptr");
+                return;
+              }
+              adapterPtr->notifyPointCloudUpdated();
+            });
+          });
+
           // TODO what is this for
           plugin->set_status_callback(
-              [adapterPtr = QPointer<DeviceAdapter>(adapter)](
-                  pc::devices::DeviceStatus status) {
+              [adapterPtr](pc::devices::DeviceStatus status) {
                 if (!adapterPtr) return;
                 QMetaObject::invokeMethod(
                     adapterPtr.data(),

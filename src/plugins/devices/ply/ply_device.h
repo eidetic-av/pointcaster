@@ -9,12 +9,13 @@
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
-#include <llfio.hpp>
-#include <llfio/v2.0/config.hpp>
-#include <llfio/v2.0/directory_handle.hpp>
 #include <readerwriterqueue/readerwritercircularbuffer.h>
 #include <string_view>
 #include <vector>
+
+// #include <llfio.hpp>
+// #include <llfio/v2.0/config.hpp>
+// #include <llfio/v2.0/directory_handle.hpp>
 
 namespace pc::devices {
 
@@ -51,18 +52,18 @@ private:
 
   PointCloud _current_point_cloud{{}, {}};
 
-  // using namespace llfio = LLFIO_V2_NAMESPACE;
+  // // using namespace llfio = LLFIO_V2_NAMESPACE;
 
-  // _sequence_file_entries is the cache of path metadata for all the files
-  // contained in the sequence
-  std::vector<LLFIO_V2_NAMESPACE::directory_entry> _sequence_file_entries;
+  // // _sequence_file_entries is the cache of path metadata for all the files
+  // // contained in the sequence
+  // std::vector<LLFIO_V2_NAMESPACE::directory_entry> _sequence_file_entries;
 
-  // _sequence_file_handles is the cache of open file handles for a
-  // wanted subset of the files contained in the sequence. the objects in this
-  // collection are handles to memory mapped files, so they may be loaded in RAM
-  // upon access or they may need to read from disk first depending on current
-  // pressure as determined by the kernel
-  std::vector<LLFIO_V2_NAMESPACE::file_handle> _sequence_file_handles;
+  // // _sequence_file_handles is the cache of open file handles for a
+  // // wanted subset of the files contained in the sequence. the objects in this
+  // // collection are handles to memory mapped files, so they may be loaded in RAM
+  // // upon access or they may need to read from disk first depending on current
+  // // pressure as determined by the kernel
+  // std::vector<LLFIO_V2_NAMESPACE::file_handle> _sequence_file_handles;
 
   // and _sequence_cloud_buffer is the cache of actual PointCloud frames that we
   // are ensuring will always be available in RAM. _sequence_file_handles above

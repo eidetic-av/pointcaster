@@ -27,7 +27,6 @@
 #include <span>
 #include <thread>
 
-#include <experimental/scope>
 #include <metrics/metrics.h>
 #include <profiling/profiler.h>
 #include <variant>
@@ -477,8 +476,8 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       if (!colour_frame || !depth_frame) continue;
 
       {
-        // ProfilingZone receive_frame_zone("OrbbecDevice::receive_frame");
-        // receive_frame_zone.text(device_config->id);
+        ProfilingZone receive_frame_zone("OrbbecDevice::receive_frame");
+        receive_frame_zone.text(device_config.id);
 
         const uint32_t width = colour_frame->width();
         const uint32_t height = colour_frame->height();
@@ -500,8 +499,9 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
         if (success) {
           _buffer_updated = true;
           set_updated_time(steady_clock::now());
+          notify_point_cloud_updated();
         } else {
-          pc::logger()->warn("Dropped frame from "
+          pc::logger()->trace("Dropped frame from "
                              "OrbbecDevice '{}' (ip: {})",
                              device_config.id,
                              device_config.network.ip_address.value());
@@ -571,7 +571,6 @@ void OrbbecDevice::on_config_field_changed(std::string_view) {
   auto &config = std::get<OrbbecDeviceConfiguration>(_config);
 
   if (config.network.apply.value()) {
-    pc::logger()->debug("Config should apply!!");
     config.network.apply.set(false);
     set_ip(config.network.ip_address.value(),
            config.network.subnet_mask.value(),

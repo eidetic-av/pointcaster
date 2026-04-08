@@ -87,9 +87,15 @@ public:
     if (_plugin) _plugin->on_config_field_changed(path.toStdString());
   }
 
+  void notifyPointCloudUpdated() {
+    emit pointCloudUpdated();
+  }
+
 signals:
   void statusChanged();
   void pluginNullStateChanged();
+
+  void pointCloudUpdated();
 
 protected:
   pc::devices::DevicePlugin *_plugin = nullptr; // non-owning

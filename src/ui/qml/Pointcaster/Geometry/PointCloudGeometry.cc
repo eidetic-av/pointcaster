@@ -1,9 +1,13 @@
 #include "PointCloudGeometry.h"
 #include <QVector3D>
+#include <algorithm>
 #include <cmath>
 #include <core/logger/logger.h>
-#include <random>
+#include <core/profiling/profiling_zone.h>
+#include <execution>
 #include <ranges>
+
+using pc::profiling::ProfilingZone;
 
 pc::ui::qml::PointCloudGeometry::PointCloudGeometry() : QQuick3DGeometry() {
   update();
@@ -11,10 +15,12 @@ pc::ui::qml::PointCloudGeometry::PointCloudGeometry() : QQuick3DGeometry() {
 
 void pc::ui::qml::PointCloudGeometry::updateGeometry() {
 
-  constexpr auto float3_stride = 3 * sizeof(float);
-  constexpr auto float4_stride = 4 * sizeof(float);
-  constexpr auto point_stride =
-      float3_stride + float4_stride + sizeof(float); // pos + col + padding
+  struct FlatVertexData {
+    float x, y, z, _p;
+    float r, g, b, a;
+  };
+  constexpr auto vertex_stride = sizeof(FlatVertexData);
+  constexpr auto float4_stride = sizeof(float) * 4;
 
   // if this geometry has a device plugin assigned to render
   if (_pointCloudAdapter) {
@@ -26,43 +32,53 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
     localGeometryNeedsUpdating = true;
 
     if (localGeometryNeedsUpdating) {
+
+      ProfilingZone update_geometry_zone("PointCloudGeometry::updateGeometry");
+
       const auto &positions = inputCloud.positions;
       const auto &colors = inputCloud.colors;
+      const auto indices =
+          std::views::iota(0, static_cast<int>(inputCloud.size()));
 
-      QByteArray v;
-      v.resize(point_stride * positions.size());
+      const auto points = std::views::zip(indices, positions, colors);
+
+      QByteArray vertexBytes;
+      vertexBytes.resize(vertex_stride * points.size());
+
+      auto *vertexData = reinterpret_cast<FlatVertexData *>(vertexBytes.data());
 
       constexpr auto mm_to_cm = [](int16_t millimetre_value) -> float {
+        // we store point positions as mm shorts but we want floats in centimetres for Qt
         return static_cast<float>(millimetre_value) / 10.0f;
       };
       constexpr auto char_to_norm = [](unsigned char color) -> float {
-        // the incoming point colour elemented are 0-255 in gamma space but we
-        // want 0-1 in linear space
+        // the incoming point colour elements are 0-255 in gamma space
+        // but we want 0-1 in linear colour space
         return std::pow(static_cast<float>(color) / 255.0f, 2.2f);
       };
 
-      // TODO profile this, its probs really expensive with large clouds
+      std::for_each(std::execution::par_unseq, points.begin(), points.end(),
+                    [&vertexData](const auto &p) {
+                      const auto &[i, pos, col] = p;
+                      vertexData[i] = {.x = mm_to_cm(pos.x),
+                                       .y = mm_to_cm(pos.y),
+                                       .z = mm_to_cm(pos.z),
+                                       ._p = 0,
+                                       .r = char_to_norm(col.r),
+                                       .g = char_to_norm(col.g),
+                                       .b = char_to_norm(col.b),
+                                       .a = 1};
+                    });
 
-      float *p = reinterpret_cast<float *>(v.data());
-      for (const auto &[pos, col] : std::views::zip(positions, colors)) {
-        *p++ = mm_to_cm(pos.x);
-        *p++ = mm_to_cm(pos.y);
-        *p++ = mm_to_cm(pos.z);
-        *p++ = char_to_norm(col.r);
-        *p++ = char_to_norm(col.g);
-        *p++ = char_to_norm(col.b);
-        *p++ = 1.0f; // alpha
-        *p++ = 0;    // padding
-      }
+      setVertexData(vertexBytes);
 
-      setVertexData(v);
-
-      setStride(point_stride);
+      setStride(vertex_stride);
       setPrimitiveType(QQuick3DGeometry::PrimitiveType::Points);
 
       addAttribute(QQuick3DGeometry::Attribute::PositionSemantic, 0,
                    QQuick3DGeometry::Attribute::F32Type);
-      addAttribute(QQuick3DGeometry::Attribute::ColorSemantic, float3_stride,
+
+      addAttribute(QQuick3DGeometry::Attribute::ColorSemantic, float4_stride,
                    QQuick3DGeometry::Attribute::F32Type);
 
       // TODO calc bounds from position min maxes

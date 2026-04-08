@@ -5,6 +5,7 @@
 #include <expected>
 #include <ranges>
 #include <string_view>
+#include <system_error>
 
 namespace pc::util {
 
@@ -20,11 +21,13 @@ parse_ip_string(std::string_view sv) {
       return std::unexpected("empty address node");
 
     int node_value = 0;
-    auto parse_result = std::from_chars(node.begin(), node.end(), node_value);
+    auto node_end = node.data() + node.size();
+    auto [ptr, ec] = std::from_chars(node.data(), node_end, node_value);
 
-    if (parse_result.ec != std::errc{} || parse_result.ptr != node.end())
+    if (ec != std::errc{} || ptr != node_end)
       return std::unexpected(
           std::format("address node {} is not a number", node_index));
+
     if (node_value < 0 || node_value > 255)
       return std::unexpected(
           std::format("address node {} is out of range", node_index));
