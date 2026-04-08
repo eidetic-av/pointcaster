@@ -66,6 +66,14 @@ RUN mkdir "$Env:TbbInstallDir"; \
 ARG Jinja2Version=3.1.6
 RUN pip install "jinja2==$Env:Jinja2Version"
 
+# install chocolatey
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;\
+	iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+
+# NVIDIA CUDA development packages
+ARG CudaVersion=13.2.0
+RUN choco install -y cuda --version $Env:CudaVersion
+
 # entry point to the docker container is our visual studio dev shell
 # so env with build tools is properly configured
 
