@@ -300,7 +300,7 @@ Item {
                     materials: [
                         PrincipledMaterial {
                             lighting: PrincipledMaterial.NoLighting
-                            pointSize: Math.round(5 * Scaling.uiScale)
+                            pointSize: Math.round(2 * Scaling.uiScale)
                             // TODO this pointSize needs to change based on the distance of the point to the camera...
                             // we can achieve this with a custom vertex and/or fragment shader
                             // CustomMaterial {
@@ -310,12 +310,11 @@ Item {
                     ]
                 }
 
-                Timer {
-                    // update the point cloud geometry every frame
-                    interval: 12
-                    running: true
-                    repeat: true
-                    onTriggered: geo.updateGeometry()
+                Connections {
+                    target: modelData
+                    function onPointCloudUpdated() {
+                        geo.updateGeometry()
+                    }
                 }
             }
         }

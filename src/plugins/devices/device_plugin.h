@@ -96,7 +96,11 @@ public:
   virtual DeviceStatus status() const = 0;
 
   void set_status_callback(std::function<void(DeviceStatus)> cb) {
-    _status_callback = std::move(cb);
+    _status_callback = cb;
+  }
+
+  void set_point_cloud_updated_callback(std::function<void()> cb) {
+    _point_cloud_updated_callback = cb;
   }
 
   DeviceConfigurationVariant &config() { return _config; }
@@ -120,9 +124,14 @@ public:
   }
   void notify_status_changed() { notify_status_changed(status()); }
 
+  void notify_point_cloud_updated() {
+    if (_point_cloud_updated_callback) _point_cloud_updated_callback();
+  }
+
 protected:
   DeviceConfigurationVariant _config;
   std::function<void(DeviceStatus)> _status_callback;
+  std::function<void()> _point_cloud_updated_callback;
   bool _is_discovery_instance = false;
 };
 
