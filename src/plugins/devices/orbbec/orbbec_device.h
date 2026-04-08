@@ -59,7 +59,7 @@ public:
   void on_config_field_changed(std::string_view path = "") override;
 
 private:
-  moodycamel::BlockingReaderWriterCircularBuffer<PointCloud> _frame_buffer{12};
+  moodycamel::BlockingReaderWriterCircularBuffer<PointCloud> _frame_buffer{2};
 
   PointCloud _current_point_cloud{{}, {}};
 
