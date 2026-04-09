@@ -71,7 +71,7 @@ RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tl
 	iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 
 # NVIDIA CUDA development packages
-ARG CudaVersion=13.2.0
+ARG CudaVersion=12.9.1.576
 RUN choco install -y cuda --version $Env:CudaVersion
 
 # entry point to the docker container is our visual studio dev shell
