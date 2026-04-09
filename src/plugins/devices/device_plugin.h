@@ -33,7 +33,7 @@ public:
   static Corrade::Containers::Array<Corrade::Containers::String>
   pluginSearchPaths() {
     std::filesystem::path exe_dir(cpplocate::getModulePath());
-    auto plugin_dir = exe_dir.parent_path() / "plugins";
+    auto plugin_dir = exe_dir.parent_path() / "plugins" / "devices";
 
     std::vector<Corrade::Containers::String> search_paths;
 

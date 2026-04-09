@@ -1,5 +1,3 @@
-set(DEVICES_PLUGIN_DIR "plugins/devices")
-
 add_library(pointcaster_plugins
     plugin_loader.cc
 )
@@ -20,12 +18,16 @@ target_link_libraries(pointcaster_plugins PRIVATE cpplocate::cpplocate)
 
 # subdirectories are corrade plugins
 
+set(DEVICES_PLUGIN_DIR "plugins/devices")
+set(BACKEND_PLUGIN_DIR "plugins/backend")
+
 # - static plugins
 add_subdirectory(devices/null)
 add_subdirectory(devices/ply)
 
 # - dynamic plugins
 add_subdirectory(devices/orbbec)
+add_subdirectory(backend/cuda)
 
 
 # the $CORRADE_PLUGINS and $CORRADE_STATIC_PLUGINS lists should 
