@@ -6,7 +6,6 @@ corrade_add_plugin(OrbbecDevice
   OrbbecDevice.conf
   orbbec_device.cc
   orbbec_context.cc
-  orbbec_kernels.cc
   ${CMAKE_SOURCE_DIR}/src/ui/models/device_status.h
 )
 
@@ -22,12 +21,22 @@ set_target_properties(OrbbecDevice PROPERTIES
 find_package(OrbbecSDK CONFIG REQUIRED)
 find_package(TBB REQUIRED)
 
+# TODO
+# don't link to this. dynamically link to cuda plugin
+# i guess just load headers into this ? 
+# AND it needs to be compiled by nvcc
+find_package(Thrust REQUIRED CONFIG)
+thrust_create_target(Thrust)
+
 target_link_libraries(OrbbecDevice PRIVATE
   pointcaster::core
   pointcaster::metrics
   Corrade::PluginManager
   ob::OrbbecSDK
   TBB::tbb
+
+  # TODO
+  Thrust::Thrust
 )
 
 find_path(READERWRITERQUEUE_INCLUDE_DIR "readerwriterqueue/readerwriterqueue.h")

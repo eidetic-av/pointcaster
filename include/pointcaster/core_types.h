@@ -12,72 +12,28 @@ struct float3 {
   float x = 0;
   float y = 0;
   float z = 0;
-
-  constexpr float &operator[](std::size_t index) {
-    return index == 0 ? x : (index == 1 ? y : z);
-  }
-  constexpr const float &operator[](std::size_t index) const {
-    return index == 0 ? x : (index == 1 ? y : z);
-  }
+  auto operator<=>(const float3 &f) const = default;
 };
-
-constexpr bool operator==(const float3 &lhs, const float3 &rhs) {
-  return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
-}
-constexpr bool operator!=(const float3 &lhs, const float3 &rhs) {
-  return !(rhs == lhs);
-}
 
 struct float4 {
   float x = 0;
   float y = 0;
   float z = 0;
   float w = 0;
-
-  constexpr float &operator[](std::size_t index) {
-    return index == 0 ? x : (index == 1 ? y : (index == 2 ? z : w));
-  }
-  constexpr const float &operator[](std::size_t index) const {
-    return index == 0 ? x : (index == 1 ? y : (index == 2 ? z : w));
-  }
+  auto operator<=>(const float4 &f) const = default;
 };
-
-constexpr bool operator==(const float4 &lhs, const float4 &rhs) {
-  return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
-}
-constexpr bool operator!=(const float4 &lhs, const float4 &rhs) {
-  return !(rhs == lhs);
-}
 
 struct quaternion {
   float scalar = 1;
   float x = 0;
   float y = 0;
   float z = 0;
-
-  constexpr float &operator[](std::size_t index) {
-    return index == 0 ? scalar : (index == 1 ? x : (index == 2 ? y : z));
-  }
-  constexpr const float &operator[](std::size_t index) const {
-    return index == 0 ? scalar : (index == 1 ? x : (index == 2 ? y : z));
-  }
+  auto operator<=>(const quaternion &q) const = default;
 };
-
-constexpr bool operator==(const quaternion &lhs, const quaternion &rhs) {
-  return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z &&
-         lhs.scalar == rhs.scalar;
-}
-constexpr bool operator!=(const quaternion &lhs, const quaternion &rhs) {
-  return !(rhs == lhs);
-}
 
 struct uint2 {
   unsigned int x, y = 0;
-
-  bool operator==(const uint2 other) const {
-    return x == other.x && y == other.y;
-  }
-  bool operator!=(const uint2 other) const { return !operator==(other); }
+  auto operator<=>(const uint2 &u) const = default;
 };
 
 struct alignas(4) position {
@@ -85,32 +41,18 @@ struct alignas(4) position {
   int16_t y = 0;
   int16_t z = 0;
   int16_t __pad = 0;
+  auto operator<=>(const position &p) const = default;
 };
-
-constexpr bool operator==(const position &lhs, const position &rhs) {
-  return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
-}
-constexpr bool operator!=(const position &lhs, const position &rhs) {
-  return !(rhs == lhs);
-}
 
 struct color {
   unsigned char r, g, b, a = 0;
-
-  bool operator==(const color other) const {
-    return r == other.r && g == other.g && b == other.b && a == other.a;
-  }
-  bool operator!=(const color other) const { return !operator==(other); }
+  auto operator<=>(const color &c) const = default;
 };
 
 struct color_rgb {
   unsigned char r = 0;
   unsigned char g = 0;
   unsigned char b = 0;
-
-  bool operator==(const color other) const {
-    return r == other.r && g == other.g && b == other.b;
-  }
-  bool operator!=(const color other) const { return !operator==(other); }
+  auto operator<=>(const color_rgb &c) const = default;
 };
 } // namespace pc

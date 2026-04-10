@@ -1,11 +1,8 @@
 #include "orbbec_device.h"
 #include "orbbec_context.h"
 #include "orbbec_device_config.h"
-#include "orbbec_kernels.h"
-#include "plugins/devices/device_variants.h"
-#include "pointcaster/point_cloud.h"
-#include "util/string_utils.h"
 
+#include <Corrade/Containers/Pointer.h>
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -22,20 +19,18 @@
 #include <libobsensor/hpp/Pipeline.hpp>
 #include <libobsensor/hpp/Utils.hpp>
 #include <memory>
+#include <metrics/metrics.h>
 #include <mutex>
 #include <numeric>
+#include <plugins/devices/device_variants.h>
+#include <pointcaster/point_cloud.h>
+#include <profiling/profiler.h>
+#include <random>
 #include <span>
 #include <thread>
-
-#include <metrics/metrics.h>
-#include <profiling/profiler.h>
+#include <util/string_utils.h>
 #include <variant>
-
-// This is a zip_view impl for C++20 that makes
-// the use of the zip view in our point cloud transform
-// compile with the AdaptiveCpp compiler (until it supports C++23)
-// #define ZIP_VIEW_INJECT_STD_VIEWS_NAMESPACE
-// #include "zip_view.h"
+#include <workspace/workspace.h>
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -74,7 +69,8 @@ OrbbecDevice::~OrbbecDevice() {
                       _is_discovery_instance ? " discovery instance" : "");
 }
 
-void OrbbecDevice::init() {
+void OrbbecDevice::init(Workspace &workspace) {
+  _workspace = &workspace;
   // do our device initialisation / start procedure when
   // the context is known to be ready
   orbbec_context().run_on_ready([this] {
@@ -426,25 +422,25 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     auto ob_camera_parameters = pipeline.getCameraParam();
     auto ob_calibration_parameters = pipeline.getCalibrationParam(ob_config);
 
-    // the xy_table converts depths at certain indices to
-    uint32_t xy_table_size = depth_width * depth_height * 2;
-    std::vector<float> xy_table_data(xy_table_size);
-    OBXYTables ob_xy_tables{};
-    if (device_config.conversion_mode ==
-        OrbbecDeviceConfiguration::PointConversionMode::Custom) {
-      pc::logger()->trace("Initialising transformation tables");
-      bool table_init =
-          ob::CoordinateTransformHelper::transformationInitXYTables(
-              ob_calibration_parameters, OB_SENSOR_DEPTH, xy_table_data.data(),
-              &xy_table_size, &ob_xy_tables);
-      if (!table_init) {
-        pc::logger()->error("Failed to initialise XY transformation tables. "
-                            "Switching to OrbbecSDK conversion.");
-        // TODO is this thread safe? or a race condition
-        device_config.conversion_mode =
-            OrbbecDeviceConfiguration::PointConversionMode::OrbbecSDK;
-      }
-    }
+    // // the xy_table converts depths at certain indices to
+    // uint32_t xy_table_size = depth_width * depth_height * 2;
+    // std::vector<float> xy_table_data(xy_table_size);
+    // OBXYTables ob_xy_tables{};
+    // if (device_config.conversion_mode ==
+    //     OrbbecDeviceConfiguration::PointConversionMode::Custom) {
+    //   pc::logger()->trace("Initialising transformation tables");
+    //   bool table_init =
+    //       ob::CoordinateTransformHelper::transformationInitXYTables(
+    //           ob_calibration_parameters, OB_SENSOR_DEPTH,
+    //           xy_table_data.data(), &xy_table_size, &ob_xy_tables);
+    //   if (!table_init) {
+    //     pc::logger()->error("Failed to initialise XY transformation tables. "
+    //                         "Switching to OrbbecSDK conversion.");
+    //     // TODO is this thread safe? or a race condition
+    //     device_config.conversion_mode =
+    //         OrbbecDeviceConfiguration::PointConversionMode::OrbbecSDK;
+    //   }
+    // }
 
     ob::PointCloudFilter point_cloud_filter;
     point_cloud_filter.setCameraParam(ob_camera_parameters);
@@ -452,8 +448,32 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     // TODO: query actual depth unit scale from device
     constexpr float depth_position_scale = 1.0f;
     point_cloud_filter.setPositionDataScaled(depth_position_scale);
-
     point_cloud_filter.setCreatePointFormat(OB_FORMAT_RGB_POINT);
+
+    // create instances to the available backend plugins to transform our
+    // point-cloud with
+
+    using Corrade::Containers::Pointer;
+    using Corrade::PluginManager::LoadState;
+
+    Pointer<backend::BackendPlugin> cpu_backend;
+    Pointer<backend::BackendPlugin> cuda_backend;
+
+    auto &backend_manager = _workspace->backend_plugin_manager;
+
+    for (const auto &plugin : backend_manager->pluginList()) {
+      if (backend_manager->loadState(plugin) & LoadState::NotLoaded) continue;
+      if (plugin == "CpuBackend") {
+        cpu_backend = backend_manager->instantiate(plugin);
+        pc::logger()->trace("OrbbecDevice created CPU backend");
+        continue;
+      }
+      if (plugin == "CudaBackend") {
+        cuda_backend = backend_manager->instantiate(plugin);
+        pc::logger()->trace("OrbbecDevice created CUDA backend");
+        continue;
+      }
+    }
 
     pc::logger()->trace("Starting process loop for OrbbecDevice {}",
                         device_config.id);
@@ -479,9 +499,10 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
         ProfilingZone receive_frame_zone("OrbbecDevice::receive_frame");
         receive_frame_zone.text(device_config.id);
 
-        const uint32_t width = colour_frame->width();
-        const uint32_t height = colour_frame->height();
-        const size_t point_count = static_cast<size_t>(width) * height;
+        const auto frame_width = colour_frame->width();
+        const auto frame_height = colour_frame->height();
+        const auto point_count =
+            static_cast<size_t>(frame_width * frame_height);
 
         thread_local static PointCloud point_cloud;
         point_cloud.resize(point_count);
@@ -491,9 +512,70 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
         const auto *ob_color_frame_ptr =
             reinterpret_cast<const color_rgb *>(colour_frame->getData());
 
-        pc::devices::orbbec::transform(ob_depth_frame_ptr, ob_color_frame_ptr,
-                                       point_cloud, device_config,
-                                       ob_calibration_parameters);
+        std::span ob_depth_data{ob_depth_frame_ptr, point_count};
+        std::span ob_color_data{ob_color_frame_ptr, point_count};
+
+        // we need the colour intrinsic to transform the depth point to colour
+        // space
+        const auto color_intrinsic =
+            ob_calibration_parameters.intrinsics[OB_SENSOR_COLOR];
+
+        // we dont need an extrinsic for the 2d->3d conversion because frame
+        // alignment has already been performed within orbbec sdk
+        constexpr static OBExtrinsic identity_extrinsic{
+            {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f},
+            {0.0f, 0.0f, 0.0f},
+        };
+
+        // this is the function that does conversion from 2d orbbec frame data
+        // into our pointcaster cloud type in 3d space. it's passed into our
+        // transform function to run in parallel using the selected backend
+        const auto ob_to_point = [&](int i) -> backend::PointType {
+          const auto ob_depth = ob_depth_data[i];
+          const auto ob_color = ob_color_data[i];
+
+          const auto x = i % frame_width;
+          const auto y = i / frame_height;
+
+          OBPoint3f result;
+          ob::CoordinateTransformHelper::transformation2dto3d(
+              OBPoint2f(x, y), ob_depth, color_intrinsic, identity_extrinsic,
+              &result);
+
+          return {position{.x = static_cast<int16_t>(result.x),
+                           .y = -static_cast<int16_t>(result.y),
+                           .z = -static_cast<int16_t>(result.z)},
+                  color{.r = static_cast<uint8_t>(ob_color.r),
+                        .g = static_cast<uint8_t>(ob_color.g),
+                        .b = static_cast<uint8_t>(ob_color.b)}};
+        };
+
+        bool valid_backend = false;
+
+        switch (device_config.transform.backend.value()) {
+        case TransformConfiguration::BackendType::CUDA: {
+          if (cuda_backend) {
+            cuda_backend->transform_point_cloud(device_config.transform,
+                                                point_cloud, ob_to_point);
+            valid_backend = true;
+          }
+          break;
+        }
+        case TransformConfiguration::BackendType::CPU:
+        default: {
+          if (cpu_backend) {
+            cpu_backend->transform_point_cloud(device_config.transform,
+                                               point_cloud, ob_to_point);
+            valid_backend = true;
+          }
+          break;
+        }
+        }
+
+        if (!valid_backend) {
+          pc::logger()->warn(
+              "Selected backend for OrbbecDevice could not be loaded");
+        }
 
         bool success = _frame_buffer.try_enqueue(point_cloud);
         if (success) {
@@ -502,12 +584,13 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
           notify_point_cloud_updated();
         } else {
           pc::logger()->trace("Dropped frame from "
-                             "OrbbecDevice '{}' (ip: {})",
-                             device_config.id,
-                             device_config.network.ip_address.value());
+                              "OrbbecDevice '{}' (ip: {})",
+                              device_config.id,
+                              device_config.network.ip_address.value());
         }
       }
     }
+
   } catch (const std::exception &e) {
     pc::logger()->error("Exception in Orbbec processing thread: {}", e.what());
     set_error_state(true);

@@ -5,8 +5,18 @@
 #include <Corrade/Containers/String.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
+#include <config/transform_config.h>
+#include <cpplocate/cpplocate.h>
+#include <filesystem>
+#include <functional>
+#include <pointcaster/core_types.h>
+#include <pointcaster/point_cloud.h>
+#include <tuple>
 
 namespace pc::backend {
+
+using PointType = std::tuple<position, color>;
+using PointGeneratorFunction = std::function<PointType(const int)>;
 
 class BackendPlugin : public Corrade::PluginManager::AbstractPlugin {
 public:
@@ -57,7 +67,12 @@ public:
                          Corrade::Containers::StringView plugin)
       : Corrade::PluginManager::AbstractPlugin{manager, plugin} {}
 
-  virtual ~DevicePlugin() = default;
+  virtual ~BackendPlugin() = default;
+
+  virtual void
+  transform_point_cloud(const TransformConfiguration &transform,
+                        PointCloud &output_cloud,
+                        const PointGeneratorFunction &generate_point) = 0;
 };
 
 } // namespace pc::backend

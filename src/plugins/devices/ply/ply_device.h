@@ -32,7 +32,7 @@ public:
   PlyDevice(PlyDevice &&) = delete;
   PlyDevice &operator=(PlyDevice &&) = delete;
 
-  void init() override;
+  void init(Workspace &workspace) override;
 
   DeviceStatus status() const override { return _status; };
 
@@ -59,9 +59,12 @@ private:
   // std::vector<LLFIO_V2_NAMESPACE::directory_entry> _sequence_file_entries;
 
   // // _sequence_file_handles is the cache of open file handles for a
-  // // wanted subset of the files contained in the sequence. the objects in this
-  // // collection are handles to memory mapped files, so they may be loaded in RAM
-  // // upon access or they may need to read from disk first depending on current
+  // // wanted subset of the files contained in the sequence. the objects in
+  // this
+  // // collection are handles to memory mapped files, so they may be loaded in
+  // RAM
+  // // upon access or they may need to read from disk first depending on
+  // current
   // // pressure as determined by the kernel
   // std::vector<LLFIO_V2_NAMESPACE::file_handle> _sequence_file_handles;
 

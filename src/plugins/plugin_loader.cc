@@ -1,4 +1,6 @@
 #include "plugin_loader.h"
+#include "backend/cpu/cpu_backend.h"
+#include "backend/cuda/cuda_backend.h"
 #include "devices/device_plugin.h"
 #include "devices/null/null_device.h"
 
@@ -7,8 +9,10 @@
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/Manager.h>
 #include <core/logger/logger.h>
+#include <mutex>
 #include <print>
 #include <string>
+#include <thread>
 #include <vector>
 
 #ifdef _WIN32
@@ -18,8 +22,12 @@
 
 // import static macros need to be used in global namespace
 static void import_static_plugins() {
-  CORRADE_PLUGIN_IMPORT(NullDevice)
-  CORRADE_PLUGIN_IMPORT(PlyDevice)
+  static std::once_flag imported_flag;
+  std::call_once(imported_flag, [] {
+    CORRADE_PLUGIN_IMPORT(CpuBackend)
+    CORRADE_PLUGIN_IMPORT(NullDevice)
+    CORRADE_PLUGIN_IMPORT(PlyDevice)
+  });
 }
 
 namespace pc::plugins {
@@ -27,8 +35,9 @@ namespace pc::plugins {
 using namespace Corrade::PluginManager;
 using namespace Corrade::Containers;
 
-#ifdef _WIN32
 namespace {
+
+#ifdef _WIN32
 
 std::filesystem::path executable_directory_path() {
   wchar_t module_file_path[MAX_PATH];
@@ -59,18 +68,25 @@ void configure_search_paths(
   }
 }
 
-} // namespace
 #endif // _WIN32
+
+void configure_plugin_search_path() {
+#ifdef _WIN32
+  static std::once_flag configured_flag;
+  std::call_once(configured_flag, [] {
+    const auto plugin_root_directory = default_plugin_root_directory();
+    configure_search_paths(plugin_root_directory);
+  });
+#endif
+}
+
+} // namespace
 
 std::unique_ptr<Manager<devices::DevicePlugin>>
 load_device_plugins(pc::Workspace &workspace) {
 
-#ifdef _WIN32
-  const auto plugin_root_directory = default_plugin_root_directory();
-  configure_search_paths(plugin_root_directory);
-#endif
-
   import_static_plugins();
+  configure_plugin_search_path();
 
   auto device_plugin_manager =
       std::make_unique<Manager<devices::DevicePlugin>>();
@@ -84,7 +100,7 @@ load_device_plugins(pc::Workspace &workspace) {
 
       if (plugin_name == "NullDevice") continue;
 
-      pc::logger()->info("Loaded plugin '{}'", std::string(plugin_name));
+      pc::logger()->info("Loaded device plugin '{}'", std::string(plugin_name));
 
       // create an instance of the plugin that handles device discovery and
       // other static single plugin context things...
@@ -93,8 +109,7 @@ load_device_plugins(pc::Workspace &workspace) {
                             std::string(plugin_name));
         Corrade::Containers::Pointer<devices::DevicePlugin> discovery_instance;
         try {
-          discovery_instance =
-              device_plugin_manager->instantiate(plugin_name);
+          discovery_instance = device_plugin_manager->instantiate(plugin_name);
         } catch (...) {
           pc::logger()->error(
               "{} discovery instance failed to instantiate (unknown exception)",
@@ -125,6 +140,29 @@ bool is_loaded(Manager<devices::DevicePlugin> &device_plugin_manager,
                std::string_view plugin_name) {
   return bool(device_plugin_manager.loadState(plugin_name.data()) &
               LoadState::Loaded);
+}
+
+std::unique_ptr<Corrade::PluginManager::Manager<backend::BackendPlugin>>
+load_backend_plugins(Workspace &workspace) {
+
+  import_static_plugins();
+  configure_plugin_search_path();
+
+  auto backend_plugin_manager =
+      std::make_unique<Manager<backend::BackendPlugin>>();
+
+  workspace.loaded_backend_plugin_names.clear();
+
+  for (StringView plugin_name : backend_plugin_manager->pluginList()) {
+    const auto plugin_status = backend_plugin_manager->load(plugin_name);
+    if (plugin_status & LoadState::Loaded) {
+      workspace.loaded_backend_plugin_names.push_back(plugin_name);
+      pc::logger()->info("Loaded backend plugin '{}'",
+                         std::string(plugin_name));
+    }
+  }
+
+  return backend_plugin_manager;
 }
 
 } // namespace pc::plugins

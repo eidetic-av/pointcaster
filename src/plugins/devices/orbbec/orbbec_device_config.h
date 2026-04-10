@@ -44,8 +44,6 @@ struct OrbbecDeviceConfiguration {
 
   rfl::Skip<int> fps; // @disabled
 
-  int decimation = 1; // @minmax(1, 8)
-
   NetworkConfiguration network;
 
   TransformConfiguration transform;

@@ -31,6 +31,7 @@ target_include_directories(PlyDevice
     ${LLFIO_INCLUDE_DIRS}
 )
 
+# remove the installed directory because its static, we don't need it
 install(CODE [===[
   file(REMOVE_RECURSE "${CMAKE_INSTALL_PREFIX}/PlyDevice/")
 ]===])

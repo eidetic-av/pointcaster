@@ -18,12 +18,12 @@ namespace pc::devices {
 
 using pc::profiling::ProfilingZone;
 
-void PlyDevice::init() {
+void PlyDevice::init(Workspace &workspace) {
   auto &config = std::get<PlyDeviceConfiguration>(_config);
   if (config.active) {
-    if (!config.file.file_path.empty())
-      load_file(config.file.file_path);
+    if (!config.file.file_path.empty()) load_file(config.file.file_path);
   }
+  _workspace = &workspace;
 }
 
 const PointCloud &PlyDevice::point_cloud() {
@@ -42,8 +42,7 @@ void PlyDevice::on_config_field_changed(std::string_view) {
   if (config.file.file_path != _loaded_file_path) {
     if (load_file(config.file.file_path)) {
       _loaded_file_path = config.file.file_path;
-      pc::logger()->info("Loaded PLY file from '{}'",
-                         config.file.file_path);
+      pc::logger()->info("Loaded PLY file from '{}'", config.file.file_path);
     } else {
       // revert the saved file-path if we failed to load the file
       pc::logger()->error("Failed to load PLY file from '{}'",
@@ -80,7 +79,8 @@ bool PlyDevice::load_file(std::string_view url) {
   //     pc::logger()->debug("constructing directory_handle to '{}'...",
   //                         directory_path);
 
-  //     llfio::directory_handle dh = llfio::directory({}, directory_path).value();
+  //     llfio::directory_handle dh = llfio::directory({},
+  //     directory_path).value();
 
   //     pc::logger()->debug("constructed");
 
@@ -122,7 +122,8 @@ bool PlyDevice::load_file(std::string_view url) {
   //       // i think _sequence_files type must be a structure that contains the
   //       // file_mapping as well as the istream needed to construct a PLYData
   //       // into memory as per this answer constructing the imemstream
-  //       // https://stackoverflow.com/questions/10839747/istream-vs-memory-mapping-a-file
+  //       //
+  //       https://stackoverflow.com/questions/10839747/istream-vs-memory-mapping-a-file
   //       // but i feel like it might not work with binary (only ascii ply, we
   //       // will see) OR a member function OR free util function that does the
   //       // conversion from file_handle -> stream interface -> ply data,
@@ -132,15 +133,19 @@ bool PlyDevice::load_file(std::string_view url) {
   //       // happly::PLYData()
   //       // }
 
-  //       // TODO atm this actually returns an exception for: too many open files
-  //       // so i actually DO need to stream the file_handle into the ring buffer,
-  //       // not just the point cloud in the ring buffer and keep all file handles
+  //       // TODO atm this actually returns an exception for: too many open
+  //       files
+  //       // so i actually DO need to stream the file_handle into the ring
+  //       buffer,
+  //       // not just the point cloud in the ring buffer and keep all file
+  //       handles
   //       // in memory, caust it seems like thats actually not possible
 
   //       std::cout << "about to load " << entry.leafname << "\n";
   //       _sequence_file_entries.push_back(std::move(entry));
 
-  //       // llfio::file(dh, entry.leafname, llfio::file_handle::mode::attr_read)
+  //       // llfio::file(dh, entry.leafname,
+  //       llfio::file_handle::mode::attr_read)
   //       //     .value();
   //       pc::logger()->debug("afterwards...");
 
@@ -198,8 +203,9 @@ bool PlyDevice::load_file(std::string_view url) {
   //   z_values = ply_in->getElement(vertex).getProperty<float>("z");
 
   //   r_values = ply_in->getElement(vertex).getProperty<unsigned char>("red");
-  //   g_values = ply_in->getElement(vertex).getProperty<unsigned char>("green");
-  //   b_values = ply_in->getElement(vertex).getProperty<unsigned char>("blue");
+  //   g_values = ply_in->getElement(vertex).getProperty<unsigned
+  //   char>("green"); b_values =
+  //   ply_in->getElement(vertex).getProperty<unsigned char>("blue");
 
   //   point_count = x_values.size();
   //   cloud.positions.resize(point_count);

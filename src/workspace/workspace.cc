@@ -52,7 +52,8 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   // start recording metrics
   metrics::PrometheusServer::initialise();
 
-  // find and initialise device plugins
+  // find and initialise plugins
+  backend_plugin_manager = plugins::load_backend_plugins(*this);
   device_plugin_manager = plugins::load_device_plugins(*this);
 
   // instantiate device plugins for the initial config
@@ -185,9 +186,9 @@ void Workspace::sync_devices() {
         device_plugin->update_config(device_variant);
       }
     }
-    if (new_device_instance) { 
+    if (new_device_instance) {
       pc::logger()->trace("Running init() for new device_plugin");
-      device_plugin->init();
+      device_plugin->init(*this);
     }
     new_devices.push_back(std::move(device_plugin));
   }

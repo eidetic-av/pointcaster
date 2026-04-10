@@ -1,5 +1,8 @@
 #include "cuda_backend.h"
+#include <Corrade/PluginManager/AbstractManager.h>
+#include <Corrade/PluginManager/AbstractPlugin.h>
 #include <core/logger/logger.h>
+
 
 namespace pc::backend {
 
@@ -13,4 +16,13 @@ CudaBackend::~CudaBackend() {
   pc::logger()->trace("Destroyed CUDA backend");
 };
 
+void CudaBackend::transform_point_cloud(
+    const TransformConfiguration &transform, PointCloud &output_cloud,
+    const PointGeneratorFunction &generate_point) {
+  pc::logger()->debug("Should transform using CUDA");
+};
+
 } // namespace pc::backend
+
+CORRADE_PLUGIN_REGISTER(CudaBackend, pc::backend::CudaBackend,
+                        "net.pointcaster.BackendPlugin/1.0")

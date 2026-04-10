@@ -22,12 +22,13 @@ set(DEVICES_PLUGIN_DIR "plugins/devices")
 set(BACKEND_PLUGIN_DIR "plugins/backend")
 
 # - static plugins
+add_subdirectory(backend/cpu)
 add_subdirectory(devices/null)
 add_subdirectory(devices/ply)
 
 # - dynamic plugins
-add_subdirectory(devices/orbbec)
 add_subdirectory(backend/cuda)
+add_subdirectory(devices/orbbec)
 
 
 # the $CORRADE_PLUGINS and $CORRADE_STATIC_PLUGINS lists should 

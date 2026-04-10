@@ -15,6 +15,10 @@
 #include <pointcaster/point_cloud.h>
 #include <string>
 
+namespace pc {
+class Workspace;
+}
+
 namespace pc::devices {
 
 struct DiscoveredDevice {
@@ -80,7 +84,7 @@ public:
 
   virtual ~DevicePlugin() = default;
 
-  virtual void init() {};
+  virtual void init(Workspace &workspace) = 0;
 
   void set_is_discovery_instance(bool v) { _is_discovery_instance = v; }
   bool is_discovery_instance() { return _is_discovery_instance; };
@@ -129,6 +133,7 @@ public:
   }
 
 protected:
+  Workspace *_workspace;
   DeviceConfigurationVariant _config;
   std::function<void(DeviceStatus)> _status_callback;
   std::function<void()> _point_cloud_updated_callback;

@@ -41,7 +41,7 @@ public:
   OrbbecDevice(OrbbecDevice &&) = delete;
   OrbbecDevice &operator=(OrbbecDevice &&) = delete;
 
-  void init() override;
+  void init(Workspace &workspace) override;
 
   std::vector<DiscoveredDevice> discovered_devices() const override;
   void refresh_discovery() override;
