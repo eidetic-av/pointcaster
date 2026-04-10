@@ -1,4 +1,37 @@
+# Corrade doesn't play nice with nvcc so we have an nvcc-compiled 
+# library that contains the actual CUDA translation units, and also
+# the corrade plugin that links to that CUDA lib and is loaded at
+# runtime
+
+enable_language(CUDA)
+set(CMAKE_CUDA_STANDARD 20)
+
 set(CUDA_PLUGIN_DIR ${BACKEND_PLUGIN_DIR}/cuda)
+
+add_library(cuda_kernels
+  cuda_kernels.cu
+)
+
+set_target_properties(cuda_kernels PROPERTIES
+  AUTOMOC OFF
+  CUDA_SEPARABLE_COMPILATION ON
+  CUDA_RESOLVE_DEVICE_SYMBOLS ON
+  CUDA_PROPAGATE_HOST_FLAGS OFF
+  # CUDA_ARCHITECTURES "75-real;86-real;89-real;89-virtual"
+  CUDA_ARCHITECTURES "75-virtual"
+)
+
+if (WIN32)
+  target_compile_options(cuda_kernels PRIVATE 
+    /bigobj /utf-8 -forward-slash-prefix-opts)
+endif()
+
+# allow extra lambda features
+target_compile_options(cuda_kernels PRIVATE --extended-lambda)
+
+# these turn off noisy compiler output from dependencies
+target_compile_options(cuda_kernels PRIVATE 
+  --diag-suppress 20012,20013,20014,20015,27,1394,221)
 
 corrade_add_plugin(CudaBackend
   ${CUDA_PLUGIN_DIR}
@@ -16,18 +49,31 @@ set_target_properties(CudaBackend PROPERTIES
   AUTOMOC OFF
 )
 
+find_package(Corrade CONFIG REQUIRED Main PluginManager)
+
 find_package(CUDAToolkit REQUIRED)
 
 find_package(Thrust REQUIRED CONFIG)
 thrust_create_target(Thrust)
 
-target_link_libraries(CudaBackend PRIVATE
-  pointcaster::core
-  pointcaster::metrics
+target_link_libraries(cuda_kernels PRIVATE
   Corrade::PluginManager
   CUDA::cudart_static 
   CUDA::cuda_driver
   Thrust::Thrust
+)
+
+target_link_libraries(CudaBackend PRIVATE
+  cuda_kernels
+  pointcaster::core
+  pointcaster::metrics
+  Corrade::PluginManager
+)
+
+target_include_directories(cuda_kernels 
+  PRIVATE 
+    "${CMAKE_SOURCE_DIR}/src" 
+    "${CMAKE_SOURCE_DIR}/include"
 )
 
 target_include_directories(CudaBackend 
@@ -62,4 +108,9 @@ target_precompile_headers(CudaBackend PRIVATE
   <Corrade/Containers/String.h>
   <Corrade/Containers/StringView.h>
   <Corrade/PluginManager/AbstractPlugin.h>
+  <config/transform_config.h>
+  <cpplocate/cpplocate.h>
+  <filesystem>
+  <functional>
+  <tuple>
 )
