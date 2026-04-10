@@ -422,26 +422,6 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     auto ob_camera_parameters = pipeline.getCameraParam();
     auto ob_calibration_parameters = pipeline.getCalibrationParam(ob_config);
 
-    // // the xy_table converts depths at certain indices to
-    // uint32_t xy_table_size = depth_width * depth_height * 2;
-    // std::vector<float> xy_table_data(xy_table_size);
-    // OBXYTables ob_xy_tables{};
-    // if (device_config.conversion_mode ==
-    //     OrbbecDeviceConfiguration::PointConversionMode::Custom) {
-    //   pc::logger()->trace("Initialising transformation tables");
-    //   bool table_init =
-    //       ob::CoordinateTransformHelper::transformationInitXYTables(
-    //           ob_calibration_parameters, OB_SENSOR_DEPTH,
-    //           xy_table_data.data(), &xy_table_size, &ob_xy_tables);
-    //   if (!table_init) {
-    //     pc::logger()->error("Failed to initialise XY transformation tables. "
-    //                         "Switching to OrbbecSDK conversion.");
-    //     // TODO is this thread safe? or a race condition
-    //     device_config.conversion_mode =
-    //         OrbbecDeviceConfiguration::PointConversionMode::OrbbecSDK;
-    //   }
-    // }
-
     ob::PointCloudFilter point_cloud_filter;
     point_cloud_filter.setCameraParam(ob_camera_parameters);
 
