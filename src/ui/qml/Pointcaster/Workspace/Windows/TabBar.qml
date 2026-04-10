@@ -8,7 +8,7 @@ KDDW.TabBarBase {
     id: root
 
     readonly property real tabBarTextPixelSize: Math.round(14 * Scaling.uiScale)
-    readonly property real tabBarVerticalPadding: Math.round(8 * Scaling.uiScale)
+    readonly property real tabBarVerticalPadding: Math.round(7 * Scaling.uiScale)
     readonly property real tabBarHorizontalPadding: Math.round(10 * Scaling.uiScale)
     height: tabBarTextPixelSize + tabBarVerticalPadding * 2
     implicitHeight: height
