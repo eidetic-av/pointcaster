@@ -5,3 +5,5 @@ compile_commands.json
 .cache
 *.gen.h
 .qmlls*
+.vs
+Log/
