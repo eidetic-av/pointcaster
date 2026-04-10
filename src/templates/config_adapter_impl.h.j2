@@ -178,7 +178,11 @@ public:
     Q_INVOKABLE bool {{ m.name }}() const { return m_config.{{ m.name }}; }
     Q_INVOKABLE void set_{{ m.name }}(bool value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
 {% elif m.is_enum %}
-    Q_INVOKABLE int {{ m.name }}() const { return int(m_config.{{ m.name }}); }
+    {% if "rfl::" in m.type %}
+    Q_INVOKABLE int {{ m.name }}() const { return static_cast<int>(m_config.{{ m.name }}.value()); }
+    {% else %}
+    Q_INVOKABLE int {{ m.name }}() const { return static_cast<int>(m_config.{{ m.name }}); }
+    {% endif %}
     Q_INVOKABLE void set_{{ m.name }}(int value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
 {% elif is_float3_type(m.type) %}
     Q_INVOKABLE QVector3D {{ m.name }}() const {
@@ -253,7 +257,11 @@ public:
             return QVariant(QString::fromStdString(m_config.{{ m.name }}));
 {% elif m.is_enum %}
         if (path == QStringLiteral("{{ m.name }}"))
-            return QVariant(int(m_config.{{ m.name }}));
+    {% if "rfl::" in m.type %}
+            return QVariant(static_cast<int>(m_config.{{ m.name }}.value()));
+    {% else %}
+            return QVariant(static_cast<int>(m_config.{{ m.name }}));
+    {% endif %}
 {% elif is_float3_type(m.type) %}
         if (path == QStringLiteral("{{ m.name }}")) {
             const auto &v = m_config.{{ m.name }};
@@ -352,6 +360,21 @@ public:
             emit {{ m.name }}Changed();
             notifyFieldChanged(QStringLiteral("{{ m.name }}"));
             return true;
+{% elif m.is_enum %}
+            const int newValueInt = value.toInt();
+            const auto newValue = static_cast<{{ m.enum_qualified_type }}>(newValueInt);
+            {% if "rfl::" in m.type %}
+            if (m_config.{{ m.name }}.value() == newValue)
+                return false;
+            m_config.{{ m.name }}.set(newValue);
+            {% else %}
+            if (m_config.{{ m.name }} == newValue)
+                return false;
+            m_config.{{ m.name }} = newValue;
+            {% endif %}
+            emit {{ m.name }}Changed();
+            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+            return true;
 {% elif "rfl::" in m.type %}
     {% if "std::string" in m.type %}
             const std::string newValue = value.toString().toStdString();
@@ -363,15 +386,6 @@ public:
             if (m_config.{{ m.name }}.value() == newValue)
                 return false;
             m_config.{{ m.name }}.set(newValue);
-            emit {{ m.name }}Changed();
-            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
-            return true;
-{% elif m.is_enum %}
-            const int newValueInt = value.toInt();
-            const auto newValue = static_cast<{{ m.enum_qualified_type }}>(newValueInt);
-            if (m_config.{{ m.name }} == newValue)
-                return false;
-            m_config.{{ m.name }} = newValue;
             emit {{ m.name }}Changed();
             notifyFieldChanged(QStringLiteral("{{ m.name }}"));
             return true;

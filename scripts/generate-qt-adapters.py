@@ -385,8 +385,8 @@ def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[
     members: list[Member] = []
 
     for raw_type, raw_name, init_eq, init_brace, raw_comment in MEMBER_RE.findall(members_body):
-        raw_type = raw_type.strip()
         raw_name = raw_name.strip()
+        raw_type = raw_type.strip()
 
         if is_float3_type(raw_type):
             needs_qvector3d = True
@@ -401,9 +401,15 @@ def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[
         comment = raw_comment.strip() if raw_comment else ""
         minmax_match = MINMAX_RE.search(comment)
 
-        is_enum = raw_type in nested_enums
-        enum_entries = nested_enums.get(raw_type, [])
-        enum_qualified_type = f"{struct_name}::{raw_type}" if is_enum else ""
+        # handle custom enums
+        enum_type = raw_type
+        if "rfl::" in enum_type:
+            enum_type = re.findall(r"<(.*?)>", enum_type)[0].strip()
+        if f"{struct_name}::" in enum_type:
+            enum_type = enum_type.replace(f"{struct_name}::", "").strip()
+        is_enum = enum_type in nested_enums
+        enum_entries = nested_enums.get(enum_type, [])
+        enum_qualified_type = f"{struct_name}::{enum_type}" if is_enum else ""
 
         members.append(
             Member(
