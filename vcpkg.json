@@ -4,6 +4,7 @@
 	"builtin-baseline": "6f932b9730b65d28cba7dca7326dca4d3247d305",
 	"dependencies": [
 		"boost-interprocess",
+		"bshoshany-thread-pool",
 		"corrade",
 		"concurrentqueue",
 		"readerwriterqueue",

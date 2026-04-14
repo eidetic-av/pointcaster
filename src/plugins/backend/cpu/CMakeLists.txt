@@ -17,10 +17,13 @@ target_link_libraries(CpuBackend PRIVATE
   TBB::tbb
 )
 
+find_path(BSHOSHANY_THREAD_POOL_INCLUDE_DIRS "BS_thread_pool.hpp")
+
 target_include_directories(CpuBackend 
   PRIVATE 
     "${CMAKE_SOURCE_DIR}/src" 
     "${CMAKE_SOURCE_DIR}/include"
+    ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS}
 )
 
 # remove the installed directory because its static, we don't need it
