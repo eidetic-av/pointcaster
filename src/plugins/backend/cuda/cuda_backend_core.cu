@@ -2,6 +2,7 @@
 
 #include "../backend_utils.h"
 
+#include <config/transform_config.h>
 #include <mutex>
 #include <pointcaster/core_types.h>
 #include <profiling/profiling_zone.h>
@@ -55,7 +56,9 @@ namespace pc::backend::cuda {
 
 struct ProjectAndTransform {
 
-  CameraIntrinsics camera_intrinsics;
+  CameraIntrinsics color_intrinsics;
+
+  pc::float3 translation;
 
   using OutputPointT = thrust::tuple<position, color>;
   using InputPixelT = thrust::tuple<uint16_t, color_rgb, int>;
@@ -64,14 +67,17 @@ struct ProjectAndTransform {
     const uint16_t depth = thrust::get<0>(input);
     const color_rgb rgb = thrust::get<1>(input);
     const int i = thrust::get<2>(input);
-    const auto &frame_width = camera_intrinsics.frame_width;
+    const auto &frame_width = color_intrinsics.frame_width;
 
     const auto px = i % frame_width;
     const auto py = i / frame_width;
 
-    // auto pos = util::project_2d_to_3d(px, py, depth, camera_intrinsics);
-    position pos{static_cast<int16_t>(px), static_cast<int16_t>(py),
-                 static_cast<int16_t>(depth)};
+    auto pos = util::project_2d_to_3d(px, py, depth, color_intrinsics);
+    // position pos{static_cast<int16_t>(px), static_cast<int16_t>(py),
+    //              static_cast<int16_t>(depth)};
+    pos.x += translation.x;
+    pos.y += translation.y;
+    pos.z += translation.z;
 
     color col{rgb.r, rgb.g, rgb.b};
 
@@ -107,7 +113,8 @@ void project_transform_frame_data(void *owner,
                                   UShortDepthData input_depth_frame,
                                   RgbColorData input_rgb_frame,
                                   std::shared_ptr<PointCloud> output_cloud,
-                                  const CameraIntrinsics &camera_intrinsics,
+                                  const CameraIntrinsics &color_intrinsics,
+                                  const TransformConfiguration &transform,
                                   std::span<std::byte> render_output) {
 
   DeviceTransformMemory *device_memory;
@@ -145,6 +152,12 @@ void project_transform_frame_data(void *owner,
       thrust::make_tuple(device_memory->output_positions.begin(),
                          device_memory->output_colors.begin()));
 
+  // the transformation config:
+  // convert metres to milimetres for point-cloud space
+  const pc::float3 translation{transform.position.x * 1000,
+                               transform.position.y * 1000,
+                               transform.position.z * 1000};
+
   {
     ProfilingZone transform_zone("CudaBackend::transform");
 
@@ -152,7 +165,7 @@ void project_transform_frame_data(void *owner,
 
     thrust::transform(thrust::cuda::par, frame_data_input_begin,
                       frame_data_input_end, output_points_begin,
-                      ProjectAndTransform{camera_intrinsics});
+                      ProjectAndTransform{color_intrinsics, translation});
 
     if (output_render_buffer) {
       thrust::for_each(

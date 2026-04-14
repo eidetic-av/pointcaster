@@ -405,7 +405,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     auto ob_camera_parameters = pipeline.getCameraParam();
     auto ob_calibration_parameters = pipeline.getCalibrationParam(ob_config);
 
-    backend::CameraIntrinsics camera_intrinsics;
+    backend::CameraIntrinsics color_intrinsics;
     size_t max_point_count;
 
     if (device_config.conversion_mode ==
@@ -415,7 +415,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       const auto ob_color_intrinsics =
           ob_calibration_parameters.intrinsics[OB_SENSOR_COLOR];
 
-      camera_intrinsics = backend::util::make_camera_intrinsics(
+      color_intrinsics = backend::util::make_camera_intrinsics(
           ob_color_intrinsics.fx, ob_color_intrinsics.fy,
           ob_color_intrinsics.cx, ob_color_intrinsics.cy, colour_width);
 
@@ -482,7 +482,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
       _process_tasks_in_flight.fetch_add(1);
       pc::backend::CpuBackend::thread_pool.detach_task(
-          [this, &camera_intrinsics, &cuda_backend, &cpu_backend,
+          [this, &color_intrinsics, &cuda_backend, &cpu_backend,
            colour_frame = std::move(colour_frame),
            depth_frame = std::move(depth_frame), device_config = device_config,
            max_point_count = max_point_count]() {
@@ -522,13 +522,13 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                   cuda_backend) {
                 cuda_backend->project_transform_frame_data(
                     ob_depth_data, ob_color_data, point_cloud,
-                    camera_intrinsics, render_span);
+                    color_intrinsics, device_config.transform, render_span);
               } else if (device_config.transform.backend.value() ==
                              TransformConfiguration::BackendType::CPU &&
                          cpu_backend) {
                 cpu_backend->project_transform_frame_data(
                     ob_depth_data, ob_color_data, point_cloud,
-                    camera_intrinsics, render_span);
+                    color_intrinsics, device_config.transform, render_span);
               }
             }
 
