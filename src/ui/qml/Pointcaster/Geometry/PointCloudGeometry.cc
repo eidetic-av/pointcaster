@@ -2,11 +2,12 @@
 #include <QVector3D>
 #include <QtConcurrent>
 #include <algorithm>
-#include <cmath>
 #include <core/logger/logger.h>
 #include <core/profiling/profiling_zone.h>
+#include <cstring>
 #include <execution>
 #include <ranges>
+
 
 using pc::profiling::ProfilingZone;
 
@@ -23,12 +24,8 @@ PointCloudGeometry::PointCloudGeometry() : QQuick3DGeometry() {
               queued = _queuedCloud;
               _queuedCloud = nullptr;
             }
-
             applyVertexData(_conversionWatcher.result(), converted);
             _conversionInFlight.store(false);
-
-            // if newer data arrived while we were converting, immediately
-            // kick off another conversion with the latest cloud
             if (queued && queued != converted) {
               startConversion(queued);
             }
@@ -39,16 +36,12 @@ PointCloudGeometry::PointCloudGeometry() : QQuick3DGeometry() {
 void PointCloudGeometry::updateGeometry() {
   if (!_enabled) return;
   if (!_pointCloudAdapter) return;
-
   const auto inputCloud = _pointCloudAdapter->point_cloud();
-
   if (_conversionInFlight.load()) {
-    // conversion running — stash this as the next one to process
     std::lock_guard lock(_pendingMutex);
     _queuedCloud = inputCloud;
     return;
   }
-
   startConversion(inputCloud);
 }
 
@@ -59,41 +52,30 @@ void PointCloudGeometry::startConversion(std::shared_ptr<PointCloud> cloud) {
     _pendingCloud = cloud;
     _queuedCloud = nullptr;
   }
-
   _conversionWatcher.setFuture(QtConcurrent::run([cloud]() -> QByteArray {
     ProfilingZone zone("PointCloudGeometry::conversion");
 
-    struct FlatVertexData {
-      float x, y, z, _p, r, g, b, a;
-    };
-    constexpr auto vertex_stride = sizeof(FlatVertexData);
-
-    const auto &positions = cloud->positions;
-    const auto &colors = cloud->colors;
-    const auto indices = std::views::iota(0, static_cast<int>(cloud->size()));
-    const auto points = std::views::zip(indices, positions, colors);
+    const auto count = static_cast<int>(cloud->size());
+    constexpr int kPosSize = 8; // position: int16 x,y,z + pad = 8 bytes
+    constexpr int kColSize = 4; // color: uint8 r,g,b,a = 4 bytes
+    constexpr int kStride = kPosSize + kColSize; // 12 bytes per vertex
 
     QByteArray vertexBytes;
-    vertexBytes.resize(vertex_stride * points.size());
-    auto *vertexData = reinterpret_cast<FlatVertexData *>(vertexBytes.data());
+    vertexBytes.resize(kStride * count);
 
-    constexpr auto mm_to_cm = [](int16_t v) -> float {
-      return static_cast<float>(v) / 10.0f;
-    };
-    constexpr auto char_to_norm = [](unsigned char c) -> float {
-      return std::pow(static_cast<float>(c) / 255.0f, 2.2f);
-    };
+    auto *dst = vertexBytes.data();
+    const auto *pos = reinterpret_cast<const char *>(cloud->positions.data());
+    const auto *col = reinterpret_cast<const char *>(cloud->colors.data());
 
-    // TODO this needs a thrust or shader-based path for GPU
-
-    std::for_each(std::execution::par_unseq, points.begin(), points.end(),
-                  [&](const auto &p) {
-                    const auto &[i, pos, col] = p;
-                    vertexData[i] = {mm_to_cm(pos.x),     mm_to_cm(pos.y),
-                                     mm_to_cm(pos.z),     0,
-                                     char_to_norm(col.r), char_to_norm(col.g),
-                                     char_to_norm(col.b), 1};
-                  });
+    // byte interleaving because the qt quick 3d api only accepts a single vertex buffer...
+    // the shader unpacks these into pos and color 
+    auto indices = std::views::iota(0, count);
+    std::for_each(
+        std::execution::par_unseq, indices.begin(), indices.end(), [=](int i) {
+          std::memcpy(dst + i * kStride, pos + i * kPosSize, kPosSize);
+          std::memcpy(dst + i * kStride + kPosSize, col + i * kColSize,
+                      kColSize);
+        });
 
     return vertexBytes;
   }));
@@ -101,20 +83,14 @@ void PointCloudGeometry::startConversion(std::shared_ptr<PointCloud> cloud) {
 
 void PointCloudGeometry::applyVertexData(QByteArray vertexBytes,
                                          std::shared_ptr<PointCloud> cloud) {
-  constexpr auto vertex_stride = sizeof(float) * 8;
-  constexpr auto float4_stride = sizeof(float) * 4;
-
+  clear();
   setVertexData(vertexBytes);
-
-  setStride(vertex_stride);
+  setStride(12);
   setPrimitiveType(QQuick3DGeometry::PrimitiveType::Points);
-
+  // 3 × F32Type = 12 bytes per vertex...
+  // the shader reinterprets the raw bits via floatBitsToInt/floatBitsToUint.
   addAttribute(Attribute::PositionSemantic, 0, Attribute::F32Type);
-  addAttribute(Attribute::ColorSemantic, float4_stride, Attribute::F32Type);
-
-  // TODO calc bounds from position min maxes
-  setBounds(QVector3D(-500, -500, 0), QVector3D(500, 500, 0));
-
+  setBounds(QVector3D(-500, -500, -500), QVector3D(500, 500, 500));
   update();
   _lastPointCloud = cloud;
 }

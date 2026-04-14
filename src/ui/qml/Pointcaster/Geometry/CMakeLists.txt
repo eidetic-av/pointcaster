@@ -6,6 +6,9 @@ qt_add_qml_module(PointcasterGeometry
     SOURCES
         PointCloudGeometry.h
         PointCloudGeometry.cc
+    RESOURCES
+        shaders/point_cloud.vert
+        shaders/point_cloud.frag
 )
 
 target_link_libraries(PointcasterGeometry PRIVATE

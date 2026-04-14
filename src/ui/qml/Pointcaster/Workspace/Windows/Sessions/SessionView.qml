@@ -299,15 +299,10 @@ Item {
                     }
 
                     materials: [
-                        PrincipledMaterial {
-                            lighting: PrincipledMaterial.NoLighting
-                            pointSize: 1
-                            // pointSize: Math.round(2 * Scaling.uiScale)
-                            // TODO this pointSize needs to change based on the distance of the point to the camera...
-                            // we can achieve this with a custom vertex and/or fragment shader
-                            // CustomMaterial {
-                            // vertexShader: "material.vert"
-                            // fragmentShader: "material.frag"
+                        CustomMaterial {
+                            shadingMode: CustomMaterial.Unshaded
+                            vertexShader: "shaders/point_cloud.vert"
+                            fragmentShader: "shaders/point_cloud.frag"
                         }
                     ]
                 }
