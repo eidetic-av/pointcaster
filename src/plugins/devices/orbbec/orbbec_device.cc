@@ -542,8 +542,15 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
               }
               notify_point_cloud_updated();
               set_updated_time(steady_clock::now());
-            }
+
+            _process_tasks_in_flight.fetch_sub(1);
+            _process_tasks_in_flight.notify_all();
           });
+    }
+
+    // wait for detached processing tasks to finish before cleanup
+    while (_process_tasks_in_flight.load() > 0) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
   } catch (const std::exception &e) {

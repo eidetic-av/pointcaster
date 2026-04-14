@@ -145,6 +145,8 @@ protected:
   std::function<void()> _point_cloud_updated_callback;
   bool _is_discovery_instance = false;
 
+  std::atomic<size_t> _process_tasks_in_flight{0};
+
   std::atomic<std::shared_ptr<std::vector<std::byte>>> _latest_render_data;
 };
 
