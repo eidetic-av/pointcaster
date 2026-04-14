@@ -98,6 +98,12 @@ Item {
                         }
                     }
 
+                    CheckBox {
+                        id: renderCheckbox
+                        checked: modelData.render
+                        onToggled: modelData.render = checked
+                    }
+
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         width: Math.max(Math.round(75 * Scaling.uiScale), parent.width - statusCircle.width - deviceTypeText.width - (parent.spacing * 2))
@@ -118,15 +124,15 @@ Item {
                     }
                 }
 
-                MouseArea {
-                    id: mouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: {
-                        list.forceActiveFocus();
-                        setSelectedIndex(index);
-                    }
-                }
+                // MouseArea {
+                //     id: mouse
+                //     anchors.fill: parent
+                //     hoverEnabled: true
+                //     onClicked: {
+                //         list.forceActiveFocus();
+                //         setSelectedIndex(index);
+                //     }
+                // }
             }
         }
     }

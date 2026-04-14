@@ -34,6 +34,8 @@
 #include <variant>
 #include <workspace/workspace.h>
 
+#include <plugins/backend/cpu/cpu_backend.h>
+
 using namespace std::chrono;
 using namespace std::chrono_literals;
 
@@ -401,6 +403,15 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     auto ob_camera_parameters = pipeline.getCameraParam();
     auto ob_calibration_parameters = pipeline.getCalibrationParam(ob_config);
 
+    // we need the colour intrinsic to transform the depth point to
+    // colour space
+    const auto ob_color_intrinsics =
+        ob_calibration_parameters.intrinsics[OB_SENSOR_COLOR];
+
+    const auto color_intrinsics = backend::util::make_camera_intrinsics(
+        ob_color_intrinsics.fx, ob_color_intrinsics.fy, ob_color_intrinsics.cx,
+        ob_color_intrinsics.cy, colour_width);
+
     // create instances to the available backend plugins to transform our
     // point-cloud with
 
@@ -437,9 +448,6 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     pc::logger()->trace("Starting process loop for OrbbecDevice {}",
                         device_config.id);
 
-    auto point_cloud = std::make_shared<PointCloud>();
-    point_cloud->resize(max_point_count);
-
     // processing loop
     while (!stop_token.stop_requested()) {
       std::shared_ptr<ob::FrameSet> frame_set;
@@ -450,8 +458,6 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
         continue;
       }
       if (!frame_set) continue;
-
-      // CPUBackend::thread_pool.detach_task()
 
       ProfilingZone new_frame_zone("OrbbecDevice::new_frame");
       new_frame_zone.text(device_config.id);
@@ -464,80 +470,69 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       auto depth_frame = frame_set->depthFrame();
       if (!colour_frame || !depth_frame) continue;
 
-      {
-        ProfilingZone process_frame_zone("OrbbecDevice::process_frame");
+      pc::backend::CpuBackend::thread_pool.detach_task(
+          [this, &color_intrinsics, &cuda_backend, &cpu_backend,
+           colour_frame = std::move(colour_frame),
+           depth_frame = std::move(depth_frame), device_config = device_config,
+           max_point_count = max_point_count]() {
+            ProfilingZone process_frame_zone("OrbbecDevice::process_frame");
 
-        const auto frame_width = colour_frame->width();
-        const auto frame_height = colour_frame->height();
-        const auto point_count =
-            static_cast<size_t>(frame_width * frame_height);
+            const auto frame_width = colour_frame->width();
+            const auto frame_height = colour_frame->height();
+            const auto point_count =
+                static_cast<size_t>(frame_width * frame_height);
 
-        point_cloud->resize(point_count);
+            // TODO allocates every frame
+            auto point_cloud = std::make_shared<PointCloud>();
+            point_cloud->resize(max_point_count);
 
-        const auto *ob_depth_frame_ptr =
-            reinterpret_cast<const uint16_t *>(depth_frame->getData());
-        const auto *ob_color_frame_ptr =
-            reinterpret_cast<const color_rgb *>(colour_frame->getData());
+            const auto *ob_depth_frame_ptr =
+                reinterpret_cast<const uint16_t *>(depth_frame->getData());
+            const auto *ob_color_frame_ptr =
+                reinterpret_cast<const color_rgb *>(colour_frame->getData());
 
-        std::span ob_depth_data{ob_depth_frame_ptr, point_count};
-        std::span ob_color_data{ob_color_frame_ptr, point_count};
+            std::span ob_depth_data{ob_depth_frame_ptr, point_count};
+            std::span ob_color_data{ob_color_frame_ptr, point_count};
 
-        // we need the colour intrinsic to transform the depth point to colour
-        // space
-        const auto ob_color_intrinsics =
-            ob_calibration_parameters.intrinsics[OB_SENSOR_COLOR];
+            bool valid_backend = false;
+            {
+              ProfilingZone backend_process_zone(
+                  "OrbbecDevice::backend_process");
 
-        const auto color_intrinsics = backend::util::make_camera_intrinsics(
-            ob_color_intrinsics.fx, ob_color_intrinsics.fy,
-            ob_color_intrinsics.cx, ob_color_intrinsics.cy, frame_width);
-
-        bool valid_backend = false;
-        {
-          ProfilingZone backend_process_zone("OrbbecDevice::backend_process");
-
-          switch (device_config.transform.backend.value()) {
-          case TransformConfiguration::BackendType::CUDA: {
-            if (cuda_backend) {
-              cuda_backend->project_transform_frame_data(
-                  ob_depth_data, ob_color_data, point_cloud, color_intrinsics);
-              valid_backend = true;
+              switch (device_config.transform.backend.value()) {
+              case TransformConfiguration::BackendType::CUDA: {
+                if (cuda_backend) {
+                  cuda_backend->project_transform_frame_data(
+                      ob_depth_data, ob_color_data, point_cloud,
+                      color_intrinsics);
+                  valid_backend = true;
+                }
+                break;
+              }
+              case TransformConfiguration::BackendType::CPU:
+              default: {
+                if (cpu_backend) {
+                  cpu_backend->project_transform_frame_data(
+                      ob_depth_data, ob_color_data, point_cloud,
+                      color_intrinsics);
+                  valid_backend = true;
+                }
+                break;
+              }
+              }
             }
-            break;
-          }
-          case TransformConfiguration::BackendType::CPU:
-          default: {
-            if (cpu_backend) {
-              cpu_backend->project_transform_frame_data(
-                  ob_depth_data, ob_color_data, point_cloud, color_intrinsics);
-              valid_backend = true;
+
+            if (!valid_backend) {
+              pc::logger()->warn(
+                  "Selected backend for OrbbecDevice could not be loaded");
             }
-            break;
-          }
-          }
-        }
 
-        if (!valid_backend) {
-          pc::logger()->warn(
-              "Selected backend for OrbbecDevice could not be loaded");
-        }
-
-        {
-          ProfilingZone enqueue_frame_zone("OrbbecDevice::enqueue_frame");
-
-          // bool success = _frame_buffer.try_enqueue(point_cloud);
-
-          // if (success) {
-          //   _buffer_updated = true;
-          //   set_updated_time(steady_clock::now());
-          //   notify_point_cloud_updated();
-          // } else {
-          //   pc::logger()->trace("Dropped frame from "
-          //                       "OrbbecDevice '{}' (ip: {})",
-          //                       device_config.id,
-          //                       device_config.network.ip_address.value());
-          // }
-        }
-      }
+            {
+              _latest_point_cloud.exchange(point_cloud);
+              notify_point_cloud_updated();
+              set_updated_time(steady_clock::now());
+            }
+          });
     }
 
   } catch (const std::exception &e) {
@@ -550,7 +545,8 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 }
 
 std::shared_ptr<PointCloud> OrbbecDevice::point_cloud() {
-  if (_latest_point_cloud) return _latest_point_cloud;
+  auto _latest_ptr = _latest_point_cloud.load(std::memory_order_acquire);
+  if (_latest_ptr) return _latest_ptr;
   static auto empty = std::make_shared<PointCloud>(PointCloud{{}, {}});
   return empty;
 };

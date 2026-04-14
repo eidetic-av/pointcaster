@@ -295,6 +295,7 @@ Item {
                     geometry: PointCloudGeometry {
                         id: geo
                         pointCloudAdapter: modelData.pointCloudAdapter() ?? []
+                        enabled: modelData.render
                     }
 
                     materials: [

@@ -59,7 +59,7 @@ private:
   // moodycamel::BlockingReaderWriterCircularBuffer<PointCloud>
   // _frame_buffer{2};
 
-  std::shared_ptr<PointCloud> _latest_point_cloud;
+  std::atomic<std::shared_ptr<PointCloud>> _latest_point_cloud;
 
   std::vector<OBColorPoint> _point_buffer;
   std::mutex _point_buffer_access;
