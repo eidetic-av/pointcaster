@@ -1,6 +1,7 @@
 #include "orbbec_device.h"
 #include "orbbec_context.h"
 #include "orbbec_device_config.h"
+#include "orbbec_utils.h"
 
 #include <Corrade/Containers/Pointer.h>
 #include <algorithm>
@@ -22,6 +23,7 @@
 #include <metrics/metrics.h>
 #include <mutex>
 #include <numeric>
+#include <plugins/backend/backend_utils.h>
 #include <plugins/devices/device_variants.h>
 #include <pointcaster/point_cloud.h>
 #include <profiling/profiler.h>
@@ -234,23 +236,6 @@ void OrbbecDevice::start_sync() {
   const auto [depth_width, depth_height] =
       orbbec::resolution(config.depth_resolution);
 
-  if (config.acquisition_mode ==
-      OrbbecDeviceConfiguration::AcquisitionMode::XYZRGB) {
-    if (!init_device_memory(colour_width * colour_height)) {
-      pc::logger()->error(
-          "Failed to initialise GPU memory for Orbbec pipeline");
-      set_error_state(true);
-      return;
-    }
-  }
-  //
-  else if (config.acquisition_mode ==
-           OrbbecDeviceConfiguration::AcquisitionMode::XYZ) {
-    pc::logger()->warn("acquisition_mode not implemented yet");
-    set_error_state(true);
-    return;
-  }
-
   _pipeline_thread =
       std::jthread([this, ob_device = std::move(ob_device)](auto stop_token) {
         pipeline_thread_work(stop_token, ob_device);
@@ -271,13 +256,6 @@ void OrbbecDevice::stop_sync() {
   _pipeline_thread.request_stop();
   _pipeline_thread.join();
   pc::logger()->trace("Pipeline thread complete");
-  bool readied_device_memory = _device_memory_ready.load();
-  pc::logger()->trace("Need to free gpu device memory: {}",
-                      readied_device_memory ? "yes" : "no");
-  if (readied_device_memory) {
-    free_device_memory();
-    pc::logger()->trace("Device memory freed");
-  }
   set_running(false);
   set_updated_time(steady_clock::time_point{});
 }
@@ -422,16 +400,11 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     auto ob_camera_parameters = pipeline.getCameraParam();
     auto ob_calibration_parameters = pipeline.getCalibrationParam(ob_config);
 
-    ob::PointCloudFilter point_cloud_filter;
-    point_cloud_filter.setCameraParam(ob_camera_parameters);
-
-    // TODO: query actual depth unit scale from device
-    constexpr float depth_position_scale = 1.0f;
-    point_cloud_filter.setPositionDataScaled(depth_position_scale);
-    point_cloud_filter.setCreatePointFormat(OB_FORMAT_RGB_POINT);
-
     // create instances to the available backend plugins to transform our
     // point-cloud with
+
+    // TODO check if creating the CUDA instance here allocates GPU memory even
+    // if we're only using the CPU backend
 
     using Corrade::Containers::Pointer;
     using Corrade::PluginManager::LoadState;
@@ -441,15 +414,20 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
     auto &backend_manager = _workspace->backend_plugin_manager;
 
+    // TODO this is only valid for D2C not C2D
+    const auto max_point_count = colour_width * colour_height;
+
     for (const auto &plugin : backend_manager->pluginList()) {
       if (backend_manager->loadState(plugin) & LoadState::NotLoaded) continue;
       if (plugin == "CpuBackend") {
         cpu_backend = backend_manager->instantiate(plugin);
+        cpu_backend->init(max_point_count);
         pc::logger()->trace("OrbbecDevice created CPU backend");
         continue;
       }
       if (plugin == "CudaBackend") {
         cuda_backend = backend_manager->instantiate(plugin);
+        cuda_backend->init(max_point_count);
         pc::logger()->trace("OrbbecDevice created CUDA backend");
         continue;
       }
@@ -458,33 +436,39 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     pc::logger()->trace("Starting process loop for OrbbecDevice {}",
                         device_config.id);
 
+    PointCloud point_cloud;
+    point_cloud.resize(max_point_count);
+
     // processing loop
     while (!stop_token.stop_requested()) {
       std::shared_ptr<ob::FrameSet> frame_set;
       try {
-        frame_set = pipeline.waitForFrameset(100);
+        frame_set = pipeline.waitForFrameset(15);
       } catch (const ob::Error &e) {
         pc::logger()->error("waitForFrameset error: {}", e.what());
         continue;
       }
-
       if (!frame_set) continue;
-      if (_loading_pipeline.load(std::memory_order_relaxed)) set_loading(false);
+
+      ProfilingZone new_frame_zone("OrbbecDevice::new_frame");
+      new_frame_zone.text(device_config.id);
+
+      if (_loading_pipeline.load(std::memory_order_relaxed)) {
+        set_loading(false);
+      }
 
       auto colour_frame = frame_set->colorFrame();
       auto depth_frame = frame_set->depthFrame();
       if (!colour_frame || !depth_frame) continue;
 
       {
-        ProfilingZone receive_frame_zone("OrbbecDevice::receive_frame");
-        receive_frame_zone.text(device_config.id);
+        ProfilingZone process_frame_zone("OrbbecDevice::process_frame");
 
         const auto frame_width = colour_frame->width();
         const auto frame_height = colour_frame->height();
         const auto point_count =
             static_cast<size_t>(frame_width * frame_height);
 
-        thread_local static PointCloud point_cloud;
         point_cloud.resize(point_count);
 
         const auto *ob_depth_frame_ptr =
@@ -497,59 +481,36 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
         // we need the colour intrinsic to transform the depth point to colour
         // space
-        const auto color_intrinsic =
+        const auto ob_color_intrinsics =
             ob_calibration_parameters.intrinsics[OB_SENSOR_COLOR];
 
-        // we dont need an extrinsic for the 2d->3d conversion because frame
-        // alignment has already been performed within orbbec sdk
-        constexpr static OBExtrinsic identity_extrinsic{
-            {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f},
-            {0.0f, 0.0f, 0.0f},
-        };
-
-        // this is the function that does conversion from 2d orbbec frame data
-        // into our pointcaster cloud type in 3d space. it's passed into our
-        // transform function to run in parallel using the selected backend
-        const auto ob_to_point = [&](int i) -> backend::PointType {
-          const auto ob_depth = ob_depth_data[i];
-          const auto ob_color = ob_color_data[i];
-
-          const auto x = i % frame_width;
-          const auto y = i / frame_height;
-
-          OBPoint3f result;
-          ob::CoordinateTransformHelper::transformation2dto3d(
-              OBPoint2f(x, y), ob_depth, color_intrinsic, identity_extrinsic,
-              &result);
-
-          return {position{.x = static_cast<int16_t>(result.x),
-                           .y = -static_cast<int16_t>(result.y),
-                           .z = -static_cast<int16_t>(result.z)},
-                  color{.r = static_cast<uint8_t>(ob_color.r),
-                        .g = static_cast<uint8_t>(ob_color.g),
-                        .b = static_cast<uint8_t>(ob_color.b)}};
-        };
+        const auto color_intrinsics = backend::util::make_camera_intrinsics(
+            ob_color_intrinsics.fx, ob_color_intrinsics.fy,
+            ob_color_intrinsics.cx, ob_color_intrinsics.cy, frame_width);
 
         bool valid_backend = false;
+        {
+          ProfilingZone backend_process_zone("OrbbecDevice::backend_process");
 
-        switch (device_config.transform.backend.value()) {
-        case TransformConfiguration::BackendType::CUDA: {
-          if (cuda_backend) {
-            cuda_backend->transform_point_cloud(device_config.transform,
-                                                point_cloud, ob_to_point);
-            valid_backend = true;
+          switch (device_config.transform.backend.value()) {
+          case TransformConfiguration::BackendType::CUDA: {
+            if (cuda_backend) {
+              cuda_backend->project_transform_frame_data(
+                  ob_depth_data, ob_color_data, point_cloud, color_intrinsics);
+              valid_backend = true;
+            }
+            break;
           }
-          break;
-        }
-        case TransformConfiguration::BackendType::CPU:
-        default: {
-          if (cpu_backend) {
-            cpu_backend->transform_point_cloud(device_config.transform,
-                                               point_cloud, ob_to_point);
-            valid_backend = true;
+          case TransformConfiguration::BackendType::CPU:
+          default: {
+            if (cpu_backend) {
+              cpu_backend->project_transform_frame_data(
+                  ob_depth_data, ob_color_data, point_cloud, color_intrinsics);
+              valid_backend = true;
+            }
+            break;
           }
-          break;
-        }
+          }
         }
 
         if (!valid_backend) {
@@ -557,16 +518,20 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
               "Selected backend for OrbbecDevice could not be loaded");
         }
 
-        bool success = _frame_buffer.try_enqueue(point_cloud);
-        if (success) {
-          _buffer_updated = true;
-          set_updated_time(steady_clock::now());
-          notify_point_cloud_updated();
-        } else {
-          pc::logger()->trace("Dropped frame from "
-                              "OrbbecDevice '{}' (ip: {})",
-                              device_config.id,
-                              device_config.network.ip_address.value());
+        {
+          ProfilingZone enqueue_frame_zone("OrbbecDevice::enqueue_frame");
+
+          bool success = _frame_buffer.try_enqueue(point_cloud);
+          if (success) {
+            _buffer_updated = true;
+            set_updated_time(steady_clock::now());
+            notify_point_cloud_updated();
+          } else {
+            pc::logger()->trace("Dropped frame from "
+                                "OrbbecDevice '{}' (ip: {})",
+                                device_config.id,
+                                device_config.network.ip_address.value());
+          }
         }
       }
     }
@@ -684,13 +649,6 @@ void OrbbecDevice::set_ip(std::string_view ip_address,
   pc::logger()->info(
       "Successfully updated network config for OrbbecDevice '{}'", config.id);
 }
-
-// TODO in cuda
-bool OrbbecDevice::init_device_memory(std::size_t incoming_point_count) {
-  return true;
-}
-
-void OrbbecDevice::free_device_memory() {}
 
 } // namespace pc::devices
 

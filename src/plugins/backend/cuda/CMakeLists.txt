@@ -1,6 +1,6 @@
-# Corrade doesn't play nice with nvcc so we have an nvcc-compiled 
+# Corrade doesn't play nice with nvcc so we have an nvcc-compiled core 
 # library that contains the actual CUDA translation units, and also
-# the corrade plugin that links to that CUDA lib and is loaded at
+# the Corrade plugin that links to that CUDA lib and is loaded at
 # runtime
 
 enable_language(CUDA)
@@ -8,29 +8,28 @@ set(CMAKE_CUDA_STANDARD 20)
 
 set(CUDA_PLUGIN_DIR ${BACKEND_PLUGIN_DIR}/cuda)
 
-add_library(cuda_kernels
-  cuda_kernels.cu
+add_library(cuda_backend_core
+  cuda_backend_core.cu
 )
 
-set_target_properties(cuda_kernels PROPERTIES
+set_target_properties(cuda_backend_core PROPERTIES
   AUTOMOC OFF
   CUDA_SEPARABLE_COMPILATION ON
   CUDA_RESOLVE_DEVICE_SYMBOLS ON
   CUDA_PROPAGATE_HOST_FLAGS OFF
-  # CUDA_ARCHITECTURES "75-real;86-real;89-real;89-virtual"
-  CUDA_ARCHITECTURES "75-virtual"
+  CUDA_ARCHITECTURES "75-real;86-real;89-real;89-virtual"
 )
 
 if (WIN32)
-  target_compile_options(cuda_kernels PRIVATE 
+  target_compile_options(cuda_backend_core PRIVATE 
     /bigobj /utf-8 -forward-slash-prefix-opts)
 endif()
 
 # allow extra lambda features
-target_compile_options(cuda_kernels PRIVATE --extended-lambda)
+target_compile_options(cuda_backend_core PRIVATE --extended-lambda)
 
 # these turn off noisy compiler output from dependencies
-target_compile_options(cuda_kernels PRIVATE 
+target_compile_options(cuda_backend_core PRIVATE 
   --diag-suppress 20012,20013,20014,20015,27,1394,221)
 
 corrade_add_plugin(CudaBackend
@@ -54,23 +53,25 @@ find_package(Corrade CONFIG REQUIRED Main PluginManager)
 find_package(CUDAToolkit REQUIRED)
 
 find_package(Thrust REQUIRED CONFIG)
-thrust_create_target(Thrust)
 
-target_link_libraries(cuda_kernels PRIVATE
+thrust_create_target(Thrust DEVICE CUDA)
+target_link_libraries(Thrust INTERFACE CUDA::toolkit)
+
+target_link_libraries(cuda_backend_core PUBLIC
+  pointcaster::core
   Corrade::PluginManager
-  CUDA::cudart_static 
-  CUDA::cuda_driver
-  Thrust::Thrust
+  CUDA::toolkit
+  Thrust
 )
 
 target_link_libraries(CudaBackend PRIVATE
-  cuda_kernels
+  cuda_backend_core
   pointcaster::core
   pointcaster::metrics
   Corrade::PluginManager
 )
 
-target_include_directories(cuda_kernels 
+target_include_directories(cuda_backend_core 
   PRIVATE 
     "${CMAKE_SOURCE_DIR}/src" 
     "${CMAKE_SOURCE_DIR}/include"
@@ -100,7 +101,10 @@ endif()
 
 # install(DIRECTORY "${CUDA_INSTALLED_LIB_DIR}/extensions" DESTINATION ${CUDA_PLUGIN_DIR})
 
-set(CORRADE_PLUGINS ${CORRADE_PLUGINS} CudaBackend PARENT_SCOPE)
+target_precompile_headers(cuda_backend_core PRIVATE
+  <functional>
+  <tuple>
+)
 
 target_precompile_headers(CudaBackend PRIVATE
   <Corrade/Containers/Array.h>
@@ -114,3 +118,5 @@ target_precompile_headers(CudaBackend PRIVATE
   <functional>
   <tuple>
 )
+
+set(CORRADE_PLUGINS ${CORRADE_PLUGINS} CudaBackend PARENT_SCOPE)

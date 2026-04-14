@@ -1,23 +1,22 @@
 #pragma once
 
-#include <Corrade/Containers/String.h>
-#include <Corrade/Containers/StringView.h>
+#include "backend_types.h"
+
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/GrowableArray.h>
+#include <Corrade/Containers/String.h>
+#include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
-
 #include <config/transform_config.h>
 #include <cpplocate/cpplocate.h>
 #include <filesystem>
 #include <functional>
 #include <pointcaster/core_types.h>
 #include <pointcaster/point_cloud.h>
+#include <span>
 #include <tuple>
 
 namespace pc::backend {
-
-using PointType = std::tuple<position, color>;
-using PointGeneratorFunction = std::function<PointType(const int)>;
 
 class BackendPlugin : public Corrade::PluginManager::AbstractPlugin {
 public:
@@ -70,10 +69,13 @@ public:
 
   virtual ~BackendPlugin() = default;
 
-  virtual void
-  transform_point_cloud(const TransformConfiguration &transform,
-                        PointCloud &output_cloud,
-                        const PointGeneratorFunction &generate_point) = 0;
+  // since plugins are created by a factory, we implement a custom init() which
+  // must be called
+  virtual void init([[maybe_unused]] const size_t point_count) {};
+
+  virtual void project_transform_frame_data(
+      UShortDepthData input_depth_frame, RgbColorData input_rgb_frame,
+      PointCloud &output_cloud, const CameraIntrinsics &camera_intrinsics) = 0;
 };
 
 } // namespace pc::backend

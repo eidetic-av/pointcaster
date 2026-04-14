@@ -27,7 +27,7 @@
 // namespace pc::devices::orbbec {
 
 // void transform_cpu(PointCloud &output_cloud,
-//                    const PointGeneratorFunction &generate_point) {
+//                    const PointGenerator &generate_point) {
 
 //   const auto point_count = output_cloud.size();
 

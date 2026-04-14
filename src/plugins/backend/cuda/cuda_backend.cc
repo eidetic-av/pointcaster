@@ -1,26 +1,28 @@
 #include "cuda_backend.h"
-#include "cuda_kernels.h"
+#include "cuda_backend_core.h"
+
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
 #include <core/logger/logger.h>
 
 namespace pc::backend {
 
-CudaBackend::CudaBackend(Corrade::PluginManager::AbstractManager &manager,
-                         Corrade::Containers::StringView plugin)
-    : BackendPlugin(manager, plugin) {
-  pc::logger()->trace("Initialised CUDA backend");
+void CudaBackend::init(const size_t point_count) {
+  if (!cuda::init_device_memory(this, point_count)) {
+    pc::logger()->error("Failed to initialse CUDA device memory");
+  }
 };
 
 CudaBackend::~CudaBackend() {
-  pc::logger()->trace("Destroyed CUDA backend");
+  cuda::free_device_memory(this);
 };
 
-void CudaBackend::transform_point_cloud(
-    const TransformConfiguration &transform, PointCloud &output_cloud,
-    const PointGeneratorFunction &generate_point) {
-  cuda::transform_point_cloud(transform, output_cloud, generate_point);
-};
+void CudaBackend::project_transform_frame_data(
+    UShortDepthData input_depth_frame, RgbColorData input_rgb_frame,
+    PointCloud &output_cloud, const CameraIntrinsics &camera_intrinsics) {
+  cuda::project_transform_frame_data(this, input_depth_frame, input_rgb_frame,
+                                     output_cloud, camera_intrinsics);
+}
 
 } // namespace pc::backend
 

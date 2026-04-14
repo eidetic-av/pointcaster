@@ -7,7 +7,8 @@ namespace pc::backend {
 class CudaBackend : public BackendPlugin {
 public:
   explicit CudaBackend(Corrade::PluginManager::AbstractManager &manager,
-                       Corrade::Containers::StringView plugin);
+                       Corrade::Containers::StringView plugin)
+      : BackendPlugin(manager, plugin) {};
 
   ~CudaBackend();
 
@@ -16,10 +17,12 @@ public:
   CudaBackend(CudaBackend &&) = delete;
   CudaBackend &operator=(CudaBackend &&) = delete;
 
-  void
-  transform_point_cloud(const TransformConfiguration &transform,
-                        PointCloud &output_cloud,
-                        const PointGeneratorFunction &generate_point) override;
+  void init(const size_t point_count) override;
+
+  void project_transform_frame_data(
+      UShortDepthData input_depth_frame, RgbColorData input_rgb_frame,
+      PointCloud &output_cloud,
+      const CameraIntrinsics &camera_intrinsics) override;
 };
 
 } // namespace pc::backend

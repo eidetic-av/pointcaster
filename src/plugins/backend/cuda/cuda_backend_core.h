@@ -1,0 +1,18 @@
+#pragma once
+#include "../backend_types.h"
+
+#include <config/transform_config.h>
+#include <pointcaster/point_cloud.h>
+
+namespace pc::backend::cuda {
+
+bool init_device_memory(void *owner, const size_t point_count);
+void free_device_memory(void *owner);
+
+void project_transform_frame_data(void *owner,
+                                  UShortDepthData input_depth_frame,
+                                  RgbColorData input_rgb_frame,
+                                  PointCloud &output_cloud,
+                                  const CameraIntrinsics &camera_intrinsics);
+
+} // namespace pc::backend::cuda

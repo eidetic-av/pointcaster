@@ -24,10 +24,6 @@
 // #include <profiling/profiling_mutex.h>
 
 namespace pc::devices {
-// this device memory structure hides CUDA types, allowing OrbbecDriver to have
-// CUDA members. This prevents issues when this header is included in TUs not
-// compiled with nvcc
-struct OrbbecImplDeviceMemory;
 
 class OrbbecDevice final : public DevicePlugin {
 public:
@@ -59,6 +55,8 @@ public:
   void on_config_field_changed(std::string_view path = "") override;
 
 private:
+
+    // TODO replace with SPMC triple-buffer
   moodycamel::BlockingReaderWriterCircularBuffer<PointCloud> _frame_buffer{2};
 
   PointCloud _current_point_cloud{{}, {}};
@@ -82,15 +80,9 @@ private:
   std::mutex _process_current_cloud_access;
   std::uint64_t _last_processed_frame_index{0};
 
-  OrbbecImplDeviceMemory *_device_memory;
-  std::atomic_bool _device_memory_ready{false};
-
   std::jthread _initialisation_thread;
   std::jthread _pipeline_thread;
   std::jthread _timeout_thread;
-
-  bool init_device_memory(std::size_t incoming_point_count);
-  void free_device_memory();
 
   void start_sync();
   void stop_sync();

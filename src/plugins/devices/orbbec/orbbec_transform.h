@@ -14,10 +14,10 @@
 // using RGBColorData = std::span<const color_rgb>;
 
 // using PointType = std::tuple<position, color>;
-// using PointGeneratorFunction = std::function<PointType(const int)>;
+// using PointGenerator = std::function<PointType(const int)>;
 
 // void transform_cpu(PointCloud &output_cloud,
-//                    const PointGeneratorFunction &generate_point);
+//                    const PointGenerator &generate_point);
 
 // void transform_cpu(std::span<const uint16_t> ob_depth_data,
 //                    std::span<const color_rgb> ob_color_data,
