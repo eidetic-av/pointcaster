@@ -13,6 +13,7 @@ class OrbbecDevice;
 struct OrbbecDeviceConfiguration {
   std::string id;     // @hidden
   bool active = true; // @hidden
+  bool render = true; // @hidden;
 
   std::string ob_uid; // @disabled
 

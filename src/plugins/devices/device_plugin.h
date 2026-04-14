@@ -8,10 +8,12 @@
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
 #include <Corrade/Tags.h>
+#include <atomic>
 #include <cpplocate/cpplocate.h>
 #include <filesystem>
 #include <functional>
 #include <logger/logger.h>
+#include <memory>
 #include <pointcaster/point_cloud.h>
 #include <string>
 
@@ -119,6 +121,10 @@ public:
 
   virtual std::shared_ptr<PointCloud> point_cloud() = 0;
 
+  std::shared_ptr<std::vector<std::byte>> render_data() {
+    return _latest_render_data.load(std::memory_order_acquire);
+  }
+
   virtual void start() = 0;
   virtual void stop() = 0;
   virtual void restart() = 0;
@@ -138,6 +144,8 @@ protected:
   std::function<void(DeviceStatus)> _status_callback;
   std::function<void()> _point_cloud_updated_callback;
   bool _is_discovery_instance = false;
+
+  std::atomic<std::shared_ptr<std::vector<std::byte>>> _latest_render_data;
 };
 
 } // namespace pc::devices

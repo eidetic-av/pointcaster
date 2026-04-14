@@ -27,12 +27,17 @@ CpuBackend::~CpuBackend() {
 void CpuBackend::project_transform_frame_data(
     UShortDepthData input_depth_frame, RgbColorData input_rgb_frame,
     std::shared_ptr<PointCloud> output_cloud,
-    const CameraIntrinsics &camera_intrinsics) {
+    const CameraIntrinsics &camera_intrinsics,
+    std::span<std::byte> render_output) {
   const auto point_count = output_cloud->size();
   const auto index_sequence =
       std::views::iota(0, static_cast<int>(point_count));
 
   const auto frame_width = camera_intrinsics.frame_width;
+
+  char *render_destination =
+      render_output.empty() ? nullptr
+                            : reinterpret_cast<char *>(render_output.data());
 
   const auto project_and_transform_point = [&](const auto i) {
     const auto &depth_pixel = input_depth_frame[i];
@@ -41,16 +46,15 @@ void CpuBackend::project_transform_frame_data(
     const auto px = i % frame_width;
     const auto py = i / frame_width;
     auto pos = util::project_2d_to_3d(px, py, depth_pixel, camera_intrinsics);
-
     color col{color_pixel.r, color_pixel.g, color_pixel.b};
 
-    // TODO
-    // do transform stuff here
-    // TODO i guess this might contain globally defined transform kernels
-    // that work on both cpu and gpu
+    output_cloud->positions[i] = pos;
+    output_cloud->colors[i] = col;
 
-    output_cloud->positions[i] = std::move(pos);
-    output_cloud->colors[i] = std::move(col);
+    if (render_destination) {
+      std::memcpy(render_destination + i * 12, &pos, 8);
+      std::memcpy(render_destination + i * 12 + 8, &col, 4);
+    }
   };
 
   std::for_each(std::execution::par_unseq, index_sequence.begin(),

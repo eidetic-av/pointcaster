@@ -12,6 +12,7 @@ class PlyDevice;
 struct PlyDeviceConfiguration {
   std::string id;     // @hidden
   bool active = true; // @hidden
+  bool render = true; // @hidden;
 
   FileConfiguration file;
   TransformConfiguration transform;

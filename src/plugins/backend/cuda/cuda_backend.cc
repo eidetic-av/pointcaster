@@ -20,9 +20,11 @@ CudaBackend::~CudaBackend() {
 void CudaBackend::project_transform_frame_data(
     UShortDepthData input_depth_frame, RgbColorData input_rgb_frame,
     std::shared_ptr<PointCloud> output_cloud,
-    const CameraIntrinsics &camera_intrinsics) {
+    const CameraIntrinsics &camera_intrinsics,
+    std::span<std::byte> render_output) {
   cuda::project_transform_frame_data(this, input_depth_frame, input_rgb_frame,
-                                     output_cloud, camera_intrinsics);
+                                     output_cloud, camera_intrinsics,
+                                     render_output);
 }
 
 } // namespace pc::backend

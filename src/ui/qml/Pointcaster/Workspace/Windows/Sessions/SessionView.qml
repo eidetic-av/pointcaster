@@ -298,13 +298,7 @@ Item {
                         enabled: modelData.render
                     }
 
-                    materials: [
-                        CustomMaterial {
-                            shadingMode: CustomMaterial.Unshaded
-                            vertexShader: "shaders/point_cloud.vert"
-                            fragmentShader: "shaders/point_cloud.frag"
-                        }
-                    ]
+                    materials: [ PointCloudMaterial {} ]
                 }
 
                 Connections {

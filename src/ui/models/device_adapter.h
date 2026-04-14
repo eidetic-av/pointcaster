@@ -22,8 +22,6 @@ class DeviceAdapter : public ConfigAdapter, public PointCloudAdapter {
   Q_PROPERTY(
       bool pluginNullState READ pluginNullState NOTIFY pluginNullStateChanged)
 
-  Q_PROPERTY(bool render READ render WRITE setRender NOTIFY renderChanged)
-
 public:
   explicit DeviceAdapter(pc::devices::DevicePlugin *plugin,
                          QObject *parent = nullptr)
@@ -60,13 +58,6 @@ public:
     emit statusChanged();
   }
 
-  bool render() const { return _render; }
-  void setRender(bool render) {
-    if (_render == render) return;
-    _render = render;
-    emit renderChanged();
-  }
-
   Q_INVOKABLE void start() {
     if (!_plugin) return;
     _plugin->start();
@@ -87,6 +78,10 @@ public:
     return _plugin->point_cloud();
   };
 
+  Q_INVOKABLE std::shared_ptr<std::vector<std::byte>> render_data() override {
+    return _plugin->render_data();
+  }
+
   Q_INVOKABLE PointCloudAdapter *pointCloudAdapter() {
     return static_cast<PointCloudAdapter *>(this);
   }
@@ -100,7 +95,6 @@ public:
 
 signals:
   void statusChanged();
-  void renderChanged();
   void pluginNullStateChanged();
 
   void pointCloudUpdated();
@@ -109,7 +103,6 @@ protected:
   pc::devices::DevicePlugin *_plugin = nullptr; // non-owning
   pc::devices::ui::WorkspaceDeviceStatus _status =
       pc::devices::ui::WorkspaceDeviceStatus::Unloaded;
-  bool _render = true;
 
   int _deviceIndex = -1;
 };

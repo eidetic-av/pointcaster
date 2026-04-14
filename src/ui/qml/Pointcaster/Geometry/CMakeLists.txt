@@ -1,11 +1,12 @@
-
 qt_add_qml_module(PointcasterGeometry
-	URI Pointcaster.Geometry VERSION 1.0
+    URI Pointcaster.Geometry VERSION 1.0
     DEPENDENCIES
         QtQuick3D
     SOURCES
         PointCloudGeometry.h
         PointCloudGeometry.cc
+    QML_FILES
+        PointCloudMaterial.qml
     RESOURCES
         shaders/point_cloud.vert
         shaders/point_cloud.frag

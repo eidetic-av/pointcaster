@@ -482,9 +482,17 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             const auto point_count =
                 static_cast<size_t>(frame_width * frame_height);
 
-            // TODO allocates every frame
             auto point_cloud = std::make_shared<PointCloud>();
             point_cloud->resize(max_point_count);
+
+            // Allocate render buffer only when rendering is active
+            std::shared_ptr<std::vector<std::byte>> render_buffer;
+            std::span<std::byte> render_span;
+            if (device_config.render) {
+              render_buffer = std::make_shared<std::vector<std::byte>>(
+                  max_point_count * 12);
+              render_span = std::span<std::byte>(*render_buffer);
+            }
 
             const auto *ob_depth_frame_ptr =
                 reinterpret_cast<const uint16_t *>(depth_frame->getData());
@@ -504,7 +512,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                 if (cuda_backend) {
                   cuda_backend->project_transform_frame_data(
                       ob_depth_data, ob_color_data, point_cloud,
-                      color_intrinsics);
+                      color_intrinsics, render_span);
                   valid_backend = true;
                 }
                 break;
@@ -514,7 +522,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                 if (cpu_backend) {
                   cpu_backend->project_transform_frame_data(
                       ob_depth_data, ob_color_data, point_cloud,
-                      color_intrinsics);
+                      color_intrinsics, render_span);
                   valid_backend = true;
                 }
                 break;
@@ -529,6 +537,9 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
             {
               _latest_point_cloud.exchange(point_cloud);
+              if (render_buffer) {
+                _latest_render_data.exchange(render_buffer);
+              }
               notify_point_cloud_updated();
               set_updated_time(steady_clock::now());
             }
