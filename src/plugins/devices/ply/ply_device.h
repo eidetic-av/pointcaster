@@ -36,7 +36,7 @@ public:
 
   DeviceStatus status() const override { return _status; };
 
-  const PointCloud &point_cloud() override;
+  std::shared_ptr<PointCloud> point_cloud() override;
 
   void start() override {};
   void stop() override {};

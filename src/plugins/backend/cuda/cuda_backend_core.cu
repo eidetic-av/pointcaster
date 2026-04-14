@@ -93,7 +93,7 @@ void free_device_memory(void *owner) {
 void project_transform_frame_data(void *owner,
                                   UShortDepthData input_depth_frame,
                                   RgbColorData input_rgb_frame,
-                                  PointCloud &output_cloud,
+                                  std::shared_ptr<PointCloud> output_cloud,
                                   const CameraIntrinsics &camera_intrinsics) {
 
   DeviceTransformMemory *device_memory;
@@ -140,18 +140,18 @@ void project_transform_frame_data(void *owner,
   {
     ProfilingZone output_zone("CudaBackend::copy_back_to_host");
 
-    if (output_cloud.positions.size() != device_memory->point_count ||
-        output_cloud.colors.size() != device_memory->point_count) {
+    if (output_cloud->positions.size() != device_memory->point_count ||
+        output_cloud->colors.size() != device_memory->point_count) {
       throw std::runtime_error("invalid output_cloud");
     }
 
     thrust::copy(device_memory->output_positions.begin(),
                  device_memory->output_positions.end(),
-                 output_cloud.positions.begin());
+                 output_cloud->positions.begin());
 
     thrust::copy(device_memory->output_colors.begin(),
                  device_memory->output_colors.end(),
-                 output_cloud.colors.begin());
+                 output_cloud->colors.begin());
   }
 }
 

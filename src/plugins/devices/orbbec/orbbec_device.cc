@@ -37,6 +37,7 @@
 using namespace std::chrono;
 using namespace std::chrono_literals;
 
+using namespace pc::backend;
 using pc::profiling::ProfilingZone;
 
 namespace {
@@ -436,19 +437,21 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     pc::logger()->trace("Starting process loop for OrbbecDevice {}",
                         device_config.id);
 
-    PointCloud point_cloud;
-    point_cloud.resize(max_point_count);
+    auto point_cloud = std::make_shared<PointCloud>();
+    point_cloud->resize(max_point_count);
 
     // processing loop
     while (!stop_token.stop_requested()) {
       std::shared_ptr<ob::FrameSet> frame_set;
       try {
-        frame_set = pipeline.waitForFrameset(15);
+        frame_set = pipeline.waitForFrameset(100);
       } catch (const ob::Error &e) {
         pc::logger()->error("waitForFrameset error: {}", e.what());
         continue;
       }
       if (!frame_set) continue;
+
+      // CPUBackend::thread_pool.detach_task()
 
       ProfilingZone new_frame_zone("OrbbecDevice::new_frame");
       new_frame_zone.text(device_config.id);
@@ -469,7 +472,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
         const auto point_count =
             static_cast<size_t>(frame_width * frame_height);
 
-        point_cloud.resize(point_count);
+        point_cloud->resize(point_count);
 
         const auto *ob_depth_frame_ptr =
             reinterpret_cast<const uint16_t *>(depth_frame->getData());
@@ -521,17 +524,18 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
         {
           ProfilingZone enqueue_frame_zone("OrbbecDevice::enqueue_frame");
 
-          bool success = _frame_buffer.try_enqueue(point_cloud);
-          if (success) {
-            _buffer_updated = true;
-            set_updated_time(steady_clock::now());
-            notify_point_cloud_updated();
-          } else {
-            pc::logger()->trace("Dropped frame from "
-                                "OrbbecDevice '{}' (ip: {})",
-                                device_config.id,
-                                device_config.network.ip_address.value());
-          }
+          // bool success = _frame_buffer.try_enqueue(point_cloud);
+
+          // if (success) {
+          //   _buffer_updated = true;
+          //   set_updated_time(steady_clock::now());
+          //   notify_point_cloud_updated();
+          // } else {
+          //   pc::logger()->trace("Dropped frame from "
+          //                       "OrbbecDevice '{}' (ip: {})",
+          //                       device_config.id,
+          //                       device_config.network.ip_address.value());
+          // }
         }
       }
     }
@@ -544,6 +548,12 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     set_error_state(true);
   }
 }
+
+std::shared_ptr<PointCloud> OrbbecDevice::point_cloud() {
+  if (_latest_point_cloud) return _latest_point_cloud;
+  static auto empty = std::make_shared<PointCloud>(PointCloud{{}, {}});
+  return empty;
+};
 
 void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
   constexpr auto error_timeout = 10s;
@@ -586,14 +596,6 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
     std::this_thread::sleep_for(check_interval);
   }
 }
-
-const PointCloud &OrbbecDevice::point_cloud() {
-  if (_buffer_updated.load(std::memory_order_relaxed)) {
-    _frame_buffer.try_dequeue(_current_point_cloud);
-    _buffer_updated = false;
-  }
-  return std::ref(_current_point_cloud);
-};
 
 void OrbbecDevice::on_config_field_changed(std::string_view) {
   auto &config = std::get<OrbbecDeviceConfiguration>(_config);

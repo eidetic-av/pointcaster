@@ -26,15 +26,17 @@ void PlyDevice::init(Workspace &workspace) {
   _workspace = &workspace;
 }
 
-const PointCloud &PlyDevice::point_cloud() {
-  const auto &config = std::get<PlyDeviceConfiguration>(_config);
-  if (config.file.load_sequence) {
-    const auto &pc = _sequence_cloud_buffer[_current_sequence_frame_index];
-    // pc::logger()->debug("pc.size(): {}", pc.size());
-    return pc;
-  } else {
-    return _current_point_cloud;
-  }
+std::shared_ptr<PointCloud> PlyDevice::point_cloud() {
+  // const auto &config = std::get<PlyDeviceConfiguration>(_config);
+  // if (config.file.load_sequence) {
+  //   const auto &pc = _sequence_cloud_buffer[_current_sequence_frame_index];
+  //   // pc::logger()->debug("pc.size(): {}", pc.size());
+  //   return pc;
+  // } else {
+  //   return _current_point_cloud;
+  // }
+  static auto empty = std::make_shared<PointCloud>(PointCloud{{}, {}});
+  return empty;
 }
 
 void PlyDevice::on_config_field_changed(std::string_view) {

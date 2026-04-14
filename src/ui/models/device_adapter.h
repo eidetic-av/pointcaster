@@ -7,7 +7,7 @@
 #include <QObject>
 #include <QStringList>
 #include <QVariant>
-
+#include <memory>
 #include <plugins/devices/device_plugin.h>
 #include <plugins/devices/device_variants.h>
 #include <pointcaster/point_cloud.h>
@@ -74,7 +74,7 @@ public:
     _plugin->restart();
   }
 
-  Q_INVOKABLE const pc::PointCloud &point_cloud() override {
+  Q_INVOKABLE std::shared_ptr<pc::PointCloud> point_cloud() override {
     return _plugin->point_cloud();
   };
 
@@ -87,9 +87,7 @@ public:
     if (_plugin) _plugin->on_config_field_changed(path.toStdString());
   }
 
-  void notifyPointCloudUpdated() {
-    emit pointCloudUpdated();
-  }
+  void notifyPointCloudUpdated() { emit pointCloudUpdated(); }
 
 signals:
   void statusChanged();

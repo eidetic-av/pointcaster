@@ -46,7 +46,7 @@ public:
 
   DeviceStatus status() const override;
 
-  const PointCloud &point_cloud() override;
+  std::shared_ptr<PointCloud> point_cloud() override;
 
   void start() override;
   void stop() override;
@@ -55,11 +55,11 @@ public:
   void on_config_field_changed(std::string_view path = "") override;
 
 private:
+  // TODO replace with SPMC triple-buffer
+  // moodycamel::BlockingReaderWriterCircularBuffer<PointCloud>
+  // _frame_buffer{2};
 
-    // TODO replace with SPMC triple-buffer
-  moodycamel::BlockingReaderWriterCircularBuffer<PointCloud> _frame_buffer{2};
-
-  PointCloud _current_point_cloud{{}, {}};
+  std::shared_ptr<PointCloud> _latest_point_cloud;
 
   std::vector<OBColorPoint> _point_buffer;
   std::mutex _point_buffer_access;

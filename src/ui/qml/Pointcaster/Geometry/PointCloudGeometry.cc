@@ -24,10 +24,10 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
 
   // if this geometry has a device plugin assigned to render
   if (_pointCloudAdapter) {
-    const auto &inputCloud = _pointCloudAdapter->point_cloud();
+    const auto inputCloud = _pointCloudAdapter->point_cloud();
 
     bool localGeometryNeedsUpdating =
-        _lastPointCloud == nullptr || _lastPointCloud != &inputCloud;
+        _lastPointCloud == nullptr || _lastPointCloud != inputCloud;
 
     localGeometryNeedsUpdating = true;
 
@@ -35,10 +35,10 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
 
       ProfilingZone update_geometry_zone("PointCloudGeometry::updateGeometry");
 
-      const auto &positions = inputCloud.positions;
-      const auto &colors = inputCloud.colors;
+      const auto &positions = inputCloud->positions;
+      const auto &colors = inputCloud->colors;
       const auto indices =
-          std::views::iota(0, static_cast<int>(inputCloud.size()));
+          std::views::iota(0, static_cast<int>(inputCloud->size()));
 
       const auto points = std::views::zip(indices, positions, colors);
 
@@ -87,6 +87,6 @@ void pc::ui::qml::PointCloudGeometry::updateGeometry() {
       update();
     }
 
-    _lastPointCloud = &inputCloud;
+    _lastPointCloud = inputCloud;
   }
 }

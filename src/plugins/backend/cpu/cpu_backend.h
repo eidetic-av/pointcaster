@@ -2,10 +2,14 @@
 
 #include "../backend_plugin.h"
 
+#include <BS_thread_pool.hpp>
+
 namespace pc::backend {
 
 class CpuBackend : public BackendPlugin {
 public:
+  inline static BS::thread_pool thread_pool{};
+
   explicit CpuBackend(Corrade::PluginManager::AbstractManager &manager,
                       Corrade::Containers::StringView plugin);
 
@@ -18,7 +22,7 @@ public:
 
   void project_transform_frame_data(
       UShortDepthData input_depth_frame, RgbColorData input_rgb_frame,
-      PointCloud &output_cloud,
+      std::shared_ptr<PointCloud> output_cloud,
       const CameraIntrinsics &camera_intrinsics) override;
 };
 

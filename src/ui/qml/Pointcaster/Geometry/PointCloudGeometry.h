@@ -5,9 +5,9 @@
 #include <QQuick3DGeometry>
 #include <QtQmlIntegration/qqmlintegration.h>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <pointcaster/point_cloud.h>
-
 #include <ui/models/point_cloud_adapter.h>
 
 namespace pc::ui::qml {
@@ -23,7 +23,9 @@ public:
   PointCloudGeometry();
 
   PointCloudAdapter *pointCloudAdapter() const { return _pointCloudAdapter; };
-  void setPointCloudAdapter(PointCloudAdapter *adapter) { _pointCloudAdapter = adapter; };
+  void setPointCloudAdapter(PointCloudAdapter *adapter) {
+    _pointCloudAdapter = adapter;
+  };
 
   Q_INVOKABLE void updateGeometry();
 
@@ -32,7 +34,7 @@ signals:
 
 private:
   PointCloudAdapter *_pointCloudAdapter = nullptr;
-  const PointCloud *_lastPointCloud = nullptr;
+  std::shared_ptr<PointCloud> _lastPointCloud = nullptr;
 };
 
 } // namespace pc::ui::qml

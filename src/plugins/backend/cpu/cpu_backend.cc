@@ -26,8 +26,9 @@ CpuBackend::~CpuBackend() {
 
 void CpuBackend::project_transform_frame_data(
     UShortDepthData input_depth_frame, RgbColorData input_rgb_frame,
-    PointCloud &output_cloud, const CameraIntrinsics &camera_intrinsics) {
-  const auto point_count = output_cloud.size();
+    std::shared_ptr<PointCloud> output_cloud,
+    const CameraIntrinsics &camera_intrinsics) {
+  const auto point_count = output_cloud->size();
   const auto index_sequence =
       std::views::iota(0, static_cast<int>(point_count));
 
@@ -48,8 +49,8 @@ void CpuBackend::project_transform_frame_data(
     // TODO i guess this might contain globally defined transform kernels
     // that work on both cpu and gpu
 
-    output_cloud.positions[i] = std::move(pos);
-    output_cloud.colors[i] = std::move(col);
+    output_cloud->positions[i] = std::move(pos);
+    output_cloud->colors[i] = std::move(col);
   };
 
   std::for_each(std::execution::par_unseq, index_sequence.begin(),

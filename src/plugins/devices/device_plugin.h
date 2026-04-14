@@ -117,7 +117,7 @@ public:
 
   virtual bool plugin_null_state() const { return false; }
 
-  virtual const PointCloud &point_cloud() = 0;
+  virtual std::shared_ptr<PointCloud> point_cloud() = 0;
 
   virtual void start() = 0;
   virtual void stop() = 0;

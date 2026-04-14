@@ -73,9 +73,11 @@ public:
   // must be called
   virtual void init([[maybe_unused]] const size_t point_count) {};
 
-  virtual void project_transform_frame_data(
-      UShortDepthData input_depth_frame, RgbColorData input_rgb_frame,
-      PointCloud &output_cloud, const CameraIntrinsics &camera_intrinsics) = 0;
+  virtual void
+  project_transform_frame_data(UShortDepthData input_depth_frame,
+                               RgbColorData input_rgb_frame,
+                               std::shared_ptr<PointCloud> output_cloud,
+                               const CameraIntrinsics &camera_intrinsics) = 0;
 };
 
 } // namespace pc::backend
