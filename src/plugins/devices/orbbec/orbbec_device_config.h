@@ -23,8 +23,8 @@ struct OrbbecDeviceConfiguration {
   enum class AcquisitionMode { XYZRGB, XYZ };
   AcquisitionMode acquisition_mode = AcquisitionMode::XYZRGB;
 
-  enum class PointConversionMode { Custom, OrbbecSDK };
-  PointConversionMode conversion_mode = PointConversionMode::Custom;
+  enum class PointConversionMode { D2C, C2D };
+  PointConversionMode conversion_mode = PointConversionMode::D2C;
 
   enum class ColorResolution {
     HD_1280x720,

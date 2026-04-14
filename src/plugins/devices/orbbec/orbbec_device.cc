@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstring>
 #include <execution>
+#include <format>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/h/ObTypes.h>
 #include <libobsensor/hpp/Context.hpp>
@@ -332,47 +333,48 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
     std::shared_ptr<ob::VideoStreamProfile> depth_profile;
 
-    // try hardware D2C first
-    std::shared_ptr<ob::StreamProfileList> depth_d2c_list;
-    try {
-      depth_d2c_list =
-          pipeline.getD2CDepthProfileList(colour_profile, ALIGN_D2C_HW_MODE);
-    } catch (const ob::Error &e) {
-      pc::logger()->warn("Failed to get HW D2C depth profile list: {}",
-                         e.what());
-    }
+    if (device_config.conversion_mode ==
+        OrbbecDeviceConfiguration::PointConversionMode::D2C) {
 
-    if (depth_d2c_list && depth_d2c_list->count() > 0) {
+      // try hardware D2C first
+      std::shared_ptr<ob::StreamProfileList> depth_d2c_list;
       try {
-        depth_profile = depth_d2c_list->getVideoStreamProfile(
-            depth_width, depth_height, OB_FORMAT_Y16, OB_FPS_ANY);
-        ob_config->setAlignMode(ALIGN_D2C_HW_MODE);
-      } catch (const ob::Error &e) {
-        pc::logger()->error("Failed to select HW D2C depth profile: {}",
-                            e.what());
-      }
-    }
-
-    // fallback to software D2C if HW failed or unsupported for this combo
-    if (!depth_profile) {
-      pc::logger()->warn("Falling back to ALIGN_D2C_SW_MODE");
-      try {
-        auto depth_sw_list =
-            pipeline.getD2CDepthProfileList(colour_profile, ALIGN_D2C_SW_MODE);
-        if (!depth_sw_list || depth_sw_list->count() == 0) {
-          pc::logger()->error("No SW D2C depth profiles available");
-          set_error_state(true);
-          return;
+        depth_d2c_list =
+            pipeline.getD2CDepthProfileList(colour_profile, ALIGN_D2C_HW_MODE);
+        if (depth_d2c_list && depth_d2c_list->count() > 0) {
+          depth_profile = depth_d2c_list->getVideoStreamProfile(
+              depth_width, depth_height, OB_FORMAT_Y16, OB_FPS_ANY);
+          ob_config->setAlignMode(ALIGN_D2C_HW_MODE);
         }
-        depth_profile = depth_sw_list->getVideoStreamProfile(
-            depth_width, depth_height, OB_FORMAT_Y16, OB_FPS_ANY);
-        ob_config->setAlignMode(ALIGN_D2C_SW_MODE);
       } catch (const ob::Error &e) {
-        pc::logger()->error("Failed to select SW D2C depth profile: {}",
-                            e.what());
-        set_error_state(true);
-        return;
+        pc::logger()->warn("Failed to get HW D2C depth profile list: {}",
+                           e.what());
       }
+      // if that didn't work, go to software D2C
+      if (!depth_profile) {
+        try {
+          depth_d2c_list = pipeline.getD2CDepthProfileList(colour_profile,
+                                                           ALIGN_D2C_SW_MODE);
+          if (depth_d2c_list && depth_d2c_list->count() > 0) {
+            depth_profile = depth_d2c_list->getVideoStreamProfile(
+                depth_width, depth_height, OB_FORMAT_Y16, OB_FPS_ANY);
+            ob_config->setAlignMode(ALIGN_D2C_SW_MODE);
+          }
+        } catch (const ob::Error &e) {
+          pc::logger()->warn("Failed to get SW D2C depth profile list: {}",
+                             e.what());
+        }
+      }
+
+      // if that didn't work, D2C is unavailable
+      if (!depth_profile) {
+        set_error_state(true);
+        throw std::format_error("Device does not support D2C conversion mode");
+      }
+
+    } else if (device_config.conversion_mode ==
+               OrbbecDeviceConfiguration::PointConversionMode::C2D) {
+      // need to do stuff here
     }
 
     const auto fps =
@@ -403,14 +405,25 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     auto ob_camera_parameters = pipeline.getCameraParam();
     auto ob_calibration_parameters = pipeline.getCalibrationParam(ob_config);
 
-    // we need the colour intrinsic to transform the depth point to
-    // colour space
-    const auto ob_color_intrinsics =
-        ob_calibration_parameters.intrinsics[OB_SENSOR_COLOR];
+    backend::CameraIntrinsics camera_intrinsics;
+    size_t max_point_count;
 
-    const auto color_intrinsics = backend::util::make_camera_intrinsics(
-        ob_color_intrinsics.fx, ob_color_intrinsics.fy, ob_color_intrinsics.cx,
-        ob_color_intrinsics.cy, colour_width);
+    if (device_config.conversion_mode ==
+        OrbbecDeviceConfiguration::PointConversionMode::D2C) {
+      // we need the colour intrinsic to transform the depth point to
+      // colour space
+      const auto ob_color_intrinsics =
+          ob_calibration_parameters.intrinsics[OB_SENSOR_COLOR];
+
+      camera_intrinsics = backend::util::make_camera_intrinsics(
+          ob_color_intrinsics.fx, ob_color_intrinsics.fy,
+          ob_color_intrinsics.cx, ob_color_intrinsics.cy, colour_width);
+
+      max_point_count = colour_width * colour_height;
+
+    } else if (device_config.conversion_mode ==
+               OrbbecDeviceConfiguration::PointConversionMode::C2D) {
+    }
 
     // create instances to the available backend plugins to transform our
     // point-cloud with
@@ -425,9 +438,6 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     Pointer<backend::BackendPlugin> cuda_backend;
 
     auto &backend_manager = _workspace->backend_plugin_manager;
-
-    // TODO this is only valid for D2C not C2D
-    const auto max_point_count = colour_width * colour_height;
 
     for (const auto &plugin : backend_manager->pluginList()) {
       if (backend_manager->loadState(plugin) & LoadState::NotLoaded) continue;
@@ -470,8 +480,9 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       auto depth_frame = frame_set->depthFrame();
       if (!colour_frame || !depth_frame) continue;
 
+      _process_tasks_in_flight.fetch_add(1);
       pc::backend::CpuBackend::thread_pool.detach_task(
-          [this, &color_intrinsics, &cuda_backend, &cpu_backend,
+          [this, &camera_intrinsics, &cuda_backend, &cpu_backend,
            colour_frame = std::move(colour_frame),
            depth_frame = std::move(depth_frame), device_config = device_config,
            max_point_count = max_point_count]() {
@@ -502,46 +513,31 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             std::span ob_depth_data{ob_depth_frame_ptr, point_count};
             std::span ob_color_data{ob_color_frame_ptr, point_count};
 
-            bool valid_backend = false;
             {
               ProfilingZone backend_process_zone(
                   "OrbbecDevice::backend_process");
 
-              switch (device_config.transform.backend.value()) {
-              case TransformConfiguration::BackendType::CUDA: {
-                if (cuda_backend) {
-                  cuda_backend->project_transform_frame_data(
-                      ob_depth_data, ob_color_data, point_cloud,
-                      color_intrinsics, render_span);
-                  valid_backend = true;
-                }
-                break;
-              }
-              case TransformConfiguration::BackendType::CPU:
-              default: {
-                if (cpu_backend) {
-                  cpu_backend->project_transform_frame_data(
-                      ob_depth_data, ob_color_data, point_cloud,
-                      color_intrinsics, render_span);
-                  valid_backend = true;
-                }
-                break;
-              }
+              if (device_config.transform.backend.value() ==
+                      TransformConfiguration::BackendType::CUDA &&
+                  cuda_backend) {
+                cuda_backend->project_transform_frame_data(
+                    ob_depth_data, ob_color_data, point_cloud,
+                    camera_intrinsics, render_span);
+              } else if (device_config.transform.backend.value() ==
+                             TransformConfiguration::BackendType::CPU &&
+                         cpu_backend) {
+                cpu_backend->project_transform_frame_data(
+                    ob_depth_data, ob_color_data, point_cloud,
+                    camera_intrinsics, render_span);
               }
             }
 
-            if (!valid_backend) {
-              pc::logger()->warn(
-                  "Selected backend for OrbbecDevice could not be loaded");
+            _latest_point_cloud.exchange(point_cloud);
+            if (render_buffer) {
+              _latest_render_data.exchange(render_buffer);
             }
-
-            {
-              _latest_point_cloud.exchange(point_cloud);
-              if (render_buffer) {
-                _latest_render_data.exchange(render_buffer);
-              }
-              notify_point_cloud_updated();
-              set_updated_time(steady_clock::now());
+            notify_point_cloud_updated();
+            set_updated_time(steady_clock::now());
 
             _process_tasks_in_flight.fetch_sub(1);
             _process_tasks_in_flight.notify_all();
