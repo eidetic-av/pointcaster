@@ -43,7 +43,7 @@ Item {
                 id: content
 
                 property bool selected: list.currentIndex === index
-                property bool hovered: mouse.containsMouse
+                property bool hovered: deviceRowMouseArea.containsMouse
 
                 width: list.width
                 height: Math.max(Math.round(30 * Scaling.uiScale), Math.ceil(Scaling.pointSize * 2.1))
@@ -65,6 +65,17 @@ Item {
                             horizontalCenter: undefined
                             verticalCenter: undefined
                         }
+                    }
+                }
+
+                MouseArea {
+                    id: deviceRowMouseArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    propagateComposedEvents: true
+                    onClicked: {
+                        list.forceActiveFocus();
+                        setSelectedIndex(index);
                     }
                 }
 
@@ -123,16 +134,6 @@ Item {
                         font: Scaling.uiFont
                     }
                 }
-
-                // MouseArea {
-                //     id: mouse
-                //     anchors.fill: parent
-                //     hoverEnabled: true
-                //     onClicked: {
-                //         list.forceActiveFocus();
-                //         setSelectedIndex(index);
-                //     }
-                // }
             }
         }
     }
