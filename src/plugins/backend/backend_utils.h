@@ -28,6 +28,9 @@ __host__ __device__
   return cam;
 }
 
+#ifdef __CUDACC__
+__host__ __device__
+#endif
 auto round_pos(float v) {
 #ifdef __CUDACC__
   return llrintf(v);
