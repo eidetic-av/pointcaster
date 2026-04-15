@@ -11,6 +11,8 @@ add_subdirectory(core)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(app_icon_resource "${CMAKE_SOURCE_DIR}/packaging/icon.rc")
+  # adds PDB export to msvc
+  add_compile_options("/Zi")
 endif()
 
 qt_add_executable(pointcaster 
