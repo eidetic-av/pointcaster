@@ -88,6 +88,10 @@ def is_float3_type(type_name: str) -> bool:
     t = type_name.strip()
     return t in ("pc::float3", "float3")
 
+def is_float3_rfl_type(type_name: str) -> bool:
+    t = type_name.strip()
+    return "rfl::" in t and ("float3" in t or "pc::float3" in t)
+
 def is_quaternion_type(type_name: str) -> bool:
     t = type_name.strip()
     return t in ("pc::quaternion", "quaternion")
@@ -388,7 +392,7 @@ def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[
         raw_name = raw_name.strip()
         raw_type = raw_type.strip()
 
-        if is_float3_type(raw_type):
+        if is_float3_type(raw_type) or ("rfl::" in raw_type and "float3" in raw_type):
             needs_qvector3d = True
 
         if is_quaternion_type(raw_type):
@@ -488,7 +492,7 @@ def process_cpp_header(
                 "label": format_struct_name(struct_name),
                 "members": members,
                 "any_enums": any(m.is_enum for m in members),
-                "any_float3": any(is_float3_type(m.type) for m in members),
+                "any_float3": any((is_float3_type(m.type) or is_float3_rfl_type(m.type)) for m in members),
                 "any_quaternion": any(is_quaternion_type(m.type) for m in members),
                 "nested_adapter_includes": nested_adapter_includes,
                 "flattened_paths": flattened_paths,

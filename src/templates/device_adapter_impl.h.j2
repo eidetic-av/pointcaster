@@ -233,6 +233,11 @@ public:
     {% if "std::string" in m.type %}
         if (path == QStringLiteral("{{ m.name }}"))
             return QVariant(QString::fromStdString(m_config.{{ m.name }}.value()));
+    {% elif "float3" in m.type %}
+        if (path == QStringLiteral("{{ m.name }}")) {
+            const auto &v = m_config.{{ m.name }}.value();
+            return QVariant::fromValue(QVector3D(v.x, v.y, v.z));
+        }
     {% else %}
         if (path == QStringLiteral("{{ m.name }}"))
             return QVariant::fromValue(m_config.{{ m.name }}.value());
@@ -302,6 +307,9 @@ public:
             const bool newValue = value.toBool();
     {% elif "int" in m.type %}
             const int newValue = value.toInt();
+    {% elif "float3" in m.type %}
+            const QVector3D v = toQVector3DLoose(value);
+            float3 newValue{ v.x(), v.y(), v.z() };
     {% endif %}
             if (m_config.{{ m.name }}.value() == newValue)
                 return false;
