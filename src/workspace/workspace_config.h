@@ -1,8 +1,9 @@
 #pragma once
 
 #include <plugins/devices/device_variants.h>
-#include <session/session_config.h>
 #include <rfl/DefaultVal.hpp>
+#include <session/session_config.h>
+
 
 namespace pc {
 

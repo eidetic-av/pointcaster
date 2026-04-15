@@ -85,7 +85,7 @@ KDDW.DockWidget {
                         states: [
                             State {
                                 name: "idle"
-                                when: !recorder.recording
+                                when: !recorder.isRecording
                                 PropertyChanges {
                                     target: recordingStatusShape
                                     radius: recordingButton.recordingCircleRadius
@@ -97,7 +97,7 @@ KDDW.DockWidget {
                             },
                             State {
                                 name: "recording"
-                                when: recorder.recording
+                                when: recorder.isRecording
                                 PropertyChanges {
                                     target: recordingStatusShape
                                     radius: recordingButton.stopButtonRadius
@@ -124,22 +124,29 @@ KDDW.DockWidget {
                     }
 
                     MouseArea {
+                        id: recordingButtonMouseArea
                         anchors.fill: parent
+                        hoverEnabled: true
                         onClicked: {
-                            if (!recorder.recording)
+                            if (!recorder.isRecording)
                                 recorder.startRecording();
-                            else if (recorder.recording)
+                            else if (recorder.isRecording)
                                 recorder.stopRecording();
                         }
+                    }
+
+                    InfoToolTip {
+                        visible: recordingButtonMouseArea.hovered
+                        textValue: (!recorder.isRecording ? "Start" : "Stop") + " recording"
                     }
                 }
 
                 Label {
-                    text: "10205128 frames"
+                    text: "Frame " + recorder.currentFrame
                 }
 
                 Label {
-                    text: "10.300 seconds"
+                    text: recorder.currentSeconds.toFixed(2) + " seconds"
                 }
             }
         }

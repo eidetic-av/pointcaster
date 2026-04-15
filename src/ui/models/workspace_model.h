@@ -3,7 +3,7 @@
 #include "config_adapter.h"
 #include "device_adapter.h"
 #include "device_status.h"
-#include "recorder_model.h"
+#include "session_recorder_model.h"
 #include <QObject>
 #include <QPointer>
 #include <QUndoStack>

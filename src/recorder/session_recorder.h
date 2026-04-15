@@ -1,7 +1,14 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <logger/logger.h>
+#include <memory>
+#include <pointcaster/core_types.h>
+#include <pointcaster/point_cloud.h>
+#include <readerwriterqueue/readerwriterqueue.h>
+#include <string_view>
+#include <thread>
 
 namespace pc {
 class Workspace;
@@ -13,28 +20,46 @@ class SessionRecorder {
 public:
   explicit SessionRecorder(Workspace *workspace);
 
-  bool recording() { return _recording; }
+  void start_recording();
+  void stop_recording();
 
-  void start_recording() {
-    _recording = true;
-    if (_recording_changed_callback) _recording_changed_callback(_recording);
-    pc::logger()->debug("started recording");
-  }
+  bool is_recording();
+  bool is_file_writing();
 
-  void stop_recording() {
-    _recording = false;
-    if (_recording_changed_callback) _recording_changed_callback(_recording);
-    pc::logger()->debug("stopped recording");
-  }
+  size_t current_recording_frame() const; 
+  float current_recording_seconds() const;
 
-  void set_recording_changed_callback(std::function<void(bool)> callback) {
-    _recording_changed_callback = callback;
-  }
+  size_t writer_queue_depth() const; 
+  size_t dropped_frames() const; 
+
+  void set_recording_changed_callback(std::function<void(bool)> callback);
 
 private:
   Workspace *_workspace;
-  bool _recording = false;
   std::function<void(bool)> _recording_changed_callback{};
+
+  std::atomic<bool> _recording = false;
+  std::atomic<bool> _file_writing = false;
+  std::atomic<size_t> _current_frame{0};
+
+  struct DeviceFrame {
+    std::string_view device_name;
+    std::shared_ptr<PointCloud> data;
+  };
+  struct Frame {
+    size_t frame_index;
+    std::vector<DeviceFrame> devices;
+  };
+  static constexpr size_t frame_queue_max{100};
+  moodycamel::BlockingReaderWriterQueue<Frame> _frame_queue{frame_queue_max};
+
+  std::atomic<size_t> _queue_depth{0};
+  std::atomic<size_t> _dropped_frames{0};
+
+  std::jthread _recorder_thread;
+
+  void recorder_thread_work(std::stop_token stop_token);
+  void file_writer_thread_work(std::stop_token stop_token);
 };
 
 } // namespace pc::recorder
