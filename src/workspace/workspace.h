@@ -4,6 +4,7 @@
 #include "plugins/backend/backend_plugin.h"
 #include "plugins/devices/device_plugin.h"
 #include "plugins/devices/device_variants.h"
+#include "recorder/session_recorder.h"
 #include "workspace_config.h"
 
 #include <Corrade/Containers/Pointer.h>
@@ -42,6 +43,8 @@ public:
                      Corrade::Containers::Pointer<pc::devices::DevicePlugin>>
       discovery_plugins{};
   std::unique_ptr<metrics::PrometheusServer> prometheus_server;
+
+  std::unique_ptr<recorder::SessionRecorder> session_recorder;
 
   explicit Workspace(const WorkspaceConfiguration &initial);
 

@@ -6,6 +6,7 @@ add_library(pointcaster_ui
     models/settings_page_registry.h
     models/settings_page_registry.cc
     models/commands/device_config_commands.cc
+    models/recorder_model.h
     window/view_factory.cc
     # geometry/point_cloud_geometry.h
     # geometry/point_cloud_geometry.cc

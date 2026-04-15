@@ -3,6 +3,7 @@
 #include "app_settings/app_settings.h"
 #include "layout_saver.h"
 #include "models/device_adapter.h"
+#include "models/recorder_model.h"
 #include "plugins/devices/ply/ply_device_config.h"
 #include <QHash>
 #include <QMetaObject>
@@ -179,10 +180,15 @@ void WorkspaceModel::applyWorkspaceConfigAndRebuild(
 
 WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
     : QObject(parent), _workspace(*workspace) {
+
   if (workspace->auto_loaded_config) {
     const auto path = AppSettings::instance()->lastWorkspacePath();
     setSaveFileUrl(QUrl::fromLocalFile(path));
   }
+
+  _recorderModel = new RecorderModel(workspace->session_recorder.get(), this);
+  recorderChanged();
+
   syncAdapters();
 }
 

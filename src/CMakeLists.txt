@@ -20,6 +20,7 @@ qt_add_executable(pointcaster
     pointcaster.cc
     workspace/workspace.cc
     workspace/workspace_config.cc
+    recorder/session_recorder.cc
     ${app_icon_resource}
 )
 

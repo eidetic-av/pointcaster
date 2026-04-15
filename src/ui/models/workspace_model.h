@@ -3,6 +3,7 @@
 #include "config_adapter.h"
 #include "device_adapter.h"
 #include "device_status.h"
+#include "recorder_model.h"
 #include <QObject>
 #include <QPointer>
 #include <QUndoStack>
@@ -44,7 +45,7 @@ class WorkspaceModel : public QObject {
 
   Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl)
 
-  //
+  // Console logger window
   Q_PROPERTY(QVariantList consoleOverlayEntries READ consoleOverlayEntries
                  NOTIFY consoleOverlayEntriesChanged)
   Q_PROPERTY(QVariantList consoleHistoryEntries READ consoleHistoryEntries
@@ -52,6 +53,9 @@ class WorkspaceModel : public QObject {
 
   Q_PROPERTY(QVariantMap foldedPropertyPaths READ foldedPropertyPaths NOTIFY
                  foldedPropertyPathsChanged)
+
+  // Recording
+  Q_PROPERTY(RecorderModel* recorder READ recorder NOTIFY recorderChanged)
 
 public:
   explicit WorkspaceModel(pc::Workspace *workspace, QObject *parent);
@@ -89,6 +93,8 @@ public:
   QVariantList consoleOverlayEntries() const;
   QVariantList consoleHistoryEntries() const;
 
+  RecorderModel *recorder() const { return _recorderModel; }
+
   Q_INVOKABLE QVariantMap foldedPropertyPaths() const {
     return _foldedPropertyPaths;
   }
@@ -122,13 +128,18 @@ signals:
 
   void foldedPropertyPathsChanged();
 
+  void recorderChanged();
+
 private:
   pc::Workspace &_workspace;
 
+  // TODO raw pointer and new? really?
   QUndoStack *_undoStack = new QUndoStack(this);
 
   QList<QObject *> _sessionAdapters;
   QList<QObject *> _deviceAdapters;
+
+  RecorderModel *_recorderModel;
 
   // Tracks whether an existing SessionConfigurationAdapter is still bound to
   // a valid underlying SessionConfiguration object address.

@@ -116,6 +116,13 @@ ApplicationWindow {
             }
         }
 
+        RecordingWindow {
+            id: recordingWindow
+            workspace: workspaceModel
+            recorder: workspaceModel.recorder
+            affinities: ["edit"]
+        }
+
         // id(string) -> KDDW.DockWidget
         property var sessionDockById: ({})
 
@@ -190,6 +197,7 @@ ApplicationWindow {
         }
 
         Component.onCompleted: {
+            addDockWidget(recordingWindow, KDDW.KDDockWidgets.Location_OnBottom, null, Qt.size(500, 150), KDDW.KDDockWidgets.StartHidden);
             addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(400, 400));
             mainDockingArea.syncSessionWindows();
         }

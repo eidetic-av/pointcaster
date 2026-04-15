@@ -56,6 +56,8 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   backend_plugin_manager = plugins::load_backend_plugins(*this);
   device_plugin_manager = plugins::load_device_plugins(*this);
 
+  session_recorder = std::make_unique<recorder::SessionRecorder>(this);
+
   // instantiate device plugins for the initial config
   sync_devices();
 }

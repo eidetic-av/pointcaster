@@ -117,7 +117,7 @@ MenuBar {
         }
 
         Action {
-            id: devicesMenuToggle
+            id: devicesWindowMenuToggle
             text: qsTr("&Devices")
             checkable: true
             checked: false
@@ -136,19 +136,43 @@ MenuBar {
         Connections {
             target: devicesWindow
             function onIsOpenChanged() {
-                devicesMenuToggle.checked = devicesWindow.isOpen;
+                devicesWindowMenuToggle.checked = devicesWindow.isOpen;
             }
         }
 
-        onAboutToShow: {
-            if (devicesWindow)
-                devicesMenuToggle.checked = devicesWindow.isOpen;
+        Action {
+            id: recordingWindowMenuToggle
+            text: qsTr("&Recording")
+            checkable: true
+            checked: false
+
+            onTriggered: {
+                if (!recordingWindow)
+                    return;
+
+                if (recordingWindow.isOpen)
+                    recordingWindow.forceClose();
+                else 
+                    recordingWindow.open();
+            }
         }
 
-        Component.onCompleted: {
-            if (devicesWindow)
-                devicesMenuToggle.checked = devicesWindow.isOpen;
+        Connections {
+            target: recordingWindow
+            function onIsOpenChanged() {
+                recordingWindowMenuToggle.checked = recordingWindow.isOpen;
+            }
         }
+
+        function sync() {
+            if (devicesWindow)
+                devicesWindowMenuToggle.checked = devicesWindow.isOpen;
+            if (recordingWindow)
+                recordingWindowMenuToggle.checked = recordingWindow.isOpen;
+        }
+
+        onAboutToShow: sync()
+        Component.onCompleted: sync()
     }
 
     Menu {
