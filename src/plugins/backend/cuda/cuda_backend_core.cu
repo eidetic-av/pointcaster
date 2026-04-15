@@ -1,5 +1,6 @@
 #include "cuda_backend_core.h"
 
+#include "../backend_filters.h"
 #include "../backend_utils.h"
 
 #include <config/transform_config.h>
@@ -12,11 +13,11 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/partition.h>
 #include <thrust/sequence.h>
 #include <unordered_map>
 
 namespace {
-// global data used by all instances of this backend
 
 using namespace pc;
 
@@ -57,8 +58,13 @@ namespace pc::backend::cuda {
 struct ProjectAndTransform {
 
   CameraIntrinsics color_intrinsics;
+  filter::TransformFilterParameters params;
 
-  pc::float3 translation;
+  explicit ProjectAndTransform(const CameraIntrinsics &intrinsics,
+                               const TransformConfiguration &transform)
+      : color_intrinsics(intrinsics) {
+    params = filter::TransformFilterParameters::from_config(transform);
+  }
 
   using OutputPointT = thrust::tuple<position, color>;
   using InputPixelT = thrust::tuple<uint16_t, color_rgb, int>;
@@ -73,15 +79,20 @@ struct ProjectAndTransform {
     const auto py = i / frame_width;
 
     auto pos = util::project_2d_to_3d(px, py, depth, color_intrinsics);
-    // position pos{static_cast<int16_t>(px), static_cast<int16_t>(py),
-    //              static_cast<int16_t>(depth)};
-    pos.x += translation.x;
-    pos.y += translation.y;
-    pos.z += translation.z;
+    pos = filter::transform(pos, params);
 
     color col{rgb.r, rgb.g, rgb.b};
 
     return thrust::make_tuple(pos, col);
+  }
+};
+
+struct BoundsCheck {
+  filter::TransformFilterParameters params;
+
+  __host__ __device__ bool
+  operator()(thrust::tuple<position, color> point) const {
+    return filter::in_bounds(thrust::get<0>(point), params);
   }
 };
 
@@ -128,6 +139,9 @@ void project_transform_frame_data(void *owner,
 
   using namespace pc::profiling;
 
+  const auto transform_parameters =
+      filter::TransformFilterParameters::from_config(transform);
+
   bool output_render_buffer = !render_output.empty();
 
   {
@@ -152,25 +166,31 @@ void project_transform_frame_data(void *owner,
       thrust::make_tuple(device_memory->output_positions.begin(),
                          device_memory->output_colors.begin()));
 
-  // the transformation config:
-  // convert metres to milimetres for point-cloud space
-  const pc::float3 translation{transform.position.x * 1000,
-                               transform.position.y * 1000,
-                               transform.position.z * 1000};
+  size_t new_point_count;
 
   {
-    ProfilingZone transform_zone("CudaBackend::transform");
-
-    // TODO can/do these run in parallel?
+    ProfilingZone transform_zone("CudaBackend::transform_and_filter");
 
     thrust::transform(thrust::cuda::par, frame_data_input_begin,
                       frame_data_input_end, output_points_begin,
-                      ProjectAndTransform{color_intrinsics, translation});
+                      ProjectAndTransform{color_intrinsics, transform});
+
+    auto output_points_end = output_points_begin + device_memory->point_count;
+
+    auto new_end =
+        thrust::partition(thrust::cuda::par, output_points_begin,
+                          output_points_end, BoundsCheck{transform_parameters});
+
+    new_point_count = new_end - output_points_begin;
 
     if (output_render_buffer) {
+      // reset indices to sequential for the filtered range
+      thrust::sequence(device_memory->indices.begin(),
+                       device_memory->indices.begin() + new_point_count);
+
       thrust::for_each(
           thrust::cuda::par, device_memory->indices.begin(),
-          device_memory->indices.end(),
+          device_memory->indices.begin() + new_point_count,
           InterleaveForRender{
               thrust::raw_pointer_cast(device_memory->output_positions.data()),
               thrust::raw_pointer_cast(device_memory->output_colors.data()),
@@ -183,18 +203,21 @@ void project_transform_frame_data(void *owner,
     ProfilingZone output_zone("CudaBackend::copy_back_to_host");
 
     thrust::copy(device_memory->output_positions.begin(),
-                 device_memory->output_positions.end(),
+                 device_memory->output_positions.begin() + new_point_count,
                  output_cloud->positions.begin());
     thrust::copy(device_memory->output_colors.begin(),
-                 device_memory->output_colors.end(),
+                 device_memory->output_colors.begin() + new_point_count,
                  output_cloud->colors.begin());
 
     if (output_render_buffer) {
       thrust::copy(device_memory->interleaved_render.begin(),
-                   device_memory->interleaved_render.end(),
+                   device_memory->interleaved_render.begin() +
+                       new_point_count * 12,
                    render_output.begin());
     }
   }
+
+  output_cloud->resize(new_point_count);
 }
 
 } // namespace pc::backend::cuda
