@@ -17,7 +17,10 @@ void MAIN()
         float((rgba >> 8u) & 0xFFu),
         float((rgba >> 16u) & 0xFFu)
     ) / 255.0;
-    vColor = vec4(pow(srgb, vec3(2.2)), 1.0);
+    vColor = vec4(srgb, 1.0);
+
+    // color conversion seems unecessary
+    // vColor = vec4(pow(srgb, vec3(2.2)), 1.0);
 
     POSITION = MODELVIEWPROJECTION_MATRIX * vec4(pos, 1.0);
     POINT_SIZE = 1.0;
