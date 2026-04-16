@@ -3,6 +3,8 @@ import QtQuick.Controls
 import QtQuick3D
 import QtQuick3D.Helpers
 
+import Gizmo3D
+
 import Pointcaster 1.0
 import Pointcaster.Workspace 1.0
 import Pointcaster.Geometry 1.0
@@ -595,6 +597,15 @@ Item {
             homeOrbitOriginDistanceAnim.from = camera.z;
             homeOrbitOriginAnim.start();
         }
+    }
+
+    // the transform gizmo actually sits in 2d space outside the view3d
+    GlobalGizmo {
+        view3d: view
+        targetNode: cubeTest
+        anchors.fill: parent
+        mode: GizmoEnums.Mode.All
+        z: 99
     }
 
     // Camera move animations

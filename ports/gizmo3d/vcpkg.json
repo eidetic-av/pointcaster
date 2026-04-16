@@ -1,0 +1,17 @@
+{
+    "name": "gizmo3d",
+    "version-string": "bd2b58c39b7fe4c5e3504a8890543de2dd0cbfc2",
+    "description": "",
+    "homepage": "https://github.com/DScudeler/gizmo-3d",
+    "dependencies": [
+        {
+            "name": "vcpkg-cmake",
+            "host": true
+        },
+        {
+            "name": "vcpkg-cmake-config",
+            "host": true
+        },
+        "qtbase"
+    ]
+}

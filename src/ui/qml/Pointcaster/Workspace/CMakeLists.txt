@@ -64,6 +64,7 @@ qt_add_qml_module(PointcasterWorkspace
 )
 
 find_package(QtAwesome CONFIG REQUIRED)
+find_package(gizmo3d CONFIG REQUIRED)
 
 target_link_libraries(PointcasterWorkspace PRIVATE
     pointcaster::core
@@ -72,6 +73,7 @@ target_link_libraries(PointcasterWorkspace PRIVATE
     Qt6::Quick3D
     KDAB::kddockwidgets
     QtAwesome::QtAwesome
+    Gizmo3D::gizmo3d
 )
 
 target_include_directories(PointcasterWorkspace 
