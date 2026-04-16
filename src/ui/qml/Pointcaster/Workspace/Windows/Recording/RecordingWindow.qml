@@ -33,18 +33,17 @@ KDDW.DockWidget {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
-                Rectangle {
+                Column {
                     Layout.alignment: Qt.AlignVCenter
                     width: Math.round(100 * Scaling.uiScale)
-                    height: Math.round(100 * Scaling.uiScale)
-                    color: "blue"
-                }
 
-                Rectangle {
-                    Layout.alignment: Qt.AlignVCenter
-                    width: Math.round(200 * Scaling.uiScale)
-                    height: Math.round(150 * Scaling.uiScale)
-                    color: "green"
+                    Label {
+                        text: "Queue depth: " + recorder.writerQueueDepth
+                    }
+
+                    Label {
+                        text: "Dropped frames: " + recorder.droppedFrames
+                    }
                 }
             }
 
