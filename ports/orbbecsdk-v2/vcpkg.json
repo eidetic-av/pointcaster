@@ -1,9 +1,9 @@
 {
     "name": "orbbecsdk",
-    "version": "1.10.18",
+    "version": "2.7.6",
     "port-version": 1,
-    "description": "C/C++ base core lib for Orbbec 3D cameras",
-    "homepage": "https://github.com/orbbec/OrbbecSDK",
+    "description": "Orbbec SDK v2 Open-Source",
+    "homepage": "https://github.com/orbbec/OrbbecSDK_v2",
     "license": "MIT",
     "dependencies": [
 	{
@@ -13,6 +13,8 @@
 	{
 	    "name": "vcpkg-cmake-config",
 	    "host": true
-	}
+	},
+    "spdlog",
+    "fmt"
     ]
 }

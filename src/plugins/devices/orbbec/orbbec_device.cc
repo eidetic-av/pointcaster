@@ -159,7 +159,7 @@ void OrbbecDevice::start_sync() {
   pc::logger()->debug("Running 'start_sync()'");
   pc::logger()->trace("Attempting to start an Orrbec driver");
 
-  std::lock_guard lock(orbbec_context().start_stop_device_access);
+  std::lock_guard lock(orbbec_context().device_api_access);
 
   set_loading(true);
   set_running(false);
@@ -188,7 +188,7 @@ void OrbbecDevice::start_sync() {
   if (auto ob_device_list = ob_ctx->queryDeviceList()) {
     const size_t device_count = ob_device_list->deviceCount();
     for (size_t i = 0; i < device_count; ++i) {
-      auto id = ob_device_list->getUid(i);
+      auto id = ob_device_list->uid(i);
       if (!config.id.empty() && id) {
         if (std::strcmp(id, config.id.c_str()) == 0) {
           try {
@@ -213,9 +213,9 @@ void OrbbecDevice::start_sync() {
                           net_device_port);
       ob_device = ob_ctx->createNetDevice(ip.c_str(), net_device_port);
     } catch (const ob::Error &e) {
-      pc::logger()->error("Failed to create OrbbecDevice at {}:{}: {}",
+      pc::logger()->error("Failed to create OrbbecDevice at {}:{} {}",
                           config.network.ip_address.value(), net_device_port,
-                          e.what());
+                          e.getMessage());
       set_error_state(true);
       return;
     } catch (...) {
@@ -253,7 +253,7 @@ void OrbbecDevice::stop_sync() {
   pc::logger()->debug("Running 'stop_sync()'");
   if (!_running_pipeline) return;
   auto config = std::get<OrbbecDeviceConfiguration>(this->config());
-  std::lock_guard lock(orbbec_context().start_stop_device_access);
+  std::lock_guard lock(orbbec_context().device_api_access);
   pc::logger()->info("Closing OrbbecDevice {}",
                      config.network.ip_address.value());
   pc::logger()->trace("Joining pipeline thread");
@@ -302,6 +302,13 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                                         std::shared_ptr<ob::Device> ob_device) {
   try {
     pc::logger()->trace("creating new ob::Pipeline");
+
+    // we get exclusive access to the orbbec device api during initialisation of
+    // this thread, but unlock before starting the working loop. this ensures
+    // that devices are loaded serially because the sdk is not thread safe
+    std::unique_lock<std::mutex> ob_device_api_access(
+        orbbec_context().device_api_access);
+
     ob::Pipeline pipeline{ob_device};
 
     auto ob_config = std::make_shared<ob::Config>();
@@ -323,9 +330,9 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     std::shared_ptr<ob::VideoStreamProfile> colour_profile;
     try {
       colour_profile = colour_profile_list->getVideoStreamProfile(
-          colour_width, colour_height, OB_FORMAT_RGB, OB_FPS_ANY);
+          colour_width, colour_height, OB_FORMAT_RGB, 30);
     } catch (const ob::Error &e) {
-      pc::logger()->error("Failed to get colour profile: {}", e.what());
+      pc::logger()->error("Failed to get colour profile: {}", e.getMessage());
       set_error_state(true);
       return;
     }
@@ -343,12 +350,12 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             pipeline.getD2CDepthProfileList(colour_profile, ALIGN_D2C_HW_MODE);
         if (depth_d2c_list && depth_d2c_list->count() > 0) {
           depth_profile = depth_d2c_list->getVideoStreamProfile(
-              depth_width, depth_height, OB_FORMAT_Y16, OB_FPS_ANY);
+              depth_width, depth_height, OB_FORMAT_Y16, 30);
           ob_config->setAlignMode(ALIGN_D2C_HW_MODE);
         }
       } catch (const ob::Error &e) {
         pc::logger()->warn("Failed to get HW D2C depth profile list: {}",
-                           e.what());
+                           e.getMessage());
       }
       // if that didn't work, go to software D2C
       if (!depth_profile) {
@@ -357,12 +364,12 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                                                            ALIGN_D2C_SW_MODE);
           if (depth_d2c_list && depth_d2c_list->count() > 0) {
             depth_profile = depth_d2c_list->getVideoStreamProfile(
-                depth_width, depth_height, OB_FORMAT_Y16, OB_FPS_ANY);
+                depth_width, depth_height, OB_FORMAT_Y16, 30);
             ob_config->setAlignMode(ALIGN_D2C_SW_MODE);
           }
         } catch (const ob::Error &e) {
           pc::logger()->warn("Failed to get SW D2C depth profile list: {}",
-                             e.what());
+                             e.getMessage());
         }
       }
 
@@ -378,7 +385,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     }
 
     const auto fps =
-        std::min(depth_profile->getFps(), colour_profile->getFps());
+        std::min(depth_profile->fps(), colour_profile->fps());
     device_config.fps.set(fps);
     update_config(device_config);
 
@@ -388,7 +395,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
     ob_config->enableStream(depth_profile);
     ob_config->setFrameAggregateOutputMode(
-        OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);
+        OB_FRAME_AGGREGATE_OUTPUT_FULL_FRAME_REQUIRE);
 
     // this is frame sync between the devices own depth and colour cameras
     pipeline.enableFrameSync();
@@ -397,7 +404,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       pc::logger()->trace("attempting to start pipeline");
       pipeline.start(ob_config);
     } catch (const ob::Error &e) {
-      pc::logger()->error("Failed to start Orbbec pipeline: {}", e.what());
+      pc::logger()->error("Failed to start Orbbec pipeline: {}", e.getMessage());
       set_error_state(true);
       return;
     }
@@ -455,6 +462,8 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       }
     }
 
+    ob_device_api_access.unlock();
+
     pc::logger()->trace("Starting process loop for OrbbecDevice {}",
                         device_config.id);
 
@@ -462,9 +471,9 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     while (!stop_token.stop_requested()) {
       std::shared_ptr<ob::FrameSet> frame_set;
       try {
-        frame_set = pipeline.waitForFrameset(100);
+        frame_set = pipeline.waitForFrames(100);
       } catch (const ob::Error &e) {
-        pc::logger()->error("waitForFrameset error: {}", e.what());
+        pc::logger()->error("waitForFrames error: {}", e.getMessage());
         continue;
       }
       if (!frame_set) continue;
@@ -506,9 +515,9 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             }
 
             const auto *ob_depth_frame_ptr =
-                reinterpret_cast<const uint16_t *>(depth_frame->getData());
+                reinterpret_cast<const uint16_t *>(depth_frame->data());
             const auto *ob_color_frame_ptr =
-                reinterpret_cast<const color_rgb *>(colour_frame->getData());
+                reinterpret_cast<const color_rgb *>(colour_frame->data());
 
             std::span ob_depth_data{ob_depth_frame_ptr, point_count};
             std::span ob_color_data{ob_color_frame_ptr, point_count};
@@ -521,14 +530,14 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                       TransformConfiguration::BackendType::CUDA &&
                   cuda_backend) {
                 cuda_backend->project_transform_frame_data(
-                    ob_depth_data, ob_color_data, point_cloud,
-                    color_intrinsics, device_config.transform, render_span);
+                    ob_depth_data, ob_color_data, point_cloud, color_intrinsics,
+                    device_config.transform, render_span);
               } else if (device_config.transform.backend.value() ==
                              TransformConfiguration::BackendType::CPU &&
                          cpu_backend) {
                 cpu_backend->project_transform_frame_data(
-                    ob_depth_data, ob_color_data, point_cloud,
-                    color_intrinsics, device_config.transform, render_span);
+                    ob_depth_data, ob_color_data, point_cloud, color_intrinsics,
+                    device_config.transform, render_span);
               }
             }
 
@@ -621,45 +630,45 @@ void OrbbecDevice::on_config_field_changed(std::string_view) {
 void OrbbecDevice::set_ip(std::string_view ip_address,
                           std::string_view subnet_mask,
                           std::string_view gateway_address) {
-  using pc::util::parse_ip_string;
+  // using pc::util::parse_ip_string;
 
-  auto ip_address_buffer = parse_ip_string(ip_address);
-  if (!ip_address_buffer.has_value()) {
-    pc::logger()->error("Unable to update IP Address: {}",
-                        ip_address_buffer.error());
-    return;
-  }
-  auto subnet_mask_buffer = parse_ip_string(subnet_mask);
-  if (!subnet_mask_buffer.has_value()) {
-    pc::logger()->error("Unable to update subnet mask: {}",
-                        subnet_mask_buffer.error());
-    return;
-  }
-  auto gateway_address_buffer = parse_ip_string(gateway_address);
-  if (!subnet_mask_buffer.has_value()) {
-    pc::logger()->error("Unable to update gateway address: {}",
-                        gateway_address_buffer.error());
-    return;
-  }
+  // auto ip_address_buffer = parse_ip_string(ip_address);
+  // if (!ip_address_buffer.has_value()) {
+  //   pc::logger()->error("Unable to update IP Address: {}",
+  //                       ip_address_buffer.error());
+  //   return;
+  // }
+  // auto subnet_mask_buffer = parse_ip_string(subnet_mask);
+  // if (!subnet_mask_buffer.has_value()) {
+  //   pc::logger()->error("Unable to update subnet mask: {}",
+  //                       subnet_mask_buffer.error());
+  //   return;
+  // }
+  // auto gateway_address_buffer = parse_ip_string(gateway_address);
+  // if (!subnet_mask_buffer.has_value()) {
+  //   pc::logger()->error("Unable to update gateway address: {}",
+  //                       gateway_address_buffer.error());
+  //   return;
+  // }
 
-  OBNetIpConfig net_config{};
-  net_config.dhcp = 0;
-  std::copy(ip_address_buffer->begin(), ip_address_buffer->end(),
-            net_config.address);
-  std::copy(subnet_mask_buffer->begin(), subnet_mask_buffer->end(),
-            net_config.mask);
-  std::copy(gateway_address_buffer->begin(), gateway_address_buffer->end(),
-            net_config.gateway);
+  // OBNetIpConfig net_config{};
+  // net_config.dhcp = 0;
+  // std::copy(ip_address_buffer->begin(), ip_address_buffer->end(),
+  //           net_config.address);
+  // std::copy(subnet_mask_buffer->begin(), subnet_mask_buffer->end(),
+  //           net_config.mask);
+  // std::copy(gateway_address_buffer->begin(), gateway_address_buffer->end(),
+  //           net_config.gateway);
 
-  auto ob_ctx = orbbec_context().wait_til_ready();
-  auto &config = std::get<OrbbecDeviceConfiguration>(_config);
-  pc::logger()->trace("Forcing IP...");
-  auto set_result = ob_ctx->forceIp(config.id.c_str(), net_config);
-  if (!set_result) {
-    pc::logger()->error("Failed to set network configuration");
-  }
-  pc::logger()->info(
-      "Successfully updated network config for OrbbecDevice '{}'", config.id);
+  // auto ob_ctx = orbbec_context().wait_til_ready();
+  // auto &config = std::get<OrbbecDeviceConfiguration>(_config);
+  // pc::logger()->trace("Forcing IP...");
+  // auto set_result = ob_ctx->forceIp(config.id.c_str(), net_config);
+  // if (!set_result) {
+  //   pc::logger()->error("Failed to set network configuration");
+  // }
+  // pc::logger()->info(
+  //     "Successfully updated network config for OrbbecDevice '{}'", config.id);
 }
 
 } // namespace pc::devices

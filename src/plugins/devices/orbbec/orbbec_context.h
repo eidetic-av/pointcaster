@@ -34,7 +34,7 @@ public:
   std::vector<ObDeviceInfo> discovered_devices{};
   std::mutex discovered_devices_access;
 
-  std::mutex start_stop_device_access;
+  std::mutex device_api_access;
 
   void discover_devices();
   void discover_devices_async();

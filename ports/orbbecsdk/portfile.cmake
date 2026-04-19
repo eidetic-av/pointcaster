@@ -1,63 +1,65 @@
 vcpkg_from_github(
-    OUT_SOURCE_PATH SOURCE_PATH
-    REPO orbbec/OrbbecSDK_v2
-    REF v${VERSION}
-    SHA512 8ab6f25d3933011f2a9f049b21d7fbd4ffde14c26791a4e92ba0e07b09feda1197504257542380a1c8a9f6277301039e726399f3c1a02575d7e3edd69c1b4aef
-    PATCHES
-        cmake-package-install.patch
-        ros-initialisation-for-gcc.patch
-        use-vcpkg-spdlog.patch
+  OUT_SOURCE_PATH SOURCE_PATH
+  REPO orbbec/OrbbecSDK
+  REF "v${VERSION}"
+  SHA512 ae3866246641c1786d51fafc6cd4ae60c8946e5b2c881c1122830623051e21782f74d46cd9cf08c55e487af6d8961bca769ce0e5bcc1377683ad5e24945e15c0
+  HEAD_REF main
 )
 
-if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
-    message(FATAL_ERROR "orbbecsdk_v2 only supports shared builds")
+file(INSTALL
+  ${SOURCE_PATH}/include/
+  DESTINATION ${CURRENT_PACKAGES_DIR}/include)
+
+file(INSTALL
+    ${SOURCE_PATH}/OrbbecSDKConfig.cmake
+    DESTINATION ${CURRENT_PACKAGES_DIR}/share/OrbbecSDK)
+
+file(INSTALL
+  ${SOURCE_PATH}/cmake/
+  DESTINATION ${CURRENT_PACKAGES_DIR}/share/OrbbecSDK/cmake)
+
+# platform specific var setup
+
+if (VCPKG_TARGET_IS_LINUX)
+  set(LIB_DIR "linux_x64")
+elseif(VCPKG_TARGET_IS_WINDOWS)
+  set(LIB_DIR "win_x64")
+else()
+  message(FATAL_ERROR "Platform not supported.")
 endif()
 
-vcpkg_cmake_configure(
-    SOURCE_PATH "${SOURCE_PATH}"
-    OPTIONS
-        -DOB_BUILD_MAIN_PROJECT=ON
-        -DOB_BUILD_EXAMPLES=OFF
-        -DOB_BUILD_TESTS=OFF
-        -DOB_BUILD_DOCS=OFF
-        -DOB_BUILD_TOOLS=OFF
-        -DOB_INSTALL_EXAMPLES_SOURCE=OFF
-)
+# TODO
+# some predistributed dlls come even when using static builds?
+set(VCPKG_POLICY_DLLS_IN_STATIC_LIBRARY enabled)
 
-vcpkg_cmake_build()
-vcpkg_cmake_install()
+# ***MOVING DEPTH ENGINE FOR NOW***  the depth engine library will come from the k4a repo instead,
+# which works with both k4a and orbbec devices. So skip it for this port
 
-file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+file(GLOB_RECURSE LIB_FILES "${SOURCE_PATH}/lib/${LIB_DIR}/*")
 
-vcpkg_cmake_config_fixup(
-    CONFIG_PATH lib/cmake/OrbbecSDK
-    PACKAGE_NAME OrbbecSDK
-)
+file(GLOB_RECURSE LIB_FILES
+     "${SOURCE_PATH}/lib/${LIB_DIR}/*")
 
-if(VCPKG_TARGET_IS_WINDOWS)
-  set(bin_dir "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/win_x64/bin")
-  set(runtime_extensions_dir "${bin_dir}/extensions")
+foreach(LIB_FILE IN LISTS LIB_FILES)
+  get_filename_component(FILE_NAME ${LIB_FILE} NAME)
+#   if (NOT FILE_NAME MATCHES "depthengine")
+    # orbbec sdk doesnt ship debug dlls, just use release in both configs
+    if (FILE_NAME MATCHES "\\.dll$")
+      file(INSTALL ${LIB_FILE}
+                   DESTINATION ${CURRENT_PACKAGES_DIR}/bin)
+      file(INSTALL ${LIB_FILE}
+                   DESTINATION ${CURRENT_PACKAGES_DIR}/debug/bin)
+    elseif (FILE_NAME MATCHES "\\.lib$")
+      file(INSTALL ${LIB_FILE}
+                   DESTINATION ${CURRENT_PACKAGES_DIR}/lib)
+      file(INSTALL ${LIB_FILE}
+                   DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib)
+      file(INSTALL ${LIB_FILE}
+                   DESTINATION
+                     "${CURRENT_PACKAGES_DIR}/share/OrbbecSDK/lib/${LIB_DIR}")
+    endif()
+#   endif()
+endforeach()
 
-  if(EXISTS "${runtime_extensions_dir}")
-    # copy 'extensions' that orbbec loads at runtime
-    file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/bin")
-    execute_process(
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-              "${runtime_extensions_dir}"
-              "${CURRENT_PACKAGES_DIR}/bin/extensions"
-    )
-
-    # copy all DLLs adjacent to OrbbecSDK.dll
-    file(GLOB runtime_dlls "${bin_dir}/*.dll")
-    foreach(dll_path IN LISTS runtime_dlls)
-      get_filename_component(dll_filename "${dll_path}" NAME)
-
-      if(NOT dll_filename MATCHES "^OrbbecSDK.*\\.dll$")
-        file(COPY "${dll_path}" DESTINATION "${CURRENT_PACKAGES_DIR}/bin")
-      endif()
-    endforeach()
-
-  endif()
-endif()
-
-vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.txt")
+file(INSTALL ${SOURCE_PATH}/LICENSE.txt 
+  DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME "copyright")

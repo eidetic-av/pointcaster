@@ -32,7 +32,8 @@ target_link_libraries(OrbbecDevice PRIVATE
   pointcaster::core
   pointcaster::metrics
   Corrade::PluginManager
-  ob::OrbbecSDK
+  # ob::OrbbecSDK
+  ${OrbbecSDK_LIBS}
   TBB::tbb
 
   # TODO
@@ -65,7 +66,7 @@ file(GLOB ORBBEC_RUNTIME_DEPENDENCIES "${ORBBEC_INSTALLED_LIB_DIR}/*OrbbecSDK*")
 
 install(FILES ${ORBBEC_RUNTIME_DEPENDENCIES} DESTINATION ${ORBBEC_PLUGIN_DIR})
 
-install(DIRECTORY "${ORBBEC_INSTALLED_LIB_DIR}/extensions" DESTINATION ${ORBBEC_PLUGIN_DIR})
+# install(DIRECTORY "${ORBBEC_INSTALLED_LIB_DIR}/extensions" DESTINATION ${ORBBEC_PLUGIN_DIR})
 
 set(CORRADE_PLUGINS ${CORRADE_PLUGINS} OrbbecDevice PARENT_SCOPE)
 
