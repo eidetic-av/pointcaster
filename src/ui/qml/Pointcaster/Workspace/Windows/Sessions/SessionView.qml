@@ -256,14 +256,15 @@ Item {
             y: devicePos ? devicePos.y * 100 : 0
             z: devicePos ? devicePos.z * 100 : 0
 
-            scale: deviceScale || Qt.vector3d(1, 1, 1)
+            // scale: deviceScale || Qt.vector3d(1, 1, 1)
+            scale: Qt.vector3d(0.01, 0.01, 0.01)
 
             materials: PrincipledMaterial {
                 lighting: PrincipledMaterial.NoLighting
                 baseColor: "deepskyblue"
                 roughness: 0.85
                 metalness: 0.0
-                opacity: 0.5
+                opacity: 0.8
             }
         }
 
