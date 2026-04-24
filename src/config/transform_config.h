@@ -15,6 +15,8 @@ struct TransformConfiguration {
   rfl::DefaultVal<float3> min_bound = float3(-10, -10, -10); // @minmax(-10, 10)
   rfl::DefaultVal<float3> max_bound = float3(10, 10, 10);    // @minmax(-10, 10)
 
+  rfl::DefaultVal<int> sample = 1; // @minmax(1, 16)
+
   enum class BackendType { CPU, CUDA };
   rfl::DefaultVal<TransformConfiguration::BackendType> backend =
       BackendType::CPU;

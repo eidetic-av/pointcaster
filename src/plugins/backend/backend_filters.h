@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <config/transform_config.h>
+#include <pointcaster/core_types.h>
 
 #ifdef __CUDACC__
 #define PC_DEVICE_FUNC __host__ __device__
@@ -12,6 +13,8 @@
 
 namespace pc::backend::filter {
 
+static constexpr position invalid_position_value{-32768, -32768, 32767};
+
 struct TransformFilterParameters {
   float position_x, position_y, position_z;
   float rotation_matrix[9];
@@ -19,6 +22,7 @@ struct TransformFilterParameters {
   float input_translation_x, input_translation_y, input_translation_z;
   float min_x, min_y, min_z;
   float max_x, max_y, max_z;
+  int sample;
 
   static inline TransformFilterParameters
   from_config(const pc::TransformConfiguration &transform_config) {
@@ -56,30 +60,29 @@ struct TransformFilterParameters {
             .min_z = min_bound.z * 1000.f,
             .max_x = max_bound.x * 1000.f,
             .max_y = max_bound.y * 1000.f,
-            .max_z = max_bound.z * 1000.f};
+            .max_z = max_bound.z * 1000.f,
+            .sample = transform_config.sample.value()};
   }
 };
 
 PC_DEVICE_FUNC inline position
 transform(position pos, const TransformFilterParameters &param) {
-    float x = pos.x + param.input_translation_x;
-    float y = pos.y + param.input_translation_y;
-    float z = pos.z + param.input_translation_z;
+  float x = pos.x + param.input_translation_x;
+  float y = pos.y + param.input_translation_y;
+  float z = pos.z + param.input_translation_z;
 
-    x *= param.scale_x;
-    y *= param.scale_y;
-    z *= param.scale_z;
+  x *= param.scale_x;
+  y *= param.scale_y;
+  z *= param.scale_z;
 
-    const auto &r = param.rotation_matrix;
-    const float rx = r[0] * x + r[1] * y + r[2] * z;
-    const float ry = r[3] * x + r[4] * y + r[5] * z;
-    const float rz = r[6] * x + r[7] * y + r[8] * z;
+  const auto &r = param.rotation_matrix;
+  const float rx = r[0] * x + r[1] * y + r[2] * z;
+  const float ry = r[3] * x + r[4] * y + r[5] * z;
+  const float rz = r[6] * x + r[7] * y + r[8] * z;
 
-    return {
-        static_cast<int16_t>(rx + param.position_x),
-        static_cast<int16_t>(ry + param.position_y),
-        static_cast<int16_t>(rz + param.position_z)
-    };
+  return {static_cast<int16_t>(rx + param.position_x),
+          static_cast<int16_t>(ry + param.position_y),
+          static_cast<int16_t>(rz + param.position_z)};
 }
 
 PC_DEVICE_FUNC inline bool in_bounds(position pos,
@@ -87,6 +90,16 @@ PC_DEVICE_FUNC inline bool in_bounds(position pos,
   return (pos.x >= param.min_x && pos.x <= param.max_x) &&
          (pos.y >= param.min_y && pos.y <= param.max_y) &&
          (pos.z >= param.min_z && pos.z <= param.max_z);
+}
+
+PC_DEVICE_FUNC inline bool sample(uint32_t idx,
+                                  const TransformFilterParameters &p) {
+  return (idx % p.sample) == 0;
+}
+
+PC_DEVICE_FUNC inline bool is_valid(position p) {
+  return p.x != invalid_position_value.x || p.y != invalid_position_value.y ||
+         p.z != invalid_position_value.z;
 }
 
 } // namespace pc::backend::filter

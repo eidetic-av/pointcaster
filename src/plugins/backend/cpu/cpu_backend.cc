@@ -42,9 +42,15 @@ void CpuBackend::project_transform_frame_data(
   const auto transform_parameters =
       filter::TransformFilterParameters::from_config(transform);
 
+  const auto sample_cloud = transform_parameters.sample > 1;
+
   auto index_sequence = std::views::iota(0, static_cast<int>(point_count));
 
   const auto project_and_transform_point = [&](const auto i) {
+    if (sample_cloud && !filter::sample(i, transform_parameters)) {
+      output_cloud->positions[i] = filter::invalid_position_value;
+      return;
+    }
     const auto px = i % frame_width;
     const auto py = i / frame_width;
     auto pos =
@@ -62,7 +68,8 @@ void CpuBackend::project_transform_frame_data(
   std::iota(output_indices.begin(), output_indices.end(), 0);
 
   const auto crop_point_to_bounds = [&](const auto i) {
-    return filter::in_bounds(output_cloud->positions[i], transform_parameters);
+    return filter::is_valid(output_cloud->positions[i]) &&
+           filter::in_bounds(output_cloud->positions[i], transform_parameters);
   };
 
   auto new_end =

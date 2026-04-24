@@ -59,20 +59,25 @@ struct ProjectAndTransform {
 
   CameraIntrinsics color_intrinsics;
   filter::TransformFilterParameters params;
+  bool sample_cloud;
 
   explicit ProjectAndTransform(const CameraIntrinsics &intrinsics,
                                const TransformConfiguration &transform)
       : color_intrinsics(intrinsics) {
     params = filter::TransformFilterParameters::from_config(transform);
+    sample_cloud = params.sample > 1;
   }
 
   using OutputPointT = thrust::tuple<position, color>;
   using InputPixelT = thrust::tuple<uint16_t, color_rgb, int>;
 
   __host__ __device__ OutputPointT operator()(InputPixelT input) const {
+    const int i = thrust::get<2>(input);
+    if (sample_cloud && !filter::sample(i, params)) {
+      return thrust::make_tuple(filter::invalid_position_value, color{});
+    }
     const uint16_t depth = thrust::get<0>(input);
     const color_rgb rgb = thrust::get<1>(input);
-    const int i = thrust::get<2>(input);
     const auto &frame_width = color_intrinsics.frame_width;
 
     const auto px = i % frame_width;
@@ -92,7 +97,8 @@ struct BoundsCheck {
 
   __host__ __device__ bool
   operator()(thrust::tuple<position, color> point) const {
-    return filter::in_bounds(thrust::get<0>(point), params);
+    auto pos = thrust::get<0>(point);
+    return filter::is_valid(pos) && filter::in_bounds(pos, params);
   }
 };
 
