@@ -88,12 +88,6 @@ ApplicationWindow {
         affinities: ["edit", "view"]
         options: KDDW.KDDockWidgets.MainWindowOption_HasCentralGroup
 
-        DevicesWindow {
-            id: devicesWindow
-            workspace: workspaceModel
-            affinities: ["edit"]
-        }
-
         Component {
             id: sessionWindowComponent
 
@@ -109,10 +103,28 @@ ApplicationWindow {
                 affinities: ["view"]
 
                 SessionView {
+                    id: sessionView
                     workspace: workspaceModel
                     sessionAdapter: sessionDockWidget.sessionAdapter
                     deviceAdapters: workspaceModel ? workspaceModel.deviceAdapters : []
+
+                    Component.onCompleted: Workspace.addSessionView(this)
+                    // TODO
+                    // Component.onDestroyed: Workspace.eraseSessionView(this)
                 }
+            }
+        }
+
+        DevicesWindow {
+            id: devicesWindow
+            workspace: workspaceModel
+            affinities: ["edit"]
+
+            onDeviceSelected: {
+                // update session view UIs when a new device is selected
+                Workspace.sessionViews.forEach(sessionView => {
+                    sessionView.selectionTransformUpdate();
+                });
             }
         }
 
@@ -197,8 +209,8 @@ ApplicationWindow {
         }
 
         Component.onCompleted: {
-            addDockWidget(recordingWindow, KDDW.KDDockWidgets.Location_OnBottom, null, Qt.size(500, 150), KDDW.KDDockWidgets.StartHidden);
             addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(400, 400));
+            addDockWidget(recordingWindow, KDDW.KDDockWidgets.Location_OnBottom, null, Qt.size(500, 150), KDDW.KDDockWidgets.StartHidden);
             mainDockingArea.syncSessionWindows();
         }
 

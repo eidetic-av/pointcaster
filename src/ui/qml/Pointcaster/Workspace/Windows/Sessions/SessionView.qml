@@ -3,8 +3,6 @@ import QtQuick.Controls
 import QtQuick3D
 import QtQuick3D.Helpers
 
-import Gizmo3D
-
 import Pointcaster 1.0
 import Pointcaster.Workspace 1.0
 import Pointcaster.Geometry 1.0
@@ -16,6 +14,26 @@ Item {
     required property var sessionAdapter
     required property var deviceAdapters
     property var cameraAdapter: null
+
+    property var selectedAdapter: (workspace && deviceAdapters) ? deviceAdapters.length > 0 ? root.deviceAdapters[root.workspace.selectedDeviceIndex] : null : null
+
+    property var selectionPosition: selectionPositionOrDefault()
+    function selectionPositionOrDefault() {
+        const pos_mm = selectedAdapter ? selectedAdapter.value("transform/position") : Qt.vector3d(0, 0, 0);
+        return Qt.vector3d(pos_mm.x * 100, pos_mm.y * 100, pos_mm.z * 100);
+    }
+
+    property var selectionScale: selectedAdapter ? selectedAdapter.value("transform/scale") : Qt.vector3d(1, 1, 1)
+
+    property vector3d selectionRotation: selectedAdapter ? selectedAdapter.value("transform/rotation") : Qt.vector3d(0, 0, 0)
+
+    signal selectionTransformUpdate
+
+    onSelectionTransformUpdate: {
+        selectionPosition = selectionPositionOrDefault();
+        selectionRotation = root.selectedAdapter ? root.selectedAdapter.value("transform/rotation") : Qt.vector3d(0, 0, 0);
+    }
+
 
     readonly property real defaultCameraDistance: 250
     readonly property vector3d defaultOrbitOriginPosition: Qt.vector3d(0, 0, 0)
@@ -197,76 +215,7 @@ Item {
     }
 
     View3D {
-        // Model {
-        //     id: cubeWide
-        //     source: "#Cube"
-        //     pickable: true
-        //     x: 180
-        //     y: 20
-        //     scale: Qt.vector3d(1.5, 0.5, 0.5)
-        //     materials: PrincipledMaterial {
-        //         lighting: PrincipledMaterial.FragmentLighting
-        //         baseColor: view.selectedObject === cubeWide ? ThemeColors.highlight : "limegreen"
-        //         roughness: 0.85
-        //         metalness: 0.0
-        //         opacity: 0.5
-        //     }
-        // }
-        // Model {
-        //     id: cubeTall
-        //     source: "#Cube"
-        //     pickable: true
-        //     z: -150
-        //     y: -40
-        //     scale: Qt.vector3d(0.6, 1.8, 0.6)
-        //     materials: PrincipledMaterial {
-        //         lighting: PrincipledMaterial.FragmentLighting
-        //         baseColor: view.selectedObject === cubeTall ? ThemeColors.highlight : "orange"
-        //         roughness: 0.85
-        //         metalness: 0.0
-        //         opacity: 0.5
-        //     }
-        // }
-        // Device point clouds
-
         id: view
-        // ---------- MODELS ----------
-        //     id: cubeMain
-        //     source: "#Cube"
-        //     pickable: true
-        //     materials: PrincipledMaterial {
-        //         lighting: PrincipledMaterial.FragmentLighting
-        //         baseColor: view.selectedObject === cubeMain ? ThemeColors.highlight : "red"
-        //         roughness: 0.85
-        //         metalness: 0.0
-        //         opacity: 0.5
-        //     }
-        // }
-        Model {
-            id: cubeTest
-            source: "#Cube"
-            pickable: true
-
-            property var selectedDeviceAdapter: (root.workspace && root.deviceAdapters) ? root.deviceAdapters[root.workspace.selectedDeviceIndex] : null
-
-            property var devicePos: selectedDeviceAdapter ? selectedDeviceAdapter.value("transform/position") : Qt.vector3d(0, 0, 0)
-            property var deviceScale: selectedDeviceAdapter ? selectedDeviceAdapter.value("transform/scale") : Qt.vector3d(1, 1, 1)
-
-            x: devicePos ? devicePos.x * 100 : 0
-            y: devicePos ? devicePos.y * 100 : 0
-            z: devicePos ? devicePos.z * 100 : 0
-
-            // scale: deviceScale || Qt.vector3d(1, 1, 1)
-            scale: Qt.vector3d(0.01, 0.01, 0.01)
-
-            materials: PrincipledMaterial {
-                lighting: PrincipledMaterial.NoLighting
-                baseColor: "deepskyblue"
-                roughness: 0.85
-                metalness: 0.0
-                opacity: 0.8
-            }
-        }
 
         property var selectedObject: null
         readonly property quaternion gizmoBasis: Qt.quaternion(1, 0, 0, 0)
@@ -282,6 +231,25 @@ Item {
 
         anchors.fill: parent
         camera: camera
+
+        Node {
+            id: selectionProxy
+            x: selectionPosition.x
+            y: selectionPosition.y
+            z: selectionPosition.z
+            scale: selectionScale
+            // eulerRotation: selectionRotation
+        }
+
+        Connections {
+            target: selectedAdapter
+            function onFieldChanged(path) {
+                // TODO might want to debounce
+                if (path.includes("transform")) {
+                    root.selectionTransformUpdate();
+                }
+            }
+        }
 
         Repeater3D {
             model: root.deviceAdapters
@@ -301,38 +269,19 @@ Item {
                         enabled: modelData.render
                     }
 
-                    materials: [ PointCloudMaterial {} ]
+                    materials: [
+                        PointCloudMaterial {}
+                    ]
                 }
 
                 Connections {
                     target: modelData
                     function onPointCloudUpdated() {
-                        geo.updateGeometry()
+                        geo.updateGeometry();
                     }
                 }
             }
         }
-
-        // -------- TESTS -------
-
-        // // -------- LIGHT RIG --------
-        // DirectionalLight {
-        //     eulerRotation: Qt.vector3d(-35, 35, 0)
-        //     brightness: 55
-        //     ambientColor: Qt.rgba(0.18, 0.18, 0.18, 1)
-        // }
-
-        // DirectionalLight {
-        //     eulerRotation: Qt.vector3d(-5, -120, 0)
-        //     brightness: 40
-        //     ambientColor: Qt.rgba(0.26, 0.26, 0.26, 1)
-        // }
-
-        // DirectionalLight {
-        //     eulerRotation: Qt.vector3d(25, 160, 0)
-        //     brightness: 45
-        //     ambientColor: Qt.rgba(0.2, 0.2, 0.2, 1)
-        // }
 
         environment: SceneEnvironment {
             clearColor: ThemeColors.shadow
@@ -349,85 +298,12 @@ Item {
             position: root.defaultOrbitOriginPosition
             rotation: root.defaultOrbitOriginRotation
 
-            CustomCamera {
+            SessionCamera {
                 id: camera
-
-                // 0 = fully perspective, 1 = fully orthographic
-                property real blend: 0
-                // Perspective params
-                property real nearPlane: 1
-                property real farPlane: 250000
-                property real fovYRadians: 60 * Math.PI / 180
-                // ortho params
-                property real orthoHalfHeight: z * 0.6
-                // OrbitCameraController expects these to exist
-                property real clipNear
-                property real clipFar
-
-                function lerp(a, b, t) {
-                    return a + (b - a) * t;
-                }
-
-                function setBlend(targetValue, animate) {
-                    projectionBlendAnim.stop();
-                    if (!animate) {
-                        blend = targetValue;
-                        return;
-                    }
-                    projectionBlendAnim.from = blend;
-                    projectionBlendAnim.to = targetValue;
-                    // easing/duration differs by direction because the matrix blend is non-linear
-                    const ascending = projectionBlendAnim.to > projectionBlendAnim.from;
-                    projectionBlendAnim.easing.type = ascending ? Easing.OutExpo : Easing.InCubic;
-                    projectionBlendAnim.duration = ascending ? 150 : 350;
-                    projectionBlendAnim.start();
-                }
-
-                z: root.defaultCameraDistance
-                projection: {
-                    const aspect = view.width > 0 ? (view.width / view.height) : 1;
-                    const t = blend;
-                    // --- Perspective ---
-                    const cot = Math.cos(fovYRadians * 0.5) / Math.sin(fovYRadians * 0.5);
-                    const p00 = cot / aspect;
-                    const p11 = cot;
-                    const p22 = -(nearPlane + farPlane) / (farPlane - nearPlane);
-                    const p23 = -(2 * nearPlane * farPlane) / (farPlane - nearPlane);
-                    const p32 = -1;
-                    const p33 = 0;
-                    // --- Orthographic ---
-                    const top = orthoHalfHeight;
-                    const bottom = -orthoHalfHeight;
-                    const right = orthoHalfHeight * aspect;
-                    const left = -orthoHalfHeight * aspect;
-                    const o00 = 2 / (right - left);
-                    const o11 = 2 / (top - bottom);
-                    // handles clipping dist, make it pretty much infinite for ortho
-                    const o22 = -1e-08;
-                    const o23 = 0;
-                    const o32 = 0;
-                    const o33 = 1;
-                    const m00 = lerp(p00, o00, t);
-                    const m11 = lerp(p11, o11, t);
-                    const m22 = lerp(p22, o22, t);
-                    const m23 = lerp(p23, o23, t);
-                    const m32 = lerp(p32, o32, t);
-                    const m33 = lerp(p33, o33, t);
-                    return Qt.matrix4x4(m00, 0, 0, 0, 0, m11, 0, 0, 0, 0, m22, m23, 0, 0, m32, m33);
-                }
-
-                NumberAnimation {
-                    // duration/easing set in setBlend()
-
-                    id: projectionBlendAnim
-
-                    target: camera
-                    property: "blend"
-                }
             }
         }
 
-        // A real Node for the gizmo to bind to
+        // a node for camera orbit gizmo to bind to
         Node {
             id: gizmoTarget
         }
@@ -538,12 +414,12 @@ Item {
             id: xAxis
             visible: sessionControls.gridEnabled
             eulerRotation: Qt.vector3d(90, 0, 0)
-            scale: Qt.vector3d(groundGrid.metres * 500, 0, 0)
+            scale: Qt.vector3d(groundGrid.metres * 500, 1, 1)
             x: groundGrid.metres * 25
 
             geometry: GridGeometry {
-                horizontalLines: 2
-                verticalLines: 2
+                horizontalLines: 1
+                verticalLines: 1
             }
 
             materials: [
@@ -559,12 +435,12 @@ Item {
             id: zAxis
             visible: sessionControls.gridEnabled
             eulerRotation: Qt.vector3d(90, 0, 00)
-            scale: Qt.vector3d(0, groundGrid.metres * 500, 0)
+            scale: Qt.vector3d(1, groundGrid.metres * 500, 1)
             z: groundGrid.metres * 25
 
             geometry: GridGeometry {
-                horizontalLines: 2
-                verticalLines: 2
+                horizontalLines: 1
+                verticalLines: 1
             }
 
             materials: [
@@ -600,12 +476,14 @@ Item {
         }
     }
 
-    // the transform gizmo actually sits in 2d space outside the view3d
-    GlobalGizmo {
+    // transform controls for selected device/operator
+
+    SelectionGizmo {
+        id: selectionGizmo
+        visible: root.selectedAdapter && !sessionControls.viewLocked
         view3d: view
-        targetNode: cubeTest
-        anchors.fill: parent
-        mode: GizmoEnums.Mode.All
+        targetNode: selectionProxy
+        targetAdapter: root.selectedAdapter
         z: 99
     }
 

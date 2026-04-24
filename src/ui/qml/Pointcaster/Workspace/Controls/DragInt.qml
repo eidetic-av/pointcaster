@@ -51,7 +51,7 @@ SpinBox {
     }
 
     readonly property real dragTargetPixels: {
-        var frac = Math.max(0.05, Math.min(1.0, WorkspaceState.inputDragSpeed));
+        var frac = Math.max(0.05, Math.min(1.0, Workspace.inputDragSpeed));
         var w = 15000.0;
         return Math.max(200.0, w * frac);
     }

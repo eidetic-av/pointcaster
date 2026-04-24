@@ -3,7 +3,7 @@
 # configuring the qml module
 
 set(qml_singletons
-    WorkspaceState.qml
+    Workspace.qml
     Theme/ThemeColors.qml
     Theme/FontAwesome.qml
     Theme/Scaling.qml
@@ -27,6 +27,7 @@ qt_add_qml_module(PointcasterWorkspace
         Controls/InfoToolTip.qml
         Controls/OriginGizmo.qml
         Controls/OrbitViewController.qml
+        Controls/Gizmos/SelectionGizmo.qml
         Editors/ConfigurationEditor.qml
         Windows/TabBar.qml
         Windows/TabBarBase.qml
@@ -44,6 +45,7 @@ qt_add_qml_module(PointcasterWorkspace
         Windows/Devices/DevicesWindow.qml
         Windows/Devices/DeviceControlRow.qml
         Windows/Devices/AddDeviceMenu.qml
+        Windows/Sessions/SessionCamera.qml
         Windows/Sessions/SessionView.qml
         Windows/Sessions/CentralSessionView.qml
         Windows/Sessions/SessionControls.qml

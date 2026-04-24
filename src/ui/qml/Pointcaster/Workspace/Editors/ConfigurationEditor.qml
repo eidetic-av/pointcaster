@@ -14,7 +14,7 @@ Column {
 
     property bool flattenFields: true
 
-    readonly property int labelColumnWidth: WorkspaceState.labelColumnWidth
+    readonly property int labelColumnWidth: Workspace.labelColumnWidth
     property int minLabelColumnWidth: Math.round(40 * Scaling.uiScale)
     property int minValueColumnWidth: Math.round(170 * Scaling.uiScale)
 
@@ -207,7 +207,7 @@ Column {
                                 onPositionChanged: {
                                     if (!dragging)
                                         return;
-                                    WorkspaceState.labelColumnWidth = Math.round(dividerHandle.x + mouseX);
+                                    Workspace.labelColumnWidth = Math.round(dividerHandle.x + mouseX);
                                 }
                             }
                         }

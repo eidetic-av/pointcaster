@@ -13,6 +13,8 @@ KDDW.DockWidget {
 
     property var workspace: null
 
+    signal deviceSelected();
+
     function init() {
         if (workspace) {
             workspace.triggerDeviceDiscovery();
@@ -72,6 +74,7 @@ KDDW.DockWidget {
                 workspace: root.workspace
                 height: Math.round(160 * Scaling.uiScale)
                 Layout.fillWidth: true
+                onActivated: root.deviceSelected()
             }
 
             DeviceControlRow {
@@ -91,12 +94,7 @@ KDDW.DockWidget {
                 Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
                 clip: true
 
-                // the container/listview pattern here makes sure each device configuration stays
-                // in sync with our workspace model data.
-                // Just using a single ConfigurationEditor that had a bound & dynamically updated
-                // model wasn't able to refresh its own data automatically for some reason...
-                // So the ListView of device config 'pages' just ensures the config UI is always 
-                // updated in real time.
+                // 
 
                 Container {
                     id: deviceConfigContainer
@@ -108,6 +106,7 @@ KDDW.DockWidget {
                         snapMode: ListView.SnapOneItem
                         orientation: ListView.Horizontal
                         interactive: false
+                        anchors.fill: parent
 
                         Connections {
                             target: deviceSelectionList

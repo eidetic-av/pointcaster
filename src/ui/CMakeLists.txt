@@ -8,8 +8,6 @@ add_library(pointcaster_ui
     models/commands/device_config_commands.cc
     models/session_recorder_model.cc
     window/view_factory.cc
-    # geometry/point_cloud_geometry.h
-    # geometry/point_cloud_geometry.cc
 )
 add_library(pointcaster::ui ALIAS pointcaster_ui)
 

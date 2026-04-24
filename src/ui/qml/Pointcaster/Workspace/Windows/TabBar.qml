@@ -266,7 +266,6 @@ KDDW.TabBarBase {
                         text: title
                         font: Scaling.uiFont
                         color: ThemeColors.text
-                        opacity: tab.isHovered ? 1 : tab.isCurrent ? 1 : 0.5
                         elide: Text.ElideRight
                     }
                 }
