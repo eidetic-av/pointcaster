@@ -13,18 +13,20 @@
 namespace pc::backend::filter {
 
 struct TransformFilterParameters {
-  float scale_x, scale_y, scale_z;
+  float position_x, position_y, position_z;
   float rotation_matrix[9];
-  float translate_x, translate_y, translate_z;
+  float scale_x, scale_y, scale_z;
+  float input_translation_x, input_translation_y, input_translation_z;
   float min_x, min_y, min_z;
   float max_x, max_y, max_z;
 
   static inline TransformFilterParameters
   from_config(const pc::TransformConfiguration &transform_config) {
 
-    const auto &translation = transform_config.position.value();
+    const auto &position = transform_config.position.value();
     const auto &rotation = transform_config.rotation.value();
     const auto &scale = transform_config.scale.value();
+    const auto &input_translation = transform_config.input_translation.value();
     const auto &min_bound = transform_config.min_bound.value();
     const auto &max_bound = transform_config.max_bound.value();
 
@@ -36,17 +38,19 @@ struct TransformFilterParameters {
     const float cz = std::cos(rotation.z * deg_2_rad);
     const float szr = std::sin(rotation.z * deg_2_rad);
 
-    return {.scale_x = scale.x,
+    return {.position_x = position.x * 1000.f,
+            .position_y = position.y * 1000.f,
+            .position_z = position.z * 1000.f,
+            .rotation_matrix = {cy * cz + sy * sxr * szr,
+                                sy * sxr * cz - cy * szr, sy * cx, cx * szr,
+                                cx * cz, -sxr, cy * sxr * szr - sy * cz,
+                                sy * szr + cy * sxr * cz, cy * cx},
+            .scale_x = scale.x,
             .scale_y = scale.y,
             .scale_z = scale.z,
-            .rotation_matrix = {cy * cz, cy * szr, -sy,
-                                sxr * sy * cz - cx * szr,
-                                sxr * sy * szr + cx * cz, sxr * cy,
-                                cx * sy * cz + sxr * szr,
-                                cx * sy * szr - sxr * cz, cx * cy},
-            .translate_x = translation.x * 1000.f,
-            .translate_y = translation.y * 1000.f,
-            .translate_z = translation.z * 1000.f,
+            .input_translation_x = input_translation.x * 1000.f,
+            .input_translation_y = input_translation.y * 1000.f,
+            .input_translation_z = input_translation.z * 1000.f,
             .min_x = min_bound.x * 1000.f,
             .min_y = min_bound.y * 1000.f,
             .min_z = min_bound.z * 1000.f,
@@ -58,20 +62,24 @@ struct TransformFilterParameters {
 
 PC_DEVICE_FUNC inline position
 transform(position pos, const TransformFilterParameters &param) {
-  const float x = pos.x * param.scale_x;
-  const float y = pos.y * param.scale_y;
-  const float z = pos.z * param.scale_z;
+    float x = pos.x + param.input_translation_x;
+    float y = pos.y + param.input_translation_y;
+    float z = pos.z + param.input_translation_z;
 
-  // TODO
-  // rotation matrix values use ZYX, maybe cross check to see if its the
-  // rotation order we want for sure
-  const auto &r = param.rotation_matrix;
-  const float out_x = (r[0] * x + r[1] * y + r[2] * z) + param.translate_x;
-  const float out_y = (r[3] * x + r[4] * y + r[5] * z) + param.translate_y;
-  const float out_z = (r[6] * x + r[7] * y + r[8] * z) + param.translate_z;
+    x *= param.scale_x;
+    y *= param.scale_y;
+    z *= param.scale_z;
 
-  return {static_cast<int16_t>(out_x), static_cast<int16_t>(out_y),
-          static_cast<int16_t>(out_z)};
+    const auto &r = param.rotation_matrix;
+    const float rx = r[0] * x + r[1] * y + r[2] * z;
+    const float ry = r[3] * x + r[4] * y + r[5] * z;
+    const float rz = r[6] * x + r[7] * y + r[8] * z;
+
+    return {
+        static_cast<int16_t>(rx + param.position_x),
+        static_cast<int16_t>(ry + param.position_y),
+        static_cast<int16_t>(rz + param.position_z)
+    };
 }
 
 PC_DEVICE_FUNC inline bool in_bounds(position pos,
