@@ -113,6 +113,19 @@ struct InterleaveForRender {
   }
 };
 
+struct PositionAsBounds {
+  __host__ __device__ position_bounds operator()(const position &p) const {
+    return filter::as_bounds(p);
+  }
+};
+
+struct MergeBounds {
+  __host__ __device__ position_bounds
+  operator()(const position_bounds &a, const position_bounds &b) const {
+    return filter::merge_bounds(a, b);
+  }
+};
+
 bool init_device_memory(void *owner, const size_t point_count) {
   try {
     create_device_memory(owner, point_count);
@@ -173,6 +186,7 @@ void project_transform_frame_data(void *owner,
                          device_memory->output_colors.begin()));
 
   size_t new_point_count;
+  position_bounds new_cloud_bounds;
 
   {
     ProfilingZone transform_zone("CudaBackend::transform_and_filter");
@@ -188,6 +202,11 @@ void project_transform_frame_data(void *owner,
                           output_points_end, BoundsCheck{transform_parameters});
 
     new_point_count = new_end - output_points_begin;
+
+    new_cloud_bounds = thrust::transform_reduce(
+        thrust::cuda::par, device_memory->output_positions.begin(),
+        device_memory->output_positions.begin() + new_point_count,
+        PositionAsBounds{}, position_bounds{}, MergeBounds{});
 
     if (output_render_buffer) {
       // reset indices to sequential for the filtered range
@@ -214,6 +233,8 @@ void project_transform_frame_data(void *owner,
     thrust::copy(device_memory->output_colors.begin(),
                  device_memory->output_colors.begin() + new_point_count,
                  output_cloud->colors.begin());
+
+    output_cloud->bounds = new_cloud_bounds;
 
     if (output_render_buffer) {
       thrust::copy(device_memory->interleaved_render.begin(),

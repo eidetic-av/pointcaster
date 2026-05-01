@@ -4,6 +4,7 @@
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
 #include <core/logger/logger.h>
+#include <exception>
 
 namespace pc::backend {
 
@@ -23,9 +24,15 @@ void CudaBackend::project_transform_frame_data(
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
     std::span<std::byte> render_output) {
-  cuda::project_transform_frame_data(this, input_depth_frame, input_rgb_frame,
-                                     output_cloud, color_intrinsics, transform,
-                                     render_output);
+  try {
+    cuda::project_transform_frame_data(this, input_depth_frame, input_rgb_frame,
+                                       output_cloud, color_intrinsics,
+                                       transform, render_output);
+  } catch (const std::exception &e) {
+    pc::logger()->error("CUDA backend error: {}", e.what());
+  } catch (...) {
+    pc::logger()->error("CUDA backend error: Unknown exception");
+  }
 }
 
 } // namespace pc::backend

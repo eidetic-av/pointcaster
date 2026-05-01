@@ -12,6 +12,7 @@ class PointCloud {
 public:
   std::vector<position> positions;
   std::vector<color> colors;
+  position_bounds bounds;
 
   auto size() const { return positions.size(); }
   auto empty() const { return positions.empty(); }

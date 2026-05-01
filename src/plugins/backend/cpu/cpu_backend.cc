@@ -8,6 +8,7 @@
 #include <core/logger/logger.h>
 #include <execution>
 #include <logger/logger.h>
+#include <numeric>
 #include <pointcaster/core_types.h>
 #include <ranges>
 
@@ -100,6 +101,11 @@ void CpuBackend::project_transform_frame_data(
 
   std::for_each(std::execution::par_unseq, output_range.begin(),
                 output_range.end(), copy_to_output_buffers);
+
+  output_cloud->bounds =
+      std::transform_reduce(std::execution::par_unseq, output_positions.begin(),
+                            output_positions.end(), position_bounds{},
+                            filter::merge_bounds, filter::as_bounds);
 
   std::copy(output_positions.begin(), output_positions.end(),
             output_cloud->positions.begin());

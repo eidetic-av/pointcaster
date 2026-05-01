@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <utility>
 
 namespace pc {
@@ -32,7 +33,7 @@ struct quaternion {
 };
 
 struct uint2 {
-  unsigned int x, y = 0;
+  unsigned int x = 0, y = 0;
   auto operator<=>(const uint2 &u) const = default;
 };
 
@@ -44,8 +45,17 @@ struct alignas(4) position {
   auto operator<=>(const position &p) const = default;
 };
 
+struct position_bounds {
+  position min{std::numeric_limits<int16_t>::max(),
+               std::numeric_limits<int16_t>::max(),
+               std::numeric_limits<int16_t>::max()};
+  position max{std::numeric_limits<int16_t>::min(),
+               std::numeric_limits<int16_t>::min(),
+               std::numeric_limits<int16_t>::min()};
+};
+
 struct color {
-  unsigned char r, g, b, a = 0;
+  unsigned char r = 0, g = 0, b = 0, a = 0;
   auto operator<=>(const color &c) const = default;
 };
 

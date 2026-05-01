@@ -102,4 +102,18 @@ PC_DEVICE_FUNC inline bool is_valid(position p) {
          p.z != invalid_position_value.z;
 }
 
+PC_DEVICE_FUNC inline position_bounds as_bounds(const position &p) {
+  return {p, p};
+}
+
+PC_DEVICE_FUNC inline position_bounds merge_bounds(const position_bounds &a,
+                                                   const position_bounds &b) {
+  return {{a.min.x < b.min.x ? a.min.x : b.min.x,
+           a.min.y < b.min.y ? a.min.y : b.min.y,
+           a.min.z < b.min.z ? a.min.z : b.min.z},
+          {a.max.x < b.max.x ? b.max.x : a.max.x,
+           a.max.y < b.max.y ? b.max.y : a.max.y,
+           a.max.z < b.max.z ? b.max.z : a.max.z}};
+}
+
 } // namespace pc::backend::filter
