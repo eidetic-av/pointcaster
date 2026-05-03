@@ -64,5 +64,8 @@ struct color_rgb {
   unsigned char g = 0;
   unsigned char b = 0;
   auto operator<=>(const color_rgb &c) const = default;
+
+  operator color() const { return {r, g, b, 255}; };
 };
+
 } // namespace pc

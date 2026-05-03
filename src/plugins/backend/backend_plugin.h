@@ -7,6 +7,7 @@
 #include <Corrade/Containers/String.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
+#include <config/color_transform_config.h>
 #include <config/transform_config.h>
 #include <cpplocate/cpplocate.h>
 #include <filesystem>
@@ -15,6 +16,7 @@
 #include <pointcaster/point_cloud.h>
 #include <span>
 #include <tuple>
+
 
 namespace pc::backend {
 
@@ -79,6 +81,7 @@ public:
                                std::shared_ptr<PointCloud> output_cloud,
                                const CameraIntrinsics &color_intrinsics,
                                const TransformConfiguration &transform,
+                               const ColorTransformConfiguration &color_transform,
                                std::span<std::byte> render_output = {}) = 0;
 };
 

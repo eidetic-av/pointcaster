@@ -24,6 +24,7 @@ public:
       std::shared_ptr<PointCloud> output_cloud,
       const CameraIntrinsics &color_intrinsics,
       const TransformConfiguration &transform,
+      const ColorTransformConfiguration &color_transform,
       std::span<std::byte> render_output = {}) override;
 };
 

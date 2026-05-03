@@ -1,5 +1,6 @@
 #pragma once
 
+#include "color_transform_config.h"
 #include "file_config.h"
 #include "network_config.h"
 #include "transform_config.h"
@@ -8,6 +9,7 @@
 #include <utility>
 #include <variant>
 
+
 #include <camera/camera_config.h>
 #include <config/transform_config.h>
 #include <session/session_config.h>
@@ -15,8 +17,8 @@
 namespace pc {
 
 using ConfigurationVariant =
-    std::variant<TransformConfiguration, FileConfiguration,
-                 NetworkConfiguration, CameraConfiguration,
+    std::variant<TransformConfiguration, ColorTransformConfiguration,
+                 FileConfiguration, NetworkConfiguration, CameraConfiguration,
                  SessionConfiguration>;
 
 // compile time utilities

@@ -43,6 +43,7 @@ set(CONFIG_ADAPTER_INPUTS
     ${CMAKE_SOURCE_DIR}/src/config/file_config.h
     ${CMAKE_SOURCE_DIR}/src/config/network_config.h
     ${CMAKE_SOURCE_DIR}/src/config/transform_config.h
+    ${CMAKE_SOURCE_DIR}/src/config/color_transform_config.h
     ${CMAKE_SOURCE_DIR}/src/session/session_config.h
     ${CMAKE_SOURCE_DIR}/src/camera/camera_config.h
     # TODO we need some faculty to create these adapters

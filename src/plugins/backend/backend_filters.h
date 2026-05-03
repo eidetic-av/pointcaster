@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cmath>
+#include <config/color_transform_config.h>
 #include <config/transform_config.h>
+#include <optional>
 #include <pointcaster/core_types.h>
 
 #ifdef __CUDACC__
@@ -16,6 +18,7 @@ namespace pc::backend::filter {
 static constexpr position invalid_position_value{-32768, -32768, 32767};
 
 struct TransformFilterParameters {
+
   float position_x, position_y, position_z;
   float rotation_matrix[9];
   float scale_x, scale_y, scale_z;
@@ -24,8 +27,13 @@ struct TransformFilterParameters {
   float max_x, max_y, max_z;
   int sample;
 
+  struct ColorParameters {
+    float gain;
+  } color;
+
   static inline TransformFilterParameters
-  from_config(const pc::TransformConfiguration &transform_config) {
+  from_config(const pc::TransformConfiguration &transform_config,
+              const pc::ColorTransformConfiguration &color_config) {
 
     const auto &position = transform_config.position.value();
     const auto &rotation = transform_config.rotation.value();
@@ -61,7 +69,8 @@ struct TransformFilterParameters {
             .max_x = max_bound.x * 1000.f,
             .max_y = max_bound.y * 1000.f,
             .max_z = max_bound.z * 1000.f,
-            .sample = transform_config.sample.value()};
+            .sample = transform_config.sample.value(),
+            .color = {.gain = color_config.gain.value()}};
   }
 };
 
@@ -83,6 +92,16 @@ transform(position pos, const TransformFilterParameters &param) {
   return {static_cast<int16_t>(rx + param.position_x),
           static_cast<int16_t>(ry + param.position_y),
           static_cast<int16_t>(rz + param.position_z)};
+}
+
+PC_DEVICE_FUNC inline color
+color_transform(color col, const TransformFilterParameters &param) {
+  float r = col.r * param.color.gain;
+  float g = col.g * param.color.gain;
+  float b = col.b * param.color.gain;
+
+  return {static_cast<unsigned char>(r), static_cast<unsigned char>(g),
+          static_cast<unsigned char>(b)};
 }
 
 PC_DEVICE_FUNC inline bool in_bounds(position pos,

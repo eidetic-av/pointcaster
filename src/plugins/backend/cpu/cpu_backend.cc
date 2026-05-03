@@ -35,13 +35,15 @@ void CpuBackend::project_transform_frame_data(
     std::shared_ptr<PointCloud> output_cloud,
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
+    const ColorTransformConfiguration &color_transform,
     std::span<std::byte> render_output) {
 
   const auto point_count = output_cloud->size();
   const auto frame_width = color_intrinsics.frame_width;
 
   const auto transform_parameters =
-      filter::TransformFilterParameters::from_config(transform);
+      filter::TransformFilterParameters::from_config(transform,
+                                                     color_transform);
 
   const auto sample_cloud = transform_parameters.sample > 1;
 
@@ -54,12 +56,15 @@ void CpuBackend::project_transform_frame_data(
     }
     const auto px = i % frame_width;
     const auto py = i / frame_width;
-    auto pos =
+    auto position =
         util::project_2d_to_3d(px, py, input_depth_frame[i], color_intrinsics);
-    pos = filter::transform(pos, transform_parameters);
-    output_cloud->positions[i] = pos;
-    output_cloud->colors[i] = {input_rgb_frame[i].r, input_rgb_frame[i].g,
-                               input_rgb_frame[i].b};
+    position = filter::transform(position, transform_parameters);
+
+    auto color =
+        filter::color_transform(input_rgb_frame[i], transform_parameters);
+
+    output_cloud->positions[i] = position;
+    output_cloud->colors[i] = color;
   };
 
   std::for_each(std::execution::par_unseq, index_sequence.begin(),

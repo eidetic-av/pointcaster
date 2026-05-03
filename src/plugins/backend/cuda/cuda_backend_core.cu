@@ -61,10 +61,13 @@ struct ProjectAndTransform {
   filter::TransformFilterParameters params;
   bool sample_cloud;
 
-  explicit ProjectAndTransform(const CameraIntrinsics &intrinsics,
-                               const TransformConfiguration &transform)
+  explicit ProjectAndTransform(
+      const CameraIntrinsics &intrinsics,
+      const TransformConfiguration &transform,
+      const ColorTransformConfiguration &color_transform)
       : color_intrinsics(intrinsics) {
-    params = filter::TransformFilterParameters::from_config(transform);
+    params = filter::TransformFilterParameters::from_config(transform,
+                                                            color_transform);
     sample_cloud = params.sample > 1;
   }
 
@@ -83,12 +86,12 @@ struct ProjectAndTransform {
     const auto px = i % frame_width;
     const auto py = i / frame_width;
 
-    auto pos = util::project_2d_to_3d(px, py, depth, color_intrinsics);
-    pos = filter::transform(pos, params);
+    auto position = util::project_2d_to_3d(px, py, depth, color_intrinsics);
+    position = filter::transform(position, params);
 
-    color col{rgb.r, rgb.g, rgb.b};
+    auto col = filter::color_transform(color{rgb.r, rgb.g, rgb.b}, params);
 
-    return thrust::make_tuple(pos, col);
+    return thrust::make_tuple(position, col);
   }
 };
 
@@ -139,13 +142,13 @@ void free_device_memory(void *owner) {
   instance_device_memory.erase(owner);
 }
 
-void project_transform_frame_data(void *owner,
-                                  UShortDepthData input_depth_frame,
-                                  RgbColorData input_rgb_frame,
-                                  std::shared_ptr<PointCloud> output_cloud,
-                                  const CameraIntrinsics &color_intrinsics,
-                                  const TransformConfiguration &transform,
-                                  std::span<std::byte> render_output) {
+void project_transform_frame_data(
+    void *owner, UShortDepthData input_depth_frame,
+    RgbColorData input_rgb_frame, std::shared_ptr<PointCloud> output_cloud,
+    const CameraIntrinsics &color_intrinsics,
+    const TransformConfiguration &transform,
+    const ColorTransformConfiguration &color_transform,
+    std::span<std::byte> render_output) {
 
   DeviceTransformMemory *device_memory;
   {
@@ -159,7 +162,8 @@ void project_transform_frame_data(void *owner,
   using namespace pc::profiling;
 
   const auto transform_parameters =
-      filter::TransformFilterParameters::from_config(transform);
+      filter::TransformFilterParameters::from_config(transform,
+                                                     color_transform);
 
   bool output_render_buffer = !render_output.empty();
 
@@ -191,9 +195,10 @@ void project_transform_frame_data(void *owner,
   {
     ProfilingZone transform_zone("CudaBackend::transform_and_filter");
 
-    thrust::transform(thrust::cuda::par, frame_data_input_begin,
-                      frame_data_input_end, output_points_begin,
-                      ProjectAndTransform{color_intrinsics, transform});
+    thrust::transform(
+        thrust::cuda::par, frame_data_input_begin, frame_data_input_end,
+        output_points_begin,
+        ProjectAndTransform{color_intrinsics, transform, color_transform});
 
     auto output_points_end = output_points_begin + device_memory->point_count;
 
