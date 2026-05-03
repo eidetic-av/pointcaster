@@ -390,6 +390,8 @@ public:
     {% elif "float3" in m.type %}
             const QVector3D v = toQVector3DLoose(value);
             float3 newValue{ v.x(), v.y(), v.z() };
+    {% elif "float" in m.type %}
+            const float newValue = value.toFloat();
     {% endif %}
             if (m_config.{{ m.name }}.value() == newValue)
                 return false;
