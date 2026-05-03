@@ -6,7 +6,6 @@
 #include <boost/interprocess/mapped_region.hpp>
 #include <core/logger/logger.h>
 #include <core/profiling/profiling_zone.h>
-#include <happly.h>
 
 #include <oneapi/tbb/parallel_for.h>
 #include <pointcaster/point_cloud.h>

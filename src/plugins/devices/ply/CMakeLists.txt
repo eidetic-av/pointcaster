@@ -20,14 +20,12 @@ target_link_libraries(PlyDevice PRIVATE
   Boost::interprocess
 )
 
-find_path(HAPPLY_INCLUDE_DIRS "happly.h")
 find_path(LLFIO_INCLUDE_DIRS "llfio.hpp")
 
 target_include_directories(PlyDevice 
   PRIVATE 
     "${CMAKE_SOURCE_DIR}/src" 
     "${CMAKE_SOURCE_DIR}/include"
-    ${HAPPLY_INCLUDE_DIRS}
     ${LLFIO_INCLUDE_DIRS}
 )
 
