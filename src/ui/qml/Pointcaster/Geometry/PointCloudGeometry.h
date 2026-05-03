@@ -1,7 +1,9 @@
 #pragma once
 #include <QObject>
 #include <QQuick3DGeometry>
+#include <QVector3D>
 #include <QtQmlIntegration/qqmlintegration.h>
+#include <limits>
 #include <memory>
 #include <pointcaster/point_cloud.h>
 #include <ui/models/point_cloud_adapter.h>
@@ -10,10 +12,17 @@ namespace pc::ui::qml {
 
 class PointCloudGeometry : public QQuick3DGeometry {
   Q_OBJECT
+
   QML_NAMED_ELEMENT(PointCloudGeometry)
+
   Q_PROPERTY(PointCloudAdapter *pointCloudAdapter READ pointCloudAdapter WRITE
                  setPointCloudAdapter NOTIFY pointCloudAdapterChanged)
+
   Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY enabledChanged)
+
+  Q_PROPERTY(QVector3D boundsMin READ boundsMin NOTIFY boundsChanged)
+  Q_PROPERTY(QVector3D boundsMax READ boundsMax NOTIFY boundsChanged)
+  Q_PROPERTY(QVector3D boundsCenter READ boundsCenter NOTIFY boundsChanged)
 
 public:
   PointCloudGeometry();
@@ -30,15 +39,24 @@ public:
     emit enabledChanged();
   }
 
+  QVector3D boundsMin() const { return _boundsMin; }
+  QVector3D boundsMax() const { return _boundsMax; }
+  QVector3D boundsCenter() const { return _boundsCenter; }
+
   Q_INVOKABLE void updateGeometry();
 
 signals:
   void pointCloudAdapterChanged();
   void enabledChanged();
+  void boundsChanged();
 
 private:
   PointCloudAdapter *_pointCloudAdapter = nullptr;
   bool _enabled = true;
+
+  QVector3D _boundsMin;
+  QVector3D _boundsMax;
+  QVector3D _boundsCenter;
 };
 
 } // namespace pc::ui::qml
