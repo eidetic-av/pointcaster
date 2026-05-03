@@ -152,7 +152,7 @@ MenuBar {
 
                 if (recordingWindow.isOpen)
                     recordingWindow.forceClose();
-                else 
+                else
                     recordingWindow.open();
             }
         }
@@ -164,11 +164,37 @@ MenuBar {
             }
         }
 
+        Action {
+            id: alignmentWindowMenuToggle
+            text: qsTr("&Alignment")
+            checkable: true
+            checked: false
+
+            onTriggered: {
+                if (!alignmentWindow)
+                    return;
+
+                if (alignmentWindow.isOpen)
+                    alignmentWindow.forceClose();
+                else
+                    alignmentWindow.open();
+            }
+        }
+
+        Connections {
+            target: alignmentWindow
+            function onIsOpenChanged() {
+                alignmentWindowMenuToggle.checked = alignmentWindow.isOpen;
+            }
+        }
+
         function sync() {
             if (devicesWindow)
                 devicesWindowMenuToggle.checked = devicesWindow.isOpen;
             if (recordingWindow)
                 recordingWindowMenuToggle.checked = recordingWindow.isOpen;
+            if (alignmentWindow)
+                alignmentWindowMenuToggle.checked = alignmentWindow.isOpen;
         }
 
         onAboutToShow: sync()

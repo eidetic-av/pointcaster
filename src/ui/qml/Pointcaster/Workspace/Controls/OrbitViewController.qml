@@ -10,7 +10,7 @@ Item {
     required property Camera camera
 
     property real xSpeed: 0.1
-    property real ySpeed: 0.1
+    property real ySpeed: 0.5
 
     property bool xInvert: false
     property bool yInvert: true

@@ -135,6 +135,12 @@ ApplicationWindow {
             affinities: ["edit"]
         }
 
+        AlignmentWindow {
+            id: alignmentWindow
+            workspace: workspaceModel
+            affinities: ["tools"]
+        }
+
         // id(string) -> KDDW.DockWidget
         property var sessionDockById: ({})
 
