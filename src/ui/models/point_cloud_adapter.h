@@ -10,5 +10,4 @@ public:
   virtual std::shared_ptr<std::vector<std::byte>> render_data() {
     return nullptr;
   }
-
 };
