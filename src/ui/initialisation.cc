@@ -34,8 +34,10 @@ initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
 
   // load in any qml shared libs required before application engine starts
   QLibrary gizmo("gizmo3d");
-  if (!gizmo.load()) pc::logger()->error("Failed to load Gizmo3d QML library");
-  else pc::logger()->trace("Loaded Gizmo3D QML library");
+  if (!gizmo.load())
+    pc::logger()->error("Failed to load Gizmo3d QML library");
+  else
+    pc::logger()->trace("Loaded Gizmo3D QML library");
 
   // create single ApplicationEngine instance
   static QQmlApplicationEngine qml_engine;
