@@ -4,7 +4,6 @@ void MAIN()
 {
     int xy   = floatBitsToInt(VERTEX.x);
     int zp   = floatBitsToInt(VERTEX.y);
-    uint rgba = floatBitsToUint(VERTEX.z);
 
     float px = float(int(xy << 16) >> 16);
     float py = float(xy >> 16);
@@ -12,19 +11,17 @@ void MAIN()
 
     vec3 pos = vec3(px, py, pz) * 0.1;
 
-    vec3 srgb = vec3(
-        float(rgba & 0xFFu),
-        float((rgba >> 8u) & 0xFFu),
-        float((rgba >> 16u) & 0xFFu)
-    ) / 255.0;
+    // we split our point index integer into four bytes
+    // in order to pack it into our color buffer.
 
-    // since we don't use alpha, we can pack the vertex index into the a channel
-    float index = float(gl_VertexIndex);
+    int i = gl_VertexIndex;
+    unsigned char bytes[4];
+    bytes[0] = (i >> 24) & 0xFF;
+    bytes[1] = (i >> 16) & 0xFF;
+    bytes[2] = (i >> 8) & 0xFF;
+    bytes[3] = i & 0xFF;
 
-    vColor = vec4(srgb, index);
-
-    // color conversion seems unecessary
-    // vColor = vec4(pow(srgb, vec3(2.2)), 1.0);
+    vColor = bytes;
 
     POSITION = MODELVIEWPROJECTION_MATRIX * vec4(pos, 1.0);
     POINT_SIZE = uPointSize;

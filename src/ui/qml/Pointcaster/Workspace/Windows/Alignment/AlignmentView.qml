@@ -24,7 +24,7 @@ Item {
             }
 
             materials: [
-                PointCloudMaterial {
+                PointIndexMaterial {
                     uPointSize: viewController.shaderPointSize
                 }
             ]
@@ -57,22 +57,8 @@ Item {
     MouseArea {
         anchors.fill: parent
         propagateComposedEvents: true
-        onClicked: mouse => {
-            // on click, we determine the color of the pixel clicked
-            const x = Math.round(mouse.x);
-            const y = Math.round(mouse.y);
-            colorPicker.run(x, y);
-            // mainView.grabToImage(function (result) {
-            //     console.log(`generated image...`);
-            //     console.log(`clicked at: ${x}, ${y}`);
-            //     console.log(result.image.value() == null)
-            //     console.log(result.image.value == null)
-            //     // console.log(result.image);
-            //     // const color = result.image.value().pixel(x, y);
-            //     // console.log(color);
-            // });
-            // mouse.accepted = false;
-        }
+        onClicked: (mouse) => 
+            colorPicker.pick(mainView, Math.round(mouse.x), Math.round(mouse.y));
     }
 
     ColorPicker {
