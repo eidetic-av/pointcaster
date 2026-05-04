@@ -41,12 +41,9 @@ Item {
         t = Math.max(0, Math.min(1, t));
 
         const raised = Math.pow(t, shaderPointSizeExponent);
-
         const pointSizeRange = shaderMaxPointSize - shaderMinPointSize;
-        const outputSize = shaderMinPointSize + raised * pointSizeRange;
 
-        console.log("z: " + camera.z + ", p: " + outputSize);
-        return outputSize;
+        return shaderMinPointSize + raised * pointSizeRange;
     }
 
     DragHandler {

@@ -9,6 +9,8 @@
 #include <QGuiApplication>
 #include <QLibrary>
 #include <QQmlContext>
+#include <QQuickWindow>
+#include <QSGRendererInterface>
 #include <QUrl>
 #include <QtAwesome/QtAwesome.h>
 #include <QtAwesome/QtAwesomeQuickImageProvider.h>
@@ -28,6 +30,10 @@ namespace pc::ui {
 QQmlApplicationEngine *
 initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
            const std::optional<std::string> &loaded_workspace_path) {
+
+  // use vulkan even on windows because D3D11/12 doesn't support arbitrary point
+  // sizes in point-cloud shaders based that make use of vertex point rendering
+  QQuickWindow::setGraphicsApi(QSGRendererInterface::Vulkan);
 
   // qml boilerplate
   pc::ui::register_qml_uncreatable_types();
