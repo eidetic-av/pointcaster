@@ -7,9 +7,11 @@ qt_add_qml_module(PointcasterGeometry
         PointCloudGeometry.cc
     QML_FILES
         PointCloudMaterial.qml
+        PointIndexMaterial.qml
     RESOURCES
         shaders/point_cloud.vert
         shaders/point_cloud.frag
+        shaders/point_index.vert
 )
 
 target_link_libraries(PointcasterGeometry PRIVATE

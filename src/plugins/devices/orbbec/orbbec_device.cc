@@ -384,8 +384,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       // need to do stuff here
     }
 
-    const auto fps =
-        std::min(depth_profile->fps(), colour_profile->fps());
+    const auto fps = std::min(depth_profile->fps(), colour_profile->fps());
     device_config.fps.set(fps);
     update_config(device_config);
 
@@ -400,11 +399,27 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     // this is frame sync between the devices own depth and colour cameras
     pipeline.enableFrameSync();
 
+    // this is frame sync between devices
+    if (device_config.sync_mode.value() ==
+        OrbbecDeviceConfiguration::SyncMode::Software) {
+      OBMultiDeviceSyncConfig ob_sync_config{
+          .syncMode = OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING};
+      ob_device->setMultiDeviceSyncConfig(ob_sync_config);
+      orbbec_context().add_to_software_sync_list(ob_device);
+    } else if (device_config.sync_mode.value() ==
+               OrbbecDeviceConfiguration::SyncMode::Standalone) {
+      OBMultiDeviceSyncConfig ob_sync_config{
+          .syncMode = OB_MULTI_DEVICE_SYNC_MODE_STANDALONE};
+      ob_device->setMultiDeviceSyncConfig(ob_sync_config);
+      orbbec_context().erase_from_software_sync_list(ob_device);
+    }
+
     try {
       pc::logger()->trace("attempting to start pipeline");
       pipeline.start(ob_config);
     } catch (const ob::Error &e) {
-      pc::logger()->error("Failed to start Orbbec pipeline: {}", e.getMessage());
+      pc::logger()->error("Failed to start Orbbec pipeline: {}",
+                          e.getMessage());
       set_error_state(true);
       return;
     }
@@ -531,13 +546,13 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                   cuda_backend) {
                 cuda_backend->project_transform_frame_data(
                     ob_depth_data, ob_color_data, point_cloud, color_intrinsics,
-                    device_config.transform, render_span);
+                    device_config.transform, device_config.color, render_span);
               } else if (device_config.transform.backend.value() ==
                              TransformConfiguration::BackendType::CPU &&
                          cpu_backend) {
                 cpu_backend->project_transform_frame_data(
                     ob_depth_data, ob_color_data, point_cloud, color_intrinsics,
-                    device_config.transform, render_span);
+                    device_config.transform, device_config.color, render_span);
               }
             }
 
@@ -668,7 +683,8 @@ void OrbbecDevice::set_ip(std::string_view ip_address,
   //   pc::logger()->error("Failed to set network configuration");
   // }
   // pc::logger()->info(
-  //     "Successfully updated network config for OrbbecDevice '{}'", config.id);
+  //     "Successfully updated network config for OrbbecDevice '{}'",
+  //     config.id);
 }
 
 } // namespace pc::devices

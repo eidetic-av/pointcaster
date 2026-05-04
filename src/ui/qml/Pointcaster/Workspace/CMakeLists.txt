@@ -63,6 +63,8 @@ qt_add_qml_module(PointcasterWorkspace
         Resources/Fonts/AtkinsonHyperlegibleMono-Bold.otf
     SOURCES
         # TODO need to be able to add from a subdir but atm this doesn't work
+        color_picker.h
+        color_picker.cc
         net_utils.h
         net_utils.cc
 )

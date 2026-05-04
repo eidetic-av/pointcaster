@@ -111,7 +111,7 @@ KDDW.DockWidget {
                         transitions: Transition {
                             NumberAnimation {
                                 properties: "radius,width,height,rotation"
-                                duration: 150
+                                duration: 100
                                 easing.type: Easing.InOutQuad
                             }
                             ColorAnimation {

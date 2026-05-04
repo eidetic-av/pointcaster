@@ -4,9 +4,11 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <string>
-#include <vector>
 #include <mutex>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
 
 namespace ob {
 class Context;
@@ -50,6 +52,16 @@ public:
 
   void add_discovery_change_callback(std::function<void()> callback);
 
+  void add_to_software_sync_list(std::shared_ptr<ob::Device> device_ptr) {
+    std::lock_guard lock(software_sync_device_set_access);
+    software_sync_devices.insert(device_ptr);
+  }
+
+  void erase_from_software_sync_list(std::shared_ptr<ob::Device> device_ptr) {
+    std::lock_guard lock(software_sync_device_set_access);
+    software_sync_devices.erase(device_ptr);
+  }
+
   ~ObContext();
 
 private:
@@ -59,6 +71,10 @@ private:
 
   std::mutex discovery_callbacks_access;
   std::vector<std::function<void()>> discovery_callbacks;
+
+  std::unordered_set<std::shared_ptr<ob::Device>> software_sync_devices;
+  std::mutex software_sync_device_set_access;
+  std::jthread software_sync_thread{};
 
   void shutdown();
 };

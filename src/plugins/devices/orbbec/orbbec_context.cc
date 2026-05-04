@@ -38,6 +38,7 @@ void ObContext::init_async() {
       local = std::make_shared<ob::Context>();
       std::lock_guard api_access(self->device_api_access);
       local->enableNetDeviceEnumeration(true);
+      local->enableDeviceClockSync(3600000);
     } catch (const ob::Error &e) {
       pc::logger()->error(
           "Failed to initialise Orbbec context (ob::Error): [{}] {}",
@@ -66,6 +67,41 @@ void ObContext::init_async() {
 
     pc::logger()->trace("Orbbec context initialised");
   }).detach();
+
+  software_sync_thread = std::jthread([this](std::stop_token stop_token) {
+    using namespace std::chrono;
+    using namespace std::chrono_literals;
+
+    constexpr auto frames_per_second = 5;
+    constexpr auto frame_duration = 1'000'000us / frames_per_second;
+
+    auto next_frame_time = steady_clock::now();
+
+    while (!stop_token.stop_requested()) {
+
+      std::vector<std::shared_ptr<ob::Device>> devices_to_trigger;
+      {
+        std::lock_guard device_set_lock(software_sync_device_set_access);
+        for (const auto &device_ptr : software_sync_devices) {
+          devices_to_trigger.push_back(device_ptr);
+        }
+      }
+      if (devices_to_trigger.empty()) {
+        std::this_thread::sleep_for(250ms);
+        next_frame_time = steady_clock::now();
+        continue;
+      }
+
+      next_frame_time += frame_duration;
+
+      for (const auto &device_ptr : devices_to_trigger) {
+        pc::logger()->debug("trigger");
+        device_ptr->triggerCapture();
+      }
+
+      std::this_thread::sleep_until(next_frame_time);
+    }
+  });
 }
 
 std::shared_ptr<ob::Context> ObContext::get_if_ready() const {
@@ -111,8 +147,8 @@ void ObContext::discover_devices() {
 
   // auto ctx = orbbec_context().get_if_ready();
   // if (!ctx) {
-  //   pc::logger()->trace("Orbbec context not initialised; skipping discovery");
-  //   discovering_devices.store(false, std::memory_order_release);
+  //   pc::logger()->trace("Orbbec context not initialised; skipping
+  //   discovery"); discovering_devices.store(false, std::memory_order_release);
   //   return;
   // }
 
@@ -169,7 +205,8 @@ void ObContext::discover_devices() {
   //                       e.getName(), e.getMessage());
   // } catch (const std::exception &e) {
   //   pc::logger()->error(
-  //       "Unknown std::exception during Orbbec device discovery: {}", e.what());
+  //       "Unknown std::exception during Orbbec device discovery: {}",
+  //       e.what());
   // } catch (...) {
   //   pc::logger()->error("Unknown error during Orbbec device discovery");
   // }

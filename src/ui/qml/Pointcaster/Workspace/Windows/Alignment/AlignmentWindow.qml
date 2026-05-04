@@ -55,12 +55,26 @@ KDDW.DockWidget {
                     color: ThemeColors.middark
                 }
 
-                AlignmentView {
-                    id: secondaryDeviceView
-                    // TODO
-                    deviceAdapter: workspace && workspace.deviceAdapters.length > 0 ? workspace.deviceAdapters[0] : null
+                Item {
+                    id: secondaryDeviceContainer
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+
+                    AlignmentView {
+                        id: secondaryDeviceView
+                        visible: workspace.deviceAdapters.length > 1
+                        deviceAdapter: workspace && workspace.deviceAdapters.length > 1 ? workspace.deviceAdapters[1] : null
+                        anchors.fill: parent
+                    }
+
+                    Label {
+                        anchors.fill: parent
+                        visible: workspace.deviceAdapters.length < 2
+                        text: "Alignment requires 2 or more devices"
+                        background: Rectangle {
+                            color: ThemeColors.dark
+                        }
+                    }
                 }
             }
 
