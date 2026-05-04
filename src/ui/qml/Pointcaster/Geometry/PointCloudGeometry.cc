@@ -34,4 +34,16 @@ void PointCloudGeometry::updateGeometry() {
   update();
 }
 
+QVector3D PointCloudGeometry::pointPosition(int index) const {
+  QVector3D result;
+  if (_pointCloudAdapter) {
+    auto cloud = _pointCloudAdapter->point_cloud();
+    if (cloud && index < cloud->size()) {
+      auto pos = cloud->positions[index];
+      result = QVector3D(pos.x * 0.1, pos.y * 0.1, pos.z * 0.1);
+    }
+  }
+  return result;
+}
+
 } // namespace pc::ui::qml

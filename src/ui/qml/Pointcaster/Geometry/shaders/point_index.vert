@@ -15,13 +15,13 @@ void MAIN()
     // in order to pack it into our color buffer.
 
     int i = gl_VertexIndex;
-    unsigned char bytes[4];
-    bytes[0] = (i >> 24) & 0xFF;
-    bytes[1] = (i >> 16) & 0xFF;
-    bytes[2] = (i >> 8) & 0xFF;
-    bytes[3] = i & 0xFF;
 
-    vColor = bytes;
+    vColor = vec4(
+        float((i >> 24) & 0xFF) / 255.0,
+        float((i >> 16) & 0xFF) / 255.0,
+        float((i >>  8) & 0xFF) / 255.0,
+        float(i & 0xFF) / 255.0
+    );
 
     POSITION = MODELVIEWPROJECTION_MATRIX * vec4(pos, 1.0);
     POINT_SIZE = uPointSize;

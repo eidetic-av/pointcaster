@@ -45,6 +45,8 @@ public:
 
   Q_INVOKABLE void updateGeometry();
 
+  Q_INVOKABLE QVector3D pointPosition(int index) const;
+
 signals:
   void pointCloudAdapterChanged();
   void enabledChanged();
