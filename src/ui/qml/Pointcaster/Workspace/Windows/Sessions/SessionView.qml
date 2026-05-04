@@ -34,7 +34,6 @@ Item {
         selectionRotation = root.selectedAdapter ? root.selectedAdapter.value("transform/rotation") : Qt.vector3d(0, 0, 0);
     }
 
-
     readonly property real defaultCameraDistance: 250
     readonly property vector3d defaultOrbitOriginPosition: Qt.vector3d(0, 0, 0)
     readonly property quaternion defaultOrbitOriginRotation: {
@@ -270,7 +269,9 @@ Item {
                     }
 
                     materials: [
-                        PointCloudMaterial {}
+                        PointCloudMaterial {
+                            uPointSize: viewController.shaderPointSize
+                        }
                     ]
                 }
 
@@ -286,7 +287,7 @@ Item {
         environment: SceneEnvironment {
             clearColor: ThemeColors.shadow
             backgroundMode: SceneEnvironment.Color
-            depthPrePassEnabled: true
+            depthPrePassEnabled: false
             // fog: Fog { enabled: false }
             // antialiasingMode: SceneEnvironment.SSAA
         }
@@ -303,24 +304,11 @@ Item {
             }
         }
 
-        // a node for camera orbit gizmo to bind to
-        Node {
-            id: gizmoTarget
-        }
-
-        Binding {
-            target: gizmoTarget
-            property: "rotation"
-            value: view.orbitToGizmoRotation(camera.sceneRotation.conjugated())
-        }
-
         OrbitViewController {
+            id: viewController
             anchors.fill: parent
             camera: camera
             origin: orbitOrigin
-            acceptedButtons: Qt.LeftButton
-            xSpeed: 0.1
-            ySpeed: 0.5
             enabled: !sessionControls.orbitRotationRunning && !sessionControls.viewLocked
             onMouseHeldChanged: {
                 if (mouseHeld || sessionControls.orbitRotationRunning)
@@ -334,35 +322,23 @@ Item {
                     return;
                 root.commitCameraTransformToConfig();
             }
-        }
-
-        // RMB drag = pan
-        DragHandler {
-            property real lastX: 0
-            property real lastY: 0
-
-            acceptedButtons: Qt.RightButton
-            enabled: !sessionControls.viewLocked
-            onActiveChanged: {
-                if (active) {
-                    lastX = translation.x;
-                    lastY = translation.y;
-                } else {
+            onDragActiveChanged: {
+                if (!dragActive) {
                     // Commit once when the interaction finishes.
                     root.commitCameraTransformToConfig();
                 }
             }
-            onTranslationChanged: {
-                const dx = translation.x - lastX;
-                const dy = translation.y - lastY;
-                lastX = translation.x;
-                lastY = translation.y;
-                const panScale = Math.abs(camera.z) * 0.002;
-                const sceneDelta = Qt.vector3d(camera.right.x, camera.right.y, camera.right.z).times(-dx * panScale).plus(Qt.vector3d(camera.up.x, camera.up.y, camera.up.z).times(dy * panScale));
-                const parentNode = orbitOrigin.parent;
-                const parentDelta = parentNode && parentNode.mapDirectionFromScene ? parentNode.mapDirectionFromScene(sceneDelta) : sceneDelta;
-                orbitOrigin.position = Qt.vector3d(orbitOrigin.position.x + parentDelta.x, orbitOrigin.position.y + parentDelta.y, orbitOrigin.position.z + parentDelta.z);
-            }
+        }
+
+        // a node for camera orbit gizmo to bind to
+        Node {
+            id: gizmoTarget
+        }
+
+        Binding {
+            target: gizmoTarget
+            property: "rotation"
+            value: view.orbitToGizmoRotation(camera.sceneRotation.conjugated())
         }
 
         // ---------- PICKING + FOCUS ----------

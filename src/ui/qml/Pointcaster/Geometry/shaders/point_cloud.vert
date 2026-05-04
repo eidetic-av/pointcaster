@@ -23,5 +23,5 @@ void MAIN()
     // vColor = vec4(pow(srgb, vec3(2.2)), 1.0);
 
     POSITION = MODELVIEWPROJECTION_MATRIX * vec4(pos, 1.0);
-    POINT_SIZE = 1.0;
+    POINT_SIZE = uPointSize;
 }

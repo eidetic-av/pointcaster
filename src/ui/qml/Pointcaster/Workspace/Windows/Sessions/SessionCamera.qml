@@ -4,6 +4,8 @@ import QtQuick3D
 CustomCamera {
     id: root
 
+    z: root.defaultCameraDistance
+
     // 0 = fully perspective, 1 = fully orthographic
     property real blend: 0
     // Perspective params
@@ -12,6 +14,7 @@ CustomCamera {
     property real fovYRadians: 60 * Math.PI / 180
     // ortho params
     property real orthoHalfHeight: z * 0.6
+
     // OrbitCameraController expects these to exist
     property real clipNear
     property real clipFar
@@ -35,7 +38,6 @@ CustomCamera {
         projectionBlendAnim.start();
     }
 
-    z: root.defaultCameraDistance
     projection: {
         const aspect = view.width > 0 ? (view.width / view.height) : 1;
         const t = blend;
