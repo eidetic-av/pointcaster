@@ -23,6 +23,12 @@ RUN Invoke-WebRequest -Uri https://aka.ms/vs/17/release/vs_BuildTools.exe -OutFi
       --add Microsoft.VisualStudio.Component.VC.ATLMFC'; \
     Remove-Item -Force vs_BuildTools.exe
 
+ENV VsDevShell="C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\Launch-VsDevShell.ps1"
+
+# install chocolatey for some package management
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;\
+	iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+
 # Git
 RUN Invoke-WebRequest -Uri "https://github.com/git-for-windows/git/releases/download/v2.53.0.windows.2/MinGit-2.53.0.2-64-bit.zip" -OutFile 'Git.zip'; \
     Expand-Archive -Path 'Git.zip' -DestinationPath 'C:\\Git'; \
@@ -66,16 +72,25 @@ RUN mkdir "$Env:TbbInstallDir"; \
 ARG Jinja2Version=3.1.6
 RUN pip install "jinja2==$Env:Jinja2Version"
 
-# install chocolatey
-RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;\
-	iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-
 # NVIDIA CUDA development packages
 ARG CudaVersion=12.9.1.576
 RUN choco install -y cuda --version $Env:CudaVersion
 
+# Build vcpkg source-based project dependencies
+COPY vcpkg.json C:\\vcpkg-config\\
+COPY triplets C:\\vcpkg-config\\triplets
+COPY ports C:\\vcpkg-config\\ports
+
+ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR"
+
+RUN & "$Env:VsDevShell" -Arch amd64 -HostArch amd64; \
+    vcpkg install \
+      --x-manifest-root=C:\vcpkg-config \
+      --overlay-triplets=C:\vcpkg-config\triplets \
+      --overlay-ports=C:\vcpkg-config\ports \
+      --triplet x64-windows-static-md-custom-release
+
 # entry point to the docker container is our visual studio dev shell
 # so env with build tools is properly configured
 
-ENV VsDevShell="C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\Launch-VsDevShell.ps1"
 ENTRYPOINT [ "powershell", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", "& $Env:VsDevShell -Arch amd64 -HostArch amd64;& " ]
