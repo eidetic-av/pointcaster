@@ -16,8 +16,9 @@ void PointCloudGeometry::updateGeometry() {
   auto render_buffer = _pointCloudAdapter->render_data();
   if (!render_buffer || render_buffer->empty()) return;
 
-  _vertexBuffer = QByteArray(reinterpret_cast<const char *>(render_buffer->data()),
-                             static_cast<qsizetype>(render_buffer->size()));
+  _vertexBuffer =
+      QByteArray(reinterpret_cast<const char *>(render_buffer->data()),
+                 static_cast<qsizetype>(render_buffer->size()));
 
   clear();
   setVertexData(_vertexBuffer);
@@ -30,6 +31,16 @@ void PointCloudGeometry::updateGeometry() {
   _boundsMin = QVector3D(bounds.min.x, bounds.min.y, bounds.min.z);
   _boundsMax = QVector3D(bounds.max.x, bounds.max.y, bounds.max.z);
   _boundsCenter = ((_boundsMin + _boundsMax) * 0.5) * 0.1;
+  setBounds(_boundsMin, _boundsMax);
+  emit boundsChanged();
+  update();
+}
+
+void PointCloudGeometry::reset() {
+  clear();
+  _boundsMin = {};
+  _boundsMax = {};
+  _boundsCenter = {};
   setBounds(_boundsMin, _boundsMax);
   emit boundsChanged();
   update();
