@@ -96,11 +96,6 @@ Item {
         }
     }
 
-    TapHandler {
-        acceptedButtons: root.acceptedButtons
-        onTapped: root.forceActiveFocus()
-    }
-
     WheelHandler {
         id: wheelHandler
         orientation: Qt.Vertical
