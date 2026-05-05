@@ -52,8 +52,9 @@ qt_add_qml_module(PointcasterQml
         Windows/Sessions/CentralSessionView.qml
         Windows/Sessions/SessionControls.qml
         Windows/Recording/RecordingWindow.qml
-        Windows/Alignment/AlignmentView.qml
         Windows/Alignment/AlignmentWindow.qml
+        Windows/Alignment/AlignmentView.qml
+        Windows/Alignment/RefinementView.qml
     RESOURCES
         Fonts/AtkinsonHyperlegibleNext-Light.otf
         Fonts/AtkinsonHyperlegibleNext-Regular.otf
