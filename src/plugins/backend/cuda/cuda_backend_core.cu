@@ -41,7 +41,7 @@ void create_device_memory(void *owner, const size_t point_count) {
       .input_rgb_data = thrust::device_vector<color_rgb>(point_count),
       .output_positions = thrust::device_vector<position>(point_count),
       .output_colors = thrust::device_vector<color>(point_count),
-      .interleaved_render = thrust::device_vector<std::byte>(point_count * 12),
+      .interleaved_render = thrust::device_vector<std::byte>(point_count * 16),
       .indices = thrust::device_vector<int>(point_count)};
 
   thrust::sequence(new_device_memory.indices.begin(),
@@ -111,8 +111,10 @@ struct InterleaveForRender {
   std::byte *output;
 
   __host__ __device__ void operator()(int i) const {
-    memcpy(output + i * 12, &positions[i], 8);
-    memcpy(output + i * 12 + 8, &colors[i], 4);
+    memcpy(output + i * 16, &positions[i], 8);
+    memcpy(output + i * 16 + 8, &colors[i], 4);
+    float idx = static_cast<float>(i);
+    memcpy(output + i * 16 + 12, &idx, 4);
   }
 };
 
@@ -244,7 +246,7 @@ void project_transform_frame_data(
     if (output_render_buffer) {
       thrust::copy(device_memory->interleaved_render.begin(),
                    device_memory->interleaved_render.begin() +
-                       new_point_count * 12,
+                       new_point_count * 16,
                    render_output.begin());
     }
   }

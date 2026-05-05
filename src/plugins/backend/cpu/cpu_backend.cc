@@ -99,8 +99,13 @@ void CpuBackend::project_transform_frame_data(
     output_colors[i] = output_cloud->colors[output_index];
 
     if (render_destination) {
-      std::memcpy(render_destination + i * 12, &output_positions[i], 8);
-      std::memcpy(render_destination + i * 12 + 8, &output_colors[i], 4);
+      // for our shader we pack the positions and the index too
+      // which allows us to do point cloud lookup using screen-space color
+      // picking
+      std::memcpy(render_destination + i * 16, &output_positions[i], 8);
+      std::memcpy(render_destination + i * 16 + 8, &output_colors[i], 4);
+      float idx = static_cast<float>(i);
+      std::memcpy(render_destination + i * 16 + 12, &idx, 4);
     }
   };
 

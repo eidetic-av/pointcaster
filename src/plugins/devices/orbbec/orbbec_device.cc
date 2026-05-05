@@ -524,8 +524,10 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             std::shared_ptr<std::vector<std::byte>> render_buffer;
             std::span<std::byte> render_span;
             if (device_config.render) {
+              // render buffer holds positions, colors and indices packed into
+              // 16 bits and unpacked inside vert/frag shaders
               render_buffer = std::make_shared<std::vector<std::byte>>(
-                  max_point_count * 12);
+                  max_point_count * 16);
               render_span = std::span<std::byte>(*render_buffer);
             }
 
