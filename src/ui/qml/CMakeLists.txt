@@ -1,0 +1,119 @@
+
+# singletons inside qml must be specified to cmake before
+# configuring the qml module
+
+set(qml_singletons
+    Workspace.qml
+    Theme/ThemeColors.qml
+    Theme/FontAwesome.qml
+    Theme/Scaling.qml
+    Utils/StringUtils.qml
+)
+foreach(qml_singleton_file IN LISTS qml_singletons)
+    set_source_files_properties( ${qml_singleton_file} 
+        PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+endforeach()
+
+qt_add_qml_module(PointcasterQml
+	URI Pointcaster VERSION 1.0
+    QML_FILES
+        ${qml_singletons}
+        Controls/DragInput.qml
+        Controls/DragInt.qml
+        Controls/DragFloat.qml
+        Controls/DragFloat3.qml
+        Controls/EnumSelector.qml
+        Controls/IconButton.qml
+        Controls/InfoToolTip.qml
+        Controls/OriginGizmo.qml
+        Controls/OrbitViewController.qml
+        Controls/Gizmos/SelectionGizmo.qml
+        Editors/ConfigurationEditor.qml
+        PointCloud/PointCloudMaterial.qml
+        PointCloud/PointIndexMaterial.qml
+        Windows/TabBar.qml
+        Windows/TabBarBase.qml
+        Windows/Separator.qml
+        Windows/FloatingWindow.qml
+        Windows/Group.qml
+        Windows/ResizeHandlerHelper.qml
+        Windows/TopMenuBar.qml
+        Windows/MainWindow.qml
+        Windows/Settings/SettingsWindow.qml
+        Windows/Settings/GeneralSettingsPage.qml
+        Windows/Settings/MetricsSettingsPage.qml
+        Windows/Devices/DeviceSelectionList.qml
+        Windows/Devices/DevicesToolBar.qml
+        Windows/Devices/DevicesWindow.qml
+        Windows/Devices/DeviceControlRow.qml
+        Windows/Devices/AddDeviceMenu.qml
+        Windows/Sessions/SessionCamera.qml
+        Windows/Sessions/SessionView.qml
+        Windows/Sessions/CentralSessionView.qml
+        Windows/Sessions/SessionControls.qml
+        Windows/Recording/RecordingWindow.qml
+        Windows/Alignment/AlignmentView.qml
+        Windows/Alignment/AlignmentWindow.qml
+    RESOURCES
+        Fonts/AtkinsonHyperlegibleNext-Light.otf
+        Fonts/AtkinsonHyperlegibleNext-Regular.otf
+        Fonts/AtkinsonHyperlegibleNext-Medium.otf
+        Fonts/AtkinsonHyperlegibleNext-Bold.otf
+        Fonts/AtkinsonHyperlegibleMono-Light.otf
+        Fonts/AtkinsonHyperlegibleMono-Regular.otf
+        Fonts/AtkinsonHyperlegibleMono-Medium.otf
+        Fonts/AtkinsonHyperlegibleMono-Bold.otf
+        PointCloud/Shaders/PointCloud.vert
+        PointCloud/Shaders/PointCloud.frag
+        PointCloud/Shaders/PointIndex.vert
+    SOURCES
+        # TODO need to be able to add from a subdir but atm this doesn't work
+        PointCloudGeometry.h
+        PointCloudGeometry.cc
+        color_picker.h
+        color_picker.cc
+        net_utils.h
+        net_utils.cc
+)
+
+find_package(QtAwesome CONFIG REQUIRED)
+find_package(gizmo3d CONFIG REQUIRED)
+
+target_link_libraries(PointcasterQml PRIVATE
+    pointcaster::core
+    Qt6::Core Qt6::Gui Qt6::Qml Qt6::OpenGL
+    Qt6::Quick Qt6::QuickControls2 Qt6::QuickDialogs2
+    Qt6::Quick3D
+    KDAB::kddockwidgets
+    QtAwesome::QtAwesome
+    Gizmo3D::gizmo3d
+)
+
+target_include_directories(PointcasterQml 
+    PRIVATE "${CMAKE_SOURCE_DIR}/include" "${CMAKE_SOURCE_DIR}/src")
+
+install(DIRECTORY "${QT_QML_OUTPUT_DIRECTORY}/Pointcaster"
+	DESTINATION "${CMAKE_INSTALL_QMLDIR}"
+)
+
+install(TARGETS PointcasterQml
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+)
+
+target_precompile_headers(PointcasterQml PRIVATE
+  <string>
+  <string_view>
+  <vector>
+  <memory>
+  <QObject>
+  <QString>
+  <QVariant>
+  <QUrl>
+  <QByteArray>
+  <QVector3D>
+  <QQuick3DGeometry>
+  <QtQmlIntegration/qqmlintegration.h>
+  <QCoreApplication>
+)

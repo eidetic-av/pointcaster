@@ -1,0 +1,55 @@
+#include "PointCloudGeometry.h"
+#include <QVector3D>
+
+namespace pc::ui::qml {
+
+PointCloudGeometry::PointCloudGeometry() : QQuick3DGeometry() {
+  update();
+}
+
+void PointCloudGeometry::updateGeometry() {
+  if (!_enabled || !_pointCloudAdapter) return;
+
+  auto cloud = _pointCloudAdapter->point_cloud();
+  if (!cloud || cloud->empty()) return;
+
+  auto render_buffer = _pointCloudAdapter->render_data();
+  if (!render_buffer || render_buffer->empty()) return;
+
+  _vertexBuffer = QByteArray(reinterpret_cast<const char *>(render_buffer->data()),
+                             static_cast<qsizetype>(render_buffer->size()));
+
+  clear();
+  setVertexData(_vertexBuffer);
+  setStride(16);
+  setPrimitiveType(QQuick3DGeometry::PrimitiveType::Points);
+  addAttribute(Attribute::PositionSemantic, 0, Attribute::F32Type);
+  addAttribute(Attribute::TexCoord0Semantic, 12, Attribute::F32Type);
+
+  const auto &bounds = cloud->bounds;
+  _boundsMin = QVector3D(bounds.min.x, bounds.min.y, bounds.min.z);
+  _boundsMax = QVector3D(bounds.max.x, bounds.max.y, bounds.max.z);
+  _boundsCenter = ((_boundsMin + _boundsMax) * 0.5) * 0.1;
+  setBounds(_boundsMin, _boundsMax);
+  emit boundsChanged();
+  update();
+}
+
+QVector3D PointCloudGeometry::pointPosition(int index) const {
+  constexpr int stride = 16;
+  const int byteOffset = index * stride;
+  if (byteOffset + stride > _vertexBuffer.size()) return {};
+
+  const char *data = _vertexBuffer.constData() + byteOffset;
+  int32_t raw[2];
+  std::memcpy(&raw[0], data, 4);
+  std::memcpy(&raw[1], data + 4, 4);
+
+  float px = static_cast<float>(static_cast<int16_t>(raw[0] & 0xFFFF));
+  float py = static_cast<float>(raw[0] >> 16);
+  float pz = static_cast<float>(static_cast<int16_t>(raw[1] & 0xFFFF));
+
+  return QVector3D(px, py, pz) * 0.1f;
+}
+
+} // namespace pc::ui::qml

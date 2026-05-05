@@ -11,6 +11,7 @@ add_subdirectory(core)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(app_icon_resource "${CMAKE_SOURCE_DIR}/packaging/icon.rc")
+  # set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)
   # adds PDB export to msvc
   add_compile_options("/Zi")
 endif()

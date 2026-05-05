@@ -126,7 +126,7 @@ void load_main_window(Workspace *workspace, QGuiApplication *app,
     pc::logger()->trace("Loading compiled QML...");
     // normal packaged/built module path
     try {
-      engine->loadFromModule("Pointcaster.Workspace", "MainWindow");
+      engine->loadFromModule("Pointcaster", "MainWindow");
     } catch (...) {
       pc::logger()->error("Failed to load main window");
     }

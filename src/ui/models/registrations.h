@@ -5,7 +5,7 @@
 #include "device_status.h"
 #include "settings_page_registry.h"
 
-#include <ui/qml/Pointcaster/Workspace/color_picker.h>
+#include <ui/qml/color_picker.h>
 
 #include <QQmlApplicationEngine>
 
@@ -35,7 +35,7 @@ inline void register_qml_uncreatable_types() {
                                SettingsPageRegistry::instance());
 
   //
-//   qmlRegisterType<pc::ui::qml::ColorPicker>("Pointcaster.Workspace", 1, 0, "ColorPicker");
+//   qmlRegisterType<pc::ui::qml::ColorPicker>("Pointcaster", 1, 0, "ColorPicker");
 
   // qmlRegisterSingletonType<pc::ui::qml::NetUtils>(...);
 }

@@ -16,8 +16,7 @@ target_include_directories(pointcaster_ui PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 
-add_subdirectory(qml/Pointcaster/Workspace)
-add_subdirectory(qml/Pointcaster/Geometry)
+add_subdirectory(qml)
 
 find_package(Corrade CONFIG REQUIRED REQUIRED Main Utility)
 find_package(QtAwesome CONFIG REQUIRED)
@@ -25,15 +24,16 @@ find_package(QtAwesome CONFIG REQUIRED)
 target_link_libraries(pointcaster_ui PRIVATE
     pointcaster::core 
     pointcaster::app_settings
+    PointcasterQml
+    # TODO which of these aren't already brought in by above
     Corrade::Main Corrade::Utility
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::OpenGL
     Qt6::Quick Qt6::QuickControls2 Qt6::Quick3D
     KDAB::kddockwidgets 
-    PointcasterWorkspace
-    PointcasterGeometry
     QtAwesome::QtAwesome
 )
 
+#TODO why are these two here that target the parent project??
 target_link_libraries(pointcaster PRIVATE Qt6::Gui)
 
 qt_import_qml_plugins(pointcaster)
