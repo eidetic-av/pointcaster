@@ -43,23 +43,6 @@ KDDW.DockWidget {
         id: alignmentController
     }
 
-    // extract per-view marker positions from pair data
-    function primaryMarkerPositions() {
-        var positions = [];
-        for (var i = 0; i < windowState.pairs.length; ++i)
-            positions.push(windowState.pairs[i].primary);
-        if (windowState.pendingPrimaryPick !== null)
-            positions.push(windowState.pendingPrimaryPick);
-        return positions;
-    }
-
-    function secondaryMarkerPositions() {
-        var positions = [];
-        for (var i = 0; i < windowState.pairs.length; ++i)
-            positions.push(windowState.pairs[i].secondary);
-        return positions;
-    }
-
     function handlePrimaryPicked(position) {
         windowState.pendingPrimaryPick = position;
         windowState.activeView = AlignmentWindow.ActiveView.Secondary;
@@ -180,106 +163,14 @@ KDDW.DockWidget {
                 bottomMargin: Math.round(Scaling.uiScale * 4)
             }
 
-            RowLayout {
-                id: shapshotControls
-                spacing: Math.round(Scaling.uiScale * 16)
+            SnapshotControls {
+                deviceAdapters: root.workspace ? root.workspace.deviceAdapters : []
+                primaryDeviceIndex: windowState.primaryDeviceIndex
+                secondaryDeviceIndex: windowState.secondaryDeviceIndex
 
-                Item {
-                    Layout.preferredWidth: Math.round(Scaling.uiScale * 12)
-                }
-
-                Component {
-                    id: deviceSelectorItem
-                    Text {
-                        text: modelData.value("id") || modelData
-
-                        font: Scaling.uiFont
-                        color: ThemeColors.text
-
-                        topPadding: 6
-                        leftPadding: 6
-                        rightPadding: 6
-                        bottomPadding: 6
-
-                        verticalAlignment: Text.AlignVCenter
-                        elide: Text.ElideRight
-                    }
-                }
-
-                Column {
-                    spacing: Math.round(Scaling.uiScale * 4)
-                    Label {
-                        text: "Primary Device"
-                    }
-
-                    ComboBox {
-                        id: primaryDeviceList
-                        flat: true
-                        model: root.workspace ? root.workspace.deviceAdapters : []
-                        currentIndex: windowState.primaryDeviceIndex
-                        textRole: "id"
-
-                        contentItem: Text {
-                            text: primaryDeviceList.displayText
-                            font: Scaling.uiFont
-                            color: ThemeColors.text
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                        }
-
-                        delegate: ItemDelegate {
-                            width: primaryDeviceList.width
-                            text: modelData.id
-                            font: Scaling.uiFont
-                            highlighted: primaryDeviceList.highlightedIndex === index
-                            enabled: secondaryDeviceList.currentIndex !== index
-                        }
-
-                        onActivated: windowState.primaryDeviceIndex = currentIndex
-                    }
-                }
-
-                Column {
-                    spacing: Math.round(Scaling.uiScale * 4)
-                    Label {
-                        text: "Secondary Device"
-                    }
-                    ComboBox {
-                        id: secondaryDeviceList
-                        flat: true
-                        model: root.workspace ? root.workspace.deviceAdapters : []
-                        currentIndex: windowState.secondaryDeviceIndex
-                        textRole: "id"
-
-                        contentItem: Text {
-                            text: secondaryDeviceList.displayText
-                            font: Scaling.uiFont
-                            color: ThemeColors.text
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                        }
-
-                        delegate: ItemDelegate {
-                            width: secondaryDeviceList.width
-                            text: modelData.id
-                            font: Scaling.uiFont
-                            highlighted: secondaryDeviceList.highlightedIndex === index
-                            enabled: primaryDeviceList.currentIndex !== index
-                        }
-
-                        onActivated: windowState.secondaryDeviceIndex = currentIndex
-                    }
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                }
-
-                IconButton {
-                    id: snapshotButton
-                    text: "Snapshot"
-                    tooltip: "Capture a frame from the target devices and begin alignment"
-                    onClicked: {
+                onPrimaryDeviceChanged: index => windowState.primaryDeviceIndex = index
+                onSecondaryDeviceChanged: index => windowState.secondaryDeviceIndex = index
+                onSnapshotRequested: {
                         alignmentController.snapshotClouds(root.workspace.deviceAdapters[windowState.primaryDeviceIndex], root.workspace.deviceAdapters[windowState.secondaryDeviceIndex]);
                         windowState.mode = AlignmentWindow.WindowMode.Picking;
                         windowState.activeView = AlignmentWindow.ActiveView.Primary;
@@ -288,49 +179,13 @@ KDDW.DockWidget {
                     }
                 }
 
-                Item {
-                    Layout.preferredWidth: Math.round(Scaling.uiScale * 12)
-                }
-            }
+            PickingControls {
+                pairCount: windowState.pairs.length
+                canUndo: windowState.pendingPrimaryPick !== null || windowState.pairs.length > 0
 
-            RowLayout {
-                id: pickingControls
-                spacing: Math.round(Scaling.uiScale * 12)
-
-                Item {
-                    Layout.preferredWidth: Math.round(Scaling.uiScale * 12)
-                }
-
-                IconButton {
-                    id: resetButton
-                    text: "Reset"
-                    tooltip: "Remove current alignment data and start over"
-                    onClicked: root.resetAlignment()
-                }
-
-                IconButton {
-                    text: "Undo last pick"
-                    tooltip: "Undo the most recent point pick"
-                    iconSource: FontAwesome.icon("solid/rotate-left")
-                    enabled: windowState.pendingPrimaryPick !== null || windowState.pairs.length > 0
-                    onClicked: root.undoLastPick()
-                }
-
-                Label {
-                    text: windowState.pairs.length + " pair" + (windowState.pairs.length !== 1 ? "s" : "")
-                    color: ThemeColors.text
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                }
-
-                IconButton {
-                    id: alignButton
-                    text: "Align"
-                    tooltip: "Finish picking pairs and compute coarse transformation"
-                    enabled: windowState.pairs.length >= 3
-                    onClicked: {
+                onResetRequested: root.resetAlignment()
+                onUndoRequested: root.undoLastPick()
+                onAlignRequested: {
                         alignmentController.computeFromPairs(windowState.pairs);
                         if (alignmentController.hasResult) {
                             windowState.mode = AlignmentWindow.WindowMode.Refinement;
@@ -339,133 +194,11 @@ KDDW.DockWidget {
                     }
                 }
 
-                Item {
-                    Layout.preferredWidth: Math.round(Scaling.uiScale * 12)
-                }
-            }
+            RefinementControls {
+                alignmentController: alignmentController
 
-            RowLayout {
-                id: refinementControls
-                spacing: Math.round(Scaling.uiScale * 12)
-
-                Item {
-                    Layout.preferredWidth: Math.round(Scaling.uiScale * 12)
-                }
-
-                IconButton {
-                    text: "Picking"
-                    tooltip: "Return to keypoint pair picking"
-                    iconSource: FontAwesome.icon("solid/arrow-left-long")
-                    onClicked: windowState.mode = AlignmentWindow.WindowMode.Picking
-                }
-
-                Rectangle {
-                    width: 1
-                    Layout.fillHeight: true
-                    Layout.topMargin: Math.round(Scaling.uiScale * 8)
-                    Layout.bottomMargin: Math.round(Scaling.uiScale * 8)
-                    color: ThemeColors.middark
-                }
-
-                Column {
-                    spacing: Math.round(Scaling.uiScale * 2)
-                    Layout.preferredWidth: Math.round(Scaling.uiScale * 160)
-
-                    Label {
-                        text: "Correspondence: " + correspondenceSlider.value.toFixed(0)
-                        font: Scaling.uiSmallFont
-                        color: ThemeColors.midlight
-                    }
-
-                    Slider {
-                        id: correspondenceSlider
-                        width: parent.width
-                        from: 5
-                        to: 200
-                        stepSize: 1
-                        value: alignmentController.maxCorrespondenceDistance
-                        onMoved: alignmentController.maxCorrespondenceDistance = value
-                    }
-                }
-
-                Column {
-                    spacing: Math.round(Scaling.uiScale * 2)
-                    Layout.preferredWidth: Math.round(Scaling.uiScale * 120)
-
-                    Label {
-                        text: "Voxel size: " + voxelSlider.value.toFixed(1)
-                        font: Scaling.uiSmallFont
-                        color: ThemeColors.midlight
-                    }
-
-                    Slider {
-                        id: voxelSlider
-                        width: parent.width
-                        from: 0
-                        to: 20
-                        stepSize: 0.5
-                        value: alignmentController.voxelLeafSize
-                        onMoved: alignmentController.voxelLeafSize = value
-                    }
-                }
-
-                Column {
-                    spacing: Math.round(Scaling.uiScale * 2)
-                    Layout.preferredWidth: Math.round(Scaling.uiScale * 120)
-
-                    Label {
-                        text: "Iterations: " + iterationsSlider.value.toFixed(0)
-                        font: Scaling.uiSmallFont
-                        color: ThemeColors.midlight
-                    }
-
-                    Slider {
-                        id: iterationsSlider
-                        width: parent.width
-                        from: 10
-                        to: 200
-                        stepSize: 10
-                        value: alignmentController.maxIterations
-                        onMoved: alignmentController.maxIterations = value
-                    }
-                }
-
-                Rectangle {
-                    width: 1
-                    Layout.fillHeight: true
-                    Layout.topMargin: Math.round(Scaling.uiScale * 8)
-                    Layout.bottomMargin: Math.round(Scaling.uiScale * 8)
-                    color: ThemeColors.middark
-                }
-
-                IconButton {
-                    text: "Refine"
-                    tooltip: "Run ICP refinement on the current alignment"
-                    enabled: alignmentController.hasResult && !alignmentController.refining
-                    onClicked: alignmentController.refine()
-                }
-
-                Label {
-                    visible: alignmentController.fitnessScore > 0
-                    text: "fitness: " + alignmentController.fitnessScore.toFixed(4)
-                    font: Scaling.uiSmallFont
-                    color: ThemeColors.midlight
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                }
-
-                IconButton {
-                    text: "Apply to Session"
-                    tooltip: "Apply alignment transform to session configuration"
-                    iconSource: FontAwesome.icon("solid/floppy-disk")
-                    onClicked: {}
-                }
-
-                Item {
-                    Layout.preferredWidth: Math.round(Scaling.uiScale * 12)
-                }
+                onBackToPicking: windowState.mode = AlignmentWindow.WindowMode.Picking
+                onApplyRequested: {}
             }
         }
     }

@@ -56,6 +56,9 @@ qt_add_qml_module(PointcasterQml
         Windows/Alignment/AlignmentWindow.qml
         Windows/Alignment/AlignmentView.qml
         Windows/Alignment/RefinementView.qml
+        Windows/Alignment/SnapshotControls.qml
+        Windows/Alignment/PickingControls.qml
+        Windows/Alignment/RefinementControls.qml
     RESOURCES
         Fonts/AtkinsonHyperlegibleNext-Light.otf
         Fonts/AtkinsonHyperlegibleNext-Regular.otf
