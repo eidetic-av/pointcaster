@@ -31,6 +31,7 @@ qt_add_qml_module(PointcasterQml
         Editors/ConfigurationEditor.qml
         PointCloud/PointCloudMaterial.qml
         PointCloud/PointIndexMaterial.qml
+        PointCloud/PointSolidMaterial.qml
         Windows/TabBar.qml
         Windows/TabBarBase.qml
         Windows/Separator.qml
@@ -67,6 +68,7 @@ qt_add_qml_module(PointcasterQml
         PointCloud/Shaders/PointCloud.vert
         PointCloud/Shaders/PointCloud.frag
         PointCloud/Shaders/PointIndex.vert
+        PointCloud/Shaders/PointSolid.frag
     SOURCES
         # TODO need to be able to add from a subdir but atm this doesn't work
         PointCloudGeometry.h
