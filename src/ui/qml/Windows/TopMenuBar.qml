@@ -21,7 +21,7 @@ MenuBar {
 
     Menu {
         title: qsTr("&File")
-        popupType: Popup.Native
+        popupType: Popup.Item
 
         delegate: MenuItem {
             font: Scaling.uiFont
@@ -72,7 +72,7 @@ MenuBar {
 
     Menu {
         title: qsTr("&Edit")
-        popupType: Popup.Native
+        popupType: Popup.Item
 
         delegate: MenuItem {
             id: item
@@ -109,7 +109,7 @@ MenuBar {
 
     Menu {
         title: qsTr("&Window")
-        popupType: Popup.Native
+        popupType: Popup.Item
 
         delegate: MenuItem {
             font: Scaling.uiFont
@@ -203,7 +203,7 @@ MenuBar {
 
     Menu {
         title: qsTr("&Help")
-        popupType: Popup.Native
+        popupType: Popup.Item
 
         delegate: MenuItem {
             font: Scaling.uiFont
@@ -211,8 +211,13 @@ MenuBar {
         }
 
         Action {
-            text: qsTr("&About")
+            text: qsTr("&Documentation")
             shortcut: StandardKey.HelpContents
+            onTriggered: Qt.openUrlExternally("https://docs.pointcaster.net")
+        }
+
+        Action {
+            text: qsTr("&About")
             onTriggered: aboutPopup.open()
         }
     }
