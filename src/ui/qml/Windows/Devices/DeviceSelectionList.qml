@@ -84,12 +84,54 @@ Item {
                     anchors.rightMargin: Math.round(8 * Scaling.uiScale)
                     spacing: Math.round(8 * Scaling.uiScale)
 
+                    CheckBox {
+                        id: activeToggle
+                        checked: modelData.active
+                        onToggled: modelData.active = checked
+                        width: Math.round(16 * Scaling.uiScale)
+                        height: parent.height
+
+                        indicator: Image {
+                            anchors.centerIn: parent
+                            source: activeToggle.checked ? FontAwesome.icon("solid/toggle-on") : FontAwesome.icon("solid/toggle-off")
+                            sourceSize: Qt.size(9.5 * Scaling.uiScale, 9.5 * Scaling.uiScale)
+                            opacity: activeToggle.hovered ? 0.7 : 0.5
+                        }
+
+                        InfoToolTip {
+                            textValue: "Toggle device active"
+                        }
+                    }
+
+                    CheckBox {
+                        id: renderToggle
+                        checked: modelData.render
+                        onToggled: modelData.render = checked
+                        width: Math.round(16 * Scaling.uiScale)
+                        height: parent.height
+
+                        indicator: Image {
+                            anchors.centerIn: parent
+                            source: renderToggle.checked ? FontAwesome.icon("solid/eye") : FontAwesome.icon("solid/eye-slash")
+                            sourceSize: Qt.size(9.5 * Scaling.uiScale, 9.5 * Scaling.uiScale)
+                            opacity: renderToggle.hovered ? 0.7 : 0.5
+                        }
+
+                        InfoToolTip {
+                            textValue: "Toggle session rendering"
+                        }
+                    }
+
                     Rectangle {
                         id: statusCircle
-                        width: Math.round(9 * Scaling.uiScale)
-                        height: Math.round(9 * Scaling.uiScale)
-                        radius: Math.round(5 * Scaling.uiScale)
-                        anchors.verticalCenter: parent.verticalCenter
+                        width: 7 * Scaling.uiScale
+                        height: 7 * Scaling.uiScale
+                        radius: 3.5 * Scaling.uiScale
+                        anchors {
+                            verticalCenter: parent.verticalCenter
+                            rightMargin: 2 * Scaling.uiScale
+                            leftMargin: 2 * Scaling.uiScale
+                        }
                         color: {
                             if (!modelData || modelData.status === undefined)
                                 return ThemeColors.inactive;
@@ -108,11 +150,6 @@ Item {
                         }
                     }
 
-                    CheckBox {
-                        id: renderCheckbox
-                        checked: modelData.render
-                        onToggled: modelData.render = checked
-                    }
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter

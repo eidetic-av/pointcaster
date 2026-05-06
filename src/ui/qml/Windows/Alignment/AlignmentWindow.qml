@@ -74,9 +74,29 @@ KDDW.DockWidget {
         updateMarkers();
     }
 
+    function undoLastPick() {
+        if (windowState.activeView === AlignmentWindow.ActiveView.Secondary && windowState.pendingPrimaryPick !== null) {
+            windowState.pendingPrimaryPick = null;
+            windowState.activeView = AlignmentWindow.ActiveView.Primary;
+        } else if (windowState.pairs.length > 0) {
+            var newPairs = windowState.pairs.slice();
+            var removed = newPairs.pop();
+            windowState.pairs = newPairs;
+            windowState.pendingPrimaryPick = removed.primary;
+            windowState.activeView = AlignmentWindow.ActiveView.Secondary;
+        }
+        updateMarkers();
+    }
+
     function updateMarkers() {
-        primaryDeviceView.markerPositions = primaryMarkerPositions();
-        secondaryDeviceView.markerPositions = secondaryMarkerPositions();
+        var primary = windowState.pairs.map(p => p.primary);
+        if (windowState.pendingPrimaryPick !== null)
+            primary.push(windowState.pendingPrimaryPick);
+        primaryDeviceView.markerPositions = primary;
+        primaryDeviceView.pairCount = windowState.pairs.length;
+
+        secondaryDeviceView.markerPositions = windowState.pairs.map(p => p.secondary);
+        secondaryDeviceView.pairCount = windowState.pairs.length;
     }
 
     function resetAlignment() {
@@ -105,6 +125,7 @@ KDDW.DockWidget {
             RowLayout {
                 AlignmentView {
                     id: primaryDeviceView
+                    visible: windowState.mode < AlignmentWindow.WindowMode.Refinement
                     deviceAdapter: root.workspace && root.workspace.deviceAdapters.length > windowState.primaryDeviceIndex ? root.workspace.deviceAdapters[windowState.primaryDeviceIndex] : null
                     live: windowState.mode == AlignmentWindow.WindowMode.Snapshot
                     enablePicking: windowState.mode == AlignmentWindow.WindowMode.Picking
@@ -123,6 +144,7 @@ KDDW.DockWidget {
 
                 AlignmentView {
                     id: secondaryDeviceView
+                    visible: windowState.mode < AlignmentWindow.WindowMode.Refinement
                     deviceAdapter: root.workspace && root.workspace.deviceAdapters.length > windowState.secondaryDeviceIndex ? root.workspace.deviceAdapters[windowState.secondaryDeviceIndex] : null
                     live: windowState.mode == AlignmentWindow.WindowMode.Snapshot
                     enablePicking: windowState.mode == AlignmentWindow.WindowMode.Picking
@@ -136,6 +158,9 @@ KDDW.DockWidget {
 
             RefinementView {
                 id: refinementView
+                visible: windowState.mode == AlignmentWindow.WindowMode.Refinement
+                primaryAdapter: root.workspace && root.workspace.deviceAdapters.length > windowState.primaryDeviceIndex ? root.workspace.deviceAdapters[windowState.primaryDeviceIndex] : null
+                secondaryAdapter: root.workspace && root.workspace.deviceAdapters.length > windowState.secondaryDeviceIndex ? root.workspace.deviceAdapters[windowState.secondaryDeviceIndex] : null
             }
         }
 
@@ -263,6 +288,7 @@ KDDW.DockWidget {
             }
 
             RowLayout {
+                id: pickingControls
                 spacing: Math.round(Scaling.uiScale * 12)
 
                 Item {
@@ -276,13 +302,21 @@ KDDW.DockWidget {
                     onClicked: root.resetAlignment()
                 }
 
-                Item {
-                    Layout.fillWidth: true
+                IconButton {
+                    text: "Undo last pick"
+                    tooltip: "Undo the most recent point pick"
+                    iconSource: FontAwesome.icon("solid/rotate-left")
+                    enabled: windowState.pendingPrimaryPick !== null || windowState.pairs.length > 0
+                    onClicked: root.undoLastPick()
                 }
 
                 Label {
                     text: windowState.pairs.length + " pair" + (windowState.pairs.length !== 1 ? "s" : "")
                     color: ThemeColors.text
+                }
+
+                Item {
+                    Layout.fillWidth: true
                 }
 
                 IconButton {
@@ -292,6 +326,7 @@ KDDW.DockWidget {
                     enabled: windowState.pairs.length >= 3
                     onClicked: {
                         windowState.mode = AlignmentWindow.WindowMode.Refinement;
+                        refinementView.activate();
                     }
                 }
 
@@ -301,6 +336,7 @@ KDDW.DockWidget {
             }
 
             RowLayout {
+                id: refinementControls
                 spacing: Math.round(Scaling.uiScale * 12)
 
                 Item {
