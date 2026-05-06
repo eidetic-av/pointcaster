@@ -47,6 +47,10 @@ public:
 
   Q_INVOKABLE void reset();
 
+  Q_INVOKABLE void setStaticData(const QByteArray &vertexData,
+                                 const QVector3D &boundsMin,
+                                 const QVector3D &boundsMax);
+
   Q_INVOKABLE QVector3D pointPosition(int index) const;
 
 signals:
@@ -56,7 +60,7 @@ signals:
 
 private:
   PointCloudAdapter *_pointCloudAdapter = nullptr;
-  bool _enabled = true; 
+  bool _enabled = true;
 
   QByteArray _vertexBuffer;
 

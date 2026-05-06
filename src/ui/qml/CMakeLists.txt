@@ -90,6 +90,7 @@ target_link_libraries(PointcasterQml PRIVATE
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::OpenGL
     Qt6::Quick Qt6::QuickControls2 Qt6::QuickDialogs2
     Qt6::Quick3D
+    Qt6::Concurrent
     KDAB::kddockwidgets
     QtAwesome::QtAwesome
     Gizmo3D::gizmo3d

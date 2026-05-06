@@ -46,6 +46,24 @@ void PointCloudGeometry::reset() {
   update();
 }
 
+void PointCloudGeometry::setStaticData(const QByteArray &vertexData,
+                                       const QVector3D &boundsMin,
+                                       const QVector3D &boundsMax) {
+  _vertexBuffer = vertexData;
+  clear();
+  setVertexData(_vertexBuffer);
+  setStride(16);
+  setPrimitiveType(QQuick3DGeometry::PrimitiveType::Points);
+  addAttribute(Attribute::PositionSemantic, 0, Attribute::F32Type);
+  addAttribute(Attribute::TexCoord0Semantic, 12, Attribute::F32Type);
+  _boundsMin = boundsMin;
+  _boundsMax = boundsMax;
+  _boundsCenter = ((_boundsMin + _boundsMax) * 0.5) * 0.1;
+  setBounds(_boundsMin, _boundsMax);
+  emit boundsChanged();
+  update();
+}
+
 QVector3D PointCloudGeometry::pointPosition(int index) const {
   constexpr int stride = 16;
   const int byteOffset = index * stride;

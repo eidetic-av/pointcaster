@@ -110,39 +110,181 @@ Item {
     }
 
     // material picker
-    Rectangle {
+    Column {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.margins: Math.round(Scaling.uiScale * 8)
-        width: col.implicitWidth + Math.round(Scaling.uiScale * 16)
-        height: col.implicitHeight + Math.round(Scaling.uiScale * 16)
-        radius: Math.round(Scaling.uiScale * 6)
-        color: ThemeColors.withAlpha(ThemeColors.dark, 0.85)
+        spacing: Math.round(Scaling.uiScale * 8)
 
-        Column {
-            id: col
-            anchors.centerIn: parent
-            spacing: Math.round(Scaling.uiScale * 8)
+        // colour picker
+        Rectangle {
+            width: colourCol.implicitWidth + Math.round(Scaling.uiScale * 16)
+            height: colourCol.implicitHeight + Math.round(Scaling.uiScale * 16)
+            radius: Math.round(Scaling.uiScale * 6)
+            color: ThemeColors.withAlpha(ThemeColors.dark, 0.85)
 
-            ColorModeSelector {
-                label: "Primary"
-                currentMode: root.primaryColorMode
-                onModeSelected: mode => root.primaryColorMode = mode
+            Column {
+                id: colourCol
+                anchors.centerIn: parent
+                spacing: Math.round(Scaling.uiScale * 8)
+
+                ColorModeSelector {
+                    label: "Primary"
+                    currentMode: root.primaryColorMode
+                    onModeSelected: mode => root.primaryColorMode = mode
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: ThemeColors.middark
+                }
+
+                ColorModeSelector {
+                    label: "Secondary"
+                    currentMode: root.secondaryColorMode
+                    onModeSelected: mode => root.secondaryColorMode = mode
+                }
             }
+        }
 
-            Rectangle {
-                width: parent.width
-                height: 1
-                color: ThemeColors.middark
-            }
+        // transform output
+        Rectangle {
+            id: transformPanel
+            visible: root.alignmentController.hasResult
+            width: transformCol.implicitWidth + Math.round(Scaling.uiScale * 16)
+            height: transformCol.implicitHeight + Math.round(Scaling.uiScale * 16)
+            radius: Math.round(Scaling.uiScale * 6)
+            color: ThemeColors.withAlpha(ThemeColors.dark, 0.85)
 
-            ColorModeSelector {
-                label: "Secondary"
-                currentMode: root.secondaryColorMode
-                onModeSelected: mode => root.secondaryColorMode = mode
+            Column {
+                id: transformCol
+                anchors.centerIn: parent
+                spacing: Math.round(Scaling.uiScale * 8)
+
+                // 4x4 matrix
+                Column {
+                    spacing: Math.round(Scaling.uiScale * 2)
+
+                    Text {
+                        text: "Matrix"
+                        font: Scaling.uiSmallFont
+                        color: ThemeColors.midlight
+                    }
+
+                    TextEdit {
+                        readOnly: true
+                        selectByMouse: true
+                        selectionColor: ThemeColors.highlight
+                        selectedTextColor: ThemeColors.text
+                        font: Scaling.monoFont
+                        color: ThemeColors.text
+                        text: root.alignmentController.transformString
+                    }
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: ThemeColors.middark
+                }
+
+                // position
+                Column {
+                    spacing: Math.round(Scaling.uiScale * 2)
+
+                    Text {
+                        text: "Position"
+                        font: Scaling.uiSmallFont
+                        color: ThemeColors.midlight
+                    }
+
+                    TextEdit {
+                        readOnly: true
+                        selectByMouse: true
+                        selectionColor: ThemeColors.highlight
+                        selectedTextColor: ThemeColors.text
+                        font: Scaling.monoFont
+                        color: ThemeColors.text
+                        text: {
+                            var p = root.alignmentController.resultPosition;
+                            return (p.x * 0.1).toFixed(3) + ", " + (p.y * 0.1).toFixed(3) + ", " + (p.z * 0.1).toFixed(3);
+                        }
+                    }
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: ThemeColors.middark
+                }
+
+                // rotation (quaternion)
+                Column {
+                    spacing: Math.round(Scaling.uiScale * 2)
+
+                    Text {
+                        text: "Quaternion (w, x, y, z)"
+                        font: Scaling.uiSmallFont
+                        color: ThemeColors.midlight
+                    }
+
+                    TextEdit {
+                        readOnly: true
+                        selectByMouse: true
+                        selectionColor: ThemeColors.highlight
+                        selectedTextColor: ThemeColors.text
+                        font: Scaling.monoFont
+                        color: ThemeColors.text
+                        text: {
+                            var q = root.alignmentController.resultRotation;
+                            return q.scalar.toFixed(6) + ", " + q.x.toFixed(6) + ", " + q.y.toFixed(6) + ", " + q.z.toFixed(6);
+                        }
+                    }
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: ThemeColors.middark
+                }
+
+                // rotation (euler)
+                Column {
+                    spacing: Math.round(Scaling.uiScale * 2)
+
+                    Text {
+                        text: "Euler (pitch, yaw, roll)"
+                        font: Scaling.uiSmallFont
+                        color: ThemeColors.midlight
+                    }
+
+                    TextEdit {
+                        readOnly: true
+                        selectByMouse: true
+                        selectionColor: ThemeColors.highlight
+                        selectedTextColor: ThemeColors.text
+                        font: Scaling.monoFont
+                        color: ThemeColors.text
+                        text: {
+                            var e = root.alignmentController.resultRotation.toEulerAngles();
+                            return e.x.toFixed(4) + ", " + e.y.toFixed(4) + ", " + e.z.toFixed(4);
+                        }
+                    }
+                }
+
+                // fitness
+                Text {
+                    visible: root.alignmentController.fitnessScore > 0
+                    text: "fitness: " + root.alignmentController.fitnessScore.toFixed(6)
+                    font: Scaling.uiSmallFont
+                    color: ThemeColors.midlight
+                }
             }
         }
     }
+
+    // colour mode selector component
 
     component ColorModeSelector: Column {
         property string label: ""
@@ -160,7 +302,6 @@ Item {
         Row {
             spacing: Math.round(Scaling.uiScale * 4)
 
-            // color option (regular shading)
             Rectangle {
                 width: Math.round(Scaling.uiScale * 36)
                 height: Math.round(Scaling.uiScale * 20)
@@ -168,10 +309,8 @@ Item {
                 border.width: 1
                 border.color: currentMode === 0 ? ThemeColors.highlight : ThemeColors.middark
                 color: "transparent"
-
                 opacity: rgbMouseArea.containsMouse ? 1 : currentMode === 0 ? 0.8 : 0.4
 
-                // mini rainbow gradient to signify regular shading
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
                     GradientStop {
@@ -180,7 +319,7 @@ Item {
                     }
                     GradientStop {
                         position: 0.5
-                        color: ThemeColors.highlight
+                        color: ThemeColors.green
                     }
                     GradientStop {
                         position: 1.0
@@ -206,7 +345,6 @@ Item {
                 }
             }
 
-            // Solid color swatches
             Repeater {
                 model: root.solidColors
 
@@ -230,9 +368,35 @@ Item {
         }
     }
 
+    // refining overlay
+
+    Rectangle {
+        anchors.fill: parent
+        visible: root.alignmentController.refining
+        color: ThemeColors.withAlpha(ThemeColors.shadow, 0.6)
+
+        Column {
+            anchors.centerIn: parent
+            spacing: Math.round(Scaling.uiScale * 12)
+
+            BusyIndicator {
+                anchors.horizontalCenter: parent.horizontalCenter
+                running: root.alignmentController.refining
+                palette.dark: ThemeColors.highlight
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Refining alignment..."
+                font: Scaling.uiFont
+                color: ThemeColors.text
+            }
+        }
+    }
+
     function activate() {
-        primaryGeo.updateGeometry();
-        secondaryGeo.updateGeometry();
+        primaryGeo.setStaticData(root.alignmentController.primaryRenderData, root.alignmentController.primaryBoundsMin, root.alignmentController.primaryBoundsMax);
+        secondaryGeo.setStaticData(root.alignmentController.secondaryRenderData, root.alignmentController.secondaryBoundsMin, root.alignmentController.secondaryBoundsMax);
         orbitOrigin.position = primaryGeo.boundsCenter;
     }
 }

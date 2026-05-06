@@ -172,7 +172,7 @@ KDDW.DockWidget {
         StackLayout {
             id: controlBarStack
             currentIndex: windowState.mode
-            height: Math.round(Scaling.uiScale * 52)
+            height: windowState.mode === AlignmentWindow.WindowMode.Refinement ? Math.round(Scaling.uiScale * 80) : Math.round(Scaling.uiScale * 52)
             anchors {
                 left: parent.left
                 right: parent.right
@@ -280,6 +280,7 @@ KDDW.DockWidget {
                     text: "Snapshot"
                     tooltip: "Capture a frame from the target devices and begin alignment"
                     onClicked: {
+                        alignmentController.snapshotClouds(root.workspace.deviceAdapters[windowState.primaryDeviceIndex], root.workspace.deviceAdapters[windowState.secondaryDeviceIndex]);
                         windowState.mode = AlignmentWindow.WindowMode.Picking;
                         windowState.activeView = AlignmentWindow.ActiveView.Primary;
                         primaryDeviceView.snapshot();
@@ -352,13 +353,103 @@ KDDW.DockWidget {
                 }
 
                 IconButton {
-                    id: returnToPickingButton
                     text: "Picking"
                     tooltip: "Return to keypoint pair picking"
                     iconSource: FontAwesome.icon("solid/arrow-left-long")
-                    onClicked: {
-                        windowState.mode = AlignmentWindow.WindowMode.Picking;
+                    onClicked: windowState.mode = AlignmentWindow.WindowMode.Picking
+                }
+
+                Rectangle {
+                    width: 1
+                    Layout.fillHeight: true
+                    Layout.topMargin: Math.round(Scaling.uiScale * 8)
+                    Layout.bottomMargin: Math.round(Scaling.uiScale * 8)
+                    color: ThemeColors.middark
+                }
+
+                Column {
+                    spacing: Math.round(Scaling.uiScale * 2)
+                    Layout.preferredWidth: Math.round(Scaling.uiScale * 160)
+
+                    Label {
+                        text: "Correspondence: " + correspondenceSlider.value.toFixed(0)
+                        font: Scaling.uiSmallFont
+                        color: ThemeColors.midlight
                     }
+
+                    Slider {
+                        id: correspondenceSlider
+                        width: parent.width
+                        from: 5
+                        to: 200
+                        stepSize: 1
+                        value: alignmentController.maxCorrespondenceDistance
+                        onMoved: alignmentController.maxCorrespondenceDistance = value
+                    }
+                }
+
+                Column {
+                    spacing: Math.round(Scaling.uiScale * 2)
+                    Layout.preferredWidth: Math.round(Scaling.uiScale * 120)
+
+                    Label {
+                        text: "Voxel size: " + voxelSlider.value.toFixed(1)
+                        font: Scaling.uiSmallFont
+                        color: ThemeColors.midlight
+                    }
+
+                    Slider {
+                        id: voxelSlider
+                        width: parent.width
+                        from: 0
+                        to: 20
+                        stepSize: 0.5
+                        value: alignmentController.voxelLeafSize
+                        onMoved: alignmentController.voxelLeafSize = value
+                    }
+                }
+
+                Column {
+                    spacing: Math.round(Scaling.uiScale * 2)
+                    Layout.preferredWidth: Math.round(Scaling.uiScale * 120)
+
+                    Label {
+                        text: "Iterations: " + iterationsSlider.value.toFixed(0)
+                        font: Scaling.uiSmallFont
+                        color: ThemeColors.midlight
+                    }
+
+                    Slider {
+                        id: iterationsSlider
+                        width: parent.width
+                        from: 10
+                        to: 200
+                        stepSize: 10
+                        value: alignmentController.maxIterations
+                        onMoved: alignmentController.maxIterations = value
+                    }
+                }
+
+                Rectangle {
+                    width: 1
+                    Layout.fillHeight: true
+                    Layout.topMargin: Math.round(Scaling.uiScale * 8)
+                    Layout.bottomMargin: Math.round(Scaling.uiScale * 8)
+                    color: ThemeColors.middark
+                }
+
+                IconButton {
+                    text: "Refine"
+                    tooltip: "Run ICP refinement on the current alignment"
+                    enabled: alignmentController.hasResult && !alignmentController.refining
+                    onClicked: alignmentController.refine()
+                }
+
+                Label {
+                    visible: alignmentController.fitnessScore > 0
+                    text: "fitness: " + alignmentController.fitnessScore.toFixed(4)
+                    font: Scaling.uiSmallFont
+                    color: ThemeColors.midlight
                 }
 
                 Item {
@@ -366,7 +457,6 @@ KDDW.DockWidget {
                 }
 
                 IconButton {
-                    id: applyButton
                     text: "Apply to Session"
                     tooltip: "Apply alignment transform to session configuration"
                     iconSource: FontAwesome.icon("solid/floppy-disk")
