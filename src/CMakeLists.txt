@@ -34,6 +34,7 @@ set_target_properties(pointcaster PROPERTIES
 add_subdirectory(ui)
 add_subdirectory(app_settings)
 add_subdirectory(metrics)
+add_subdirectory(registration)
 
 # corrade lib used for dynamic plugin / lib loading
 find_package(Corrade CONFIG REQUIRED Main PluginManager)
@@ -44,15 +45,14 @@ add_subdirectory(plugins)
 
 #----- Dependencies
 
-# - reflectcpp is used for de/serialization of workspace configuration,
 find_package(reflectcpp CONFIG REQUIRED)
-
 find_package(TBB REQUIRED)
 
 target_link_libraries(pointcaster PRIVATE 
   pointcaster::core 
   pointcaster::plugins
   pointcaster::metrics
+  pointcaster::registration
   pointcaster::app_settings
   pointcaster::ui
   Corrade::Main 
@@ -77,6 +77,11 @@ target_precompile_headers(pointcaster PRIVATE
   <Corrade/Containers/StringView.h>
   <QCoreApplication>
   <QUrl>
+  <Eigen/Core>
+  <Eigen/Dense>
+  <pcl/point_cloud.h>
+  <pcl/point_types.h>
+  <pcl/registration/transformation_estimation_svd.h>
 )
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")

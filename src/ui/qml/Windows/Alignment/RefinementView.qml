@@ -10,6 +10,7 @@ Item {
 
     required property QtObject primaryAdapter
     required property QtObject secondaryAdapter
+    required property QtObject alignmentController
 
     // 0 = "color" (PointCloudMaterial), >1 = solid color index
     property int primaryColorMode: 0
@@ -51,27 +52,34 @@ Item {
             pointCloudAdapter: root.primaryAdapter ? root.primaryAdapter.pointCloudAdapter() : null
         }
 
-        // secondary cloud with regular color
-        Model {
-            visible: root.secondaryColorMode === 0
-            geometry: secondaryGeo
-            materials: [
-                PointCloudMaterial {
-                    uPointSize: viewController.shaderPointSize
-                }
-            ]
-        }
+        // secondary cloud is wrapped in a node that controls its transformation based on the result of the alignment controller
+        Node {
+            id: secondaryTransformNode
+            position: root.alignmentController.resultPosition
+            rotation: root.alignmentController.resultRotation
 
-        // secondary cloud with solid color
-        Model {
-            visible: root.secondaryColorMode !== 0
-            geometry: secondaryGeo
-            materials: [
-                PointSolidMaterial {
-                    uPointSize: viewController.shaderPointSize
-                    uColor: root.secondaryColorMode > 0 ? root.solidColors[root.secondaryColorMode - 1] : "white"
-                }
-            ]
+            // secondary cloud with regular color
+            Model {
+                visible: root.secondaryColorMode === 0
+                geometry: secondaryGeo
+                materials: [
+                    PointCloudMaterial {
+                        uPointSize: viewController.shaderPointSize
+                    }
+                ]
+            }
+
+            // secondary cloud with solid color
+            Model {
+                visible: root.secondaryColorMode !== 0
+                geometry: secondaryGeo
+                materials: [
+                    PointSolidMaterial {
+                        uPointSize: viewController.shaderPointSize
+                        uColor: root.secondaryColorMode > 0 ? root.solidColors[root.secondaryColorMode - 1] : "white"
+                    }
+                ]
+            }
         }
 
         PointCloudGeometry {

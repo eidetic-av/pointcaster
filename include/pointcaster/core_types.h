@@ -24,6 +24,16 @@ struct float4 {
   auto operator<=>(const float4 &f) const = default;
 };
 
+struct float4x4 {
+  float values[16]{
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1,
+  };
+  bool operator==(const float4x4 &) const = default;
+};
+
 struct quaternion {
   float scalar = 1;
   float x = 0;

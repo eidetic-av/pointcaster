@@ -71,6 +71,8 @@ qt_add_qml_module(PointcasterQml
         PointCloud/Shaders/PointSolid.frag
     SOURCES
         # TODO need to be able to add from a subdir but atm this doesn't work
+        AlignmentController.h
+        AlignmentController.cc
         PointCloudGeometry.h
         PointCloudGeometry.cc
         color_picker.h
@@ -84,6 +86,7 @@ find_package(gizmo3d CONFIG REQUIRED)
 
 target_link_libraries(PointcasterQml PRIVATE
     pointcaster::core
+    pointcaster::registration
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::OpenGL
     Qt6::Quick Qt6::QuickControls2 Qt6::QuickDialogs2
     Qt6::Quick3D

@@ -12,6 +12,7 @@ add_library(pointcaster_core SHARED
     profiling/profiling_zone.cc
     profiling/profiler.cc
     util/string_utils.cc
+    util/geometry_utils.cc
 )
 
 add_library(pointcaster::core ALIAS pointcaster_core)
@@ -28,6 +29,9 @@ target_link_libraries(pointcaster_core PUBLIC spdlog::spdlog fmt::fmt)
 
 find_package(Tracy CONFIG REQUIRED)
 target_link_libraries(pointcaster_core PUBLIC Tracy::TracyClient)
+
+find_package(Eigen3 CONFIG REQUIRED)
+target_link_libraries(pointcaster_core PUBLIC Eigen3::Eigen)
 
 target_include_directories(pointcaster_core
     ${WARNING_GUARD}

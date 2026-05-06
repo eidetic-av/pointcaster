@@ -39,6 +39,10 @@ KDDW.DockWidget {
         property var pendingPrimaryPick: null
     }
 
+    AlignmentController {
+        id: alignmentController
+    }
+
     // extract per-view marker positions from pair data
     function primaryMarkerPositions() {
         var positions = [];
@@ -161,6 +165,7 @@ KDDW.DockWidget {
                 visible: windowState.mode == AlignmentWindow.WindowMode.Refinement
                 primaryAdapter: root.workspace && root.workspace.deviceAdapters.length > windowState.primaryDeviceIndex ? root.workspace.deviceAdapters[windowState.primaryDeviceIndex] : null
                 secondaryAdapter: root.workspace && root.workspace.deviceAdapters.length > windowState.secondaryDeviceIndex ? root.workspace.deviceAdapters[windowState.secondaryDeviceIndex] : null
+                alignmentController: alignmentController
             }
         }
 
@@ -325,8 +330,11 @@ KDDW.DockWidget {
                     tooltip: "Finish picking pairs and compute coarse transformation"
                     enabled: windowState.pairs.length >= 3
                     onClicked: {
-                        windowState.mode = AlignmentWindow.WindowMode.Refinement;
-                        refinementView.activate();
+                        alignmentController.computeFromPairs(windowState.pairs);
+                        if (alignmentController.hasResult) {
+                            windowState.mode = AlignmentWindow.WindowMode.Refinement;
+                            refinementView.activate();
+                        }
                     }
                 }
 

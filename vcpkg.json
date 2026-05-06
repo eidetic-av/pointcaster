@@ -15,6 +15,13 @@
 		"libcpplocate",
 		"llfio",
 		"orbbecsdk",
+		{
+			"name": "pcl",
+			"default-features": false,
+			"features": [
+				"cuda"
+			]
+		},
 		"prometheus-cpp",
 		"qtawesome",
 		{
