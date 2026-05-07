@@ -4,6 +4,7 @@
 #include "plugins/backend/backend_plugin.h"
 #include "plugins/devices/device_plugin.h"
 #include "plugins/devices/device_variants.h"
+#include "plugins/operators/operator_plugin.h"
 #include "recorder/session_recorder.h"
 #include "workspace_config.h"
 
@@ -42,6 +43,10 @@ public:
   std::unordered_map<std::string,
                      Corrade::Containers::Pointer<pc::devices::DevicePlugin>>
       discovery_plugins{};
+
+  std::unique_ptr<Corrade::PluginManager::Manager<operators::OperatorPlugin>>
+      operator_plugin_manager;
+  std::vector<std::string> loaded_operator_plugin_names{};
 
   std::unique_ptr<metrics::PrometheusServer> prometheus_server;
 

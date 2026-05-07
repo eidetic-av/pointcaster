@@ -25,21 +25,22 @@ public:
       std::shared_ptr<PointCloud> output_cloud,
       const CameraIntrinsics &color_intrinsics,
       const TransformConfiguration &transform,
-      const ColorTransformConfiguration &color_transform,
-      std::span<std::byte> render_output = {}) const override;
+      const ColorTransformConfiguration &color_transform) const override;
 
-  void transform_point_cloud(const PointCloud &input_cloud,
-                             std::shared_ptr<PointCloud> output_cloud,
-                             const TransformConfiguration &transform,
-                             const ColorTransformConfiguration &color_transform,
-                             std::span<std::byte> render_output) const override;
+  void transform_point_cloud(
+      const PointCloud &input_cloud, std::shared_ptr<PointCloud> output_cloud,
+      const TransformConfiguration &transform,
+      const ColorTransformConfiguration &color_transform) const override;
 
-  void transform_point_cloud(std::span<const position> input_positions,
-                             std::span<const color> input_colors,
-                             std::shared_ptr<PointCloud> output_cloud,
-                             const TransformConfiguration &transform,
-                             const ColorTransformConfiguration &color_transform,
-                             std::span<std::byte> render_output) const override;
+  void transform_point_cloud(
+      std::span<const position> input_positions,
+      std::span<const color> input_colors,
+      std::shared_ptr<PointCloud> output_cloud,
+      const TransformConfiguration &transform,
+      const ColorTransformConfiguration &color_transform) const override;
+
+  void pack_render_buffer(const PointCloud &cloud,
+                          std::span<std::byte> output) const override;
 };
 
 } // namespace pc::backend

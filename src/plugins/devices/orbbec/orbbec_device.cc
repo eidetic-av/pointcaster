@@ -29,11 +29,13 @@
 #include <pointcaster/point_cloud.h>
 #include <profiling/profiler.h>
 #include <random>
+#include <ranges>
 #include <span>
 #include <thread>
 #include <util/string_utils.h>
 #include <variant>
 #include <workspace/workspace.h>
+
 
 #include <plugins/backend/cpu/cpu_backend.h>
 
@@ -539,29 +541,43 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             std::span ob_depth_data{ob_depth_frame_ptr, point_count};
             std::span ob_color_data{ob_color_frame_ptr, point_count};
 
-            {
-              ProfilingZone backend_process_zone(
-                  "OrbbecDevice::backend_process");
+            backend::BackendPlugin *backend =
+                (device_config.transform.backend.value() ==
+                     TransformConfiguration::BackendType::CUDA &&
+                 cuda_backend)
+                    ? cuda_backend.get()
+                    : cpu_backend.get();
 
-              if (device_config.transform.backend.value() ==
-                      TransformConfiguration::BackendType::CUDA &&
-                  cuda_backend) {
-                cuda_backend->project_transform_frame_data(
+            {
+              ProfilingZone backend_transform_zone(
+                  "OrbbecDevice::backend_transform");
+              if (backend) {
+                backend->project_transform_frame_data(
                     ob_depth_data, ob_color_data, point_cloud, color_intrinsics,
-                    device_config.transform, device_config.color, render_span);
-              } else if (device_config.transform.backend.value() ==
-                             TransformConfiguration::BackendType::CPU &&
-                         cpu_backend) {
-                cpu_backend->project_transform_frame_data(
-                    ob_depth_data, ob_color_data, point_cloud, color_intrinsics,
-                    device_config.transform, device_config.color, render_span);
+                    device_config.transform, device_config.color);
               }
             }
 
-            _latest_point_cloud.exchange(point_cloud);
-            if (render_buffer) {
-              _latest_render_data.exchange(render_buffer);
+            {
+              ProfilingZone operator_zone("OrbbecDevice::operators");
+
+              for (const auto &[operator_plugin, operator_config] :
+                   std::views::zip(operators, device_config.operators)) {
+                operator_plugin->process(*point_cloud, *point_cloud,
+                                         operator_config);
+              }
             }
+
+            if (device_config.render && backend) {
+              const auto final_count = point_cloud->size();
+              auto render_buffer =
+                  std::make_shared<std::vector<std::byte>>(final_count * 16);
+              backend->pack_render_buffer(*point_cloud, *render_buffer);
+              if (render_buffer) _latest_render_data.exchange(render_buffer);
+            }
+
+            _latest_point_cloud.exchange(point_cloud);
+
             notify_point_cloud_updated();
             set_updated_time(steady_clock::now());
 

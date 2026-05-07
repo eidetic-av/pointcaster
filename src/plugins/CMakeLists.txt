@@ -1,5 +1,6 @@
 add_library(pointcaster_plugins
     plugin_loader.cc
+    devices/device_plugin.cc
 )
 add_library(pointcaster::plugins ALIAS pointcaster_plugins)
 
@@ -20,6 +21,7 @@ target_link_libraries(pointcaster_plugins PRIVATE cpplocate::cpplocate)
 
 set(DEVICES_PLUGIN_DIR "plugins/devices")
 set(BACKEND_PLUGIN_DIR "plugins/backend")
+set(OPERATORS_PLUGIN_DIR "plugins/operators")
 
 # - static plugins
 add_subdirectory(backend/cpu)
@@ -28,7 +30,10 @@ add_subdirectory(devices/ply)
 
 # - dynamic plugins
 add_subdirectory(backend/cuda)
+
 add_subdirectory(devices/orbbec)
+
+add_subdirectory(operators/fringe_removal)
 
 
 # the $CORRADE_PLUGINS and $CORRADE_STATIC_PLUGINS lists should 

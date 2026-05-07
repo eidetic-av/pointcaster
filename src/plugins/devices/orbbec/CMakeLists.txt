@@ -1,6 +1,7 @@
 set(ORBBEC_PLUGIN_DIR ${DEVICES_PLUGIN_DIR}/orbbec)
 
-corrade_add_plugin(OrbbecDevice
+corrade_add_plugin(
+  OrbbecDevice
   ${ORBBEC_PLUGIN_DIR}
   ${ORBBEC_PLUGIN_DIR}
   OrbbecDevice.conf

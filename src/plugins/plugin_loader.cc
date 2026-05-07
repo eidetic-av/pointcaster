@@ -3,6 +3,7 @@
 #include "backend/cuda/cuda_backend.h"
 #include "devices/device_plugin.h"
 #include "devices/null/null_device.h"
+#include "operators/operator_plugin.h"
 
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/Containers/StringView.h>
@@ -24,6 +25,7 @@
 static void import_static_plugins() {
   static std::once_flag imported_flag;
   std::call_once(imported_flag, [] {
+    // these are all the plugins bundled with the pointcaster binary itself
     CORRADE_PLUGIN_IMPORT(CpuBackend)
     CORRADE_PLUGIN_IMPORT(NullDevice)
     CORRADE_PLUGIN_IMPORT(PlyDevice)
@@ -48,10 +50,6 @@ std::filesystem::path executable_directory_path() {
   return std::filesystem::path(module_file_path).parent_path();
 }
 
-std::filesystem::path default_plugin_root_directory() {
-  return executable_directory_path().parent_path() / "plugins";
-}
-
 void configure_search_paths(
     const std::filesystem::path &plugin_root_directory) {
   SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS |
@@ -69,6 +67,10 @@ void configure_search_paths(
 }
 
 #endif // _WIN32
+
+std::filesystem::path default_plugin_root_directory() {
+  return executable_directory_path().parent_path() / "plugins";
+}
 
 void configure_plugin_search_path() {
 #ifdef _WIN32
@@ -163,6 +165,28 @@ load_backend_plugins(Workspace &workspace) {
   }
 
   return backend_plugin_manager;
+}
+
+std::unique_ptr<Corrade::PluginManager::Manager<operators::OperatorPlugin>>
+load_operator_plugins(Workspace& workspace) {
+  import_static_plugins();
+  configure_plugin_search_path();
+
+  auto operator_plugin_manager =
+      std::make_unique<Manager<operators::OperatorPlugin>>();
+
+  workspace.loaded_operator_plugin_names.clear();
+
+  for (StringView plugin_name : operator_plugin_manager->pluginList()) {
+    const auto plugin_status = operator_plugin_manager->load(plugin_name);
+    if (plugin_status & LoadState::Loaded) {
+      workspace.loaded_operator_plugin_names.push_back(plugin_name);
+      pc::logger()->info("Loaded operator plugin '{}'",
+                         std::string(plugin_name));
+    }
+  }
+
+  return operator_plugin_manager;
 }
 
 } // namespace pc::plugins

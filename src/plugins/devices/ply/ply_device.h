@@ -52,6 +52,7 @@ private:
   std::shared_ptr<PointCloud> _input_cloud;
 
   Corrade::Containers::Pointer<backend::BackendPlugin> _cpu_backend;
+  Corrade::Containers::Pointer<backend::BackendPlugin> _cuda_backend;
 
   std::shared_ptr<PointCloud> _current_point_cloud =
       std::make_shared<PointCloud>(PointCloud{{}, {}});

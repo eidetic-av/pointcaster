@@ -1,35 +1,35 @@
 #pragma once
 
-#include "backend_types.h"
+#include "operator_variants.h"
 
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/GrowableArray.h>
 #include <Corrade/Containers/String.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
-#include <config/color_transform_config.h>
-#include <config/transform_config.h>
+#include <Corrade/Tags.h>
 #include <cpplocate/cpplocate.h>
 #include <filesystem>
-#include <functional>
-#include <pointcaster/core_types.h>
+#include <logger/logger.h>
 #include <pointcaster/point_cloud.h>
-#include <span>
-#include <tuple>
 
-namespace pc::backend {
+namespace pc {
+class Workspace;
+}
 
-class BackendPlugin : public Corrade::PluginManager::AbstractPlugin {
+namespace pc::operators {
+
+class OperatorPlugin : public Corrade::PluginManager::AbstractPlugin {
 public:
   static Corrade::Containers::StringView pluginInterface() {
     using namespace Corrade::Containers::Literals;
-    return "net.pointcaster.BackendPlugin/1.0"_s;
+    return "net.pointcaster.OperatorPlugin/1.0"_s;
   }
 
   static Corrade::Containers::Array<Corrade::Containers::String>
   pluginSearchPaths() {
     std::filesystem::path exe_dir(cpplocate::getModulePath());
-    auto plugin_dir = exe_dir.parent_path() / "plugins" / "backend";
+    auto plugin_dir = exe_dir.parent_path() / "plugins" / "operators";
 
     std::vector<Corrade::Containers::String> search_paths;
 
@@ -64,38 +64,20 @@ public:
     return {Corrade::InPlaceInit, results};
   }
 
-  explicit BackendPlugin(Corrade::PluginManager::AbstractManager &manager,
-                         Corrade::Containers::StringView plugin)
+  explicit OperatorPlugin(Corrade::PluginManager::AbstractManager &manager,
+                          Corrade::Containers::StringView plugin)
       : Corrade::PluginManager::AbstractPlugin{manager, plugin} {}
 
-  virtual ~BackendPlugin() = default;
+  virtual ~OperatorPlugin() = default;
 
-  // since plugins are created by a factory, we implement a custom init() which
-  // must be called
-  virtual void init([[maybe_unused]] const size_t point_count) {};
+  virtual void init() {};
 
-  virtual void transform_point_cloud(
-      const PointCloud &input_cloud, std::shared_ptr<PointCloud> output_cloud,
-      const TransformConfiguration &transform,
-      const ColorTransformConfiguration &color_transform) const = 0;
+  virtual void process(const PointCloud &input, PointCloud &output,
+                       const OperatorConfigurationVariant &config_variant) const = 0;
 
-  virtual void transform_point_cloud(
-      std::span<const position> input_positions,
-      std::span<const color> input_colors,
-      std::shared_ptr<PointCloud> output_cloud,
-      const TransformConfiguration &transform,
-      const ColorTransformConfiguration &color_transform) const = 0;
+  virtual void on_config_field_changed(std::string_view path = "") {}
 
-  virtual void project_transform_frame_data(
-      std::span<const uint16_t> input_depth_frame,
-      std::span<const color_rgb> input_rgb_frame,
-      std::shared_ptr<PointCloud> output_cloud,
-      const CameraIntrinsics &color_intrinsics,
-      const TransformConfiguration &transform,
-      const ColorTransformConfiguration &color_transform) const = 0;
-
-  virtual void pack_render_buffer(const PointCloud &cloud,
-                                  std::span<std::byte> output) const = 0;
+  virtual bool plugin_null_state() const { return false; }
 };
 
-} // namespace pc::backend
+} // namespace pc::operators

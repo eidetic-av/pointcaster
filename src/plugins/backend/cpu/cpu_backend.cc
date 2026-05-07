@@ -33,8 +33,7 @@ template <PointSource F>
 void transform_from(F &&get_point, size_t point_count,
                     std::shared_ptr<PointCloud> output_cloud,
                     const TransformConfiguration &transform,
-                    const ColorTransformConfiguration &color_transform,
-                    std::span<std::byte> render_output) {
+                    const ColorTransformConfiguration &color_transform) {
 
   // TODO a few of these per-transform allocations could move to cpu_backend
   // class members and be resized in init
@@ -81,24 +80,10 @@ void transform_from(F &&get_point, size_t point_count,
 
   auto output_range = std::views::iota(size_t{0}, new_point_count);
 
-  char *render_destination =
-      render_output.empty() ? nullptr
-                            : reinterpret_cast<char *>(render_output.data());
-
   const auto copy_to_output_buffers = [&](const auto i) {
     const auto output_index = output_indices[i];
     output_positions[i] = output_cloud->positions[output_index];
     output_colors[i] = output_cloud->colors[output_index];
-
-    if (render_destination) {
-      // for our shader we pack the positions and the index too
-      // which allows us to do point cloud lookup using screen-space color
-      // picking
-      std::memcpy(render_destination + i * 16, &output_positions[i], 8);
-      std::memcpy(render_destination + i * 16 + 8, &output_colors[i], 4);
-      float idx = static_cast<float>(i);
-      std::memcpy(render_destination + i * 16 + 12, &idx, 4);
-    }
   };
 
   std::for_each(std::execution::par_unseq, output_range.begin(),
@@ -132,15 +117,13 @@ CpuBackend::~CpuBackend() {
 void CpuBackend::transform_point_cloud(
     const PointCloud &input_cloud, std::shared_ptr<PointCloud> output_cloud,
     const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform,
-    std::span<std::byte> render_output) const {
+    const ColorTransformConfiguration &color_transform) const {
 
   transform_from(
       [&](int i) -> std::pair<position, color> {
         return {input_cloud.positions[i], input_cloud.colors[i]};
       },
-      output_cloud->size(), output_cloud, transform, color_transform,
-      render_output);
+      output_cloud->size(), output_cloud, transform, color_transform);
 }
 
 void CpuBackend::transform_point_cloud(
@@ -148,15 +131,13 @@ void CpuBackend::transform_point_cloud(
     std::span<const color> input_colors,
     std::shared_ptr<PointCloud> output_cloud,
     const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform,
-    std::span<std::byte> render_output) const {
+    const ColorTransformConfiguration &color_transform) const {
 
   transform_from(
       [&](int i) -> std::pair<position, color> {
         return {input_positions[i], input_colors[i]};
       },
-      output_cloud->size(), output_cloud, transform, color_transform,
-      render_output);
+      output_cloud->size(), output_cloud, transform, color_transform);
 }
 
 void CpuBackend::project_transform_frame_data(
@@ -165,8 +146,7 @@ void CpuBackend::project_transform_frame_data(
     std::shared_ptr<PointCloud> output_cloud,
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform,
-    std::span<std::byte> render_output) const {
+    const ColorTransformConfiguration &color_transform) const {
 
   const auto point_count = output_cloud->size();
   const auto frame_width = color_intrinsics.frame_width;
@@ -181,8 +161,25 @@ void CpuBackend::project_transform_frame_data(
   };
 
   transform_from(convert_point_data, point_count, output_cloud, transform,
-                 color_transform, render_output);
+                 color_transform);
 }
+
+void CpuBackend::pack_render_buffer(const PointCloud &cloud,
+                                    std::span<std::byte> output) const {
+  if (output.empty()) return;
+
+  const auto count = cloud.size();
+  const auto indices = std::views::iota(size_t{0}, count);
+  auto *out_bytes = reinterpret_cast<char *>(output.data());
+
+  std::for_each(std::execution::par_unseq, indices.begin(), indices.end(),
+                [&](size_t i) {
+                  std::memcpy(out_bytes + i * 16, &cloud.positions[i], 8);
+                  std::memcpy(out_bytes + i * 16 + 8, &cloud.colors[i], 4);
+                  float idx = static_cast<float>(i);
+                  std::memcpy(out_bytes + i * 16 + 12, &idx, 4);
+                });
+};
 
 } // namespace pc::backend
 

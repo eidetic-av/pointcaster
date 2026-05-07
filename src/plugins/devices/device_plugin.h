@@ -4,6 +4,7 @@
 #include "device_variants.h"
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/GrowableArray.h>
+#include <Corrade/Containers/Pointer.h>
 #include <Corrade/Containers/String.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
@@ -14,8 +15,11 @@
 #include <functional>
 #include <logger/logger.h>
 #include <memory>
+#include <plugins/operators/operator_plugin.h>
+#include <plugins/operators/operator_variants.h>
 #include <pointcaster/point_cloud.h>
 #include <string>
+#include <string_view>
 
 namespace pc {
 class Workspace;
@@ -138,12 +142,19 @@ public:
     if (_point_cloud_updated_callback) _point_cloud_updated_callback();
   }
 
+  void add_operator(const std::string_view operator_name);
+  void
+  add_operator(const operators::OperatorConfigurationVariant &operator_config);
+
 protected:
   Workspace *_workspace;
   DeviceConfigurationVariant _config;
   std::function<void(DeviceStatus)> _status_callback;
   std::function<void()> _point_cloud_updated_callback;
   bool _is_discovery_instance = false;
+
+  std::vector<Corrade::Containers::Pointer<operators::OperatorPlugin>>
+      operators{};
 
   std::atomic<size_t> _process_tasks_in_flight{0};
 

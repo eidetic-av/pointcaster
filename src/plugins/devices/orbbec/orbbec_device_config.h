@@ -3,10 +3,10 @@
 #include <config/color_transform_config.h>
 #include <config/network_config.h>
 #include <config/transform_config.h>
+#include <plugins/operators/operator_variants.h>
 #include <pointcaster/point_cloud.h>
 #include <rfl/Literal.hpp>
 #include <string>
-
 
 namespace pc::devices {
 
@@ -51,14 +51,13 @@ struct OrbbecDeviceConfiguration {
   rfl::DefaultVal<SyncMode> sync_mode = SyncMode::Standalone;
 
   NetworkConfiguration network;
-
   TransformConfiguration transform;
-
   ColorTransformConfiguration color;
+
+  std::vector<operators::OperatorConfigurationVariant> operators;
 
   using DeviceType = OrbbecDevice;
   using Tag = rfl::Literal<"orbbec">;
-  static constexpr auto PublishPath = "ob";
   static constexpr auto PluginName = "OrbbecDevice";
 };
 

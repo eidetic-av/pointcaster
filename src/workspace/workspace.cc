@@ -55,6 +55,7 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   // find and initialise plugins
   backend_plugin_manager = plugins::load_backend_plugins(*this);
   device_plugin_manager = plugins::load_device_plugins(*this);
+  operator_plugin_manager = plugins::load_operator_plugins(*this);
 
   session_recorder = std::make_unique<recorder::SessionRecorder>(this);
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "operators/operator_plugin.h"
 #include <Corrade/PluginManager/Manager.h>
 #include <memory>
 #include <string>
@@ -21,6 +22,9 @@ load_device_plugins(Workspace &workspace);
 
 std::unique_ptr<Corrade::PluginManager::Manager<backend::BackendPlugin>>
 load_backend_plugins(Workspace &workspace);
+
+std::unique_ptr<Corrade::PluginManager::Manager<operators::OperatorPlugin>>
+load_operator_plugins(Workspace &workspace);
 
 bool is_loaded(Corrade::PluginManager::Manager<devices::DevicePlugin>
                    &device_plugin_manager,

@@ -25,16 +25,15 @@ void PlyDevice::init(Workspace &workspace) {
 
   pc::logger()->trace("PlyDevice created CPU backend");
 
-  // using Corrade::Containers::Pointer;
-  // using Corrade::PluginManager::LoadState;
+  using Corrade::PluginManager::LoadState;
 
-  // for (const auto &plugin : backend_manager->pluginList()) {
-  //   if (backend_manager->loadState(plugin) & LoadState::NotLoaded) continue;
-  //  if (plugin == "CudaBackend") {
-  //   _cuda_backend = backend_manager->instantiate(plugin);
-  //   pc::logger()->trace("PlyDevice created CUDA backend");
-  // }
-  // }
+  for (const auto &plugin : backend_manager->pluginList()) {
+    if (backend_manager->loadState(plugin) & LoadState::NotLoaded) continue;
+    if (plugin == "CudaBackend") {
+      _cuda_backend = backend_manager->instantiate(plugin);
+      pc::logger()->trace("PlyDevice created CUDA backend");
+    }
+  }
 
   auto &config = std::get<PlyDeviceConfiguration>(_config);
   if (config.active && !config.file.file_path.empty()) {
@@ -123,25 +122,24 @@ void PlyDevice::apply_transform() {
   auto output = std::make_shared<PointCloud>();
   output->resize(point_count);
 
-  std::shared_ptr<std::vector<std::byte>> render_buffer;
-  std::span<std::byte> render_span;
-  if (config.render) {
-    render_buffer = std::make_shared<std::vector<std::byte>>(point_count * 16);
-    render_span = *render_buffer;
-  }
-
-  backend::BackendPlugin *backend = nullptr;
-  // if (config.transform.backend.value() ==
-  //         TransformConfiguration::BackendType::CUDA &&
-  //     _cuda_backend) {
-  //   backend = _cuda_backend.get();
-  // } else if (_cpu_backend) {
-  backend = _cpu_backend.get();
-  // }
+  // TODO cuda backend
+  backend::BackendPlugin *backend = _cpu_backend.get();
 
   if (backend) {
     backend->transform_point_cloud(*_input_cloud, output, config.transform,
-                                   config.color, render_span);
+                                   config.color);
+  }
+
+  for (const auto &[operator_plugin, operator_config] :
+       std::views::zip(operators, config.operators)) {
+    operator_plugin->process(*output, *output, operator_config);
+  }
+
+  std::shared_ptr<std::vector<std::byte>> render_buffer;
+  if (config.render && backend) {
+    const auto final_count = output->size();
+    render_buffer = std::make_shared<std::vector<std::byte>>(final_count * 16);
+    backend->pack_render_buffer(*output, *render_buffer);
   }
 
   _current_point_cloud = std::move(output);

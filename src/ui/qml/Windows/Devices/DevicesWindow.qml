@@ -83,6 +83,20 @@ KDDW.DockWidget {
                 Layout.fillWidth: true
             }
 
+            IconButton {
+                id: addOperatorButton
+                text: "Add Fringe Removal Operator"
+
+                iconSource: FontAwesome.icon("solid/plus")
+                iconSize: Math.round(12 * Scaling.uiScale)
+                topPadding: Math.round(4 * Scaling.uiScale)
+                bottomPadding: Math.round(4 * Scaling.uiScale)
+                leftPadding: Math.round(5 * Scaling.uiScale)
+                rightPadding: Math.round(5 * Scaling.uiScale)
+
+                onClicked: root.workspace.addOperatorToDevice(root.workspace.selectedDeviceIndex, "FringeRemovalOperator")
+            }
+
             // TODO
             // why is this not scrolling??
 

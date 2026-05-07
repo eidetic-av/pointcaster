@@ -420,6 +420,51 @@ void WorkspaceModel::deleteSelectedDevice() {
   applyWorkspaceConfigAndRebuild(std::move(new_cfg));
 }
 
+void WorkspaceModel::addOperatorToDevice(int deviceIndex,
+                                         const QString &operatorPluginName) {
+  if (deviceIndex < 0 || deviceIndex >= _deviceAdapters.size()) return;
+
+  auto *adapter = qobject_cast<DeviceAdapter *>(_deviceAdapters[deviceIndex]);
+  if (!adapter) return;
+
+  const QString device_id = adapterStableId(adapter);
+  if (device_id.isEmpty()) return;
+
+  auto new_cfg = _workspace.config;
+  const int idx = find_device_index_by_id(new_cfg, device_id.toStdString());
+  if (idx < 0 || idx >= int(new_cfg.devices.size())) return;
+
+  const auto op_name = operatorPluginName.toStdString();
+
+  // Add the operator config variant to the device's operator list
+  bool found_type = false;
+  operators::for_each_operator_config_type([&]<typename OperatorConfigType>() {
+    if (found_type) return;
+    if (op_name == OperatorConfigType::PluginName) {
+      std::visit(
+          [&](auto &device_config) {
+            device_config.operators.push_back(
+                OperatorConfigType{.id = pc::uuid::word()});
+          },
+          new_cfg.devices[size_t(idx)]);
+      found_type = true;
+    }
+  });
+
+  if (!found_type) {
+    pc::logger()->error("Unknown operator plugin name '{}'", op_name);
+    return;
+  }
+
+  applyWorkspaceConfigAndRebuild(std::move(new_cfg));
+
+  // Instantiate the runtime operator on the device plugin
+  if (deviceIndex < int(_workspace.devices.size()) &&
+      _workspace.devices[deviceIndex]) {
+    _workspace.devices[deviceIndex]->add_operator(op_name);
+  }
+}
+
 QVariantMap generateConsoleEntryVariant(const LogEntry &entry) {
   QVariantMap item;
   switch (entry.level) {

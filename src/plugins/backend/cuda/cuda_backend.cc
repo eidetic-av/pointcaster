@@ -24,12 +24,11 @@ void CudaBackend::project_transform_frame_data(
     std::shared_ptr<PointCloud> output_cloud,
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform,
-    std::span<std::byte> render_output) const {
+    const ColorTransformConfiguration &color_transform) const {
   try {
-    cuda::project_transform_frame_data(
-        this, input_depth_frame, input_rgb_frame, output_cloud,
-        color_intrinsics, transform, color_transform, render_output);
+    cuda::project_transform_frame_data(this, input_depth_frame, input_rgb_frame,
+                                       output_cloud, color_intrinsics,
+                                       transform, color_transform);
   } catch (const std::exception &e) {
     pc::logger()->error("CUDA backend error: {}", e.what());
   } catch (...) {
@@ -40,8 +39,7 @@ void CudaBackend::project_transform_frame_data(
 void CudaBackend::transform_point_cloud(
     const PointCloud &input_cloud, std::shared_ptr<PointCloud> output_cloud,
     const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform,
-    std::span<std::byte> render_output) const {
+    const ColorTransformConfiguration &color_transform) const {
   //...
 }
 
@@ -50,10 +48,14 @@ void CudaBackend::transform_point_cloud(
     std::span<const color> input_colors,
     std::shared_ptr<PointCloud> output_cloud,
     const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform,
-    std::span<std::byte> render_output) const {
+    const ColorTransformConfiguration &color_transform) const {
   //...
 }
+
+void CudaBackend::pack_render_buffer(const PointCloud &cloud,
+                                     std::span<std::byte> output) const {
+  //...
+};
 
 } // namespace pc::backend
 

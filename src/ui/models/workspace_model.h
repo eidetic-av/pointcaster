@@ -55,7 +55,7 @@ class WorkspaceModel : public QObject {
                  foldedPropertyPathsChanged)
 
   // Recording
-  Q_PROPERTY(RecorderModel* recorder READ recorder NOTIFY recorderChanged)
+  Q_PROPERTY(RecorderModel *recorder READ recorder NOTIFY recorderChanged)
 
 public:
   explicit WorkspaceModel(pc::Workspace *workspace, QObject *parent);
@@ -86,6 +86,9 @@ public:
 
   int selectedDeviceIndex() const { return _selectedDeviceIndex; }
   void setSelectedDeviceIndex(int index);
+
+  Q_INVOKABLE void addOperatorToDevice(int deviceIndex,
+                                       const QString &operatorPluginName);
 
   QUrl saveFileUrl() const { return _saveFileUrl; }
   void setSaveFileUrl(const QUrl &url) { _saveFileUrl = url; }
