@@ -19,13 +19,27 @@ public:
   CpuBackend(CpuBackend &&) = delete;
   CpuBackend &operator=(CpuBackend &&) = delete;
 
+  void transform_point_cloud(const PointCloud &input_cloud,
+                             std::shared_ptr<PointCloud> output_cloud,
+                             const TransformConfiguration &transform,
+                             const ColorTransformConfiguration &color_transform,
+                             std::span<std::byte> render_output) const override;
+
+  void transform_point_cloud(std::span<const position> input_positions,
+                             std::span<const color> input_colors,
+                             std::shared_ptr<PointCloud> output_cloud,
+                             const TransformConfiguration &transform,
+                             const ColorTransformConfiguration &color_transform,
+                             std::span<std::byte> render_output) const override;
+
   void project_transform_frame_data(
-      UShortDepthData input_depth_frame, RgbColorData input_rgb_frame,
+      std::span<const uint16_t> input_depth_frame,
+      std::span<const color_rgb> input_rgb_frame,
       std::shared_ptr<PointCloud> output_cloud,
       const CameraIntrinsics &color_intrinsics,
       const TransformConfiguration &transform,
       const ColorTransformConfiguration &color_transform,
-      std::span<std::byte> render_output = {}) override;
+      std::span<std::byte> render_output = {}) const override;
 };
 
 } // namespace pc::backend

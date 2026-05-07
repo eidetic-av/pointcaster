@@ -17,7 +17,6 @@
 #include <span>
 #include <tuple>
 
-
 namespace pc::backend {
 
 class BackendPlugin : public Corrade::PluginManager::AbstractPlugin {
@@ -76,13 +75,28 @@ public:
   virtual void init([[maybe_unused]] const size_t point_count) {};
 
   virtual void
-  project_transform_frame_data(UShortDepthData input_depth_frame,
-                               RgbColorData input_rgb_frame,
-                               std::shared_ptr<PointCloud> output_cloud,
-                               const CameraIntrinsics &color_intrinsics,
-                               const TransformConfiguration &transform,
-                               const ColorTransformConfiguration &color_transform,
-                               std::span<std::byte> render_output = {}) = 0;
+  transform_point_cloud(const PointCloud &input_cloud,
+                        std::shared_ptr<PointCloud> output_cloud,
+                        const TransformConfiguration &transform,
+                        const ColorTransformConfiguration &color_transform,
+                        std::span<std::byte> render_output) const = 0;
+
+  virtual void
+  transform_point_cloud(std::span<const position> input_positions,
+                        std::span<const color> input_colors,
+                        std::shared_ptr<PointCloud> output_cloud,
+                        const TransformConfiguration &transform,
+                        const ColorTransformConfiguration &color_transform,
+                        std::span<std::byte> render_output) const = 0;
+
+  virtual void project_transform_frame_data(
+      std::span<const uint16_t> input_depth_frame,
+      std::span<const color_rgb> input_rgb_frame,
+      std::shared_ptr<PointCloud> output_cloud,
+      const CameraIntrinsics &color_intrinsics,
+      const TransformConfiguration &transform,
+      const ColorTransformConfiguration &color_transform,
+      std::span<std::byte> render_output = {}) const = 0;
 };
 
 } // namespace pc::backend

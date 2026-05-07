@@ -32,9 +32,9 @@ struct DeviceTransformMemory {
 };
 
 std::mutex device_memory_access;
-std::unordered_map<void *, DeviceTransformMemory> instance_device_memory;
+std::unordered_map<const void *, DeviceTransformMemory> instance_device_memory;
 
-void create_device_memory(void *owner, const size_t point_count) {
+void create_device_memory(const void *owner, const size_t point_count) {
   DeviceTransformMemory new_device_memory{
       .point_count = point_count,
       .input_depth_data = thrust::device_vector<uint16_t>(point_count),
@@ -131,7 +131,7 @@ struct MergeBounds {
   }
 };
 
-bool init_device_memory(void *owner, const size_t point_count) {
+bool init_device_memory(const void *owner, const size_t point_count) {
   try {
     create_device_memory(owner, point_count);
     return true;
@@ -140,13 +140,14 @@ bool init_device_memory(void *owner, const size_t point_count) {
   return false;
 }
 
-void free_device_memory(void *owner) {
+void free_device_memory(const void *owner) {
   instance_device_memory.erase(owner);
 }
 
 void project_transform_frame_data(
-    void *owner, UShortDepthData input_depth_frame,
-    RgbColorData input_rgb_frame, std::shared_ptr<PointCloud> output_cloud,
+    const void *owner, std::span<const uint16_t> input_depth_frame,
+    std::span<const color_rgb> input_rgb_frame,
+    std::shared_ptr<PointCloud> output_cloud,
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
     const ColorTransformConfiguration &color_transform,

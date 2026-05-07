@@ -20,9 +20,6 @@ struct Extrinsics {
 
 using PointType = std::tuple<position, color>;
 
-using UShortDepthData = std::span<const uint16_t>;
-using RgbColorData = std::span<const color_rgb>;
-
 // return an internal point type given pixel data from a depth frame
 using PointTransformer =
     std::function<PointType(const int, const uint16_t, const color_rgb &)>;
