@@ -18,6 +18,14 @@ AlignmentController::AlignmentController(QObject *parent) : QObject(parent) {
             try {
               auto result = _refinementWatcher.result();
               if (result.converged) {
+
+                // ********
+                // TODO is this necessary?
+                // scale translation back to scene-graph units (*0.1)
+                result.transform.values[3] *= 0.1f;
+                result.transform.values[7] *= 0.1f;
+                result.transform.values[11] *= 0.1f;
+
                 _rawTransform = result.transform;
                 decomposeTransform(result.transform);
                 _fitnessScore = result.fitness_score;
@@ -140,6 +148,16 @@ void AlignmentController::refine() {
 
   auto params = _refinementParams;
   auto current_transform = _rawTransform;
+
+  // ********
+  // TODO is this necessary?
+  // Coarse transform was computed in scene-graph units (*0.1),
+  // but the snapshot positions are in raw internal units (mm).
+
+  current_transform.values[3] *= 10.0f;  // row 0, col 3
+  current_transform.values[7] *= 10.0f;  // row 1, col 3
+  current_transform.values[11] *= 10.0f; // row 2, col 3
+
   auto source = _secondarySnapshot;
   auto target = _primarySnapshot;
 
