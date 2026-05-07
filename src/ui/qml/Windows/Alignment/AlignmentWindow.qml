@@ -171,13 +171,13 @@ KDDW.DockWidget {
                 onPrimaryDeviceChanged: index => windowState.primaryDeviceIndex = index
                 onSecondaryDeviceChanged: index => windowState.secondaryDeviceIndex = index
                 onSnapshotRequested: {
-                        alignmentController.snapshotClouds(root.workspace.deviceAdapters[windowState.primaryDeviceIndex], root.workspace.deviceAdapters[windowState.secondaryDeviceIndex]);
-                        windowState.mode = AlignmentWindow.WindowMode.Picking;
-                        windowState.activeView = AlignmentWindow.ActiveView.Primary;
-                        primaryDeviceView.snapshot();
-                        secondaryDeviceView.snapshot();
-                    }
+                    alignmentController.snapshotClouds(root.workspace.deviceAdapters[windowState.primaryDeviceIndex], root.workspace.deviceAdapters[windowState.secondaryDeviceIndex]);
+                    windowState.mode = AlignmentWindow.WindowMode.Picking;
+                    windowState.activeView = AlignmentWindow.ActiveView.Primary;
+                    primaryDeviceView.snapshot();
+                    secondaryDeviceView.snapshot();
                 }
+            }
 
             PickingControls {
                 pairCount: windowState.pairs.length
@@ -186,19 +186,27 @@ KDDW.DockWidget {
                 onResetRequested: root.resetAlignment()
                 onUndoRequested: root.undoLastPick()
                 onAlignRequested: {
-                        alignmentController.computeFromPairs(windowState.pairs);
-                        if (alignmentController.hasResult) {
-                            windowState.mode = AlignmentWindow.WindowMode.Refinement;
-                            refinementView.activate();
-                        }
+                    alignmentController.computeFromPairs(windowState.pairs);
+                    if (alignmentController.hasResult) {
+                        windowState.mode = AlignmentWindow.WindowMode.Refinement;
+                        refinementView.activate();
                     }
                 }
+            }
 
             RefinementControls {
                 alignmentController: alignmentController
 
                 onBackToPicking: windowState.mode = AlignmentWindow.WindowMode.Picking
-                onApplyRequested: {}
+                onApplyRequested: {
+                    if (!alignmentController.hasResult)
+                        return;
+                    var adapter = root.workspace.deviceAdapters[windowState.secondaryDeviceIndex];
+                    var pos = alignmentController.resultPosition;
+                    adapter.set("transform/position", Qt.vector3d(pos.x * 0.01, pos.y * 0.01, pos.z * 0.01));
+                    var euler = alignmentController.resultRotation.toEulerAngles();
+                    adapter.set("transform/rotation", Qt.vector3d(euler.x, euler.y, euler.z));
+                }
             }
         }
     }

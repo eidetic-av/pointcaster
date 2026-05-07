@@ -79,7 +79,7 @@ public:
         // Forward nested change notifications too.
         QObject::connect(&m_{{ m.name }}Adapter, &ConfigAdapter::fieldChanged, this,
             [this](const QString &subPath) {
-                emit fieldChanged(QStringLiteral("{{ m.name }}/") + subPath);
+                notifyFieldChanged(QStringLiteral("{{ m.name }}/") + subPath);
             });
 {% endif %}
 {% endfor %}
