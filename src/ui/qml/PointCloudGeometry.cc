@@ -7,6 +7,13 @@ PointCloudGeometry::PointCloudGeometry() : QQuick3DGeometry() {
   update();
 }
 
+void PointCloudGeometry::setPointCloudAdapter(PointCloudAdapter *adapter) {
+  if (_pointCloudAdapter == adapter) return;
+  _pointCloudAdapter = adapter;
+  emit pointCloudAdapterChanged();
+  updateGeometry();
+}
+
 void PointCloudGeometry::updateGeometry() {
   if (!_enabled || !_pointCloudAdapter) return;
 

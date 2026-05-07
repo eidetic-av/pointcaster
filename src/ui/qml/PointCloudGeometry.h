@@ -28,9 +28,7 @@ public:
   PointCloudGeometry();
 
   PointCloudAdapter *pointCloudAdapter() const { return _pointCloudAdapter; }
-  void setPointCloudAdapter(PointCloudAdapter *adapter) {
-    _pointCloudAdapter = adapter;
-  }
+  void setPointCloudAdapter(PointCloudAdapter *adapter);
 
   bool enabled() const { return _enabled; }
   void setEnabled(bool enabled) {
