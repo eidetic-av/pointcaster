@@ -44,7 +44,7 @@
 			"inherits": "default-preset",
 			"displayName": "Pointcaster Release build for Windows x64",
 			"environment": {
-				"VCPKG_KEEP_ENV_VARS": "Qt6_DIR;QT_DIR;TBB_DIR"
+				"VCPKG_KEEP_ENV_VARS": "Qt6_DIR;QT_DIR;TBB_DIR;CUDAToolkit_ROOT"
 			},
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": "Release",
