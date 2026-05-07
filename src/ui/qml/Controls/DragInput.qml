@@ -11,7 +11,9 @@ Item {
     property bool inputEnabled: true
     property bool editable: true
 
-    property font font: Qt.font({ pointSize: 12 })
+    property font font: Qt.font({
+        pointSize: 12
+    })
 
     // drag tuning
     property real dragThresholdPx: 6.0
@@ -29,8 +31,8 @@ Item {
 
     property real deltaEpsilon: 0.0
 
-    signal edited()
-    signal committed()
+    signal edited
+    signal committed
 
     property bool dragModeActive: false
 
@@ -47,8 +49,10 @@ Item {
     }
 
     function _defaultMultiplier(mods) {
-        if (mods & Qt.ControlModifier) return 0.1;
-        if (mods & Qt.ShiftModifier)   return 10.0;
+        if (mods & Qt.ControlModifier)
+            return 0.1;
+        if (mods & Qt.ShiftModifier)
+            return 10.0;
         return 1.0;
     }
 
@@ -58,7 +62,8 @@ Item {
 
     function _stepSize() {
         var s = stepSize ? Number(stepSize()) : 1.0;
-        if (!Number.isFinite(s) || s === 0.0) return 1.0;
+        if (!Number.isFinite(s) || s === 0.0)
+            return 1.0;
         return s;
     }
 
@@ -77,7 +82,9 @@ Item {
     }
 
     function _selectAllLater() {
-        Qt.callLater(function () { root.targetTextInput.selectAll(); });
+        Qt.callLater(function () {
+            root.targetTextInput.selectAll();
+        });
     }
 
     Menu {
@@ -112,7 +119,7 @@ Item {
         preventStealing: true
         propagateComposedEvents: false
 
-        onPressed: (mouse) => {
+        onPressed: mouse => {
             if (!root.inputEnabled) {
                 mouse.accepted = false;
                 return;
@@ -144,7 +151,7 @@ Item {
             mouse.accepted = true;
         }
 
-        onPositionChanged: (mouse) => {
+        onPositionChanged: mouse => {
             if (!gestureArea.pressed || (mouse.buttons & Qt.LeftButton) === 0)
                 return;
 
@@ -195,7 +202,7 @@ Item {
             mouse.accepted = true;
         }
 
-        onReleased: (mouse) => {
+        onReleased: mouse => {
             if (mouse.button === Qt.RightButton) {
                 mouse.accepted = true;
                 return;
@@ -213,7 +220,7 @@ Item {
 
         onCanceled: root.dragModeActive = false
 
-        onWheel: (wheel) => {
+        onWheel: wheel => {
             var hasFocus = root.focusTarget ? root.focusTarget.activeFocus : root.activeFocus;
             if (!hasFocus || !root.inputEnabled) {
                 wheel.accepted = false;
