@@ -16,10 +16,6 @@ struct PlyDeviceConfiguration {
 
   FileConfiguration file;
   TransformConfiguration transform;
-  TransformConfiguration transform2;
-  TransformConfiguration transform3;
-  TransformConfiguration transform4;
-  TransformConfiguration transform5;
 
   using DeviceType = PlyDevice;
   using Tag = rfl::Literal<"ply">;
