@@ -75,13 +75,14 @@ RUN pip install "jinja2==$Env:Jinja2Version"
 # NVIDIA CUDA development packages
 ARG CudaVersion=12.9.1.576
 RUN choco install -y cuda --version $Env:CudaVersion
+ENV CUDAToolkit_ROOT="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9"
 
 # Build vcpkg source-based project dependencies
 COPY vcpkg.json C:\\vcpkg-config\\
 COPY triplets C:\\vcpkg-config\\triplets
 COPY ports C:\\vcpkg-config\\ports
 
-ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR"
+ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR;CUDAToolkit_ROOT"
 
 RUN & "$Env:VsDevShell" -Arch amd64 -HostArch amd64; \
     vcpkg install \
