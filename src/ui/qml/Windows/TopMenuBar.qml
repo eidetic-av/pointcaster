@@ -164,6 +164,9 @@ MenuBar {
             }
         }
 
+
+        property bool openedAlignWindow: false
+
         Action {
             id: alignmentWindowMenuToggle
             text: qsTr("&Alignment")
@@ -176,8 +179,14 @@ MenuBar {
 
                 if (alignmentWindow.isOpen)
                     alignmentWindow.forceClose();
-                else
+                else {
                     alignmentWindow.open();
+                    if (!openedAlignWindow) {
+                        openedAlignWindow = true;
+                        // TODO there must be a way to set this inside AlignmentWindow not here
+                        alignmentWindow.resize(1640, 900);
+                    }
+                }
             }
         }
 
