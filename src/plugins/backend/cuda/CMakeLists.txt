@@ -50,7 +50,7 @@ set_target_properties(CudaBackend PROPERTIES
 
 find_package(Corrade CONFIG REQUIRED Main PluginManager)
 
-find_package(CUDAToolkit REQUIRED)
+find_package(CUDAToolkit REQUIRED COMPONENTS cudart)
 
 find_package(Thrust REQUIRED CONFIG)
 
