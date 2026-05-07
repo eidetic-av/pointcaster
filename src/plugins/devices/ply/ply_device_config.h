@@ -1,9 +1,11 @@
 #pragma once
 
+#include <config/color_transform_config.h>
 #include <config/file_config.h>
 #include <config/transform_config.h>
 #include <rfl/Literal.hpp>
 #include <string>
+
 
 namespace pc::devices {
 
@@ -16,6 +18,7 @@ struct PlyDeviceConfiguration {
 
   FileConfiguration file;
   TransformConfiguration transform;
+  ColorTransformConfiguration color;
 
   using DeviceType = PlyDevice;
   using Tag = rfl::Literal<"ply">;

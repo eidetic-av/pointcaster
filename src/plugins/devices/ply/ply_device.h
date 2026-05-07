@@ -4,11 +4,14 @@
 
 #include "plugins/devices/device_status.h"
 #include "plugins/devices/ply/ply_device_config.h"
+#include "ply_device_config.h"
 #include <Corrade/Containers/Array.h>
+#include <Corrade/Containers/Pointer.h>
 #include <Corrade/Containers/String.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
+#include <plugins/backend/backend_plugin.h>
 #include <readerwriterqueue/readerwritercircularbuffer.h>
 #include <string_view>
 #include <vector>
@@ -46,8 +49,14 @@ private:
   std::string _loaded_file_path{};
   DeviceStatus _status = DeviceStatus::Unloaded;
 
+  std::shared_ptr<PointCloud> _input_cloud;
+
+  Corrade::Containers::Pointer<backend::BackendPlugin> _cpu_backend;
+
   std::shared_ptr<PointCloud> _current_point_cloud =
       std::make_shared<PointCloud>(PointCloud{{}, {}});
+
+  void apply_transform();
 };
 
 } // namespace pc::devices

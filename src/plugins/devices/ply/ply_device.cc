@@ -11,17 +11,35 @@
 #include <oneapi/tbb/parallel_for.h>
 #include <pointcaster/point_cloud.h>
 #include <ranges>
+#include <workspace/workspace.h>
 
 namespace pc::devices {
 
 using pc::profiling::ProfilingZone;
 
 void PlyDevice::init(Workspace &workspace) {
-  auto &config = std::get<PlyDeviceConfiguration>(_config);
-  if (config.active) {
-    if (!config.file.file_path.empty()) load_file(config.file.file_path);
-  }
   _workspace = &workspace;
+
+  auto &backend_manager = _workspace->backend_plugin_manager;
+  _cpu_backend = backend_manager->instantiate("CpuBackend");
+
+  pc::logger()->trace("PlyDevice created CPU backend");
+
+  // using Corrade::Containers::Pointer;
+  // using Corrade::PluginManager::LoadState;
+
+  // for (const auto &plugin : backend_manager->pluginList()) {
+  //   if (backend_manager->loadState(plugin) & LoadState::NotLoaded) continue;
+  //  if (plugin == "CudaBackend") {
+  //   _cuda_backend = backend_manager->instantiate(plugin);
+  //   pc::logger()->trace("PlyDevice created CUDA backend");
+  // }
+  // }
+
+  auto &config = std::get<PlyDeviceConfiguration>(_config);
+  if (config.active && !config.file.file_path.empty()) {
+    load_file(config.file.file_path);
+  }
 }
 
 std::shared_ptr<PointCloud> PlyDevice::point_cloud() {
@@ -39,6 +57,8 @@ void PlyDevice::on_config_field_changed(std::string_view) {
                           config.file.file_path);
       config.file.file_path = _loaded_file_path;
     }
+  } else {
+    apply_transform();
   }
 }
 
@@ -50,11 +70,6 @@ bool PlyDevice::load_file(std::string_view url) {
 
   pc::logger()->trace("Loading ply file: {}", path);
 
-  size_t point_count;
-  // std::vector<float> x_values, y_values, z_values;
-  std::vector<short> x_values, y_values, z_values;
-  std::vector<unsigned char> r_values, g_values, b_values;
-  pc::PointCloud cloud{{}, {}};
   std::optional<happly::PLYData> ply_in;
 
   try {
@@ -66,28 +81,22 @@ bool PlyDevice::load_file(std::string_view url) {
     return false;
   }
 
-  {
-    ProfilingZone parse_ply_zone("Parse");
-    constexpr auto vertex = "vertex";
+  constexpr auto vertex = "vertex";
 
-    x_values = ply_in->getElement(vertex).getProperty<short>("x");
-    y_values = ply_in->getElement(vertex).getProperty<short>("y");
-    z_values = ply_in->getElement(vertex).getProperty<short>("z");
+  const auto x_values = ply_in->getElement(vertex).getProperty<short>("x");
+  const auto y_values = ply_in->getElement(vertex).getProperty<short>("y");
+  const auto z_values = ply_in->getElement(vertex).getProperty<short>("z");
+  const auto r_values =
+      ply_in->getElement(vertex).getProperty<unsigned char>("red");
+  const auto g_values =
+      ply_in->getElement(vertex).getProperty<unsigned char>("green");
+  const auto b_values =
+      ply_in->getElement(vertex).getProperty<unsigned char>("blue");
 
-    r_values = ply_in->getElement(vertex).getProperty<unsigned char>("red");
-    g_values = ply_in->getElement(vertex).getProperty<unsigned char>("green");
-    b_values = ply_in->getElement(vertex).getProperty<unsigned char>("blue");
+  const size_t point_count = x_values.size();
 
-    point_count = x_values.size();
-    cloud.positions.resize(point_count);
-    cloud.colors.resize(point_count);
-  }
-
-  auto render_buffer =
-      config.render ? std::make_shared<std::vector<std::byte>>(point_count * 16)
-                    : nullptr;
-  char *render_dest =
-      render_buffer ? reinterpret_cast<char *>(render_buffer->data()) : nullptr;
+  auto input_cloud = std::make_shared<PointCloud>();
+  input_cloud->resize(point_count);
 
   {
     ProfilingZone convert_zone("Convert and pack points");
@@ -95,41 +104,52 @@ bool PlyDevice::load_file(std::string_view url) {
         tbb::blocked_range<size_t>(0, point_count),
         [&](const tbb::blocked_range<size_t> &range) {
           for (size_t i = range.begin(), e = range.end(); i < e; ++i) {
-            cloud.positions[i] = {x_values[i], y_values[i], z_values[i]};
-            cloud.colors[i] = {r_values[i], g_values[i], b_values[i]};
-
-            if (render_dest) {
-              std::memcpy(render_dest + i * 16, &cloud.positions[i], 8);
-              std::memcpy(render_dest + i * 16 + 8, &cloud.colors[i], 4);
-              float idx = static_cast<float>(i);
-              std::memcpy(render_dest + i * 16 + 12, &idx, 4);
-            }
+            input_cloud->positions[i] = {x_values[i], y_values[i], z_values[i]};
+            input_cloud->colors[i] = {r_values[i], g_values[i], b_values[i]};
           }
         });
   }
 
-  // TODO this can be reduced in parallel
-  position_bounds bounds{};
-  for (size_t i = 0; i < point_count; ++i) {
-    auto &p = cloud.positions[i];
-    bounds.min.x = std::min(bounds.min.x, p.x);
-    bounds.min.y = std::min(bounds.min.y, p.y);
-    bounds.min.z = std::min(bounds.min.z, p.z);
-    bounds.max.x = std::max(bounds.max.x, p.x);
-    bounds.max.y = std::max(bounds.max.y, p.y);
-    bounds.max.z = std::max(bounds.max.z, p.z);
+  _input_cloud = std::move(input_cloud);
+  return true;
+}
+
+void PlyDevice::apply_transform() {
+  if (!_input_cloud) return;
+
+  const auto &config = std::get<PlyDeviceConfiguration>(_config);
+  const auto point_count = _input_cloud->size();
+
+  auto output = std::make_shared<PointCloud>();
+  output->resize(point_count);
+
+  std::shared_ptr<std::vector<std::byte>> render_buffer;
+  std::span<std::byte> render_span;
+  if (config.render) {
+    render_buffer = std::make_shared<std::vector<std::byte>>(point_count * 16);
+    render_span = *render_buffer;
   }
-  cloud.bounds = bounds;
 
-  _current_point_cloud = std::make_shared<PointCloud>(std::move(cloud));
+  backend::BackendPlugin *backend = nullptr;
+  // if (config.transform.backend.value() ==
+  //         TransformConfiguration::BackendType::CUDA &&
+  //     _cuda_backend) {
+  //   backend = _cuda_backend.get();
+  // } else if (_cpu_backend) {
+  backend = _cpu_backend.get();
+  // }
 
+  if (backend) {
+    backend->transform_point_cloud(*_input_cloud, output, config.transform,
+                                   config.color, render_span);
+  }
+
+  _current_point_cloud = std::move(output);
   if (render_buffer) {
     _latest_render_data.store(std::move(render_buffer),
                               std::memory_order_release);
   }
-
   notify_point_cloud_updated();
-  return true;
 }
 
 } // namespace pc::devices
