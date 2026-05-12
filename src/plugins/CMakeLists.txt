@@ -38,7 +38,9 @@ add_subdirectory(operators/fringe_removal)
 
 # the $CORRADE_PLUGINS and $CORRADE_STATIC_PLUGINS lists should 
 # be populated after adding plugin subdirectories
-add_dependencies(pointcaster ${CORRADE_PLUGINS})
+
+add_custom_target(plugins ALL DEPENDS ${CORRADE_PLUGINS})
+
 target_link_libraries(pointcaster_plugins PRIVATE ${CORRADE_STATIC_PLUGINS})
 
 target_precompile_headers(pointcaster_plugins PRIVATE

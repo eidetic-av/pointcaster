@@ -94,6 +94,11 @@ public:
     return false;
   }
 
+  Q_INVOKABLE virtual bool isFolderOpener(const QString &path) const {
+    Q_UNUSED(path);
+    return false;
+  }
+
   Q_INVOKABLE virtual bool isButton(const QString &path) const {
     Q_UNUSED(path);
     return false;

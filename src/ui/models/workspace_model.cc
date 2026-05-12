@@ -458,11 +458,16 @@ void WorkspaceModel::addOperatorToDevice(int deviceIndex,
 
   applyWorkspaceConfigAndRebuild(std::move(new_cfg));
 
+  // TODO
   // Instantiate the runtime operator on the device plugin
   if (deviceIndex < int(_workspace.devices.size()) &&
       _workspace.devices[deviceIndex]) {
     _workspace.devices[deviceIndex]->add_operator(op_name);
   }
+
+  // TODO
+  // rebuild adapters so QML sees the new operator
+  adapter->rebuildOperatorAdapters();
 }
 
 QVariantMap generateConsoleEntryVariant(const LogEntry &entry) {
@@ -520,41 +525,32 @@ QVariantList WorkspaceModel::consoleHistoryEntries() const {
   return entries;
 }
 
+// TODO whats the change here?
 void WorkspaceModel::initSessionAdapter(SessionConfigurationAdapter *adapter) {
   if (!adapter) return;
-
   QObject::connect(adapter, &ConfigAdapter::editRequested, this,
                    [this, adapter](const QString &path, const QVariant &value) {
                      auto *session_adapter =
                          qobject_cast<SessionConfigurationAdapter *>(adapter);
                      if (!session_adapter) return;
-
                      const QString session_id_q = session_adapter->id();
                      if (session_id_q.isEmpty()) return;
-
                      SessionConfiguration before;
                      SessionConfiguration after;
                      pc::WorkspaceConfiguration base_snapshot;
                      QString command_text;
-
                      {
                        std::scoped_lock lock(_workspace.config_access);
                        base_snapshot = _workspace.config;
-
                        const int idx = find_session_index_by_id(
                            _workspace.config, session_id_q.toStdString());
                        if (idx < 0) return;
-
                        before = _workspace.config.sessions[size_t(idx)];
-
                        const bool changed = session_adapter->apply(path, value);
                        if (!changed) return;
-
                        after = _workspace.config.sessions[size_t(idx)];
                      }
-
                      command_text = QStringLiteral("Edit %1").arg(path);
-
                      _undoStack->push(new SetSessionConfigCommand(
                          session_id_q, std::move(before), std::move(after),
                          std::move(command_text), std::move(base_snapshot),
@@ -562,7 +558,10 @@ void WorkspaceModel::initSessionAdapter(SessionConfigurationAdapter *adapter) {
                            QMetaObject::invokeMethod(
                                this,
                                [this, cfg = std::move(cfg)]() mutable {
-                                 applyWorkspaceConfigAndRebuild(std::move(cfg));
+                                 // only update config, don't rebuild devices
+                                 _workspace.apply_new_config(std::move(cfg),
+                                                             false);
+                                 syncSessionAdapters();
                                },
                                Qt::QueuedConnection);
                          }));
@@ -664,194 +663,191 @@ DeviceAdapter *WorkspaceModel::makeDeviceAdapterForPlugin(
 }
 
 void WorkspaceModel::syncAdapters() {
-  pc::logger()->trace("Syncing adapters (sessions + devices)");
+  syncSessionAdapters();
+  syncDeviceAdapters();
+}
 
-  // ---------------- sessions ----------------
-  {
-    QHash<QString, SessionConfigurationAdapter *> existing_by_id;
-    existing_by_id.reserve(_sessionAdapters.size());
+void WorkspaceModel::syncSessionAdapters() {
+  pc::logger()->trace("Syncing session adapters");
+  QHash<QString, SessionConfigurationAdapter *> existing_by_id;
+  existing_by_id.reserve(_sessionAdapters.size());
 
-    for (QObject *obj : _sessionAdapters) {
-      auto *a = qobject_cast<SessionConfigurationAdapter *>(obj);
-      if (!a) continue;
-      const QString id = a->id();
-      if (!id.isEmpty()) existing_by_id.insert(id, a);
-    }
-
-    QList<QObject *> new_ordered_sessions;
-    QHash<QString, const pc::SessionConfiguration *> new_ptrs_by_id;
-
-    {
-      std::scoped_lock lock(_workspace.config_access);
-
-      new_ordered_sessions.reserve(int(_workspace.config.sessions.size()));
-      new_ptrs_by_id.reserve(int(_workspace.config.sessions.size()));
-
-      for (auto &session_cfg : _workspace.config.sessions) {
-        const QString id = QString::fromStdString(session_cfg.id);
-        if (id.isEmpty()) continue;
-
-        const pc::SessionConfiguration *current_ptr = &session_cfg;
-
-        SessionConfigurationAdapter *adapter = existing_by_id.take(id);
-
-        const bool ptr_matches =
-            _sessionConfigPtrById.contains(id) &&
-            (_sessionConfigPtrById.value(id) == current_ptr);
-
-        if (adapter && !ptr_matches) {
-          // Underlying SessionConfiguration moved (vector realloc / reorder).
-          // Old adapter holds a dangling reference: must recreate.
-          adapter->deleteLater();
-          adapter = nullptr;
-        }
-
-        if (adapter) {
-          (void)adapter->setConfig(session_cfg);
-        } else {
-          auto *new_adapter =
-              new SessionConfigurationAdapter(session_cfg, this);
-          initSessionAdapter(new_adapter);
-          adapter = new_adapter;
-        }
-
-        if (adapter) {
-          new_ordered_sessions.append(adapter);
-          new_ptrs_by_id.insert(id, current_ptr);
-        }
-      }
-    }
-
-    // Delete adapters for removed sessions (anything left in existing_by_id).
-    for (auto it = existing_by_id.begin(); it != existing_by_id.end(); ++it) {
-      if (it.value()) it.value()->deleteLater();
-    }
-
-    _sessionAdapters = new_ordered_sessions;
-    _sessionConfigPtrById = std::move(new_ptrs_by_id);
-
-    emit sessionAdaptersChanged();
+  for (QObject *obj : _sessionAdapters) {
+    auto *a = qobject_cast<SessionConfigurationAdapter *>(obj);
+    if (!a) continue;
+    const QString id = a->id();
+    if (!id.isEmpty()) existing_by_id.insert(id, a);
   }
 
-  // ---------------- devices ----------------
+  QList<QObject *> new_ordered_sessions;
+  QHash<QString, const pc::SessionConfiguration *> new_ptrs_by_id;
+
   {
-    pc::logger()->trace("Starting device adapter sync");
-    pc::logger()->trace("Workspace device count: {}",
-                        _workspace.devices.size());
+    std::scoped_lock lock(_workspace.config_access);
 
-    QHash<QString, DeviceAdapter *> existing_by_id;
-    existing_by_id.reserve(_deviceAdapters.size());
+    new_ordered_sessions.reserve(int(_workspace.config.sessions.size()));
+    new_ptrs_by_id.reserve(int(_workspace.config.sessions.size()));
 
-    for (QObject *obj : _deviceAdapters) {
-      auto *a = qobject_cast<DeviceAdapter *>(obj);
-      if (!a) continue;
-      const QString id = adapterStableId(a);
-      if (!id.isEmpty()) existing_by_id.insert(id, a);
+    for (auto &session_cfg : _workspace.config.sessions) {
+      const QString id = QString::fromStdString(session_cfg.id);
+      if (id.isEmpty()) continue;
+
+      const pc::SessionConfiguration *current_ptr = &session_cfg;
+
+      SessionConfigurationAdapter *adapter = existing_by_id.take(id);
+
+      const bool ptr_matches = _sessionConfigPtrById.contains(id) &&
+                               (_sessionConfigPtrById.value(id) == current_ptr);
+
+      if (adapter && !ptr_matches) {
+        // Underlying SessionConfiguration moved (vector realloc / reorder).
+        // Old adapter holds a dangling reference: must recreate.
+        adapter->deleteLater();
+        adapter = nullptr;
+      }
+
+      if (adapter) {
+        (void)adapter->setConfig(session_cfg);
+      } else {
+        auto *new_adapter = new SessionConfigurationAdapter(session_cfg, this);
+        initSessionAdapter(new_adapter);
+        adapter = new_adapter;
+      }
+
+      if (adapter) {
+        new_ordered_sessions.append(adapter);
+        new_ptrs_by_id.insert(id, current_ptr);
+      }
     }
+  }
 
-    QList<QObject *> new_ordered_devices;
-    new_ordered_devices.reserve(_deviceAdapters.size());
+  // Delete adapters for removed sessions (anything left in existing_by_id).
+  for (auto it = existing_by_id.begin(); it != existing_by_id.end(); ++it) {
+    if (it.value()) it.value()->deleteLater();
+  }
 
-    for (auto &device_plugin : _workspace.devices) {
-      auto *plugin = device_plugin.get();
-      DeviceAdapter *adapter;
+  _sessionAdapters = new_ordered_sessions;
+  _sessionConfigPtrById = std::move(new_ptrs_by_id);
 
-      using DeviceConfigVariantRef =
-          std::reference_wrapper<devices::DeviceConfigurationVariant>;
-      std::optional<DeviceConfigVariantRef> device_config;
+  emit sessionAdaptersChanged();
+  pc::logger()->trace("Finished syncing sessionAdapters");
+}
 
-      if (plugin) device_config = plugin->config();
-      if (device_config.has_value()) {
-        auto config = device_config.value();
-        auto [device_id, plugin_name] =
-            devices::device_info_from_variant(config);
-        const QString id(device_id.data());
-        if (!id.isEmpty()) {
-          // try an existing adapter
-          adapter = existing_by_id.take(id);
-          if (adapter) {
-            bool sync_success = false;
-            try {
-              sync_success = adapter->setConfig(config);
-            } catch (...) {
-              pc::logger()->error(
-                  "Exception thrown setting config for '{}' '{}'", plugin_name,
-                  device_id);
-            }
+void WorkspaceModel::syncDeviceAdapters() {
+  pc::logger()->trace("Syncing device adapters");
+  pc::logger()->trace("Workspace device count: {}", _workspace.devices.size());
 
-            if (!sync_success) {
-              pc::logger()->trace(
-                  "Existing device adapter with id '{}' failed to set new "
-                  "configuration. Recreating...",
-                  device_id);
-              adapter->deleteLater();
-              adapter = nullptr;
-            }
+  QHash<QString, DeviceAdapter *> existing_by_id;
+  existing_by_id.reserve(_deviceAdapters.size());
+
+  for (QObject *obj : _deviceAdapters) {
+    auto *a = qobject_cast<DeviceAdapter *>(obj);
+    if (!a) continue;
+    const QString id = adapterStableId(a);
+    if (!id.isEmpty()) existing_by_id.insert(id, a);
+  }
+
+  QList<QObject *> new_ordered_devices;
+  new_ordered_devices.reserve(_deviceAdapters.size());
+
+  for (auto &device_plugin : _workspace.devices) {
+    auto *plugin = device_plugin.get();
+    DeviceAdapter *adapter;
+
+    using DeviceConfigVariantRef =
+        std::reference_wrapper<devices::DeviceConfigurationVariant>;
+    std::optional<DeviceConfigVariantRef> device_config;
+
+    if (plugin) device_config = plugin->config();
+    if (device_config.has_value()) {
+      auto config = device_config.value();
+      auto [device_id, plugin_name] = devices::device_info_from_variant(config);
+      const QString id(device_id.data());
+      if (!id.isEmpty()) {
+        // try an existing adapter
+        adapter = existing_by_id.take(id);
+        if (adapter) {
+          bool sync_success = false;
+          try {
+            sync_success = adapter->setConfig(config);
+          } catch (...) {
+            pc::logger()->error("Exception thrown setting config for '{}' '{}'",
+                                plugin_name, device_id);
+          }
+
+          if (!sync_success) {
+            pc::logger()->trace(
+                "Existing device adapter with id '{}' failed to set new "
+                "configuration. Recreating...",
+                device_id);
+            adapter->deleteLater();
+            adapter = nullptr;
           }
         }
-        if (!adapter) {
-          adapter = makeDeviceAdapterForPlugin(plugin, config);
-        }
-        if (adapter) {
-          auto adapterPtr = QPointer<DeviceAdapter>(adapter);
+      }
+      if (!adapter) {
+        adapter = makeDeviceAdapterForPlugin(plugin, config);
+      }
+      if (adapter) {
+        auto adapterPtr = QPointer<DeviceAdapter>(adapter);
 
-          // hook up the qt signal so that when the plugin updates its
-          // pointcloud, quick3d can react to this event and update geometry
+        // hook up the qt signal so that when the plugin updates its
+        // pointcloud, quick3d can react to this event and update geometry
 
-          plugin->set_point_cloud_updated_callback([adapterPtr]() {
-            QMetaObject::invokeMethod(adapterPtr.data(), [adapterPtr]() {
-              if (!adapterPtr) {
-                pc::logger()->error("Invalid point cloud plugin ptr");
-                return;
-              }
-              adapterPtr->notifyPointCloudUpdated();
-            });
+        plugin->set_point_cloud_updated_callback([adapterPtr]() {
+          QMetaObject::invokeMethod(adapterPtr.data(), [adapterPtr]() {
+            if (!adapterPtr) {
+              pc::logger()->error("Invalid point cloud plugin ptr");
+              return;
+            }
+            adapterPtr->notifyPointCloudUpdated();
+            // also update operator projections attached to this device we
+            // might want to visualise in the UI
+            adapterPtr->syncOperatorFrames();
           });
+        });
 
-          // TODO what is this for
-          plugin->set_status_callback(
-              [adapterPtr](pc::devices::DeviceStatus status) {
-                if (!adapterPtr) return;
-                QMetaObject::invokeMethod(
-                    adapterPtr.data(),
-                    [adapterPtr, status]() {
-                      if (!adapterPtr) return;
-                      adapterPtr->setStatusFromCore(status);
-                    },
-                    Qt::QueuedConnection);
-              });
-        }
-      }
-
-      // if we managed to construct or get an existing valid apater,
-      // add this to our new devices list
-      if (adapter)
-        new_ordered_devices.append(adapter);
-      else {
-        pc::logger()->error("no adapter");
-        // we we didn't finish this loop with a valid adapter, we need one in
-        // a null state adapter = makeDeviceAdapterForPlugin(nullptr);
+        // TODO what is this for
+        plugin->set_status_callback(
+            [adapterPtr](pc::devices::DeviceStatus status) {
+              if (!adapterPtr) return;
+              QMetaObject::invokeMethod(
+                  adapterPtr.data(),
+                  [adapterPtr, status]() {
+                    if (!adapterPtr) return;
+                    adapterPtr->setStatusFromCore(status);
+                  },
+                  Qt::QueuedConnection);
+            });
       }
     }
 
-    for (auto it = existing_by_id.begin(); it != existing_by_id.end(); ++it) {
-      if (it.value()) it.value()->deleteLater();
+    // if we managed to construct or get an existing valid apater,
+    // add this to our new devices list
+    if (adapter)
+      new_ordered_devices.append(adapter);
+    else {
+      pc::logger()->error("no adapter");
+      // we we didn't finish this loop with a valid adapter, we need one in
+      // a null state adapter = makeDeviceAdapterForPlugin(nullptr);
     }
-
-    _deviceAdapters = new_ordered_devices;
-
-    int selectedDeviceIndex = _workspace.config.selectedDeviceIndex.value();
-    if (selectedDeviceIndex >= _deviceAdapters.size() ||
-        selectedDeviceIndex < 0)
-      selectedDeviceIndex = 0;
-    setSelectedDeviceIndex(selectedDeviceIndex);
-
-    emit deviceAdaptersChanged();
-    emit deviceVariantNamesChanged();
-    emit addDeviceMenuEntriesChanged();
   }
 
-  pc::logger()->trace("Finished syncing adapters");
+  for (auto it = existing_by_id.begin(); it != existing_by_id.end(); ++it) {
+    if (it.value()) it.value()->deleteLater();
+  }
+
+  _deviceAdapters = new_ordered_devices;
+
+  int selectedDeviceIndex = _workspace.config.selectedDeviceIndex.value();
+  if (selectedDeviceIndex >= _deviceAdapters.size() || selectedDeviceIndex < 0)
+    selectedDeviceIndex = 0;
+  setSelectedDeviceIndex(selectedDeviceIndex);
+
+  emit deviceAdaptersChanged();
+  emit deviceVariantNamesChanged();
+  emit addDeviceMenuEntriesChanged();
+
   pc::logger()->trace("Workspace device count: {}", _workspace.devices.size());
 }
 

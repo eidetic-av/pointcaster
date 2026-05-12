@@ -21,6 +21,7 @@ qt_add_executable(pointcaster
     pointcaster.cc
     workspace/workspace.cc
     workspace/workspace_config.cc
+    camera/indexing_color_camera.cc
     recorder/session_recorder.cc
     ${app_icon_resource}
 )
@@ -29,6 +30,7 @@ qt_add_executable(pointcaster
 # rendered inside the ui lib not the exe itself (otherwise Qt MOC runs twice)
 set_target_properties(pointcaster PROPERTIES
   AUTOMOC OFF
+  ENABLE_EXPORTS ON
 )
 
 add_subdirectory(ui)
@@ -62,6 +64,8 @@ target_link_libraries(pointcaster PRIVATE
 )
 
 target_include_directories(pointcaster PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
+target_compile_definitions(pointcaster PRIVATE POINTCASTER_BUILD)
 
 target_precompile_headers(pointcaster PRIVATE
   <string>

@@ -55,7 +55,7 @@ public:
   explicit Workspace(const WorkspaceConfiguration &initial);
 
   // updates config and syncs (creates/destroys) device plugin instances
-  void apply_new_config(const WorkspaceConfiguration &new_config);
+  void apply_new_config(const WorkspaceConfiguration &new_config, bool sync_devices = true);
 
   // sync device plugin instances to match config.devices
   void sync_devices();

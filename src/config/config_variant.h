@@ -3,12 +3,17 @@
 #include "color_transform_config.h"
 #include "file_config.h"
 #include "network_config.h"
+#include "sequence_config.h"
 #include "transform_config.h"
 #include <concepts>
 #include <type_traits>
 #include <utility>
 #include <variant>
 
+
+// TODO REMOVE AND ADD
+// specialised jinja with  setConfig overload like device adapters
+#include <plugins/operators/fringe_removal/fringe_removal_config.h>
 
 #include <camera/camera_config.h>
 #include <config/transform_config.h>
@@ -18,8 +23,15 @@ namespace pc {
 
 using ConfigurationVariant =
     std::variant<TransformConfiguration, ColorTransformConfiguration,
-                 FileConfiguration, NetworkConfiguration, CameraConfiguration,
-                 SessionConfiguration>;
+                 FileConfiguration, FileFolderConfiguration,
+                 NetworkConfiguration, CameraConfiguration,
+                 SessionConfiguration,
+                 SequenceConfiguration
+                 // TODO REMOVE AND ADD
+                 // specialised jinja with  setConfig overload like device
+                 // adapters
+                 ,
+                 operators::FringeRemovalConfiguration>;
 
 // compile time utilities
 

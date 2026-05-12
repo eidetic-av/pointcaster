@@ -1,20 +1,25 @@
 #pragma once
 
 #include "../device_plugin.h"
-
 #include "plugins/devices/device_status.h"
-#include "plugins/devices/ply/ply_device_config.h"
 #include "ply_device_config.h"
+#include "ply_sequence_loader.h"
+
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/Containers/String.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
+#include <atomic>
+#include <chrono>
+#include <optional>
 #include <plugins/backend/backend_plugin.h>
 #include <readerwriterqueue/readerwritercircularbuffer.h>
 #include <string_view>
+#include <thread>
 #include <vector>
+
 
 namespace pc::devices {
 
@@ -24,7 +29,7 @@ public:
                      Corrade::Containers::StringView plugin)
       : DevicePlugin(manager, plugin) {}
 
-  ~PlyDevice() override {}
+  ~PlyDevice() override;
 
   PlyDevice(const PlyDevice &) = delete;
   PlyDevice &operator=(const PlyDevice &) = delete;
@@ -43,19 +48,40 @@ public:
 
   void on_config_field_changed(std::string_view path = "") override;
 
-  bool load_file(std::string_view url);
+  void
+  update_config(const devices::DeviceConfigurationVariant &config) override {
+    std::lock_guard lock(_device_mutex);
+    DevicePlugin::update_config(config);
+  }
+
+  bool load(std::string_view url);
+  void reload();
+
+  void tick(float delta_time);
+  bool is_sequence() const { return _sequence_loader.has_value(); }
+  size_t frame_count() const;
 
 private:
-  std::string _loaded_file_path{};
   DeviceStatus _status = DeviceStatus::Unloaded;
+
+  std::string _loaded_file_path{};
+  std::optional<ply::PlySequenceLoader> _sequence_loader;
+  float _frame_accumulator = 0.f;
+  int _current_frame = 0;
 
   std::shared_ptr<PointCloud> _input_cloud;
 
   Corrade::Containers::Pointer<backend::BackendPlugin> _cpu_backend;
   Corrade::Containers::Pointer<backend::BackendPlugin> _cuda_backend;
 
-  std::shared_ptr<PointCloud> _current_point_cloud =
-      std::make_shared<PointCloud>(PointCloud{{}, {}});
+  std::atomic<std::shared_ptr<PointCloud>> _current_point_cloud{
+      std::make_shared<PointCloud>(PointCloud{{}, {}})};
+
+  // TODO change this to a device-global or workspace-global timer thread
+  std::jthread _tick_thread;
+  std::mutex _device_mutex;
+
+  bool load_directory(const std::filesystem::path &dir);
 
   void apply_transform();
 };

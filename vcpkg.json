@@ -14,7 +14,6 @@
 		"happly",
 		"kddockwidgets",
 		"libcpplocate",
-		"llfio",
 		"orbbecsdk",
 		{
 			"name": "pcl",

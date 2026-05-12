@@ -7,6 +7,9 @@
 #include <utility>
 #include <variant>
 
+// TODO i think we remove variants entirely for plugins and use runtime
+// polymorphism that uses static meta info as much as possible
+
 namespace pc::operators {
 
 // TODO we absolutely cannot be doing compile time variants for polymorphism,

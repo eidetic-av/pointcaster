@@ -63,12 +63,13 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   sync_devices();
 }
 
-void Workspace::apply_new_config(const WorkspaceConfiguration &new_config) {
+void Workspace::apply_new_config(const WorkspaceConfiguration &new_config,
+                                 bool should_sync_devices) {
   {
     std::scoped_lock lock(config_access);
     config = new_config;
   }
-  sync_devices();
+  if (should_sync_devices) sync_devices();
 }
 
 void Workspace::sync_devices() {

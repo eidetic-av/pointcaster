@@ -93,6 +93,7 @@ function(add_qml_adapters)
         target_sources(${target} PRIVATE
             ${CMAKE_SOURCE_DIR}/src/ui/models/config_adapter.h
             ${CMAKE_SOURCE_DIR}/src/ui/models/device_adapter.h
+            ${CMAKE_SOURCE_DIR}/src/ui/models/operator_adapter.h
             ${CONFIG_OUTPUTS}
         )
 

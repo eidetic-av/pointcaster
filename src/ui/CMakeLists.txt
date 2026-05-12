@@ -44,6 +44,7 @@ set(CONFIG_ADAPTER_INPUTS
     ${CMAKE_SOURCE_DIR}/src/config/network_config.h
     ${CMAKE_SOURCE_DIR}/src/config/transform_config.h
     ${CMAKE_SOURCE_DIR}/src/config/color_transform_config.h
+    ${CMAKE_SOURCE_DIR}/src/config/sequence_config.h
     ${CMAKE_SOURCE_DIR}/src/session/session_config.h
     ${CMAKE_SOURCE_DIR}/src/camera/camera_config.h
     # TODO we need some faculty to create these adapters
@@ -52,6 +53,7 @@ set(CONFIG_ADAPTER_INPUTS
     # device CMakeLists.txt not here
     ${CMAKE_SOURCE_DIR}/src/plugins/devices/orbbec/orbbec_device_config.h
     ${CMAKE_SOURCE_DIR}/src/plugins/devices/ply/ply_device_config.h
+    ${CMAKE_SOURCE_DIR}/src/plugins/operators/fringe_removal/fringe_removal_config.h
 )
 
 add_qml_adapters(

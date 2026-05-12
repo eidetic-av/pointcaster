@@ -115,7 +115,7 @@ public:
 
   DeviceConfigurationVariant &config() { return _config; }
 
-  void update_config(const DeviceConfigurationVariant &config) {
+  virtual void update_config(const DeviceConfigurationVariant &config) {
     _config = config;
   }
 
@@ -146,15 +146,15 @@ public:
   void
   add_operator(const operators::OperatorConfigurationVariant &operator_config);
 
+  std::vector<Corrade::Containers::Pointer<operators::OperatorPlugin>>
+      operators{};
+
 protected:
   Workspace *_workspace;
   DeviceConfigurationVariant _config;
   std::function<void(DeviceStatus)> _status_callback;
   std::function<void()> _point_cloud_updated_callback;
   bool _is_discovery_instance = false;
-
-  std::vector<Corrade::Containers::Pointer<operators::OperatorPlugin>>
-      operators{};
 
   std::atomic<size_t> _process_tasks_in_flight{0};
 

@@ -446,6 +446,23 @@ public:
 {% endfor %}
         return false;
     }
+    
+    Q_INVOKABLE bool isFolderOpener(const QString &path) const override {
+{% for m in s.members %}
+{% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}
+        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
+            return m_{{ m.name }}Adapter.isFolderOpener(sub);
+        }
+{% else %}
+{% if '@folder_opener' is in m.comment %}
+        if (path == QStringLiteral("{{ m.name }}")) return true;
+{% endif %}
+{% endif %}
+{% endfor %}
+        return false;
+    }
+
 
     Q_INVOKABLE bool isButton(const QString &path) const override {
 {% for m in s.members %}

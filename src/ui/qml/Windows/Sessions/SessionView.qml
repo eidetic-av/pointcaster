@@ -255,8 +255,8 @@ Item {
                 Model {
                     id: model
 
-                    property string model: modelData ? "device_" + modelData.deviceIndex : ""
-                    property string geo: "geo_" + model
+                    property string model: modelData ? modelData.id + "_model" : ""
+                    property string geo: model + "_geo"
 
                     pickable: true
 

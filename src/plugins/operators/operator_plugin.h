@@ -8,10 +8,14 @@
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
 #include <Corrade/Tags.h>
+#include <camera/camera_frame.h>
 #include <cpplocate/cpplocate.h>
 #include <filesystem>
 #include <logger/logger.h>
 #include <pointcaster/point_cloud.h>
+#include <span>
+#include <string_view>
+#include <vector>
 
 namespace pc {
 class Workspace;
@@ -73,11 +77,28 @@ public:
   virtual void init() {};
 
   virtual void process(const PointCloud &input, PointCloud &output,
-                       const OperatorConfigurationVariant &config_variant) const = 0;
+                       const OperatorConfigurationVariant &config_variant) {
+    _config = config_variant;
+  };
+
+  OperatorConfigurationVariant &config() { return _config; }
+  const OperatorConfigurationVariant &config() const { return _config; }
+
+  void update_config(const OperatorConfigurationVariant &config) {
+    _config = config;
+  }
 
   virtual void on_config_field_changed(std::string_view path = "") {}
 
   virtual bool plugin_null_state() const { return false; }
+
+  // if an operator projects any camera / intermediary views into 2d that should
+  // be displayed in the UI, declare them as member variables and return them
+  // here
+  virtual std::vector<camera::CameraFrameRef> camera_frames() { return {}; }
+
+protected:
+  OperatorConfigurationVariant _config;
 };
 
 } // namespace pc::operators

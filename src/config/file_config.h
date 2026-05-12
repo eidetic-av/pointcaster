@@ -5,8 +5,11 @@
 namespace pc {
 
 struct FileConfiguration {
-  std::string file_path = ""; // @file_opener
-  bool load_sequence = false;
+  std::string path = ""; // @file_opener
+};
+
+struct FileFolderConfiguration {
+  std::string path = ""; // @file_opener @folder_opener
 };
 
 } // namespace pc

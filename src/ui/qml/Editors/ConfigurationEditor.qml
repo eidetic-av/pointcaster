@@ -249,14 +249,15 @@ Column {
     Component {
         id: stringEditor
 
-        Row {
+        RowLayout {
             width: parent.width
+            spacing: Math.round(Scaling.uiScale * 5)
 
             TextField {
                 id: valueField
                 font: Scaling.uiFont
 
-                width: parent.width - (fileOpenButton.visible ? fileOpenButton.width : 0) - Math.round(Scaling.uiScale * 5)
+                Layout.fillWidth: true
 
                 background: Rectangle {
                     color: "transparent"
@@ -295,6 +296,8 @@ Column {
                 id: fileOpenButton
                 visible: root.configAdapter ? root.configAdapter.isFileOpener(path) : false
 
+                tooltip: "Open file..."
+
                 iconSource: FontAwesome.icon("solid/file-import")
                 iconSize: Math.round(12 * Scaling.uiScale)
                 topPadding: Math.round(4 * Scaling.uiScale)
@@ -309,6 +312,44 @@ Column {
                 id: fileOpenDialog
                 nameFilters: [qsTr("PLY files (*.ply)"), qsTr("All files (*)")]
                 onAccepted: root.configAdapter.set(path, selectedFile)
+            }
+
+            IconButton {
+                id: folderOpenButton
+                visible: root.configAdapter ? root.configAdapter.isFolderOpener(path) : false
+
+                tooltip: "Open folder..."
+
+                iconSource: FontAwesome.icon("solid/folder-open")
+                iconSize: Math.round(12 * Scaling.uiScale)
+                topPadding: Math.round(4 * Scaling.uiScale)
+                bottomPadding: Math.round(4 * Scaling.uiScale)
+                leftPadding: Math.round(5 * Scaling.uiScale)
+                rightPadding: Math.round(5 * Scaling.uiScale)
+
+                onClicked: folderOpenDialog.open()
+            }
+
+            FolderDialog {
+                id: folderOpenDialog
+                onAccepted: root.configAdapter.set(path, selectedFolder)
+            }
+
+            IconButton {
+                id: reloadButton
+                visible: root.configAdapter ? root.configAdapter.isFileOpener(path) || root.configAdapter.isFolderOpener(path) : false
+
+                tooltip: "Reload"
+
+                iconSource: FontAwesome.icon("solid/arrows-rotate")
+                iconSize: Math.round(12 * Scaling.uiScale)
+                topPadding: Math.round(4 * Scaling.uiScale)
+                bottomPadding: Math.round(4 * Scaling.uiScale)
+                leftPadding: Math.round(5 * Scaling.uiScale)
+                rightPadding: Math.round(5 * Scaling.uiScale)
+
+                // onClicked: fileOpenDialog.open()
+
             }
         }
     }

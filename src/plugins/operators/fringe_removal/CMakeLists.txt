@@ -20,6 +20,7 @@ set_target_properties(FringeRemovalOperator PROPERTIES
 find_package(PCL CONFIG REQUIRED)
 
 target_link_libraries(FringeRemovalOperator PRIVATE
+  pointcaster
   pointcaster::core
   Corrade::PluginManager
   ${PCL_LIBRARIES}

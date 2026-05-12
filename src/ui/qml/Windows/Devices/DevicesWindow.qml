@@ -13,7 +13,7 @@ KDDW.DockWidget {
 
     property var workspace: null
 
-    signal deviceSelected();
+    signal deviceSelected
 
     function init() {
         if (workspace) {
@@ -83,6 +83,8 @@ KDDW.DockWidget {
                 Layout.fillWidth: true
             }
 
+            // ***** TESTING
+
             IconButton {
                 id: addOperatorButton
                 text: "Add Fringe Removal Operator"
@@ -97,6 +99,27 @@ KDDW.DockWidget {
                 onClicked: root.workspace.addOperatorToDevice(root.workspace.selectedDeviceIndex, "FringeRemovalOperator")
             }
 
+            Repeater {
+                model: deviceSelectionList.selectedDevice ? deviceSelectionList.selectedDevice.operatorAdapters : []
+
+                Column {
+                    required property var modelData
+                    Layout.fillWidth: true
+
+                    Repeater {
+                        model: modelData.frameSources
+                        Image {
+                            required property string modelData
+                            source: modelData
+                            cache: false
+                            width: 320
+                            height: 240
+                            fillMode: Image.PreserveAspectFit
+                        }
+                    }
+                }
+            }
+
             // TODO
             // why is this not scrolling??
 
@@ -108,7 +131,7 @@ KDDW.DockWidget {
                 Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
                 clip: true
 
-                // 
+                //
 
                 Container {
                     id: deviceConfigContainer

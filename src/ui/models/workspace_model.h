@@ -109,6 +109,8 @@ public:
 
 public slots:
   void syncAdapters();
+  void syncSessionAdapters();
+  void syncDeviceAdapters();
   void syncConsole();
 
 signals:

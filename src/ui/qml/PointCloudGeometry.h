@@ -31,11 +31,7 @@ public:
   void setPointCloudAdapter(PointCloudAdapter *adapter);
 
   bool enabled() const { return _enabled; }
-  void setEnabled(bool enabled) {
-    if (_enabled == enabled) return;
-    _enabled = enabled;
-    emit enabledChanged();
-  }
+  void setEnabled(bool enabled); 
 
   QVector3D boundsMin() const { return _boundsMin; }
   QVector3D boundsMax() const { return _boundsMax; }

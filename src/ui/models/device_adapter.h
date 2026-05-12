@@ -2,6 +2,7 @@
 
 #include "config_adapter.h"
 #include "device_status.h"
+#include "operator_adapter.h"
 #include "point_cloud_adapter.h"
 
 #include <QObject>
@@ -19,6 +20,9 @@ class DeviceAdapter : public ConfigAdapter, public PointCloudAdapter {
   Q_PROPERTY(pc::devices::ui::WorkspaceDeviceStatus status READ status NOTIFY
                  statusChanged)
 
+  Q_PROPERTY(QList<OperatorAdapter *> operatorAdapters READ operatorAdapters
+                 NOTIFY operatorAdaptersChanged)
+
   Q_PROPERTY(
       bool pluginNullState READ pluginNullState NOTIFY pluginNullStateChanged)
 
@@ -35,6 +39,32 @@ public:
   bool setConfig(const pc::ConfigurationVariant &) override {
     // base configs not applicable
     return false;
+  }
+
+  // --- operator control ---
+
+  QList<OperatorAdapter *> operatorAdapters() const {
+    return _operatorAdapters;
+  }
+
+  // TODO Call when the device's operator list changes (add/remove)
+  void rebuildOperatorAdapters() {
+    qDeleteAll(_operatorAdapters);
+    _operatorAdapters.clear();
+
+    for (auto &op : _plugin->operators) {
+      auto *adapter = new OperatorAdapter(op.get(), this);
+      _operatorAdapters.append(adapter);
+    }
+
+    emit operatorAdaptersChanged();
+  }
+
+  // TODO Call after the device runs all operators in its processing loop
+  void syncOperatorFrames() {
+    for (auto *adapter : _operatorAdapters) {
+      adapter->syncCameraFrames();
+    }
   }
 
   // ----------------- identity -----------------
@@ -96,8 +126,8 @@ public:
 signals:
   void statusChanged();
   void pluginNullStateChanged();
-
   void pointCloudUpdated();
+  void operatorAdaptersChanged();
 
 protected:
   pc::devices::DevicePlugin *_plugin = nullptr; // non-owning
@@ -105,4 +135,6 @@ protected:
       pc::devices::ui::WorkspaceDeviceStatus::Unloaded;
 
   int _deviceIndex = -1;
+
+  QList<OperatorAdapter *> _operatorAdapters;
 };

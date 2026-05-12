@@ -77,6 +77,14 @@ ARG CudaVersion=12.9.1.576
 RUN choco install -y cuda --version $Env:CudaVersion
 ENV CUDAToolkit_ROOT="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9"
 
+# powershell core and 7zip are both required for vcpkg
+ARG PowershellCoreVersion=7.5.3
+RUN choco install -y powershell-core --install-arguments='"DISABLE_TELEMETRY=1"' \
+      --version $Env:PowershellCoreVersion 
+
+ARG 7ZipVersion=25.1.0
+RUN choco install -y 7zip --version $Env:7zipVersion
+
 # Build vcpkg source-based project dependencies
 COPY vcpkg.json C:\\vcpkg-config\\
 COPY triplets C:\\vcpkg-config\\triplets

@@ -4,6 +4,7 @@ corrade_add_static_plugin(
   ""
   PlyDevice.conf
   ply_device.cc
+  ply_sequence_loader.cc
   ${CMAKE_SOURCE_DIR}/src/ui/models/device_status.h
 )
 
@@ -11,7 +12,6 @@ set_target_properties(PlyDevice PROPERTIES AUTOMOC OFF)
 
 find_package(TBB REQUIRED)
 find_package(Boost REQUIRED COMPONENTS interprocess)
-find_package(llfio CONFIG REQUIRED)
 
 target_link_libraries(PlyDevice PRIVATE
   pointcaster::core
@@ -21,14 +21,12 @@ target_link_libraries(PlyDevice PRIVATE
 )
 
 find_path(HAPPLY_INCLUDE_DIRS "happly.h")
-find_path(LLFIO_INCLUDE_DIRS "llfio.hpp")
 
 target_include_directories(PlyDevice 
   PRIVATE 
     "${CMAKE_SOURCE_DIR}/src" 
     "${CMAKE_SOURCE_DIR}/include"
     ${HAPPLY_INCLUDE_DIRS}
-    ${LLFIO_INCLUDE_DIRS}
 )
 
 # remove the installed directory because its static, we don't need it

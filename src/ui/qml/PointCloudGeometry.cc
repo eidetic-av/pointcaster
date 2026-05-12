@@ -14,6 +14,13 @@ void PointCloudGeometry::setPointCloudAdapter(PointCloudAdapter *adapter) {
   updateGeometry();
 }
 
+void PointCloudGeometry::setEnabled(bool enabled) {
+  if (_enabled == enabled) return;
+  if (_enabled && !enabled) reset();
+  _enabled = enabled;
+  emit enabledChanged();
+}
+
 void PointCloudGeometry::updateGeometry() {
   if (!_enabled || !_pointCloudAdapter) return;
 
