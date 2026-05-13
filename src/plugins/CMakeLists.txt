@@ -6,7 +6,7 @@ add_library(pointcaster::plugins ALIAS pointcaster_plugins)
 
 target_link_libraries(pointcaster_plugins PRIVATE
     pointcaster::core 
-    Corrade::Main Corrade::PluginManager
+    Corrade::PluginManager
 )
 
 target_include_directories(pointcaster_plugins PRIVATE 
