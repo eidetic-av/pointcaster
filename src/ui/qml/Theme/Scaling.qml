@@ -20,7 +20,8 @@ QtObject {
     })
     readonly property font uiSmallFont: Qt.font({
         pointSize: smallPointSize,
-        weight: Font.Bold
+        weight: Font.Bold,
+        letterSpacing: 1.5
     })
     readonly property font uiHeaderFont: Qt.font({
         pointSize: headerPointSize,
