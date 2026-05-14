@@ -49,6 +49,7 @@ add_subdirectory(plugins)
 
 find_package(reflectcpp CONFIG REQUIRED)
 find_package(TBB REQUIRED)
+find_package(OpenCV REQUIRED)
 
 target_link_libraries(pointcaster PRIVATE 
   pointcaster::core 
@@ -61,6 +62,7 @@ target_link_libraries(pointcaster PRIVATE
   Corrade::PluginManager
   reflectcpp::reflectcpp
   TBB::tbb
+  ${OpenCV_LIBS}
 )
 
 target_include_directories(pointcaster PRIVATE "${CMAKE_SOURCE_DIR}/src")

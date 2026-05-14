@@ -77,6 +77,13 @@ ARG CudaVersion=12.9.1.576
 RUN choco install -y cuda --version $Env:CudaVersion
 ENV CUDAToolkit_ROOT="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9"
 
+# OpenCV library
+# TODO at the moment this configures for opencv_world, and default 
+# compile options... it may be worth compiling using vcpkg in the future
+ARG OpenCVVersion=4.12.0
+RUN choco install -y opencv --version $Env:OpenCVVersion
+ENV OpenCV_DIR="C:\\tools\\opencv\\build"
+
 # powershell core and 7zip are both required for vcpkg
 ARG PowershellCoreVersion=7.5.3
 RUN choco install -y powershell-core --install-arguments='"DISABLE_TELEMETRY=1"' \
@@ -90,7 +97,7 @@ COPY vcpkg.json C:\\vcpkg-config\\
 COPY triplets C:\\vcpkg-config\\triplets
 COPY ports C:\\vcpkg-config\\ports
 
-ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR;CUDAToolkit_ROOT"
+ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR;CUDAToolkit_ROOT;OpenCV_DIR"
 
 RUN & "$Env:VsDevShell" -Arch amd64 -HostArch amd64; \
     vcpkg install \
