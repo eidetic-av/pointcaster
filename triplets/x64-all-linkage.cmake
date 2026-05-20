@@ -21,3 +21,8 @@ if (PORT MATCHES "tracy")
         -DTRACY_MANUAL_LIFETIME=ON
     )
 endif()
+
+# opencv will only work with the tbb backend if it's dynamic
+if(PORT MATCHES "opencv4")
+    set(VCPKG_LIBRARY_LINKAGE dynamic)
+endif()
