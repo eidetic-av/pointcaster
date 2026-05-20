@@ -88,13 +88,18 @@ RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
 # install cuda libs
 ARG CUDA_VERSION=13.2.1
 ARG CUDA_INSTALLER=cuda_13.2.1_595.58.03_linux.run
+ARG CUDA_INSTALLER_SHA256="5514a3fe7bcea92b25073c7c100c3e64e7961a7e1dbad6955adb8b59806053f0"
 
+# TODO add sha check for cuda installer
 RUN --mount=type=cache,id=root-download-cache,target=/root/.cache/downloads \
     set -eux; \
     test -f /root/.cache/downloads/${CUDA_INSTALLER} || \
         axel "https://developer.download.nvidia.com/compute/cuda/${CUDA_VERSION}/local_installers/${CUDA_INSTALLER}" \
             -qo /root/.cache/downloads/${CUDA_INSTALLER}; \
+    echo "${CUDA_INSTALLER_SHA256} /root/.cache/downloads/${CUDA_INSTALLER}" | sha256sum -c -; \
     sh /root/.cache/downloads/${CUDA_INSTALLER} --toolkit --silent
+
+ENV PATH="/usr/local/cuda/bin:${PATH}"
 
 # set up directories for dependency locations that need to be manipulated by the dev user
 ENV USERBIN_DIR=/opt/bin
