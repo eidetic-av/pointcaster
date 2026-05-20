@@ -38,7 +38,7 @@ RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
     rm -rf /var/lib/apt/lists/*
 
 # download and install cmake
-ARG CMAKE_VERSION=4.2.1
+ARG CMAKE_VERSION=4.2.3
 RUN set -eux; \
     BASE_URL="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}"; \
     curl -fsSLO "${BASE_URL}/cmake-${CMAKE_VERSION}-SHA-256.txt"; \
