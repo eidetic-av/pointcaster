@@ -3,7 +3,6 @@ FROM docker.io/zhongruoyu/gcc-ports:15-bookworm
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV ARCH=x86_64
 
-ARG DEV_USERNAME=dev
 ARG DEV_USER_UID=1000
 ARG DEV_USER_GID=1000
 
@@ -91,7 +90,7 @@ ENV USERBIN_DIR=/opt/bin
 
 RUN set -eux; \
     mkdir -p /opt ${USERBIN_DIR}; \
-    chown "${DEV_USER_UID}:${DEV_USER_GID}" /opt ${USERBIN_DIR}
+    chown ${DEV_USER_UID}:${DEV_USER_GID} /opt ${USERBIN_DIR}
 
 ENV PATH="${USERBIN_DIR}:${PATH}"
 
@@ -105,11 +104,11 @@ RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
 
 # set up dev user
 RUN set -eux; \
-    groupadd --gid "${DEV_USER_GID}" "${DEV_USERNAME}"; \
-    useradd --uid "${DEV_USER_UID}" --gid "${DEV_USER_GID}" -m "${DEV_USERNAME}"
+    groupadd --gid ${DEV_USER_GID} dev; \
+    useradd --uid ${DEV_USER_UID} --gid ${DEV_USER_GID} -m dev
 
 # move to the dev user's environment now and set up the tools that don't require root
-USER ${DEV_USERNAME}
+USER dev
 
 WORKDIR /pointcaster
 
@@ -131,7 +130,7 @@ ENV PATH="${Qt6_DIR}/gcc_64/bin:${PATH}"
 ARG VCPKG_COMMIT=6f932b9730b65d28cba7dca7326dca4d3247d305
 
 ENV VCPKG_ROOT=/opt/vcpkg
-ENV VCPKG_DEFAULT_BINARY_CACHE=/home/${DEV_USERNAME}/.cache/vcpkg/archives
+ENV VCPKG_DEFAULT_BINARY_CACHE=/home/dev/.cache/vcpkg/archives
 ENV VCPKG_DOWNLOADS=${VCPKG_ROOT}-cache/downloads
 ENV VCPKG_BUILDTREES=${VCPKG_ROOT}-cache/buildtrees
 
@@ -151,16 +150,15 @@ ARG APPIMAGETOOL_VERSION=1.9.1
 ARG APPIMAGETOOL_SHA256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
 ENV APPIMAGETOOL_DIR=${USERBIN_DIR}
 
-RUN --mount=type=cache,id=user-downloads,target=/home/${DEV_USERNAME}/.cache/downloads,uid=${DEV_USER_UID},gid=${DEV_USER_GID} \
+RUN --mount=type=cache,id=user-downloads,target=/home/dev/.cache/downloads,uid=${DEV_USER_UID},gid=${DEV_USER_GID} \
     set -eux; \
     mkdir -p "${APPIMAGETOOL_DIR}"; \
     cd "${APPIMAGETOOL_DIR}"; \
-    test -f "/home/${DEV_USERNAME}/.cache/downloads/appimagetool-x86_64.AppImage" || \
+    test -f "/home/dev/.cache/downloads/appimagetool-x86_64.AppImage" || \
         axel "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage" \
-            -o "/home/${DEV_USERNAME}/.cache/downloads/appimagetool-x86_64.AppImage"; \
-    echo "${APPIMAGETOOL_SHA256}  /home/${DEV_USERNAME}/.cache/downloads/appimagetool-x86_64.AppImage" | sha256sum -c -; \
-    cp -f "/home/${DEV_USERNAME}/.cache/downloads/appimagetool-x86_64.AppImage" ./appimagetool-x86_64.AppImage; \
+            -o "/home/dev/.cache/downloads/appimagetool-x86_64.AppImage"; \
+    echo "${APPIMAGETOOL_SHA256}  /home/dev/.cache/downloads/appimagetool-x86_64.AppImage" | sha256sum -c -; \
+    cp -f "/home/dev/.cache/downloads/appimagetool-x86_64.AppImage" ./appimagetool-x86_64.AppImage; \
     chmod +x appimagetool-x86_64.AppImage; \
     mkdir -p appimagetool && cd appimagetool; \
     ../appimagetool-x86_64.AppImage --appimage-extract
-
