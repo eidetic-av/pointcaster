@@ -85,6 +85,17 @@ RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
         hwloc intel-oneapi-tbb-devel-${TBB_VERSION}; \
     rm -rf /var/lib/apt/lists/*
 
+# install cuda libs
+ARG CUDA_VERSION=13.2.1
+ARG CUDA_INSTALLER=cuda_13.2.1_595.58.03_linux.run
+
+RUN --mount=type=cache,id=root-download-cache,target=/root/.cache/downloads \
+    set -eux; \
+    test -f /root/.cache/downloads/${CUDA_INSTALLER} || \
+        axel "https://developer.download.nvidia.com/compute/cuda/${CUDA_VERSION}/local_installers/${CUDA_INSTALLER}" \
+            -qo /root/.cache/downloads/${CUDA_INSTALLER}; \
+    sh /root/.cache/downloads/${CUDA_INSTALLER} --toolkit --silent
+
 # set up directories for dependency locations that need to be manipulated by the dev user
 ENV USERBIN_DIR=/opt/bin
 
