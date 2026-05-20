@@ -1,7 +1,7 @@
 {
 	"name": "pointcaster",
 	"version-string": "0.2.0",
-	"builtin-baseline": "6f932b9730b65d28cba7dca7326dca4d3247d305",
+	"builtin-baseline": "4cf671c303551b27c6360c7c6e1ced5ec46d7258",
 	"dependencies": [
 		"boost-interprocess",
 		"bshoshany-thread-pool",
