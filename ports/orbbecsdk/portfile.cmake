@@ -37,9 +37,6 @@ set(VCPKG_POLICY_DLLS_IN_STATIC_LIBRARY enabled)
 
 file(GLOB_RECURSE LIB_FILES "${SOURCE_PATH}/lib/${LIB_DIR}/*")
 
-file(GLOB_RECURSE LIB_FILES
-     "${SOURCE_PATH}/lib/${LIB_DIR}/*")
-
 foreach(LIB_FILE IN LISTS LIB_FILES)
   get_filename_component(FILE_NAME ${LIB_FILE} NAME)
 #   if (NOT FILE_NAME MATCHES "depthengine")
@@ -49,11 +46,12 @@ foreach(LIB_FILE IN LISTS LIB_FILES)
                    DESTINATION ${CURRENT_PACKAGES_DIR}/bin)
       file(INSTALL ${LIB_FILE}
                    DESTINATION ${CURRENT_PACKAGES_DIR}/debug/bin)
-    elseif (FILE_NAME MATCHES "\\.lib$")
+    elseif (FILE_NAME MATCHES "\\.lib$" OR FILE_NAME MATCHES "\\.so")
       file(INSTALL ${LIB_FILE}
                    DESTINATION ${CURRENT_PACKAGES_DIR}/lib)
       file(INSTALL ${LIB_FILE}
                    DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib)
+      # TODO this one is a bit random... why put it into /share too? 
       file(INSTALL ${LIB_FILE}
                    DESTINATION
                      "${CURRENT_PACKAGES_DIR}/share/OrbbecSDK/lib/${LIB_DIR}")
