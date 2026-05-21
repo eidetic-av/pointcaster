@@ -8,3 +8,4 @@ compile_commands.json
 .vs
 Log/
 CMakeCache.txt
+cmake.check_cache
