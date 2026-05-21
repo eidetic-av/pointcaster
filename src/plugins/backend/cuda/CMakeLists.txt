@@ -14,6 +14,7 @@ add_library(cuda_backend_core
 
 set_target_properties(cuda_backend_core PROPERTIES
   AUTOMOC OFF
+  CORRADE_USE_PEDANTIC_FLAGS OFF
   CUDA_SEPARABLE_COMPILATION ON
   CUDA_RESOLVE_DEVICE_SYMBOLS ON
   CUDA_PROPAGATE_HOST_FLAGS OFF
@@ -60,7 +61,6 @@ target_link_libraries(Thrust INTERFACE CUDA::toolkit)
 
 target_link_libraries(cuda_backend_core PUBLIC
   pointcaster::core
-  Corrade::PluginManager
   CUDA::toolkit
   Thrust
 )
