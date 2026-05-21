@@ -25,12 +25,13 @@ if (WIN32)
     /bigobj /utf-8 -forward-slash-prefix-opts)
 endif()
 
-# allow extra lambda features
-target_compile_options(cuda_backend_core PRIVATE --extended-lambda)
-
-# these turn off noisy compiler output from dependencies
 target_compile_options(cuda_backend_core PRIVATE 
-  --diag-suppress 20012,20013,20014,20015,27,1394,221)
+  --extended-lambda
+  --split-compile=0
+  --threads=0
+  # these turn off noisy compiler output from dependencies
+  --diag-suppress 20012,20013,20014,20015,27,1394,221
+)
 
 corrade_add_plugin(CudaBackend
   ${CUDA_PLUGIN_DIR}
