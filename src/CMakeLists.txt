@@ -9,7 +9,7 @@ set(QT_QML_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml")
 
 add_subdirectory(core)
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(app_icon_resource "${CMAKE_SOURCE_DIR}/packaging/icon.rc")
   # set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)
   # adds PDB export to msvc
@@ -90,7 +90,7 @@ target_precompile_headers(pointcaster PRIVATE
   <pcl/registration/transformation_estimation_svd.h>
 )
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   add_custom_command(TARGET pointcaster POST_BUILD
     COMMAND ${CMAKE_COMMAND}
     -DROOT=$<TARGET_FILE_DIR:pointcaster>
@@ -99,6 +99,6 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 
 install(TARGETS pointcaster
-    BUNDLE  DESTINATION .
+  BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
