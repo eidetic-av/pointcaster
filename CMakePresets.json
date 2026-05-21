@@ -21,7 +21,7 @@
 			"name": "default-linux",
 			"inherits": "default-preset",
 			"environment": {
-				"VCPKG_KEEP_ENV_VARS": "Qt6_DIR;QT_DIR;TBB_DIR"
+				"VCPKG_KEEP_ENV_VARS": "Qt6_DIR;QT_DIR;TBB_DIR;CUDACXX;Thrust_DIR;LD_LIBRARY_PATH"
 			}
 		},
 		{
@@ -34,8 +34,8 @@
 				"CMAKE_INSTALL_PREFIX": "/usr",
 				"CPACK_APPIMAGE_TOOL_EXECUTABLE": "/opt/bin/appimagetool/squashfs-root/AppRun",
 				"CMAKE_THREAD_LIBS_INIT": "-lpthread",
-				"CMAKE_CXX_FLAGS_INIT": "-O3 -march=skylake-avx512 -ffast-math",
-				"CMAKE_C_FLAGS_INIT": "-O3 -march=skylake-avx512 -ffast-math"
+				"CMAKE_CXX_FLAGS_INIT": "-O3 -march=x86-64-v3 -ffast-math",
+				"CMAKE_C_FLAGS_INIT": "-O3 -march=x86-64-v3 -ffast-math"
 			}
 		},
 		{
@@ -61,8 +61,8 @@
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": "Release",
 				"VCPKG_TARGET_TRIPLET": "x64-windows-static-md-custom-release",
-				"CMAKE_CXX_FLAGS_INIT": "/O2 /arch:AVX512 /fp:fast",
-				"CMAKE_C_FLAGS_INIT": "/O2 /arch:AVX512 /fp:fast",
+				"CMAKE_CXX_FLAGS_INIT": "/O2 /arch:AVX2 /fp:fast",
+				"CMAKE_C_FLAGS_INIT": "/O2 /arch:AVX2 /fp:fast",
 				"CMAKE_EXE_LINKER_FLAGS_INIT": "/LTCG",
 				"CMAKE_SHARED_LINKER_FLAGS_INIT": "/LTCG",
 				"CMAKE_STATIC_LINKER_FLAGS_INIT": "/LTCG"
