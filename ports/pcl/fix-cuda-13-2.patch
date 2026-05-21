@@ -1,0 +1,23 @@
+diff --git a/gpu/utils/include/pcl/gpu/utils/device/functional.hpp b/gpu/utils/include/pcl/gpu/utils/device/functional.hpp
+index 30439975e..ab5815a95 100644
+--- a/gpu/utils/include/pcl/gpu/utils/device/functional.hpp
++++ b/gpu/utils/include/pcl/gpu/utils/device/functional.hpp
+@@ -41,6 +41,10 @@
+ #include <thrust/functional.h>
+ #include <cuda.h>
+ 
++#if CUDA_VERSION >= 13000
++#include <cuda/std/functional>
++#endif
++
+ namespace pcl
+ {
+     namespace device
+@@ -84,7 +88,6 @@ namespace pcl
+         };
+ 
+         // Generalized Identity Operations
+-
+         #if CUDA_VERSION >= 13000
+         using cuda::std::identity;
+         #else
