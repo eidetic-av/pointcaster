@@ -66,17 +66,20 @@ void configure_search_paths(
   }
 }
 
-#endif // _WIN32
+#else
 
-std::filesystem::path default_plugin_root_directory() {
-  return executable_directory_path().parent_path() / "plugins";
+std::filesystem::path executable_directory_path() {
+  return std::filesystem::read_symlink("/proc/self/exe").parent_path();
 }
+
+#endif // _WIN32
 
 void configure_plugin_search_path() {
 #ifdef _WIN32
   static std::once_flag configured_flag;
   std::call_once(configured_flag, [] {
-    const auto plugin_root_directory = default_plugin_root_directory();
+    const auto plugin_root_directory =
+        executable_directory_path().parent_path() / "plugins";
     configure_search_paths(plugin_root_directory);
   });
 #endif
@@ -168,7 +171,7 @@ load_backend_plugins(Workspace &workspace) {
 }
 
 std::unique_ptr<Corrade::PluginManager::Manager<operators::OperatorPlugin>>
-load_operator_plugins(Workspace& workspace) {
+load_operator_plugins(Workspace &workspace) {
   import_static_plugins();
   configure_plugin_search_path();
 

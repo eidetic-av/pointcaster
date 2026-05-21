@@ -1,8 +1,11 @@
-add_library(pointcaster_plugins
+add_library(pointcaster_plugins SHARED
     plugin_loader.cc
     devices/device_plugin.cc
 )
 add_library(pointcaster::plugins ALIAS pointcaster_plugins)
+
+# to allow export of lib functions for use in runtime-loaded plugins
+target_compile_definitions(pointcaster_plugins PRIVATE POINTCASTER_BUILD)
 
 target_link_libraries(pointcaster_plugins PRIVATE
     pointcaster::core 
@@ -31,6 +34,8 @@ add_subdirectory(devices/ply)
 # - dynamic plugins
 add_subdirectory(backend/cuda)
 
+# TODO fix this build on linux
+# orbbec lib dep is not found!!
 add_subdirectory(devices/orbbec)
 
 add_subdirectory(operators/fringe_removal)

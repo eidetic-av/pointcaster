@@ -1,5 +1,6 @@
 #pragma once
 
+#pragma once
 #if defined(_WIN32)
   #ifdef POINTCASTER_BUILD
     #define POINTCASTER_API __declspec(dllexport)
@@ -7,5 +8,9 @@
     #define POINTCASTER_API __declspec(dllimport)
   #endif
 #else
-  #define POINTCASTER_API
+  #ifdef POINTCASTER_BUILD
+    #define POINTCASTER_API __attribute__((visibility("default")))
+  #else
+    #define POINTCASTER_API
+  #endif
 #endif
