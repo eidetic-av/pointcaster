@@ -2,6 +2,7 @@
 
 #include <camera/camera_config.h>
 #include <config/color_transform_config.h>
+#include <plugins/backend/backend_types.h>
 #include <rfl/Literal.hpp>
 #include <string>
 
@@ -13,8 +14,7 @@ struct FringeRemovalConfiguration {
   std::string id;     // @hidden
   bool active = true; // @hidden
 
-  CameraConfiguration camera;
-  int point_radius = 1;
+  rfl::DefaultVal<BackendType> backend = BackendType::CPU;
 
   using OperatorType = FringeRemovalOperator;
   using Tag = rfl::Literal<"fringeRemoval">;

@@ -5,7 +5,11 @@
 #include <span>
 #include <tuple>
 
-namespace pc::backend {
+namespace pc {
+
+enum class BackendType { CPU, CUDA };
+
+namespace backend {
 
 struct CameraIntrinsics {
   float fx, fy, cx, cy;
@@ -24,4 +28,6 @@ using PointType = std::tuple<position, color>;
 using PointTransformer =
     std::function<PointType(const int, const uint16_t, const color_rgb &)>;
 
-} // namespace pc::backend
+} // namespace backend
+
+} // namespace pc
