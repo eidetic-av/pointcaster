@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 import Pointcaster 1.0
 
@@ -223,6 +224,53 @@ Item {
                                     AppSettings.gridSizeMetres = v;
                                 }
                             }
+                        }
+
+                        RowLayout {
+                            id: backgroundColorRow
+                            Layout.fillWidth: true
+                            spacing: 10 * Scaling.uiScale
+
+                            Label {
+                                text: "Background color"
+                                font: Scaling.uiFont
+                                Layout.preferredWidth: 120 * Scaling.uiScale
+                                opacity: 0.9
+                            }
+
+                            TextField {
+                                id: backgroundColorField
+                                font: Scaling.uiFont
+                                text: AppSettings.backgroundColor
+
+                                onEditingFinished: {
+                                    if (color.valid(text))
+                                        AppSettings.backgroundColor = text;
+                                    else
+                                        text = AppSettings.backgroundColor; // revert invalid input
+                                }
+
+                                Connections {
+                                    target: AppSettings
+                                    function onBackgroundColorChanged() {
+                                        backgroundColorField.text = AppSettings.backgroundColor;
+                                    }
+                                }
+                            }
+
+                            Button {
+                                text: "Select…"
+                                font: Scaling.uiFont
+                                onClicked: {
+                                    backgroundColorDialog.selectedColor = AppSettings.backgroundColor;
+                                    backgroundColorDialog.open();
+                                }
+                            }
+                        }
+
+                        ColorDialog {
+                            id: backgroundColorDialog
+                            onAccepted: AppSettings.backgroundColor = selectedColor.toString()
                         }
                     }
                 }

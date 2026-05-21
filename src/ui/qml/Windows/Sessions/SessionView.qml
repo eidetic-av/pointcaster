@@ -283,7 +283,7 @@ Item {
         }
 
         environment: SceneEnvironment {
-            clearColor: ThemeColors.shadow
+            clearColor: AppSettings.backgroundColor
             backgroundMode: SceneEnvironment.Color
             depthPrePassEnabled: false
             // fog: Fog { enabled: false }

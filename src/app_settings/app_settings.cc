@@ -37,6 +37,9 @@ AppSettings::AppSettings(QObject *parent)
 
   m_uiScale = m_settings.value("ui/scale", 1.0).toDouble();
   m_gridSizeMetres = m_settings.value("ui/gridSize", 10).toInt();
+  m_backgroundColor =
+      m_settings.value("ui/backgroundColor", QStringLiteral("#00010A"))
+          .toString();
 
   m_enablePrometheusMetrics =
       m_settings.value("metrics/enabled", true).toBool();
@@ -163,6 +166,25 @@ void AppSettings::setGridSizeMetres(int value) {
   m_gridSizeMetres = value;
   write("ui/gridSize", m_gridSizeMetres);
   emit gridSizeMetresChanged();
+}
+
+void AppSettings::setBackgroundColor(const QString &value) {
+  if (value == m_backgroundColor) return;
+
+  if (!onObjectThread(this)) {
+    QMetaObject::invokeMethod(
+        this, [this, value] { setBackgroundColor(value); },
+        Qt::QueuedConnection);
+    return;
+  }
+
+  m_backgroundColor = value;
+  write("ui/backgroundColor", m_backgroundColor);
+  emit backgroundColorChanged();
+}
+
+QString AppSettings::backgroundColor() const {
+  return m_backgroundColor;
 }
 
 bool AppSettings::restoreLastWorkspace() const {

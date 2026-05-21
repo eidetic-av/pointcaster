@@ -35,11 +35,12 @@ class APP_SETTINGS_API AppSettings final : public QObject {
   Q_PROPERTY(double uiScale READ uiScale WRITE setUiScale NOTIFY uiScaleChanged)
   Q_PROPERTY(int gridSizeMetres READ gridSizeMetres WRITE setGridSizeMetres
                  NOTIFY gridSizeMetresChanged)
+  Q_PROPERTY(QString backgroundColor READ backgroundColor WRITE
+                 setBackgroundColor NOTIFY backgroundColorChanged)
 
   Q_PROPERTY(
       bool enablePrometheusMetrics READ enablePrometheusMetrics WRITE
           setEnablePrometheusMetrics NOTIFY enablePrometheusMetricsChanged)
-
   Q_PROPERTY(QString prometheusAddress READ prometheusAddress WRITE
                  setPrometheusAddress NOTIFY prometheusAddressChanged)
 
@@ -85,6 +86,9 @@ public:
   int gridSizeMetres() const;
   void setGridSizeMetres(int value);
 
+  QString backgroundColor() const;
+  void setBackgroundColor(const QString &value);
+
   // -- Metrics
 
   bool enablePrometheusMetrics() const;
@@ -112,6 +116,7 @@ signals:
 
   void uiScaleChanged();
   void gridSizeMetresChanged();
+  void backgroundColorChanged();
 
   void enablePrometheusMetricsChanged();
   void prometheusAddressChanged();
@@ -140,6 +145,7 @@ private:
 
   double m_uiScale = 1.0;
   int m_gridSizeMetres = 10;
+  QString m_backgroundColor = "#00010A";
 
   bool m_enablePrometheusMetrics = true;
   QString m_prometheusAddress;
