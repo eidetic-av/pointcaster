@@ -66,12 +66,6 @@ void configure_search_paths(
   }
 }
 
-#else
-
-std::filesystem::path executable_directory_path() {
-  return std::filesystem::read_symlink("/proc/self/exe").parent_path();
-}
-
 #endif // _WIN32
 
 void configure_plugin_search_path() {
