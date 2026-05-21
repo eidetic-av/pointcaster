@@ -54,6 +54,8 @@ public:
 
   void on_config_field_changed(std::string_view path = "") override;
 
+  void update_config(const DeviceConfigurationVariant &config) override;
+
 private:
   // TODO replace with SPMC triple-buffer
   // moodycamel::BlockingReaderWriterCircularBuffer<PointCloud>
@@ -69,6 +71,7 @@ private:
   std::atomic_bool _loading_pipeline = false;
   std::atomic_bool _in_error_state{false};
   bool _initialised_point_cloud_scale = false;
+  std::once_flag _kickoff_once;
 
   std::atomic<std::chrono::steady_clock::time_point> _last_updated_time{};
   std::atomic<float> _pipeline_fps_ema{0.0f};

@@ -18,8 +18,10 @@
 #include <plugins/operators/operator_plugin.h>
 #include <plugins/operators/operator_variants.h>
 #include <pointcaster/point_cloud.h>
+#include <pointcaster_api.h>
 #include <string>
 #include <string_view>
+
 
 namespace pc {
 class Workspace;
@@ -33,7 +35,9 @@ struct DiscoveredDevice {
   std::string id;
 };
 
-class DevicePlugin : public Corrade::PluginManager::AbstractPlugin {
+class POINTCASTER_API DevicePlugin
+    : public Corrade::PluginManager::AbstractPlugin,
+      public pc::operators::OperatorHost {
 public:
   static Corrade::Containers::StringView pluginInterface() {
     using namespace Corrade::Containers::Literals;

@@ -36,7 +36,6 @@
 #include <variant>
 #include <workspace/workspace.h>
 
-
 #include <plugins/backend/cpu/cpu_backend.h>
 
 using namespace std::chrono;
@@ -69,7 +68,6 @@ OrbbecDevice::OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
 }
 
 OrbbecDevice::~OrbbecDevice() {
-  pc::logger()->debug("~OrbbecDevice Destructor");
   stop_sync();
   _timeout_thread.request_stop();
   orbbec_context().release_user();
@@ -79,12 +77,6 @@ OrbbecDevice::~OrbbecDevice() {
 
 void OrbbecDevice::init(Workspace &workspace) {
   _workspace = &workspace;
-  // do our device initialisation / start procedure when
-  // the context is known to be ready
-  orbbec_context().run_on_ready([this] {
-    notify_status_changed();
-    start();
-  });
 }
 
 std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
@@ -130,8 +122,8 @@ DeviceStatus OrbbecDevice::status() const {
 }
 
 void OrbbecDevice::start() {
-  pc::logger()->debug("Running 'start()'");
-  _initialisation_thread = std::jthread([this](std::stop_token stop_token) {
+  pc::logger()->trace("Running 'start()'");
+  _initialisation_thread = std::jthread([this](std::stop_token) {
     // TODO stop_token is currently unused,
     // should pass it in and check at different initialisation thread steps
     start_sync();
@@ -139,8 +131,8 @@ void OrbbecDevice::start() {
 }
 
 void OrbbecDevice::stop() {
-  pc::logger()->debug("Running 'stop()'");
-  _initialisation_thread = std::jthread([this](std::stop_token stop_token) {
+  pc::logger()->trace("Running 'stop()'");
+  _initialisation_thread = std::jthread([this](std::stop_token) {
     // TODO stop_token is currently unused,
     // should pass it in and check at different initialisation thread steps
     stop_sync();
@@ -148,8 +140,8 @@ void OrbbecDevice::stop() {
 }
 
 void OrbbecDevice::restart() {
-  pc::logger()->debug("Running 'restart()'");
-  _initialisation_thread = std::jthread([this](std::stop_token stop_token) {
+  pc::logger()->trace("Running 'restart()'");
+  _initialisation_thread = std::jthread([this](std::stop_token) {
     // TODO stop_token is currently unused,
     // should pass it in and check at different initialisation thread steps
     stop_sync();
@@ -158,7 +150,6 @@ void OrbbecDevice::restart() {
 }
 
 void OrbbecDevice::start_sync() {
-  pc::logger()->debug("Running 'start_sync()'");
   pc::logger()->trace("Attempting to start an Orrbec driver");
 
   std::lock_guard lock(orbbec_context().device_api_access);
@@ -252,7 +243,7 @@ void OrbbecDevice::start_sync() {
 }
 
 void OrbbecDevice::stop_sync() {
-  pc::logger()->debug("Running 'stop_sync()'");
+  pc::logger()->trace("Running 'stop_sync()'");
   if (!_running_pipeline) return;
   auto config = std::get<OrbbecDeviceConfiguration>(this->config());
   std::lock_guard lock(orbbec_context().device_api_access);
@@ -390,9 +381,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     device_config.fps.set(fps);
     update_config(device_config);
 
-    pc::logger()->debug("stream at: {} fps", fps);
-
-    pc::logger()->trace("enabling stream");
+    pc::logger()->trace("enabling stream at: {} fps", fps);
 
     ob_config->enableStream(depth_profile);
     ob_config->setFrameAggregateOutputMode(
@@ -430,7 +419,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     auto ob_calibration_parameters = pipeline.getCalibrationParam(ob_config);
 
     backend::CameraIntrinsics color_intrinsics;
-    size_t max_point_count;
+    size_t max_point_count{};
 
     if (device_config.conversion_mode ==
         OrbbecDeviceConfiguration::PointConversionMode::D2C) {
@@ -522,17 +511,6 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             auto point_cloud = std::make_shared<PointCloud>();
             point_cloud->resize(max_point_count);
 
-            // Allocate render buffer only when rendering is active
-            std::shared_ptr<std::vector<std::byte>> render_buffer;
-            std::span<std::byte> render_span;
-            if (device_config.render) {
-              // render buffer holds positions, colors and indices packed into
-              // 16 bits and unpacked inside vert/frag shaders
-              render_buffer = std::make_shared<std::vector<std::byte>>(
-                  max_point_count * 16);
-              render_span = std::span<std::byte>(*render_buffer);
-            }
-
             const auto *ob_depth_frame_ptr =
                 reinterpret_cast<const uint16_t *>(depth_frame->data());
             const auto *ob_color_frame_ptr =
@@ -541,9 +519,10 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             std::span ob_depth_data{ob_depth_frame_ptr, point_count};
             std::span ob_color_data{ob_color_frame_ptr, point_count};
 
+            // TODO backend instances should be inside the device plugin class
+            // more like operators
             backend::BackendPlugin *backend =
-                (device_config.transform.backend.value() ==
-                     TransformConfiguration::BackendType::CUDA &&
+                (device_config.transform.backend.value() == BackendType::CUDA &&
                  cuda_backend)
                     ? cuda_backend.get()
                     : cpu_backend.get();
@@ -563,13 +542,18 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
               for (const auto &[operator_plugin, operator_config] :
                    std::views::zip(operators, device_config.operators)) {
-                operator_plugin->process(*point_cloud, *point_cloud,
-                                         operator_config);
+                // TODO do i need to update here now?
+                operator_plugin->update_config(operator_config);
+                operator_plugin->process(*point_cloud, *point_cloud);
               }
             }
 
+            // Allocate render buffer only when rendering is active
             if (device_config.render && backend) {
               const auto final_count = point_cloud->size();
+              // TODO
+              // we do a new allocation here but maybe we should make this just
+              // a double-buffered exchange with a resize on the stale data
               auto render_buffer =
                   std::make_shared<std::vector<std::byte>>(final_count * 16);
               backend->pack_render_buffer(*point_cloud, *render_buffer);
@@ -612,7 +596,9 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
   constexpr auto recovery_window = 500ms;
   constexpr auto check_interval = 1s;
 
-  auto &config = std::get<OrbbecDeviceConfiguration>(this->config());
+  auto get_id = [this] {
+    return std::get<OrbbecDeviceConfiguration>(this->config()).id;
+  };
 
   while (!stop_token.stop_requested()) {
 
@@ -624,8 +610,7 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
 
     // we can update metrics on this thread too
     pc::metrics::set_gauge("pointcaster_orbbec_pipeline_hertz",
-                           _pipeline_fps_ema.load(),
-                           {{"device_id", config.id}});
+                           _pipeline_fps_ema.load(), {{"device_id", get_id()}});
 
     if (_running_pipeline && !_in_error_state) {
       if (!has_seen_a_frame) {
@@ -634,10 +619,9 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
       }
       if (now - last_frame_time >= error_timeout) {
         set_error_state(true);
-        auto config = std::get<OrbbecDeviceConfiguration>(this->config());
         pc::logger()->error(
             "Orbbec device '{}' entered error state. Attempting restart...",
-            config.id);
+            get_id());
         restart();
       }
     } else if (_in_error_state) {
@@ -660,9 +644,24 @@ void OrbbecDevice::on_config_field_changed(std::string_view) {
   }
 }
 
-void OrbbecDevice::set_ip(std::string_view ip_address,
-                          std::string_view subnet_mask,
-                          std::string_view gateway_address) {
+void OrbbecDevice::update_config(const DeviceConfigurationVariant &config) {
+  DevicePlugin::update_config(config);
+  if (!std::holds_alternative<OrbbecDeviceConfiguration>(_config)) return;
+
+  // start the device when the first configuration is applied
+  std::call_once(_kickoff_once, [this] {
+    orbbec_context().run_on_ready([this] {
+      notify_status_changed();
+      start();
+    });
+  });
+}
+
+void OrbbecDevice::set_ip(std::string_view, std::string_view,
+                          std::string_view) {
+  // void OrbbecDevice::set_ip(std::string_view ip_address,
+  //                           std::string_view subnet_mask,
+  //                           std::string_view gateway_address) {
   // using pc::util::parse_ip_string;
 
   // auto ip_address_buffer = parse_ip_string(ip_address);

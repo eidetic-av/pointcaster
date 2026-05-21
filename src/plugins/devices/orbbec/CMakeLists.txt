@@ -32,23 +32,19 @@ thrust_create_target(Thrust)
 target_link_libraries(OrbbecDevice PRIVATE
   pointcaster::core
   pointcaster::metrics
+  pointcaster::plugins
   Corrade::PluginManager
-  # ob::OrbbecSDK
   ${OrbbecSDK_LIBS}
-  TBB::tbb
-
-  # TODO
-  Thrust::Thrust
 )
 
 find_path(READERWRITERQUEUE_INCLUDE_DIR "readerwriterqueue/readerwriterqueue.h")
 
-target_include_directories(OrbbecDevice 
-  PRIVATE 
-    "${CMAKE_SOURCE_DIR}/src" 
-    "${CMAKE_SOURCE_DIR}/include"
-    "${READERWRITERQUEUE_INCLUDE_DIR}"
-    "$ENV{TBB_DIR}/include"
+target_include_directories(OrbbecDevice
+  PRIVATE
+  "${CMAKE_SOURCE_DIR}/src"
+  "${CMAKE_SOURCE_DIR}/include"
+  "${READERWRITERQUEUE_INCLUDE_DIR}"
+  "$ENV{TBB_DIR}/include"
 )
 
 add_custom_command(TARGET OrbbecDevice POST_BUILD
