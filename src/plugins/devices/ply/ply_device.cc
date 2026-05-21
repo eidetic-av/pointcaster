@@ -61,7 +61,12 @@ bool PlyDevice::load(std::string_view url) {
   std::lock_guard lock(_device_mutex);
   pc::logger()->trace("Loading ply(s) from: {}", url);
 
-  static const std::string file_prefix = "file:///";
+#ifdef _WIN32
+  static constexpr std::string file_prefix = "file:///";
+#else
+  static constexpr std::string file_prefix = "file://";
+#endif
+
   auto path_str = std::string(
       url.starts_with(file_prefix) ? url.substr(file_prefix.size()) : url);
 
