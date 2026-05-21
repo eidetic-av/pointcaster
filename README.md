@@ -13,6 +13,9 @@ streamed over multiple protocols including MIDI, RTP-MIDI, OSC and MQTT
 to enable integration into game engines, digital audio workstations and
 any other application you can think of.
 
+> [!NOTE]
+> Most development is currently happening on the `qt` branch until the project is fully ported to a new Qt-based UI. 
+
 ![Pointcaster screenshot](https://b2.matth.cc/pointcaster-scrot.png)
 
 ## Download
