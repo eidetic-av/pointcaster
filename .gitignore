@@ -9,3 +9,4 @@ compile_commands.json
 Log/
 CMakeCache.txt
 cmake.check_cache
+CMakeConfigureLog.yaml
