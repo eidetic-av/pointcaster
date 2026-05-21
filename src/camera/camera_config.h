@@ -14,11 +14,12 @@ struct CameraConfiguration {
 
   // TODO these units as floats are wrong
   pc::float3 position;
-  pc::quaternion rotation{0.989016, -0.147809};
+  pc::quaternion rotation{0.989016f, -0.147809f};
   float distance = 250;
 };
 
-inline float4x4 extrinsic_from_camera_config(const CameraConfiguration &cam) {
+inline float4x4 extrinsic_from_camera_config(const CameraConfiguration &cam,
+                                             const float uniform_scale = 1.0f) {
   // quaternion to rotation matrix (the orbit rotation)
   const auto &q = cam.rotation;
   float qw = q.scalar, qx = q.x, qy = q.y, qz = q.z;
@@ -48,9 +49,10 @@ inline float4x4 extrinsic_from_camera_config(const CameraConfiguration &cam) {
   ext.values[10] = r22;
 
   // -R^T * cam_world_pos
-  ext.values[3] = -(r00 * cam_wx + r10 * cam_wy + r20 * cam_wz);
-  ext.values[7] = -(r01 * cam_wx + r11 * cam_wy + r21 * cam_wz);
-  ext.values[11] = -(r02 * cam_wx + r12 * cam_wy + r22 * cam_wz);
+  ext.values[3] = -(r00 * cam_wx + r10 * cam_wy + r20 * cam_wz) * uniform_scale;
+  ext.values[7] = -(r01 * cam_wx + r11 * cam_wy + r21 * cam_wz) * uniform_scale;
+  ext.values[11] =
+      -(r02 * cam_wx + r12 * cam_wy + r22 * cam_wz) * uniform_scale;
 
   ext.values[15] = 1.0f;
   return ext;
