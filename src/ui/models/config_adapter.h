@@ -108,7 +108,7 @@ public:
     emit fieldChanged(path);
   }
 
-  virtual bool setConfig(const pc::ConfigurationVariant &) = 0;
+  virtual bool setConfig(const pc::ConfigurationVariant &) { return false; }
 
 signals:
   void editRequested(const QString &path, const QVariant &value);
