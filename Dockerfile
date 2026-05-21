@@ -6,14 +6,15 @@ ENV ARCH=x86_64
 ARG DEV_USER_UID=1000
 ARG DEV_USER_GID=1000
 
-# install build toolchain
+# install build toolchain & surrounding tools
 RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
     --mount=type=cache,id=var-lib-apt,target=/var/lib/apt \
     set -eux; \
     apt-get update; \
     apt-get -y install --no-install-recommends \
         build-essential ninja-build pkg-config gnupg \
-        git curl wget axel ca-certificates tar zip unzip \
+        git curl wget axel ca-certificates jq \
+        tar zip unzip 7zip \
         autoconf-archive libtool \
         m4 gettext libltdl-dev \
         bison flex patchelf \
@@ -90,7 +91,6 @@ ARG CUDA_VERSION=13.2.1
 ARG CUDA_INSTALLER=cuda_13.2.1_595.58.03_linux.run
 ARG CUDA_INSTALLER_SHA256="5514a3fe7bcea92b25073c7c100c3e64e7961a7e1dbad6955adb8b59806053f0"
 
-# TODO add sha check for cuda installer
 RUN --mount=type=cache,id=root-download-cache,target=/root/.cache/downloads \
     set -eux; \
     test -f /root/.cache/downloads/${CUDA_INSTALLER} || \
@@ -100,6 +100,13 @@ RUN --mount=type=cache,id=root-download-cache,target=/root/.cache/downloads \
     sh /root/.cache/downloads/${CUDA_INSTALLER} --toolkit --silent
 
 ENV PATH="/usr/local/cuda/bin:${PATH}"
+ENV CUDACXX="/usr/local/cuda/bin/nvcc"
+ENV Thrust_DIR="/usr/local/cuda/lib64/cmake/thrust"
+
+# before building anything from source, we need to make sure that the libstdc++ version 
+# being prioritised is from gcc-ports' gcc 15, not the system bookworm version
+RUN set -eux; echo "/usr/local/lib64" > /etc/ld.so.conf.d/gcc15.conf && ldconfig
+
 
 # set up directories for dependency locations that need to be manipulated by the dev user
 ENV USERBIN_DIR=/opt/bin
@@ -142,25 +149,6 @@ RUN set -eux; \
 ENV CMAKE_PREFIX_PATH="${QT_INSTALL_DIR}/${QT_VERSION}/gcc_64"
 ENV PATH="${Qt6_DIR}/gcc_64/bin:${PATH}"
 
-# download and bootstrap vcpkg into the user's home dir
-ARG VCPKG_COMMIT=6f932b9730b65d28cba7dca7326dca4d3247d305
-
-ENV VCPKG_ROOT=/opt/vcpkg
-ENV VCPKG_DEFAULT_BINARY_CACHE=/home/dev/.cache/vcpkg/archives
-ENV VCPKG_DOWNLOADS=${VCPKG_ROOT}-cache/downloads
-ENV VCPKG_BUILDTREES=${VCPKG_ROOT}-cache/buildtrees
-
-RUN --mount=type=cache,id=vcpkg-downloads,target=${VCPKG_DOWNLOADS},uid=${DEV_USER_UID},gid=${DEV_USER_GID} \
-    --mount=type=cache,id=vcpkg-buildtrees,target=${VCPKG_BUILDTREES},uid=${DEV_USER_UID},gid=${DEV_USER_GID} \
-    set -eux; \
-    mkdir -p ${VCPKG_DEFAULT_BINARY_CACHE}; \
-    git clone https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}"; \
-    cd "${VCPKG_ROOT}"; \
-    git reset --hard "${VCPKG_COMMIT}"; \
-    ./bootstrap-vcpkg.sh -disableMetrics
-
-ENV PATH="${VCPKG_ROOT}:${PATH}"
-
 # install appimagetool for AppImage deployment
 ARG APPIMAGETOOL_VERSION=1.9.1
 ARG APPIMAGETOOL_SHA256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
@@ -178,3 +166,43 @@ RUN --mount=type=cache,id=user-downloads,target=/home/dev/.cache/downloads,uid=$
     chmod +x appimagetool-x86_64.AppImage; \
     mkdir -p appimagetool && cd appimagetool; \
     ../appimagetool-x86_64.AppImage --appimage-extract
+
+# download and bootstrap vcpkg...
+# then run a vcpkg install to bundle the fully-built vcpkg source-based 
+# dependencies into the docker image
+
+ENV VCPKG_ROOT=/opt/vcpkg
+ENV VCPKG_DEFAULT_BINARY_CACHE=/home/dev/.cache/vcpkg/archives
+ENV VCPKG_DOWNLOADS=/opt/vcpkg-cache/downloads
+
+RUN set -eux; mkdir -p ${VCPKG_DEFAULT_BINARY_CACHE} ${VCPKG_DOWNLOADS}
+RUN set -eux; mkdir -p /opt/vcpkg-config
+
+RUN --mount=type=cache,id=vcpkg-downloads-cache,target=${VCPKG_DOWNLOADS},uid=${DEV_USER_UID},gid=${DEV_USER_GID} \
+    set -eux; \
+    git clone https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}"; \
+    cd "${VCPKG_ROOT}"; \
+    git reset --hard $(jq '.["builtin-baseline"]' /opt/vcpkg-config/vcpkg.json -r); \
+    ./bootstrap-vcpkg.sh -disableMetrics
+
+ENV PATH="${VCPKG_ROOT}:${PATH}"
+
+ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR;CUDACXX;Thrust_DIR"
+
+COPY vcpkg.json /opt/vcpkg-config/vcpkg.json
+COPY triplets /opt/vcpkg-config/triplets
+COPY ports /opt/vcpkg-config/ports
+
+# we trigger a vcpkg install using our project's config, overlay triplets and overlay ports 
+# in order to populate the system-wide vcpkg binary cache. we can delete the vcpkg_installed there
+# and our project's dependencies will be restored into it's own vcpkg_installed from the cache
+
+RUN --mount=type=cache,id=vcpkg-downloads-cache,target=${VCPKG_DOWNLOADS},uid=${DEV_USER_UID},gid=${DEV_USER_GID} \
+    set -eux; \
+    vcpkg install \
+      --x-manifest-root=/opt/vcpkg-config \
+      --downloads-root=${VCPKG_DOWNLOADS} \
+      --overlay-triplets=/opt/vcpkg-config/triplets \
+      --overlay-ports=/opt/vcpkg-config/ports \
+      --triplet x64-linux-custom-release; \
+    rm -rf /opt/vcpkg-config/vcpkg_installed
