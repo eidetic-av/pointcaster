@@ -85,7 +85,7 @@ RefinementResult refine_alignment(const PointCloud &source,
   auto tgt = downsample(to_pcl_cloud(target), params.voxel_leaf_size);
 
   const Eigen::Map<const Eigen::Matrix<float, 4, 4, Eigen::RowMajor>> guess(
-      initial_guess.values);
+      initial_guess.values.data());
 
   pcl::GeneralizedIterativeClosestPoint6D icp;
   icp.setInputSource(src);

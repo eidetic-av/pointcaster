@@ -8,7 +8,8 @@ namespace pc {
 decomposed_transform decompose_transform(const pc::float4x4 &matrix) {
   using RowMajorMatrix4f = Eigen::Matrix<float, 4, 4, Eigen::RowMajor>;
 
-  const Eigen::Map<const RowMajorMatrix4f> eigen_transform(matrix.values);
+  const Eigen::Map<const RowMajorMatrix4f> eigen_transform(
+      matrix.values.data());
 
   const auto translation = eigen_transform.block<3, 1>(0, 3);
 

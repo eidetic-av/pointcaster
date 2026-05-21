@@ -1,9 +1,11 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <utility>
+
 
 namespace pc {
 
@@ -25,10 +27,10 @@ struct float4 {
 };
 
 struct float4x4 {
-  float values[16]{
-      1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 1, 0,
+  std::array<float, 16> values{
+      1, 0, 0, 0, //
+      0, 1, 0, 0, //
+      0, 0, 1, 0, //
       0, 0, 0, 1,
   };
   bool operator==(const float4x4 &) const = default;

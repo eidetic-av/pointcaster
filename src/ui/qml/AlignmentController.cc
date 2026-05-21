@@ -172,7 +172,7 @@ void AlignmentController::refine() {
 
 void AlignmentController::decomposeTransform(const pc::float4x4 &matrix) {
   const auto [position, rotation] = pc::decompose_transform(matrix);
-  _transform = QMatrix4x4(matrix.values);
+  _transform = QMatrix4x4(matrix.values.data());
   _position = QVector3D(position.x, position.y, position.z);
   _rotation = QQuaternion(rotation.scalar, rotation.x, rotation.y, rotation.z);
 }
