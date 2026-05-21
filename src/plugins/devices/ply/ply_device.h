@@ -75,7 +75,7 @@ private:
   Corrade::Containers::Pointer<backend::BackendPlugin> _cuda_backend;
 
   std::atomic<std::shared_ptr<PointCloud>> _current_point_cloud{
-      std::make_shared<PointCloud>(PointCloud{{}, {}})};
+      std::make_shared<PointCloud>(PointCloud{{}, {}, {}})};
 
   // TODO change this to a device-global or workspace-global timer thread
   std::jthread _tick_thread;

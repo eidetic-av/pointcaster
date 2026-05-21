@@ -38,7 +38,7 @@ public:
   DeviceStatus status() const override { return DeviceStatus::Unloaded; };
 
   std::shared_ptr<PointCloud> point_cloud() override {
-    static auto empty = std::make_shared<PointCloud>(PointCloud{{}, {}});
+    static auto empty = std::make_shared<PointCloud>(PointCloud{{}, {}, {}});
     return empty;
   };
 
