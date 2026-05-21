@@ -405,7 +405,7 @@ def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[
         comment = raw_comment.strip() if raw_comment else ""
         minmax_match = MINMAX_RE.search(comment)
 
-        # handle custom enums
+        # handle nested enums
         enum_type = raw_type
         if "rfl::" in enum_type:
             enum_type = re.findall(r"<(.*?)>", enum_type)[0].strip()
@@ -414,6 +414,14 @@ def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[
         is_enum = enum_type in nested_enums
         enum_entries = nested_enums.get(enum_type, [])
         enum_qualified_type = f"{struct_name}::{enum_type}" if is_enum else ""
+
+        # handle specific enums
+        if "rfl::" in enum_type:
+            enum_type = re.findall(r"<(.*?)>", enum_type)[0].strip()
+        if "BackendType" in enum_type:
+            is_enum = True
+            enum_entries = [EnumEntry("CPU", 0), EnumEntry("CUDA", 1)]
+            enum_qualified_type = "BackendType"
 
         members.append(
             Member(
