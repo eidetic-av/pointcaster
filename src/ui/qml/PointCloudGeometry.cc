@@ -22,12 +22,14 @@ void PointCloudGeometry::setEnabled(bool enabled) {
 }
 
 void PointCloudGeometry::updateGeometry() {
-  if (!_enabled || !_pointCloudAdapter) return;
+  if (!_enabled || !_pointCloudAdapter) {
+    return;
+  }
 
   auto cloud = _pointCloudAdapter->point_cloud();
-  if (!cloud || cloud->empty()) return;
-
   auto render_buffer = _pointCloudAdapter->render_data();
+
+  if (!cloud || cloud->empty()) return;
   if (!render_buffer || render_buffer->empty()) return;
 
   _vertexBuffer =
