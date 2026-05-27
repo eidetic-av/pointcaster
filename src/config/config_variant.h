@@ -10,12 +10,12 @@
 #include <utility>
 #include <variant>
 
-
 // TODO REMOVE AND ADD
 // specialised jinja with  setConfig overload like device adapters
 #include <plugins/operators/fringe_removal/fringe_removal_config.h>
 
 #include <camera/camera_config.h>
+#include <camera/look_at_camera_config.h>
 #include <config/transform_config.h>
 #include <session/session_config.h>
 
@@ -25,7 +25,7 @@ using ConfigurationVariant =
     std::variant<TransformConfiguration, ColorTransformConfiguration,
                  FileConfiguration, FileFolderConfiguration,
                  NetworkConfiguration, CameraConfiguration,
-                 SessionConfiguration,
+                 LookAtCameraConfiguration, SessionConfiguration,
                  SequenceConfiguration
                  // TODO REMOVE AND ADD
                  // specialised jinja with  setConfig overload like device

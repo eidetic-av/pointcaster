@@ -16,14 +16,16 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   add_compile_options("/Zi")
 endif()
 
-qt_add_executable(pointcaster 
-    #WIN32
-    pointcaster.cc
-    workspace/workspace.cc
-    workspace/workspace_config.cc
-    camera/indexing_color_camera.cc
-    recorder/session_recorder.cc
-    ${app_icon_resource}
+qt_add_executable(pointcaster
+  #WIN32
+  pointcaster.cc
+  workspace/workspace.cc
+  workspace/workspace_config.cc
+  camera/look_at_camera.cc
+  camera/camera_frame.cc
+  recorder/session_recorder.cc
+  pipeline/concurrent_operator_pipeline.cc
+  ${app_icon_resource}
 )
 
 # we set qt automoc off because QObjects we include should be
@@ -49,23 +51,33 @@ add_subdirectory(plugins)
 
 find_package(reflectcpp CONFIG REQUIRED)
 find_package(TBB REQUIRED)
-find_package(OpenCV REQUIRED)
+find_package(PCL CONFIG REQUIRED)
+find_package(OpenCV CONFIG REQUIRED 
+  COMPONENTS 
+  opencv_core
+  opencv_imgproc
+)
 
-target_link_libraries(pointcaster PRIVATE 
-  pointcaster::core 
+target_link_libraries(pointcaster PRIVATE
+  pointcaster::core
   pointcaster::plugins
   pointcaster::metrics
   pointcaster::registration
   pointcaster::app_settings
   pointcaster::ui
-  Corrade::Main 
+  Corrade::Main
   Corrade::PluginManager
   reflectcpp::reflectcpp
   TBB::tbb
   ${OpenCV_LIBS}
+  ${PCL_LIBRARIES}
 )
 
-target_include_directories(pointcaster PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_include_directories(pointcaster PRIVATE 
+  "${CMAKE_SOURCE_DIR}/src"
+  ${OpenCV_INCLUDE_DIRS}
+  ${TBB_INCLUDE_DIRS}
+)
 
 target_compile_definitions(pointcaster PRIVATE POINTCASTER_BUILD)
 
@@ -100,5 +112,5 @@ endif()
 
 install(TARGETS pointcaster
   BUNDLE DESTINATION .
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
