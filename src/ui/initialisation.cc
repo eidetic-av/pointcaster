@@ -1,6 +1,6 @@
 #include "initialisation.h"
 #include "layout_saver.h"
-#include "models/projection_image_provider.h"
+#include "models/camera_image_provider.h"
 #include "models/registrations.h"
 #include "models/workspace_model.h"
 #include "window/view_factory.h"
@@ -71,8 +71,9 @@ initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
 
   // initialise our image receiving singleton that takes projection frames
   // from cameras anywhere in the application
-  auto *projection_provider = new ProjectionImageProvider;
-  qml_engine.addImageProvider("frame", projection_provider);
+  auto *camera_image_provider = new CameraImageProvider;
+  qml_engine.addImageProvider("camera", camera_image_provider);
+  workspace_model->setImageProvider(camera_image_provider);
 
   // if we auto-loaded a workspace, find any adjacent layout file to load the UI
   if (loaded_workspace_path.has_value()) {
