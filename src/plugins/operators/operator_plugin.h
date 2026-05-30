@@ -1,20 +1,28 @@
 #pragma once
 
+#include "operator_host.h"
 #include "operator_variants.h"
 
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/GrowableArray.h>
 #include <Corrade/Containers/String.h>
+#include <Corrade/Containers/StringStlView.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
+#include <Corrade/PluginManager/Manager.h>
 #include <Corrade/Tags.h>
 #include <camera/camera_frame.h>
 #include <cpplocate/cpplocate.h>
 #include <filesystem>
 #include <logger/logger.h>
+#include <pipeline/concurrent_container.h>
+#include <plugins/backend/backend_plugin.h>
+#include <plugins/backend/backend_types.h>
 #include <pointcaster/point_cloud.h>
 #include <span>
 #include <string_view>
+#include <unordered_map>
+#include <variant>
 #include <vector>
 
 namespace pc {
@@ -74,21 +82,74 @@ public:
 
   virtual ~OperatorPlugin() = default;
 
-  virtual void init() {};
+  virtual void init(OperatorHost *host,
+                    Corrade::PluginManager::Manager<backend::BackendPlugin>
+                        &backend_plugin_manager) {
+    _host = host;
 
-  virtual void process(const PointCloud &input, PointCloud &output,
-                       const OperatorConfigurationVariant &config_variant) {
-    _config = config_variant;
+    // initialise backends depending on what plugins are available
+    using Corrade::PluginManager::LoadState;
+
+    const std::string operator_name{plugin()};
+
+    pc::logger()->trace("Initialising operator plugin: {}", operator_name);
+
+    for (const auto &plugin_name : backend_plugin_manager.pluginList()) {
+      const std::string plugin_name_str(plugin_name);
+      pc::logger()->debug(plugin_name_str);
+
+      if (backend_plugin_manager.loadState(plugin_name) &
+          LoadState::NotLoaded) {
+        pc::logger()->debug("{} not loaded!", plugin_name_str);
+        continue;
+      }
+      pc::logger()->debug("{} is loaded", plugin_name_str);
+      if (plugin_name == "CpuBackend") {
+        _backends[BackendType::CPU] =
+            backend_plugin_manager.instantiate(plugin_name);
+        _backends[BackendType::CPU]->init();
+        pc::logger()->trace("{} created CPU backend", operator_name);
+        continue;
+      }
+      if (plugin_name == "CudaBackend") {
+        _backends[BackendType::CUDA] =
+            backend_plugin_manager.instantiate(plugin_name);
+        _backends[BackendType::CUDA]->init();
+        pc::logger()->trace("{} created CUDA backend", operator_name);
+      }
+    }
+
+    std::visit(
+        [this](const auto &c) { set_current_backend(c.backend.value()); },
+        config_variant());
   };
 
-  OperatorConfigurationVariant &config() { return _config; }
-  const OperatorConfigurationVariant &config() const { return _config; }
+  virtual std::shared_ptr<PointCloud> process(const PointCloud &input) = 0;
 
   void update_config(const OperatorConfigurationVariant &config) {
-    _config = config;
+    _config.store(std::make_shared<const OperatorConfigurationVariant>(config));
   }
 
-  virtual void on_config_field_changed(std::string_view path = "") {}
+  const OperatorConfigurationVariant &config_variant() const {
+    return *load_config();
+  }
+
+  // if on_config_field_changed needs to be overriden, make sure to call
+  // OperatorPlugin::on_config_field_changed as well...
+  virtual void on_config_field_changed(std::string_view path = "") {
+    if (path == "backend") {
+      pc::logger()->error("Backend switch not implemented");
+      // TODO
+      // std::visit(
+      //     [this](const auto &config) {
+      //       auto it = _backends.find(config.backend);
+      //       if (it != _backends.end()) {
+      //         _current_backend = it->second.get();
+      //       }
+      //     },
+      //     _config);
+    }
+  }
 
   virtual bool plugin_null_state() const { return false; }
 
@@ -97,8 +158,27 @@ public:
   // here
   virtual std::vector<camera::CameraFrameRef> camera_frames() { return {}; }
 
+  void set_current_backend(BackendType backend_type) {
+    auto it = _backends.find(backend_type);
+    if (it != _backends.end()) {
+      _current_backend = it->second.get();
+    }
+  }
+
 protected:
-  OperatorConfigurationVariant _config;
+  OperatorHost *_host = nullptr;
+
+  ConcurrentContainer<OperatorConfigurationVariant> _config;
+
+  std::shared_ptr<const OperatorConfigurationVariant> load_config() const {
+    return _config.load();
+  }
+
+  std::unordered_map<BackendType,
+                     Corrade::Containers::Pointer<backend::BackendPlugin>>
+      _backends;
+
+  backend::BackendPlugin *_current_backend;
 };
 
 } // namespace pc::operators

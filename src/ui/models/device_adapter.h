@@ -1,5 +1,6 @@
 #pragma once
 
+#include "camera_image_provider.h"
 #include "config_adapter.h"
 #include "device_status.h"
 #include "operator_adapter.h"
@@ -8,11 +9,13 @@
 #include <QObject>
 #include <QStringList>
 #include <QVariant>
+#include <cstring>
 #include <memory>
 #include <plugins/devices/device_plugin.h>
 #include <plugins/devices/device_variants.h>
 #include <pointcaster/point_cloud.h>
 #include <qtmetamacros.h>
+#include <variant>
 
 class DeviceAdapter : public ConfigAdapter, public PointCloudAdapter {
   Q_OBJECT
@@ -23,48 +26,85 @@ class DeviceAdapter : public ConfigAdapter, public PointCloudAdapter {
   Q_PROPERTY(QList<OperatorAdapter *> operatorAdapters READ operatorAdapters
                  NOTIFY operatorAdaptersChanged)
 
+  Q_PROPERTY(QVariantList frameSources READ frameSources NOTIFY framesUpdated)
+
+  Q_PROPERTY(bool hasSequence READ hasSequence NOTIFY sequenceStateChanged)
+  Q_PROPERTY(bool isPlaying READ isPlaying NOTIFY sequenceStateChanged)
+  Q_PROPERTY(int frameCount READ frameCount NOTIFY sequenceStateChanged)
+  Q_PROPERTY(int currentFrame READ currentFrame NOTIFY sequenceStateChanged)
+
   Q_PROPERTY(
       bool pluginNullState READ pluginNullState NOTIFY pluginNullStateChanged)
 
 public:
   explicit DeviceAdapter(pc::devices::DevicePlugin *plugin,
+                         CameraImageProvider *imageProvider,
                          QObject *parent = nullptr)
-      : ConfigAdapter(parent), _plugin(plugin) {}
+      : ConfigAdapter(parent), _plugin(plugin), _imageProvider(imageProvider) {}
+
+  ~DeviceAdapter() override {
+    if (_imageProvider) _imageProvider->removeFrames(deviceKeyPrefix());
+  }
 
   using ConfigAdapter::setConfig;
 
-  // Device-only config variant, we use this for any device plugins
   virtual bool setConfig(const pc::devices::DeviceConfigurationVariant &) = 0;
 
-  bool setConfig(const pc::ConfigurationVariant &) override {
-    // base configs not applicable
-    return false;
-  }
-
-  // --- operator control ---
+  bool setConfig(const pc::ConfigurationVariant &) override { return false; }
 
   QList<OperatorAdapter *> operatorAdapters() const {
     return _operatorAdapters;
   }
 
-  // TODO Call when the device's operator list changes (add/remove)
   void rebuildOperatorAdapters() {
     qDeleteAll(_operatorAdapters);
     _operatorAdapters.clear();
-
     for (auto &op : _plugin->operators) {
-      auto *adapter = new OperatorAdapter(op.get(), this);
+      auto *adapter = new OperatorAdapter(op.get(), _plugin, this);
       _operatorAdapters.append(adapter);
     }
-
     emit operatorAdaptersChanged();
   }
 
-  // TODO Call after the device runs all operators in its processing loop
-  void syncOperatorFrames() {
-    for (auto *adapter : _operatorAdapters) {
-      adapter->syncCameraFrames();
+  // --- camera frame visualisation
+
+  QVariantList frameSources() const { return _frameSources; }
+
+  void syncCameraFrames() {
+    if (!_plugin || !_imageProvider) return;
+
+    auto frames = _plugin->latest_camera_frames();
+    if (frames.empty() && _frameSources.isEmpty()) return;
+
+    const auto prefix = deviceKeyPrefix();
+    _imageProvider->removeFrames(prefix);
+
+    QVariantList sources;
+    for (const auto &frame : frames) {
+      if (!frame.frame_data) continue;
+      auto &data = *frame.frame_data.value();
+
+      const auto w = static_cast<int>(data.width);
+      const auto h = static_cast<int>(data.height);
+      const auto &colors = data.main_color_buffer();
+
+      QImage img(reinterpret_cast<const uchar *>(colors.data()), w, h, w * 4,
+                 QImage::Format_RGBA8888);
+      // QImage from external data needs a deep copy before the frame goes
+      // out of scope
+      img = img.copy();
+
+      auto key = prefix + QString::fromStdString(frame.name);
+      _imageProvider->registerFrame(key, img);
+      sources.append(
+          QVariantMap{{"name", QString::fromStdString(frame.name)},
+                      {"url", QStringLiteral("image://camera/") + key + "?" +
+                                  QString::number(_frameRevision)}});
     }
+
+    _frameSources = std::move(sources);
+    _frameRevision++;
+    emit framesUpdated();
   }
 
   // ----------------- identity -----------------
@@ -100,7 +140,7 @@ public:
 
   Q_INVOKABLE void restart() {
     if (!_plugin) return;
-    pc::logger()->debug("Running restart from the device adapter i.e. qml");
+    pc::logger()->trace("Running restart from the device adapter i.e. qml");
     _plugin->restart();
   }
 
@@ -121,20 +161,86 @@ public:
     if (_plugin) _plugin->on_config_field_changed(path.toStdString());
   }
 
-  void notifyPointCloudUpdated() { emit pointCloudUpdated(); }
+  void notifyPointCloudUpdated() {
+    emit pointCloudUpdated();
+    syncCameraFrames();
+
+    int frame = 0;
+    std::visit(
+        [&](const auto &cfg) {
+          if constexpr (requires { cfg.sequence.current_frame; })
+            frame = cfg.sequence.current_frame.value();
+        },
+        _plugin->config());
+    updateSequenceState(frame);
+  }
+
+  bool hasSequence() const { return _plugin && _plugin->is_sequence(); }
+  bool isPlaying() const { return _isPlaying; }
+
+  int frameCount() const {
+    return _plugin ? static_cast<int>(_plugin->frame_count()) : 1;
+  }
+
+  int currentFrame() const { return _currentFrame; }
+
+  void updateSequenceState(int frame) {
+    bool playing = false;
+    std::visit(
+        [&](const auto &cfg) {
+          if constexpr (requires { cfg.sequence.playing; })
+            playing = cfg.sequence.playing.value();
+        },
+        _plugin->config());
+
+    const bool seqChanged =
+        (_plugin && _plugin->is_sequence()) != _lastHasSequence;
+    const bool frameCountChanged =
+        (_plugin ? static_cast<int>(_plugin->frame_count()) : 1) !=
+        _lastFrameCount;
+    const bool frameChanged = frame != _currentFrame;
+    const bool playingChanged = playing != _isPlaying;
+
+    _currentFrame = frame;
+    _isPlaying = playing;
+    _lastHasSequence = _plugin && _plugin->is_sequence();
+    _lastFrameCount = _plugin ? static_cast<int>(_plugin->frame_count()) : 1;
+
+    if (seqChanged || frameCountChanged || frameChanged)
+      emit sequenceStateChanged();
+  }
 
 signals:
   void statusChanged();
   void pluginNullStateChanged();
   void pointCloudUpdated();
   void operatorAdaptersChanged();
+  void framesUpdated();
+  void sequenceStateChanged();
 
 protected:
-  pc::devices::DevicePlugin *_plugin = nullptr; // non-owning
+  pc::devices::DevicePlugin *_plugin = nullptr;
+  CameraImageProvider *_imageProvider = nullptr;
   pc::devices::ui::WorkspaceDeviceStatus _status =
       pc::devices::ui::WorkspaceDeviceStatus::Unloaded;
 
   int _deviceIndex = -1;
 
   QList<OperatorAdapter *> _operatorAdapters;
+  QVariantList _frameSources;
+  int _frameRevision = 0;
+
+  int _currentFrame = 0;
+  bool _isPlaying = false;
+  bool _lastHasSequence = false;
+  int _lastFrameCount = 1;
+
+private:
+  QString deviceKeyPrefix() const {
+    if (!_plugin) return {};
+    QString id;
+    std::visit([&](const auto &cfg) { id = QString::fromStdString(cfg.id); },
+               _plugin->config());
+    return id + "/";
+  }
 };

@@ -88,7 +88,7 @@ void Workspace::sync_devices() {
     auto &p = devices[i];
     if (!p) continue;
 
-    const auto [id, _] = device_info_from_variant(p->config());
+    const auto [id, _] = device_info_from_variant(p->config_variant());
     if (id.empty()) continue;
 
     // If duplicates exist, keep the first
@@ -133,7 +133,6 @@ void Workspace::sync_devices() {
     }
 
     Pointer<pc::devices::DevicePlugin> device_plugin = nullptr;
-    bool new_device_instance = false;
 
     auto it = existing_index_by_id.find(device_id);
     if (it != existing_index_by_id.end()) {
@@ -146,7 +145,7 @@ void Workspace::sync_devices() {
         auto *existing_plugin = existing_ptr.get();
 
         const auto [_, existing_plugin_name] =
-            device_info_from_variant(existing_plugin->config());
+            device_info_from_variant(existing_plugin->config_variant());
 
         if (existing_plugin_name == device_plugin_name) {
           // Update config in-place (does not restart pipelines by itself).
@@ -161,6 +160,7 @@ void Workspace::sync_devices() {
 
           stop_plugin_best_effort(existing_plugin);
           existing_ptr = nullptr;
+          bool new_device_instance = false;
 
           if (plugin_loaded) {
             device_plugin =
@@ -168,8 +168,10 @@ void Workspace::sync_devices() {
             new_device_instance = true;
           } else {
             device_plugin = device_plugin_manager->instantiate("NullDevice");
+            new_device_instance = true;
           }
           device_plugin->set_is_discovery_instance(false);
+          if (new_device_instance) device_plugin->init(*this);
           device_plugin->update_config(device_variant);
         }
       }
@@ -177,22 +179,18 @@ void Workspace::sync_devices() {
       if (plugin_loaded) {
         pc::logger()->trace("Instantiating a new device plugin instance");
         device_plugin = device_plugin_manager->instantiate(device_plugin_name);
-        new_device_instance = true;
       }
       if (device_plugin) {
         std::visit(
             [](auto &&config) {
-              pc::logger()->debug("Applying device configuration: {}",
+              pc::logger()->trace("Applying device configuration: {}",
                                   config.id);
             },
             device_variant);
         device_plugin->set_is_discovery_instance(false);
+        device_plugin->init(*this);
         device_plugin->update_config(device_variant);
       }
-    }
-    if (new_device_instance) {
-      pc::logger()->trace("Running init() for new device_plugin");
-      device_plugin->init(*this);
     }
     new_devices.push_back(std::move(device_plugin));
   }

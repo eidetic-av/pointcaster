@@ -13,9 +13,10 @@ namespace pc::devices {
 class OrbbecDevice;
 
 struct OrbbecDeviceConfiguration {
-  std::string id;     // @hidden
-  bool active = true; // @hidden
-  bool render = true; // @hidden;
+  std::string id;                          // @hidden
+  rfl::DefaultVal<std::string> label = ""; // @hidden
+  bool active = true;                      // @hidden
+  bool render = true;                      // @hidden;
 
   std::string ob_uid; // @disabled
 
