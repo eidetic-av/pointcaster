@@ -22,11 +22,12 @@ target_link_libraries(PlyDevice PRIVATE
 
 find_path(HAPPLY_INCLUDE_DIRS "happly.h")
 
-target_include_directories(PlyDevice 
-  PRIVATE 
-    "${CMAKE_SOURCE_DIR}/src" 
-    "${CMAKE_SOURCE_DIR}/include"
-    ${HAPPLY_INCLUDE_DIRS}
+target_include_directories(PlyDevice
+  PRIVATE
+  "${CMAKE_SOURCE_DIR}/src"
+  "${CMAKE_SOURCE_DIR}/include"
+  ${HAPPLY_INCLUDE_DIRS}
+  ${TBB_INCLUDE_DIRS}
 )
 
 # remove the installed directory because its static, we don't need it

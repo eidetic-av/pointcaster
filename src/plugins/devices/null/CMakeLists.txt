@@ -9,15 +9,21 @@ corrade_add_static_plugin(
 
 set_target_properties(NullDevice PROPERTIES AUTOMOC OFF)
 
+# TODO ??
+find_package(TBB REQUIRED)
+
 target_link_libraries(NullDevice PRIVATE
   pointcaster::core
   Corrade::PluginManager
+  #
+  TBB::tbb
 )
 
-target_include_directories(NullDevice 
-  PRIVATE 
-    "${CMAKE_SOURCE_DIR}/src" 
-    "${CMAKE_SOURCE_DIR}/include"
+target_include_directories(NullDevice
+  PRIVATE
+  "${CMAKE_SOURCE_DIR}/src"
+  "${CMAKE_SOURCE_DIR}/include"
+  ${TBB_INCLUDE_DIRS}
 )
 
 install(CODE [===[
