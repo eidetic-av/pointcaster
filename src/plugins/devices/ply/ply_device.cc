@@ -33,23 +33,6 @@ void PlyDevice::init(Workspace &workspace) {
       pc::logger()->trace("PlyDevice created CUDA backend");
     }
   }
-
-  auto &config = std::get<PlyDeviceConfiguration>(_config);
-  if (config.active && !config.file.path.empty()) {
-    load(config.file.path);
-  }
-
-  _tick_thread = std::jthread([this](std::stop_token stop) {
-    using clock = std::chrono::steady_clock;
-    auto last = clock::now();
-    while (!stop.stop_requested()) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      auto now = clock::now();
-      float dt = std::chrono::duration<float>(now - last).count();
-      last = now;
-      tick(dt);
-    }
-  });
 }
 
 PlyDevice::~PlyDevice() {
@@ -71,7 +54,9 @@ bool PlyDevice::load(std::string_view url) {
       url.starts_with(file_prefix) ? url.substr(file_prefix.size()) : url);
 
   if (std::filesystem::is_directory(path_str)) {
-    return load_directory(path_str);
+    if (!load_directory(path_str)) return false;
+    _loaded_file_path = std::string(url);
+    return true;
   }
 
   // ── single file mode ──
@@ -121,6 +106,7 @@ bool PlyDevice::load(std::string_view url) {
   }
 
   _input_cloud = std::move(input_cloud);
+  _loaded_file_path = std::string(url);
   // _status = DeviceStatus::Loaded;
   apply_transform();
   return true;
@@ -164,7 +150,7 @@ void PlyDevice::tick(float delta_time) {
   std::lock_guard lock(_device_mutex);
   if (!_sequence_loader) return;
 
-  auto config = std::get<PlyDeviceConfiguration>(_config);
+  auto &config = std::get<PlyDeviceConfiguration>(_config);
   auto &seq = config.sequence;
 
   if (!seq.playing.value()) return;
@@ -181,6 +167,8 @@ void PlyDevice::tick(float delta_time) {
                        : std::clamp(seq.end_frame.value(), start, total - 1);
   const auto range = end - start + 1;
 
+  if (_current_frame < start || _current_frame > end) _current_frame = start;
+
   auto next = _current_frame + advance;
 
   if (next > end) {
@@ -194,9 +182,11 @@ void PlyDevice::tick(float delta_time) {
 
   if (next == _current_frame) return;
   _current_frame = next;
+  _current_frame = next;
+  seq.current_frame.set(_current_frame);
 
-  auto frame = _sequence_loader->get_frame(static_cast<size_t>(_current_frame));
-  if (frame) {
+  if (auto frame =
+          _sequence_loader->get_frame(static_cast<size_t>(_current_frame))) {
     _input_cloud = std::move(frame);
     apply_transform();
   }
@@ -207,6 +197,8 @@ size_t PlyDevice::frame_count() const {
 }
 
 void PlyDevice::on_config_field_changed(std::string_view path) {
+  DevicePlugin::on_config_field_changed(path);
+
   std::unique_lock lock(_device_mutex);
   auto &config = std::get<PlyDeviceConfiguration>(_config);
 
@@ -214,12 +206,9 @@ void PlyDevice::on_config_field_changed(std::string_view path) {
   if (path.find("file") != std::string_view::npos) {
     if (config.file.path != _loaded_file_path) {
       lock.unlock();
-      if (load(config.file.path)) {
+      if (!load(config.file.path)) {
         lock.lock();
-        _loaded_file_path = config.file.path;
-      } else {
-        lock.lock();
-        config.file.path = _loaded_file_path;
+        config.file.path = _loaded_file_path; // rollback
       }
       return;
     }
@@ -227,8 +216,6 @@ void PlyDevice::on_config_field_changed(std::string_view path) {
 
   // sequence config changes
   if (_sequence_loader && path.find("sequence") != std::string_view::npos) {
-    auto &seq = config.sequence;
-
     if (path.find("buffer_capacity") != std::string_view::npos ||
         path.find("prefetch_ahead") != std::string_view::npos) {
       _sequence_loader->invalidate();
@@ -237,6 +224,7 @@ void PlyDevice::on_config_field_changed(std::string_view path) {
 
     // scrub...
     if (path.find("current_frame") != std::string_view::npos) {
+      _current_frame = config.sequence.current_frame.value();
       auto frame =
           _sequence_loader->get_frame(static_cast<size_t>(_current_frame));
       if (frame) {
@@ -256,6 +244,43 @@ void PlyDevice::on_config_field_changed(std::string_view path) {
   }
 }
 
+void PlyDevice::update_config(
+    const devices::DeviceConfigurationVariant &config) {
+  std::string path_to_load;
+  bool need_tick_thread = false;
+  {
+    std::lock_guard lock(_device_mutex);
+    DevicePlugin::update_config(config);
+    if (!std::holds_alternative<PlyDeviceConfiguration>(_config)) return;
+    const auto &cfg = std::get<PlyDeviceConfiguration>(_config);
+    if (cfg.active && !cfg.file.path.empty() &&
+        cfg.file.path != _loaded_file_path) {
+      path_to_load = cfg.file.path;
+    }
+    need_tick_thread = !_tick_thread.joinable();
+  }
+
+  if (!path_to_load.empty()) {
+    load(path_to_load);
+  }
+
+  if (need_tick_thread) {
+    // TODO replace the tick thread with a session or workspace-wide one that we
+    // can register with
+    _tick_thread = std::jthread([this](std::stop_token stop) {
+      using clock = std::chrono::steady_clock;
+      auto last = clock::now();
+      while (!stop.stop_requested()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        auto now = clock::now();
+        float dt = std::chrono::duration<float>(now - last).count();
+        last = now;
+        tick(dt);
+      }
+    });
+  }
+}
+
 std::shared_ptr<PointCloud> PlyDevice::point_cloud() {
   return _current_point_cloud.load(std::memory_order_acquire);
 }
@@ -266,34 +291,37 @@ void PlyDevice::apply_transform() {
   const auto config = std::get<PlyDeviceConfiguration>(_config);
   const auto point_count = _input_cloud->size();
 
-  auto output = std::make_shared<PointCloud>();
-  output->resize(point_count);
-
-  backend::BackendPlugin *backend = _cpu_backend.get();
-
-  if (backend) {
-    backend->transform_point_cloud(*_input_cloud, output, config.transform,
-                                   config.color);
+  // TODO get backend from config
+  auto *backend = _cpu_backend.get();
+  if (!backend) {
+    pc::logger()->error("uninitalised PlyDevice backend");
+    return;
   }
 
-  for (const auto &[operator_plugin, operator_config] :
-       std::views::zip(operators, config.operators)) {
-    operator_plugin->process(*output, *output, operator_config);
-  }
+  auto transformed_cloud = std::make_shared<PointCloud>();
+  transformed_cloud->resize(point_count);
 
-  std::shared_ptr<std::vector<std::byte>> render_buffer;
-  if (config.render && backend) {
-    const auto final_count = output->size();
-    render_buffer = std::make_shared<std::vector<std::byte>>(final_count * 16);
-    backend->pack_render_buffer(*output, *render_buffer);
-  }
+  backend->transform_point_cloud(*_input_cloud, transformed_cloud,
+                                 config.transform, config.color);
 
-  _current_point_cloud.store(std::move(output), std::memory_order_release);
+  feed_operator_pipeline(transformed_cloud);
+}
 
-  if (render_buffer) {
-    _latest_render_data.store(std::move(render_buffer),
-                              std::memory_order_release);
+void PlyDevice::on_pipeline_output(std::shared_ptr<PointCloud> processed) {
+  pc::logger()->trace("on_pipeline_output: size={} render={} backend={}",
+                      processed ? processed->size() : 0,
+                      std::get<PlyDeviceConfiguration>(_config).render,
+                      _cpu_backend != nullptr);
+  auto config = std::get<PlyDeviceConfiguration>(_config);
+  if (config.render && _cpu_backend) {
+    auto buf = std::make_shared<std::vector<std::byte>>(processed->size() * 16);
+    _cpu_backend->pack_render_buffer(*processed, *buf);
+    _latest_render_data.store(std::move(buf), std::memory_order_release);
   }
+  _current_point_cloud.store(std::move(processed), std::memory_order_release);
+  pc::logger()->trace(
+      "on_pipeline_output: calling notify_point_cloud_updated, callback={}",
+      _point_cloud_updated_callback != nullptr);
   notify_point_cloud_updated();
 }
 

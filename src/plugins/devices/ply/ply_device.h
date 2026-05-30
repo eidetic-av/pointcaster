@@ -20,7 +20,6 @@
 #include <thread>
 #include <vector>
 
-
 namespace pc::devices {
 
 class PlyDevice : public DevicePlugin {
@@ -46,20 +45,24 @@ public:
   void stop() override {};
   void restart() override {};
 
+  void reprocess() override {
+    std::lock_guard lock(_device_mutex);
+    apply_transform();
+  }
+
+  void on_pipeline_output(std::shared_ptr<PointCloud> processed) override;
+
   void on_config_field_changed(std::string_view path = "") override;
 
   void
-  update_config(const devices::DeviceConfigurationVariant &config) override {
-    std::lock_guard lock(_device_mutex);
-    DevicePlugin::update_config(config);
-  }
+  update_config(const devices::DeviceConfigurationVariant &config) override;
 
   bool load(std::string_view url);
   void reload();
 
   void tick(float delta_time);
-  bool is_sequence() const { return _sequence_loader.has_value(); }
-  size_t frame_count() const;
+  bool is_sequence() const override { return _sequence_loader.has_value(); }
+  size_t frame_count() const override;
 
 private:
   DeviceStatus _status = DeviceStatus::Unloaded;
