@@ -8,7 +8,7 @@ corrade_add_plugin(
   fringe_removal_operator.cc
 )
 
-set_target_properties(FringeRemovalOperator PROPERTIES 
+set_target_properties(FringeRemovalOperator PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${FRINGE_REMOVAL_PLUGIN_DIR}
   LIBRARY_OUTPUT_DIRECTORY ${FRINGE_REMOVAL_PLUGIN_DIR}
   ARCHIVE_OUTPUT_DIRECTORY ${FRINGE_REMOVAL_PLUGIN_DIR}
@@ -17,7 +17,17 @@ set_target_properties(FringeRemovalOperator PROPERTIES
   AUTOMOC OFF
 )
 
+# this quiets some very noisy opencv warnings
+set_source_files_properties(fringe_removal_operator.cc PROPERTIES
+  COMPILE_OPTIONS "-Wno-old-style-cast;-Wno-zero-as-null-pointer-constant"
+)
+
 find_package(PCL CONFIG REQUIRED)
+find_package(OpenCV CONFIG REQUIRED
+  COMPONENTS
+  opencv_core
+  opencv_imgproc
+)
 
 target_link_libraries(FringeRemovalOperator PRIVATE
   pointcaster
@@ -26,10 +36,10 @@ target_link_libraries(FringeRemovalOperator PRIVATE
   ${PCL_LIBRARIES}
 )
 
-target_include_directories(FringeRemovalOperator 
-  PRIVATE 
-    "${CMAKE_SOURCE_DIR}/src" 
-    "${CMAKE_SOURCE_DIR}/include"
+target_include_directories(FringeRemovalOperator PRIVATE
+  "${CMAKE_SOURCE_DIR}/src"
+  "${CMAKE_SOURCE_DIR}/include"
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 add_custom_command(TARGET FringeRemovalOperator POST_BUILD
@@ -42,13 +52,16 @@ add_custom_command(TARGET FringeRemovalOperator POST_BUILD
 set(CORRADE_PLUGINS ${CORRADE_PLUGINS} FringeRemovalOperator PARENT_SCOPE)
 
 # target_precompile_headers(FringeRemovalOperator PRIVATE
-#   <string>
-#   <string_view>
-#   <vector>
-#   <memory>
-#   <mutex>
-#   <thread>
-#   <chrono>
-#   <atomic>
-#   <optional>
+# <algorithm>
+# <cmath>
+# <cstdint>
+# <limits>
+# <numbers>
+# <vector>
+# <string>
+# <opencv2/core.hpp>
+# <opencv2/imgproc.hpp>
+# <pcl/features/organized_edge_detection.h>
+# <pcl/point_cloud.h>
+# <pcl/point_types.h>
 # )

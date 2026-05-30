@@ -9,13 +9,14 @@
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
 #include <camera/camera_frame.h>
+#include <camera/look_at_camera.h>
 #include <optional>
 #include <plugins/backend/backend_plugin.h>
 #include <plugins/operators/operator_plugin.h>
 
 namespace pc::operators {
 
-class FringeRemovalOperator : public OperatorPlugin {
+class FringeRemovalOperator final : public OperatorPlugin {
 public:
   explicit FringeRemovalOperator(
       Corrade::PluginManager::AbstractManager &manager,
@@ -29,15 +30,32 @@ public:
   FringeRemovalOperator(FringeRemovalOperator &&) = delete;
   FringeRemovalOperator &operator=(FringeRemovalOperator &&) = delete;
 
-  void init() override;
-  void process(const PointCloud &input, PointCloud &output,
-               const OperatorConfigurationVariant &config_variant) override;
+  void init(OperatorHost *host,
+            Corrade::PluginManager::Manager<backend::BackendPlugin>
+                &backend_plugin_manager) override;
 
-  virtual std::vector<pc::camera::CameraFrameRef> camera_frames();
+  std::shared_ptr<PointCloud> process(const PointCloud &input) override;
+
+  void on_config_field_changed(std::string_view path = "") override;
+
+  std::vector<pc::camera::CameraFrameRef> camera_frames() override {
+    std::vector<pc::camera::CameraFrameRef> frames;
+    frames.push_back(std::ref(_input_image));
+    frames.push_back(std::ref(_edge_detector_image));
+    frames.push_back(std::ref(_drop_mask_image));
+    return frames;
+  }
+
+  const FringeRemovalConfiguration &config() const {
+    return std::get<FringeRemovalConfiguration>(config_variant());
+  }
 
 private:
+  pc::camera::LookAtCamera _camera;
+
   pc::camera::CameraFrame _input_image;
-  std::vector<pc::camera::CameraFrameRef> _camera_frame_refs;
+  pc::camera::CameraFrame _edge_detector_image;
+  pc::camera::CameraFrame _drop_mask_image;
 };
 
 } // namespace pc::operators
