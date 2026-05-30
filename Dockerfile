@@ -50,7 +50,7 @@ RUN set -eux; \
     rm -f cmake-${CMAKE_VERSION}-linux-x86_64.sh cmake-${CMAKE_VERSION}-SHA-256.txt cmake.sha256
 
 # install clang tools
-ARG CLANG_VERSION=21
+ARG CLANG_VERSION=22
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates wget gnupg; \
