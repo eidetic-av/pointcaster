@@ -9,13 +9,22 @@ Item {
     required property View3D view3d
     required property Node targetNode
     required property var targetAdapter
+    required property bool cameraTarget
+
+    required property GizmoEnums.Mode mode
 
     property real size: 80
 
-    property vector3d dragStartPos: Qt.vector3d(0, 0, 0)
-    property quaternion dragStartRot: Qt.quaternion(1, 0, 0, 0)
-    property vector3d dragStartEuler: Qt.vector3d(0, 0, 0)
-    property vector3d dragStartScale: Qt.vector3d(1, 1, 1)
+    // ── Live drag state (read by SessionView for immediate visual feedback) ──
+    property bool dragging: false
+    property vector3d dragPosition: Qt.vector3d(0, 0, 0)
+    property vector3d dragRotation: Qt.vector3d(0, 0, 0)
+    property vector3d dragScale: Qt.vector3d(1, 1, 1)
+
+    // ── Private drag-start snapshots ──
+    property vector3d _startPos: Qt.vector3d(0, 0, 0)
+    property vector3d _startEuler: Qt.vector3d(0, 0, 0)
+    property vector3d _startScale: Qt.vector3d(1, 1, 1)
 
     anchors.fill: parent
 
@@ -23,124 +32,150 @@ Item {
         id: gizmo
         view3d: root.view3d
         targetNode: root.targetNode
-        mode: GizmoEnums.Mode.All
+        mode: root.mode
         gizmoSize: root.size
         anchors.fill: parent
     }
 
-    // Translation signal connections
+    // ── Helpers ──
+
+    function snapshotCurrent() {
+        dragPosition = targetNode.position;
+        dragRotation = targetAdapter ? targetAdapter.value("transform/rotation") : targetNode.eulerRotation;
+        dragScale = targetAdapter ? targetAdapter.value("transform/scale") : targetNode.scale;
+        _startPos = dragPosition;
+        _startEuler = dragRotation;
+        _startScale = dragScale;
+    }
+
+    function commitTransform() {
+        if (!dragging)
+            return;
+        if (!targetAdapter) {
+            dragging = false;
+            return;
+        }
+
+        if (cameraTarget) {
+            targetAdapter.set("camera/position", Qt.vector3d(dragPosition.x * 0.01, dragPosition.y * 0.01, dragPosition.z * 0.01));
+        } else {
+            targetAdapter.set("transform/position", Qt.vector3d(dragPosition.x * 0.01, dragPosition.y * 0.01, dragPosition.z * 0.01));
+            targetAdapter.set("transform/rotation", dragRotation);
+            targetAdapter.set("transform/scale", dragScale);
+        }
+
+        dragging = false;
+    }
+
+    // ── Translation ──
+
     Connections {
         target: gizmo
         ignoreUnknownSignals: true
 
         function onAxisTranslationStarted(axis) {
-            root.dragStartPos = root.targetNode.position;
+            root.snapshotCurrent();
+            root.dragging = true;
         }
 
         function onAxisTranslationDelta(axis, transformMode, delta, snapActive) {
-            // Convert axis number to 3D direction based on transform mode
-            var axisDirection;
+            var dir;
             if (transformMode === GizmoEnums.TransformMode.Local) {
-                // Calculate local axes from target node's scene rotation (includes parent transforms)
-                var localAxes = GizmoMath.getLocalAxes(root.targetNode.sceneRotation);
-                axisDirection = axis === GizmoEnums.Axis.X ? localAxes.x : axis === GizmoEnums.Axis.Y ? localAxes.y : localAxes.z;
+                var local = GizmoMath.getLocalAxes(root.targetNode.sceneRotation);
+                dir = axis === GizmoEnums.Axis.X ? local.x : axis === GizmoEnums.Axis.Y ? local.y : local.z;
             } else {
-                // World mode: use global X/Y/Z axes
-                axisDirection = axis === GizmoEnums.Axis.X ? Qt.vector3d(1, 0, 0) : axis === GizmoEnums.Axis.Y ? Qt.vector3d(0, 1, 0) : Qt.vector3d(0, 0, 1);
+                dir = axis === GizmoEnums.Axis.X ? Qt.vector3d(1, 0, 0) : axis === GizmoEnums.Axis.Y ? Qt.vector3d(0, 1, 0) : Qt.vector3d(0, 0, 1);
             }
+            root.dragPosition = Qt.vector3d(root._startPos.x + dir.x * delta, root._startPos.y + dir.y * delta, root._startPos.z + dir.z * delta);
+        }
 
-            // Apply translation along the axis direction
-            var deltaVec = Qt.vector3d(axisDirection.x * delta, axisDirection.y * delta, axisDirection.z * delta);
-            var newQtPos = Qt.vector3d(root.dragStartPos.x + deltaVec.x, root.dragStartPos.y + deltaVec.y, root.dragStartPos.z + deltaVec.z);
-            root.targetNode.position = newQtPos;
-            if (root.targetAdapter) {
-                var unscaledPos = Qt.vector3d(newQtPos.x * 0.01, newQtPos.y * 0.01, newQtPos.z * 0.01);
-                root.targetAdapter.set("transform/position", unscaledPos);
-            }
+        function onAxisTranslationEnded(axis) {
+            root.commitTransform();
         }
 
         function onPlaneTranslationStarted(plane) {
-            root.dragStartPos = root.targetNode.position;
+            root.snapshotCurrent();
+            root.dragging = true;
         }
 
         function onPlaneTranslationDelta(plane, transformMode, delta, snapActive) {
-            var deltaVec;
+            var d;
             if (transformMode === GizmoEnums.TransformMode.Local) {
-                // Local mode: delta components are along local axes, convert to world space
-                var localAxes = GizmoMath.getLocalAxes(root.targetNode.sceneRotation);
-                deltaVec = Qt.vector3d(localAxes.x.x * delta.x + localAxes.y.x * delta.y + localAxes.z.x * delta.z, localAxes.x.y * delta.x + localAxes.y.y * delta.y + localAxes.z.y * delta.z, localAxes.x.z * delta.x + localAxes.y.z * delta.y + localAxes.z.z * delta.z);
+                var local = GizmoMath.getLocalAxes(root.targetNode.sceneRotation);
+                d = Qt.vector3d(local.x.x * delta.x + local.y.x * delta.y + local.z.x * delta.z, local.x.y * delta.x + local.y.y * delta.y + local.z.y * delta.z, local.x.z * delta.x + local.y.z * delta.y + local.z.z * delta.z);
             } else {
-                // World mode: delta is already in world space
-                deltaVec = delta;
+                d = delta;
             }
-            var newQtPos = Qt.vector3d(root.dragStartPos.x + deltaVec.x, root.dragStartPos.y + deltaVec.y, root.dragStartPos.z + deltaVec.z);
-            root.targetNode.position = newQtPos;
-            if (root.targetAdapter) {
-                var unscaledPos = Qt.vector3d(newQtPos.x * 0.01, newQtPos.y * 0.01, newQtPos.z * 0.01);
-                root.targetAdapter.set("transform/position", unscaledPos);
-            }
+            root.dragPosition = Qt.vector3d(root._startPos.x + d.x, root._startPos.y + d.y, root._startPos.z + d.z);
+        }
+
+        function onPlaneTranslationEnded(plane) {
+            root.commitTransform();
         }
     }
 
-    // Rotation signal connections
+    // ── Rotation ──
+
     Connections {
         target: gizmo
         ignoreUnknownSignals: true
 
         function onRotationStarted(axis) {
-            root.dragStartEuler = root.targetAdapter ? root.targetAdapter.value("transform/rotation") : root.targetNode.eulerRotation;
+            root.snapshotCurrent();
+            root.dragging = true;
         }
 
         function onRotationDelta(axis, transformMode, angleDegrees, snapActive) {
-            const sign = axis === GizmoEnums.Axis.X ? 1 : axis === GizmoEnums.Axis.Y ? 1 : 1;
-
-            const delta = angleDegrees * sign;
-            const e = root.dragStartEuler;
-
-            let newEuler;
+            var e = root._startEuler;
             if (axis === GizmoEnums.Axis.X)
-                newEuler = Qt.vector3d(e.x + delta, e.y, e.z);
+                root.dragRotation = Qt.vector3d(e.x + angleDegrees, e.y, e.z);
             else if (axis === GizmoEnums.Axis.Y)
-                newEuler = Qt.vector3d(e.x, e.y + delta, e.z);
+                root.dragRotation = Qt.vector3d(e.x, e.y + angleDegrees, e.z);
             else
-                newEuler = Qt.vector3d(e.x, e.y, e.z + delta);
+                root.dragRotation = Qt.vector3d(e.x, e.y, e.z + angleDegrees);
+        }
 
-            root.targetNode.eulerRotation = newEuler;
-            if (root.targetAdapter) {
-                // root.targetAdapter.set("transform/rotation", Qt.vector3d(newEuler.x, newEuler.z, newEuler.y));
-                root.targetAdapter.set("transform/rotation", Qt.vector3d(newEuler.x, newEuler.y, newEuler.z));
-            }
+        function onRotationEnded(axis) {
+            root.commitTransform();
         }
     }
 
-    // Scale signal connections
+    // ── Scale ──
+
     Connections {
         target: gizmo
         ignoreUnknownSignals: true
 
         function onScaleStarted(axis) {
-            root.dragStartScale = root.targetAdapter ? root.targetAdapter.value("transform/scale") : root.targetNode.scale;
+            root.snapshotCurrent();
+            root.dragging = true;
         }
 
         function onScaleDelta(axis, transformMode, scaleFactor, snapActive) {
-            // Scale is axis-aligned regardless of transform mode
-            var newScale = root.targetNode.scale;
-            if (axis === GizmoEnums.Axis.Uniform) {
-                // Uniform scaling
-                newScale = Qt.vector3d(root.dragStartScale.x * scaleFactor, root.dragStartScale.y * scaleFactor, root.dragStartScale.z * scaleFactor);
-            } else {
-                // Axis-constrained scaling
-                if (axis === GizmoEnums.Axis.X) {
-                    newScale = Qt.vector3d(root.dragStartScale.x * scaleFactor, root.dragStartScale.y, root.dragStartScale.z);
-                } else if (axis === GizmoEnums.Axis.Y) {
-                    newScale = Qt.vector3d(root.dragStartScale.x, root.dragStartScale.y * scaleFactor, root.dragStartScale.z);
-                } else if (axis === GizmoEnums.Axis.Z) {
-                    newScale = Qt.vector3d(root.dragStartScale.x, root.dragStartScale.y, root.dragStartScale.z * scaleFactor);
-                }
-            }
-            if (root.targetAdapter) {
-                root.targetAdapter.set("transform/scale", newScale);
-            }
+            var s = root._startScale;
+            if (axis === GizmoEnums.Axis.Uniform)
+                root.dragScale = Qt.vector3d(s.x * scaleFactor, s.y * scaleFactor, s.z * scaleFactor);
+            else if (axis === GizmoEnums.Axis.X)
+                root.dragScale = Qt.vector3d(s.x * scaleFactor, s.y, s.z);
+            else if (axis === GizmoEnums.Axis.Y)
+                root.dragScale = Qt.vector3d(s.x, s.y * scaleFactor, s.z);
+            else
+                root.dragScale = Qt.vector3d(s.x, s.y, s.z * scaleFactor);
+        }
+
+        function onScaleEnded(axis) {
+            root.commitTransform();
+        }
+    }
+
+    // ── Fallback: if gizmo doesn't emit *Ended signals ──
+
+    Connections {
+        target: gizmo
+        ignoreUnknownSignals: true
+        function onActiveChanged() {
+            if (!gizmo.active && root.dragging)
+                root.commitTransform();
         }
     }
 }

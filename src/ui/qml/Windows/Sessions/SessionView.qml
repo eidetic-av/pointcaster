@@ -13,23 +13,54 @@ Item {
     required property var deviceAdapters
     property var cameraAdapter: null
 
-    property var selectedAdapter: (workspace && deviceAdapters) ? deviceAdapters.length > 0 ? root.deviceAdapters[root.workspace.selectedDeviceIndex] : null : null
+    property var selectedDeviceAdapter: (workspace && deviceAdapters) ? deviceAdapters.length > 0 ? root.deviceAdapters[root.workspace.selectedDeviceIndex] : null : null
+    property var selectedOperatorAdapter: workspace ? workspace.selectedOperatorAdapter ? workspace.selectedOperatorAdapter.configAdapter : null : null
 
     property var selectionPosition: selectionPositionOrDefault()
     function selectionPositionOrDefault() {
-        const pos_mm = selectedAdapter ? selectedAdapter.value("transform/position") : Qt.vector3d(0, 0, 0);
+        var pos_mm = Qt.vector3d(0, 0, 0);
+        if (selectedOperatorAdapter) {
+            pos_mm = selectedOperatorAdapter.value("camera/position");
+        } else if (selectedDeviceAdapter) {
+            pos_mm = selectedDeviceAdapter.value("transform/position");
+        }
         return Qt.vector3d(pos_mm.x * 100, pos_mm.y * 100, pos_mm.z * 100);
     }
 
-    property var selectionScale: selectedAdapter ? selectedAdapter.value("transform/scale") : Qt.vector3d(1, 1, 1)
+    property var selectionScale: selectionScaleOrDefault()
+    function selectionScaleOrDefault() {
+        var scale = Qt.vector3d(1, 1, 1);
+        if (selectedDeviceAdapter) {
+            scale = selectedDeviceAdapter.value("transform/scale");
+        }
+        return scale;
+    }
 
-    property vector3d selectionRotation: selectedAdapter ? selectedAdapter.value("transform/rotation") : Qt.vector3d(0, 0, 0)
+    property vector3d selectionRotation: selectionRotationOrDefault()
+    function selectionRotationOrDefault() {
+        var euler = Qt.vector3d(0, 0, 0);
+        if (selectedDeviceAdapter) {
+            euler = selectedDeviceAdapter.value("transform/rotation");
+        }
+        return euler;
+    }
 
     signal selectionTransformUpdate
 
     onSelectionTransformUpdate: {
         selectionPosition = selectionPositionOrDefault();
-        selectionRotation = root.selectedAdapter ? root.selectedAdapter.value("transform/rotation") : Qt.vector3d(0, 0, 0);
+        selectionScale = selectionScaleOrDefault();
+        selectionRotation = selectionRotationOrDefault();
+    }
+
+    Connections {
+        target: workspace
+        function onSelectedDeviceIndexChanged() {
+            root.selectionTransformUpdate();
+        }
+        function onSelectedOperatorAdapterChanged() {
+            root.selectionTransformUpdate();
+        }
     }
 
     readonly property real defaultCameraDistance: 250
@@ -231,18 +262,27 @@ Item {
 
         Node {
             id: selectionProxy
-            x: selectionPosition.x
-            y: selectionPosition.y
-            z: selectionPosition.z
-            scale: selectionScale
-            // eulerRotation: selectionRotation
+            x: selectionGizmo.dragging ? selectionGizmo.dragPosition.x : selectionPosition.x
+            y: selectionGizmo.dragging ? selectionGizmo.dragPosition.y : selectionPosition.y
+            z: selectionGizmo.dragging ? selectionGizmo.dragPosition.z : selectionPosition.z
+            scale: selectionGizmo.dragging ? selectionGizmo.dragScale : selectionScale
+            eulerRotation: selectionGizmo.dragging ? selectionGizmo.dragRotation : selectionRotation
         }
 
         Connections {
-            target: selectedAdapter
+            target: selectedDeviceAdapter
             function onFieldChanged(path) {
                 // TODO might want to debounce
                 if (path.includes("transform")) {
+                    root.selectionTransformUpdate();
+                }
+            }
+        }
+
+        Connections {
+            target: selectedOperatorAdapter
+            function onFieldChanged(path) {
+                if (path.includes("camera")) {
                     root.selectionTransformUpdate();
                 }
             }
@@ -252,6 +292,16 @@ Item {
             model: root.deviceAdapters
 
             Node {
+                id: deviceNode
+
+                property bool isSelected: index === root.workspace.selectedDeviceIndex && !root.selectedOperatorAdapter
+
+                // TODO
+                // visual offset during gizmo drag (translation only for now cause that's easier than figuring out how to update rotation origins lol)
+                x: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.x - selectionPosition.x : 0
+                y: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.y - selectionPosition.y : 0
+                z: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.z - selectionPosition.z : 0
+
                 Model {
                     id: model
 
@@ -454,10 +504,13 @@ Item {
 
     SelectionGizmo {
         id: selectionGizmo
-        visible: root.selectedAdapter && !sessionControls.viewLocked
+        visible: root.selectedOperatorAdapter || root.selectedDeviceAdapter && !sessionControls.viewLocked
         view3d: view
         targetNode: selectionProxy
-        targetAdapter: root.selectedAdapter
+        // TODO the mode should be based on what kind of transformation the adapter exposes
+        mode: GizmoEnums.Mode.All
+        targetAdapter: root.selectedOperatorAdapter || root.selectedDeviceAdapter
+        cameraTarget: root.selectedOperatorAdapter !== null
         z: 99
     }
 
