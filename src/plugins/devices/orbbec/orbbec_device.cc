@@ -172,7 +172,8 @@ void OrbbecDevice::start_sync() {
   // discovery, dont bother trying to attach to a device
   if (is_discovery_instance()) return;
 
-  const auto config = std::get<OrbbecDeviceConfiguration>(this->config());
+  const auto config =
+      std::get<OrbbecDeviceConfiguration>(this->config_variant());
   pc::logger()->info("Initialising OrbbecDevice ({})", config.id);
 
   std::shared_ptr<ob::Device> ob_device;
@@ -245,7 +246,7 @@ void OrbbecDevice::start_sync() {
 void OrbbecDevice::stop_sync() {
   pc::logger()->trace("Running 'stop_sync()'");
   if (!_running_pipeline) return;
-  auto config = std::get<OrbbecDeviceConfiguration>(this->config());
+  auto config = std::get<OrbbecDeviceConfiguration>(this->config_variant());
   std::lock_guard lock(orbbec_context().device_api_access);
   pc::logger()->info("Closing OrbbecDevice {}",
                      config.network.ip_address.value());
@@ -415,7 +416,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       return;
     }
 
-    auto ob_camera_parameters = pipeline.getCameraParam();
+    // auto ob_camera_parameters = pipeline.getCameraParam();
     auto ob_calibration_parameters = pipeline.getCalibrationParam(ob_config);
 
     backend::CameraIntrinsics color_intrinsics;
@@ -537,30 +538,19 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
               }
             }
 
-            {
-              ProfilingZone operator_zone("OrbbecDevice::operators");
+            feed_operator_pipeline(point_cloud);
 
-              for (const auto &[operator_plugin, operator_config] :
-                   std::views::zip(operators, device_config.operators)) {
-                // TODO do i need to update here now?
-                operator_plugin->update_config(operator_config);
-                operator_plugin->process(*point_cloud, *point_cloud);
+            // Render from the latest *processed* cloud (may lag one frame —
+            // fine for real-time)
+            if (device_config.render && backend) {
+              if (auto processed = _pipeline->latest_cloud()) {
+                auto render_buffer = std::make_shared<std::vector<std::byte>>(
+                    processed->size() * 16);
+                backend->pack_render_buffer(*processed, *render_buffer);
+                _latest_render_data.store(std::move(render_buffer),
+                                          std::memory_order_release);
               }
             }
-
-            // Allocate render buffer only when rendering is active
-            if (device_config.render && backend) {
-              const auto final_count = point_cloud->size();
-              // TODO
-              // we do a new allocation here but maybe we should make this just
-              // a double-buffered exchange with a resize on the stale data
-              auto render_buffer =
-                  std::make_shared<std::vector<std::byte>>(final_count * 16);
-              backend->pack_render_buffer(*point_cloud, *render_buffer);
-              if (render_buffer) _latest_render_data.exchange(render_buffer);
-            }
-
-            _latest_point_cloud.exchange(point_cloud);
 
             notify_point_cloud_updated();
             set_updated_time(steady_clock::now());
@@ -585,11 +575,13 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 }
 
 std::shared_ptr<PointCloud> OrbbecDevice::point_cloud() {
-  auto _latest_ptr = _latest_point_cloud.load(std::memory_order_acquire);
-  if (_latest_ptr) return _latest_ptr;
-  static auto empty = std::make_shared<PointCloud>(PointCloud{{}, {}});
+  if (_pipeline) {
+    auto latest = _pipeline->latest_cloud();
+    if (latest) return latest;
+  }
+  static auto empty = std::make_shared<PointCloud>(PointCloud{{}, {}, {}});
   return empty;
-};
+}
 
 void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
   constexpr auto error_timeout = 10s;
@@ -597,7 +589,7 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
   constexpr auto check_interval = 1s;
 
   auto get_id = [this] {
-    return std::get<OrbbecDeviceConfiguration>(this->config()).id;
+    return std::get<OrbbecDeviceConfiguration>(this->config_variant()).id;
   };
 
   while (!stop_token.stop_requested()) {
