@@ -181,6 +181,56 @@ void CpuBackend::pack_render_buffer(const PointCloud &cloud,
                 });
 };
 
+void CpuBackend::project_frame(const PointCloud &cloud,
+                               camera::CameraFrameData &output,
+                               camera::FrameProjectionArgs projection) const {
+
+  const auto &[fx, fy, cx, cy, width, height, extrinsic] = projection;
+  auto &ext = extrinsic.values;
+
+  auto &color_buffer = output.main_color_buffer();
+  auto &depth_buffer = output.depth_buffer();
+  auto &index_buffer = output.index_buffer();
+  auto &pixel_hits = output.pixel_hits;
+
+  for (size_t point_index = 0; point_index < cloud.size(); point_index++) {
+
+    const auto &pos = cloud.positions[point_index];
+    auto wx = static_cast<float>(pos.x);
+    auto wy = static_cast<float>(pos.y);
+    auto wz = static_cast<float>(pos.z);
+
+    // transform to camera space (row-major multiply)
+    float cam_x = ext[0] * wx + ext[1] * wy + ext[2] * wz + ext[3];
+    float cam_y = ext[4] * wx + ext[5] * wy + ext[6] * wz + ext[7];
+    float cam_z = ext[8] * wx + ext[9] * wy + ext[10] * wz + ext[11];
+
+    // near plane cutoff
+    if (cam_z <= 0.0f) continue;
+
+    float u_f = fx * (cam_x / cam_z) + cx;
+    float v_f = fy * (cam_y / cam_z) + cy;
+    int u = static_cast<int>(std::round(u_f));
+    int v = static_cast<int>(std::round(v_f));
+
+    if (u < 0 || u >= width || v < 0 || v >= height) continue;
+
+    int pixel_index = v * width + u;
+
+    // store every point that hits this pixel
+    pixel_hits[pixel_index].push_back({point_index, cam_z});
+
+    // if this point's z is nearest to the camera, it wins for rendering it
+    if (cam_z < depth_buffer[pixel_index]) {
+      depth_buffer[pixel_index] = cam_z;
+      index_buffer[pixel_index] = point_index;
+      auto col = cloud.colors[point_index];
+      col.a = 255;
+      color_buffer[pixel_index] = col;
+    }
+  }
+}
+
 } // namespace pc::backend
 
 CORRADE_PLUGIN_REGISTER(CpuBackend, pc::backend::CpuBackend,

@@ -15,13 +15,14 @@
 #include <functional>
 #include <logger/logger.h>
 #include <memory>
+#include <pipeline/concurrent_operator_pipeline.h>
+#include <plugins/operators/operator_host.h>
 #include <plugins/operators/operator_plugin.h>
 #include <plugins/operators/operator_variants.h>
 #include <pointcaster/point_cloud.h>
 #include <pointcaster_api.h>
 #include <string>
 #include <string_view>
-
 
 namespace pc {
 class Workspace;
@@ -121,9 +122,13 @@ public:
 
   virtual void update_config(const DeviceConfigurationVariant &config) {
     _config = config;
+    sync_operators();
   }
 
-  virtual void on_config_field_changed(std::string_view path = "") {}
+  void sync_operators();
+
+  virtual void
+  on_config_field_changed([[maybe_unused]] std::string_view path = "");
 
   virtual bool plugin_null_state() const { return false; }
 
@@ -137,6 +142,15 @@ public:
   virtual void stop() = 0;
   virtual void restart() = 0;
 
+  void reprocess() override {}
+
+  virtual bool is_sequence() const { return false; }
+  virtual size_t frame_count() const { return 1; }
+
+  virtual void rebuild_pipeline();
+
+  void feed_operator_pipeline(std::shared_ptr<PointCloud> cloud);
+
   void notify_status_changed(DeviceStatus new_status) {
     if (_status_callback) _status_callback(new_status);
   }
@@ -146,12 +160,19 @@ public:
     if (_point_cloud_updated_callback) _point_cloud_updated_callback();
   }
 
-  void add_operator(const std::string_view operator_name);
-  void
-  add_operator(const operators::OperatorConfigurationVariant &operator_config);
-
   std::vector<Corrade::Containers::Pointer<operators::OperatorPlugin>>
       operators{};
+
+  DeviceConfigurationVariant &config_variant() { return _config; }
+
+  std::vector<camera::CameraFrame> latest_camera_frames() const {
+    if (_pipeline) return _pipeline->latest_camera_frames();
+    return {};
+  }
+
+  void update_operator_in_pipeline(
+      const operators::OperatorConfigurationVariant &config,
+      std::string_view changed_path);
 
 protected:
   Workspace *_workspace;
@@ -160,9 +181,16 @@ protected:
   std::function<void()> _point_cloud_updated_callback;
   bool _is_discovery_instance = false;
 
+  // each device has a multi-threaded pipeline of operators
+  std::unique_ptr<pipeline::ConcurrentOperatorPipeline> _pipeline;
+
   std::atomic<size_t> _process_tasks_in_flight{0};
 
   std::atomic<std::shared_ptr<std::vector<std::byte>>> _latest_render_data;
+
+  virtual void on_pipeline_output(std::shared_ptr<PointCloud>) {
+    notify_point_cloud_updated();
+  }
 };
 
 } // namespace pc::devices

@@ -41,6 +41,9 @@ public:
 
   void pack_render_buffer(const PointCloud &cloud,
                           std::span<std::byte> output) const override;
+
+  void project_frame(const PointCloud &cloud, camera::CameraFrameData &output,
+                     camera::FrameProjectionArgs projection) const override;
 };
 
 } // namespace pc::backend

@@ -7,6 +7,7 @@
 #include <Corrade/Containers/String.h>
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
+#include <camera/camera_frame.h>
 #include <config/color_transform_config.h>
 #include <config/transform_config.h>
 #include <cpplocate/cpplocate.h>
@@ -71,8 +72,9 @@ public:
   virtual ~BackendPlugin() = default;
 
   // since plugins are created by a factory, we implement a custom init() which
-  // must be called
-  virtual void init([[maybe_unused]] const size_t point_count) {};
+  // must be called and can optionally be overriden if backend devices need to
+  // allocate memory up front
+  virtual void init([[maybe_unused]] const size_t point_count = 0) {};
 
   virtual void transform_point_cloud(
       const PointCloud &input_cloud, std::shared_ptr<PointCloud> output_cloud,
@@ -96,6 +98,10 @@ public:
 
   virtual void pack_render_buffer(const PointCloud &cloud,
                                   std::span<std::byte> output) const = 0;
+
+  virtual void project_frame(const PointCloud &cloud,
+                             camera::CameraFrameData &output,
+                             camera::FrameProjectionArgs projection) const = 0;
 };
 
 } // namespace pc::backend

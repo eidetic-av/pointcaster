@@ -37,24 +37,45 @@ void CudaBackend::project_transform_frame_data(
 }
 
 void CudaBackend::transform_point_cloud(
-    const PointCloud &input_cloud, std::shared_ptr<PointCloud> output_cloud,
-    const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform) const {
+    const PointCloud &, std::shared_ptr<PointCloud>,
+    const TransformConfiguration &, const ColorTransformConfiguration &) const {
+  // void CudaBackend::transform_point_cloud(
+  //     const PointCloud &input_cloud, std::shared_ptr<PointCloud>
+  //     output_cloud, const TransformConfiguration &transform, const
+  //     ColorTransformConfiguration &color_transform) const {
   //...
+  pc::logger()->error("Unimplemented CUDA backend function");
 }
 
 void CudaBackend::transform_point_cloud(
-    std::span<const position> input_positions,
-    std::span<const color> input_colors,
-    std::shared_ptr<PointCloud> output_cloud,
-    const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform) const {
+    std::span<const position>, std::span<const color>,
+    std::shared_ptr<PointCloud>, const TransformConfiguration &,
+    const ColorTransformConfiguration &) const {
+  // void CudaBackend::transform_point_cloud(
+  //     std::span<const position> input_positions,
+  //     std::span<const color> input_colors,
+  //     std::shared_ptr<PointCloud> output_cloud,
+  //     const TransformConfiguration &transform,
+  //     const ColorTransformConfiguration &color_transform) const {
   //...
+  pc::logger()->error("Unimplemented CUDA backend function");
 }
 
-void CudaBackend::pack_render_buffer(const PointCloud &cloud,
-                                     std::span<std::byte> output) const {
+void CudaBackend::pack_render_buffer(const PointCloud &,
+                                     std::span<std::byte>) const {
+  // void CudaBackend::pack_render_buffer(const PointCloud &cloud,
+  //                                      std::span<std::byte> output) const {
   //...
+  pc::logger()->error("Unimplemented CUDA backend function");
+};
+
+void CudaBackend::project_frame(const PointCloud &, camera::CameraFrameData &,
+                   camera::FrameProjectionArgs) const {
+  // void project_frame(const PointCloud &cloud, camera::CameraFrameData
+  // &output,
+  //                    camera::FrameProjectionArgs projection) const {
+  //...
+  pc::logger()->error("Unimplemented CUDA backend function");
 };
 
 } // namespace pc::backend
