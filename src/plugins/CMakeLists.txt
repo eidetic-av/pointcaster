@@ -7,9 +7,13 @@ add_library(pointcaster::plugins ALIAS pointcaster_plugins)
 # to allow export of lib functions for use in runtime-loaded plugins
 target_compile_definitions(pointcaster_plugins PRIVATE POINTCASTER_BUILD)
 
+# TODO ??
+find_package(TBB REQUIRED)
+
 target_link_libraries(pointcaster_plugins PRIVATE
     pointcaster::core 
     Corrade::PluginManager
+    TBB::tbb
 )
 
 target_include_directories(pointcaster_plugins PRIVATE 
