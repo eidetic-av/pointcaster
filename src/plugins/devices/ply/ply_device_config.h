@@ -2,8 +2,8 @@
 
 #include <config/color_transform_config.h>
 #include <config/file_config.h>
-#include <config/transform_config.h>
 #include <config/sequence_config.h>
+#include <config/transform_config.h>
 #include <plugins/operators/operator_variants.h>
 #include <rfl/DefaultVal.hpp>
 #include <rfl/Literal.hpp>
@@ -15,16 +15,17 @@ namespace pc::devices {
 class PlyDevice;
 
 struct PlyDeviceConfiguration {
-  std::string id;     // @hidden
-  bool active = true; // @hidden
-  bool render = true; // @hidden;
+  std::string id;                          // @hidden
+  rfl::DefaultVal<std::string> label = ""; // @hidden
+  bool active = true;                      // @hidden
+  bool render = true;                      // @hidden;
 
   FileFolderConfiguration file;
   SequenceConfiguration sequence;
   TransformConfiguration transform;
   ColorTransformConfiguration color;
 
-  std::vector<operators::OperatorConfigurationVariant> operators;
+  std::vector<operators::OperatorConfigurationVariant> operators; // @hidden
 
   using DeviceType = PlyDevice;
   using Tag = rfl::Literal<"ply">;

@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-
 namespace pc::devices::ply {
 
 // TODO
@@ -32,11 +31,12 @@ std::shared_ptr<PointCloud> load_frame(const std::string &path);
 class PlySequenceLoader {
 public:
   struct Config {
-    size_t buffer_capacity = 60;
-    size_t prefetch_ahead = 30;
+    size_t buffer_capacity;
+    size_t prefetch_ahead;
   };
 
-  bool open(const std::filesystem::path &directory, const Config &config = {});
+  bool open(const std::filesystem::path &directory,
+            const Config &config = {60, 30});
 
   std::shared_ptr<PointCloud> get_frame(size_t frame);
 

@@ -80,6 +80,8 @@ std::shared_ptr<PointCloud> load_frame(const std::string &path) {
                     [&](const tbb::blocked_range<size_t> &range) {
                       for (size_t i = range.begin(); i < range.end(); ++i) {
                         const auto *v = vertex_data + i * vertex_stride;
+                        // TODO warning about copying non-full types here...
+                        // like we only copy in RGB not A and POS not padding
                         std::memcpy(&cloud->positions[i], v + pos_offset, 6);
                         std::memcpy(&cloud->colors[i], v + color_offset, 3);
                       }
