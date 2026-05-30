@@ -40,6 +40,8 @@ AppSettings::AppSettings(QObject *parent)
   m_backgroundColor =
       m_settings.value("ui/backgroundColor", QStringLiteral("#00010A"))
           .toString();
+  m_pointSizeMin = m_settings.value("rendering/pointSizeMin", 1.0).toDouble();
+  m_pointSizeMax = m_settings.value("rendering/pointSizeMax", 5.0).toDouble();
 
   m_enablePrometheusMetrics =
       m_settings.value("metrics/enabled", true).toBool();
@@ -185,6 +187,40 @@ void AppSettings::setBackgroundColor(const QString &value) {
 
 QString AppSettings::backgroundColor() const {
   return m_backgroundColor;
+}
+
+double AppSettings::pointSizeMin() const {
+  return m_pointSizeMin;
+}
+
+void AppSettings::setPointSizeMin(double value) {
+  const double v = qBound(0.5, value, 20.0);
+  if (qFuzzyCompare(v, m_pointSizeMin)) return;
+  if (!onObjectThread(this)) {
+    QMetaObject::invokeMethod(
+        this, [this, v] { setPointSizeMin(v); }, Qt::QueuedConnection);
+    return;
+  }
+  m_pointSizeMin = v;
+  write("rendering/pointSizeMin", m_pointSizeMin);
+  emit pointSizeMinChanged();
+}
+
+double AppSettings::pointSizeMax() const {
+  return m_pointSizeMax;
+}
+
+void AppSettings::setPointSizeMax(double value) {
+  const double v = qBound(0.5, value, 20.0);
+  if (qFuzzyCompare(v, m_pointSizeMax)) return;
+  if (!onObjectThread(this)) {
+    QMetaObject::invokeMethod(
+        this, [this, v] { setPointSizeMax(v); }, Qt::QueuedConnection);
+    return;
+  }
+  m_pointSizeMax = v;
+  write("rendering/pointSizeMax", m_pointSizeMax);
+  emit pointSizeMaxChanged();
 }
 
 bool AppSettings::restoreLastWorkspace() const {
