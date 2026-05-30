@@ -12,6 +12,7 @@ KDDW.DockWidget {
     title: "Devices"
 
     property var workspace: null
+    property int currentDeviceIndex: workspace ? workspace.selectedDeviceIndex : 0
 
     signal deviceSelected
 
@@ -19,6 +20,7 @@ KDDW.DockWidget {
         if (workspace) {
             workspace.triggerDeviceDiscovery();
             deviceSelectionList.setSelectedIndex(workspace.selectedDeviceIndex);
+            currentDeviceIndex = workspace.selectedDeviceIndex;
         }
     }
 
@@ -36,7 +38,14 @@ KDDW.DockWidget {
         target: workspace
         function onDeviceAdded() {
             deviceSelectionList.setSelectedIndex(workspace.deviceAdapters.length - 1);
+            currentDeviceIndex = workspace.deviceAdapters.length - 1;
         }
+    }
+
+    // reset scroll position when switching devices
+    onCurrentDeviceIndexChanged: {
+        if (deviceConfigScrollView.contentItem)
+            deviceConfigScrollView.contentItem.contentY = 0;
     }
 
     Item {
@@ -49,7 +58,7 @@ KDDW.DockWidget {
         }
 
         ColumnLayout {
-            id: content
+            id: innerContent
 
             property var kddockwidgets_min_size: Qt.size(Math.round(225 * Scaling.uiScale), Math.round(500 * Scaling.uiScale))
 
@@ -60,7 +69,6 @@ KDDW.DockWidget {
                 leftMargin: Math.round(8 * Scaling.uiScale)
                 rightMargin: Math.round(8 * Scaling.uiScale)
             }
-
             spacing: Math.round(10 * Scaling.uiScale)
 
             DevicesToolBar {
@@ -69,12 +77,23 @@ KDDW.DockWidget {
                 Layout.fillWidth: true
             }
 
-            DeviceSelectionList {
-                id: deviceSelectionList
-                workspace: root.workspace
-                height: Math.round(160 * Scaling.uiScale)
+            Item {
                 Layout.fillWidth: true
-                onActivated: root.deviceSelected()
+                Layout.preferredHeight: Math.round(160 * Scaling.uiScale)
+
+                DeviceSelectionList {
+                    id: deviceSelectionList
+                    workspace: root.workspace
+                    anchors.fill: parent
+                    onActivated: function (index) {
+                        root.currentDeviceIndex = index;
+                        root.deviceSelected();
+                    }
+                }
+
+                TapHandler {
+                    onTapped: root.workspace.selectedOperatorAdapter = null
+                }
             }
 
             DeviceControlRow {
@@ -83,90 +102,49 @@ KDDW.DockWidget {
                 Layout.fillWidth: true
             }
 
-            // ***** TESTING
-
-            IconButton {
-                id: addOperatorButton
-                text: "Add Fringe Removal Operator"
-
-                iconSource: FontAwesome.icon("solid/plus")
-                iconSize: Math.round(12 * Scaling.uiScale)
-                topPadding: Math.round(4 * Scaling.uiScale)
-                bottomPadding: Math.round(4 * Scaling.uiScale)
-                leftPadding: Math.round(5 * Scaling.uiScale)
-                rightPadding: Math.round(5 * Scaling.uiScale)
-
-                onClicked: root.workspace.addOperatorToDevice(root.workspace.selectedDeviceIndex, "FringeRemovalOperator")
+            Timeline {
+                id: sequenceTimeline
+                adapter: deviceSelectionList.selectedDevice
+                Layout.fillWidth: true
             }
-
-            Repeater {
-                model: deviceSelectionList.selectedDevice ? deviceSelectionList.selectedDevice.operatorAdapters : []
-
-                Column {
-                    required property var modelData
-                    Layout.fillWidth: true
-
-                    Repeater {
-                        model: modelData.frameSources
-                        Image {
-                            required property string modelData
-                            source: modelData
-                            cache: false
-                            width: 320
-                            height: 240
-                            fillMode: Image.PreserveAspectFit
-                        }
-                    }
-                }
-            }
-
-            // TODO
-            // why is this not scrolling??
 
             ScrollView {
                 id: deviceConfigScrollView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-
-                Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
                 clip: true
 
-                //
+                Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
-                Container {
-                    id: deviceConfigContainer
-                    anchors.fill: parent
-
-                    contentItem: ListView {
-                        id: deviceConfigListView
-                        model: deviceConfigContainer.contentModel
-                        snapMode: ListView.SnapOneItem
-                        orientation: ListView.Horizontal
-                        interactive: false
-                        anchors.fill: parent
-
-                        Connections {
-                            target: deviceSelectionList
-                            function onActivated(index) {
-                                deviceConfigListView.positionViewAtIndex(index, ListView.SnapPosition);
-                            }
-                        }
-
-                        Component.onCompleted: function () {
-                            deviceConfigListView.currentIndex = root.workspace.selectedDeviceIndex;
-                            deviceConfigListView.positionViewAtIndex(root.workspace.selectedDeviceIndex, ListView.SnapPosition);
-                        }
-                    }
+                Column {
+                    width: deviceConfigScrollView.availableWidth
+                    anchors.topMargin: Math.round(8 * Scaling.uiScale)
 
                     Repeater {
                         model: root.workspace ? root.workspace.deviceAdapters : 0
 
-                        ConfigurationEditor {
+                        Column {
                             required property var modelData
-                            configAdapter: modelData
-                            workspace: root.workspace
-                            flattenFields: false
-                            width: deviceConfigContainer.width
+                            required property int index
+                            width: parent.width
+                            visible: index === root.currentDeviceIndex
+
+                            ConfigurationEditor {
+                                id: deviceConfigEditor
+                                configAdapter: modelData
+                                workspace: root.workspace
+                                flattenFields: false
+                                width: parent.width
+                            }
+
+                            spacing: deviceConfigEditor.groupSpacing
+
+                            OperatorPipelineEditor {
+                                workspace: root.workspace
+                                deviceIndex: index
+                                deviceAdapter: modelData
+                                width: parent.width
+                            }
                         }
                     }
                 }

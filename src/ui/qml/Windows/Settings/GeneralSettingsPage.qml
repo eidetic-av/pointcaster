@@ -272,6 +272,54 @@ Item {
                             id: backgroundColorDialog
                             onAccepted: AppSettings.backgroundColor = selectedColor.toString()
                         }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10 * Scaling.uiScale
+
+                            Label {
+                                text: "Point size (min)"
+                                font: Scaling.uiFont
+                                Layout.preferredWidth: 120 * Scaling.uiScale
+                                opacity: 0.9
+                            }
+
+                            DragFloat {
+                                Layout.preferredWidth: 120 * Scaling.uiScale
+                                font: Scaling.uiFont
+                                minValue: 0.5
+                                maxValue: 20.0
+                                defaultValue: 1.0
+                                boundValue: AppSettings.pointSizeMin
+                                onCommitValue: function (v) {
+                                    AppSettings.pointSizeMin = v;
+                                }
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10 * Scaling.uiScale
+
+                            Label {
+                                text: "Point size (max)"
+                                font: Scaling.uiFont
+                                Layout.preferredWidth: 120 * Scaling.uiScale
+                                opacity: 0.9
+                            }
+
+                            DragFloat {
+                                Layout.preferredWidth: 120 * Scaling.uiScale
+                                font: Scaling.uiFont
+                                minValue: 0.5
+                                maxValue: 20.0
+                                defaultValue: 5.0
+                                boundValue: AppSettings.pointSizeMax
+                                onCommitValue: function (v) {
+                                    AppSettings.pointSizeMax = v;
+                                }
+                            }
+                        }
                     }
                 }
 

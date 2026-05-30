@@ -28,8 +28,8 @@ Item {
     property alias scrolling: viewState.isScrolling
     property alias dragActive: rmbDragHandler.active
 
-    property real shaderMinPointSize: 1.0
-    property real shaderMaxPointSize: 5.0
+    property real shaderMinPointSize: AppSettings.pointSizeMin
+    property real shaderMaxPointSize: AppSettings.pointSizeMax
     property real shaderPointSizeExponent: 2
     property real shaderPointSizeCameraZMin: 10
     property real shaderPointSizeCameraZMax: 1000

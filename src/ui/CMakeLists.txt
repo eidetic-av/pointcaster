@@ -7,6 +7,7 @@ add_library(pointcaster_ui
     models/settings_page_registry.cc
     models/commands/device_config_commands.cc
     models/session_recorder_model.cc
+    models/operator_adapter.cc
     window/view_factory.cc
 )
 add_library(pointcaster::ui ALIAS pointcaster_ui)
@@ -21,6 +22,9 @@ add_subdirectory(qml)
 find_package(Corrade CONFIG REQUIRED REQUIRED Main Utility)
 find_package(QtAwesome CONFIG REQUIRED)
 
+# TODO ??
+find_package(TBB REQUIRED)
+
 target_link_libraries(pointcaster_ui PRIVATE
     pointcaster::core 
     pointcaster::app_settings
@@ -31,6 +35,8 @@ target_link_libraries(pointcaster_ui PRIVATE
     Qt6::Quick Qt6::QuickControls2 Qt6::Quick3D
     KDAB::kddockwidgets 
     QtAwesome::QtAwesome
+    #
+    TBB::tbb
 )
 
 #TODO why are these two here that target the parent project??
@@ -47,6 +53,7 @@ set(CONFIG_ADAPTER_INPUTS
     ${CMAKE_SOURCE_DIR}/src/config/sequence_config.h
     ${CMAKE_SOURCE_DIR}/src/session/session_config.h
     ${CMAKE_SOURCE_DIR}/src/camera/camera_config.h
+    ${CMAKE_SOURCE_DIR}/src/camera/look_at_camera_config.h
     # TODO we need some faculty to create these adapters
     # without them being expressed in the main module here...
     # i guess the UI adapters need to be generated inside the 

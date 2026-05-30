@@ -20,7 +20,7 @@ Column {
     property int groupSpacing: Math.round(8 * Scaling.uiScale)
     property int groupInnerPaddingY: Math.round(4 * Scaling.uiScale)
 
-    spacing: Math.round(10 * Scaling.uiScale)
+    spacing: groupSpacing
 
     Repeater {
         model: configAdapter ? configAdapter.childPaths() : []
@@ -30,7 +30,7 @@ Column {
     Component {
         id: configurationNode
 
-        Item {
+        Rectangle {
             id: nodeRoot
 
             readonly property string defaultPath: modelData[0]
@@ -39,108 +39,120 @@ Column {
             readonly property string parentConfigName: root.configAdapter.parentConfigurationName(defaultPath)
             readonly property string parentKey: root.configAdapter.value("id") + "/" + parentConfigName
 
+            readonly property bool flattened: root.flattenFields
+            readonly property bool fieldsVisible: flattened || expanded
+
             property string headerText: parentConfigName
             property int headerHeight: Math.round(28 * Scaling.uiScale)
             property int fieldHeight: Math.round(28 * Scaling.uiScale)
             property bool expanded: true
 
             width: root.width
-            height: expanded ? content.height : headerHeight
+            implicitHeight: contentColumn.implicitHeight
 
-            // bindings for folding / unfolding configuration nodes
-            // and serializing that in our workspace layout
-            onExpandedChanged: function () {
-                root.workspace.setFoldedProperty(parentKey, expanded);
+            color: flattened ? "transparent" : ThemeColors.dark
+            border.width: (!flattened && expanded) ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
+            border.color: ThemeColors.almostdark
+
+            onExpandedChanged: {
+                if (!flattened)
+                    root.workspace.setFoldedProperty(parentKey, expanded);
             }
+
             function syncFoldedProperties() {
-                // default to expanded if unset
-                var existingValue = root.workspace.foldedPropertyPaths[nodeRoot.parentKey];
-                nodeRoot.expanded = existingValue === undefined ? true : existingValue;
+                if (flattened) {
+                    expanded = true;
+                    return;
+                }
+                var existingValue = root.workspace.foldedPropertyPaths[parentKey];
+                expanded = existingValue === undefined ? true : existingValue;
             }
+
             Connections {
                 target: root.workspace
                 function onFoldedPropertyPathsChanged() {
-                    syncFoldedProperties();
+                    nodeRoot.syncFoldedProperties();
                 }
-            }
-            Component.onCompleted: function () {
-                syncFoldedProperties();
             }
 
-            Rectangle {
-                id: nodeBackground
-                anchors.fill: parent
-                color: ThemeColors.dark
-                border.width: nodeRoot.expanded ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
-                border.color: ThemeColors.almostdark
-            }
-
-            Rectangle {
-                id: nodeHeaderBackground
-                height: nodeRoot.headerHeight
-                anchors {
-                    top: parent.top
-                    left: parent.left
-                    right: parent.right
-                }
-                MouseArea {
-                    id: mouseArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: nodeRoot.expanded = !nodeRoot.expanded
-                }
-                color: mouseArea.containsMouse ? ThemeColors.middark : (nodeRoot.expanded ? ThemeColors.almostdark : ThemeColors.dark)
-                border.color: ThemeColors.almostdark
-                border.width: nodeRoot.expanded ? 0 : Math.max(1, Math.round(1 * Scaling.uiScale))
-            }
+            Component.onCompleted: syncFoldedProperties()
 
             Column {
-                id: content
+                id: contentColumn
+                width: parent.width
 
-                Row {
-                    id: header
-
-                    // only show the header if unhidden fields actually exist for this configuration node
-                    visible: fieldRepeater.count > 0
-                    height: nodeRoot.headerHeight
+                // Header
+                Rectangle {
+                    id: nodeHeader
                     width: parent.width
-                    spacing: Math.round(5 * Scaling.uiScale)
+                    height: nodeRoot.headerHeight
+                    visible: fieldRepeater.count > 0
 
-                    Image {
-                        id: headerArrowIcon
+                    color: nodeRoot.flattened ? "transparent" : (headerMouseArea.containsMouse ? ThemeColors.middark : (nodeRoot.expanded ? ThemeColors.almostdark : ThemeColors.dark))
 
-                        width: Math.round(12 * Scaling.uiScale)
-                        anchors.leftMargin: header.spacing
-                        anchors.verticalCenter: parent.verticalCenter
+                    border.color: ThemeColors.almostdark
+                    border.width: (!nodeRoot.flattened && !nodeRoot.expanded) ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
 
-                        fillMode: Image.PreserveAspectFit
-                        source: nodeRoot.expanded ? FontAwesome.icon("solid/caret-down") : FontAwesome.icon("solid/caret-right")
-                        opacity: 0.75
+                    MouseArea {
+                        id: headerMouseArea
+                        anchors.fill: parent
+                        enabled: !nodeRoot.flattened
+                        hoverEnabled: enabled
+                        onClicked: nodeRoot.expanded = !nodeRoot.expanded
                     }
 
-                    Text {
-                        text: nodeRoot.headerText
+                    Rectangle {
+                        visible: nodeRoot.flattened
+                        height: Math.max(1, Math.round(1 * Scaling.uiScale))
+                        anchors {
+                            left: parent.left
+                            right: parent.right
+                            bottom: parent.bottom
+                        }
+                        color: ThemeColors.almostdark
+                    }
 
-                        elide: Text.ElideRight
-                        font: Scaling.uiFont
-                        color: ThemeColors.text
+                    Row {
+                        anchors.fill: parent
+                        spacing: Math.round(5 * Scaling.uiScale)
 
-                        width: parent.width - headerArrowIcon.width - header.spacing
-                        anchors.verticalCenter: parent.verticalCenter
+                        Item {
+                            width: 1
+                            height: 1
+                        }
+
+                        Image {
+                            id: headerArrowIcon
+                            visible: !nodeRoot.flattened
+                            width: visible ? Math.round(12 * Scaling.uiScale) : 0
+                            anchors.verticalCenter: parent.verticalCenter
+                            fillMode: Image.PreserveAspectFit
+                            source: nodeRoot.expanded ? FontAwesome.icon("solid/caret-down") : FontAwesome.icon("solid/caret-right")
+                            opacity: 0.75
+                        }
+
+                        Text {
+                            text: nodeRoot.headerText
+                            elide: Text.ElideRight
+                            font: Scaling.uiFont
+                            color: ThemeColors.text
+                            width: parent.width - Math.round(10 * Scaling.uiScale) - (headerArrowIcon.visible ? headerArrowIcon.width + parent.spacing : 0)
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
                     }
                 }
 
+                // Fields
                 Repeater {
                     id: fieldRepeater
 
-                    // only create field entries if they're not marked 'hidden'
                     model: modelData.filter(function (path) {
                         return !root.configAdapter.isHidden(path);
                     })
 
                     delegate: RowLayout {
-                        visible: nodeRoot.expanded
-                        height: nodeRoot.fieldHeight
+                        visible: nodeRoot.fieldsVisible
+                        height: visible ? nodeRoot.fieldHeight : 0
 
                         Text {
                             id: label
@@ -163,7 +175,6 @@ Column {
                             }
                         }
 
-                        // Column width drag handle (shared global setting)
                         Rectangle {
                             id: dividerHandle
                             width: Math.round(5 * Scaling.uiScale)
@@ -172,9 +183,7 @@ Column {
 
                             Rectangle {
                                 height: parent.height
-
                                 width: (dividerMouseArea.containsMouse || dividerMouseArea.drag.active) ? Math.round(3 * Scaling.uiScale) : Math.max(1, Math.round(1 * Scaling.uiScale))
-
                                 color: dividerMouseArea.drag.active ? ThemeColors.mid : (dividerMouseArea.containsMouse ? ThemeColors.middark : ThemeColors.almostdark)
 
                                 Behavior on width {
@@ -367,7 +376,7 @@ Column {
             enabled: root.configAdapter ? !root.configAdapter.isDisabled(path) : true
 
             boundValue: {
-                var n = Number(root.configAdapter.value(path));
+                var n = root.configAdapter ? Number(root.configAdapter.value(path)) : 0;
                 return isNaN(n) ? 0 : Math.trunc(n);
             }
 
@@ -496,7 +505,7 @@ Column {
             id: boolCheckBox
             enabled: root.configAdapter ? !root.configAdapter.isDisabled(path) : true
             opacity: enabled ? 1.0 : 0.66
-            checked: !!root.configAdapter.value(path)
+            checked: root.configAdapter ? !!root.configAdapter.value(path) : false
             onCheckedChanged: function () {
                 root.configAdapter.set(path, checked);
                 // if its a button, we only want it to be momentarily checked

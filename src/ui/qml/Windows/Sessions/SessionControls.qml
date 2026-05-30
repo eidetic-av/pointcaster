@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Shapes
 import QtQuick3D
 
 import Pointcaster 1.0
@@ -35,316 +36,356 @@ Item {
     property int consolePanelWidth: Math.round(500 * Scaling.uiScale)
     readonly property int consolePanelWidthMin: Math.round(200 * Scaling.uiScale)
 
+    property real controlSpacing: Math.round(16 * Scaling.uiScale)
+
     signal requestHomeCamera
 
     anchors.fill: parent
 
-    ColumnLayout {
-        id: cameraControlsLayout
-        spacing: Math.round(13 * Scaling.uiScale)
-        Layout.alignment: Qt.AlignRight | Qt.AlignTop
+    // TODO
+
+    readonly property var frameSources: sessionView && sessionView.selectedDeviceAdapter ? sessionView.selectedDeviceAdapter.frameSources : []
+
+    Connections {
+        target: root.workspace
+        function onSelectedOperatorAdapterChanged() {
+            console.log('eyy: ' + frameSources.length);
+        }
+    }
+
+    Item {
+        id: sessionControlsOverlay
 
         width: parent.width
         height: parent.height
 
-        Item {
+        SessionControlCollapser {
             id: originGizmoCollapser
-            width: root.originGizmoPanelSize
-            implicitWidth: width
-            Layout.alignment: Qt.AlignRight | Qt.AlignTop
 
-            implicitHeight: originGizmoPanel.height + toggleOriginGizmoButton.implicitHeight
-            height: implicitHeight
+            direction: SessionControlCollapser.CollapseUp
 
-            Column {
-                id: originGizmoColumn
-                spacing: 0
-                width: parent.width
+            anchors.right: parent.right
+            anchors.top: parent.top
 
-                Item {
-                    id: originGizmoPanel
-                    width: parent.width
-                    clip: true
+            collapsed: root.originGizmoCollapsed
+            onCollapsedChanged: root.originGizmoCollapsed = collapsed
 
-                    height: root.originGizmoCollapsed ? 0 : root.originGizmoPanelSize
+            contentItem: OriginGizmo {
+                id: originGizmo
+                targetNode: root.gizmoTarget
 
-                    Behavior on height {
-                        NumberAnimation {
-                            duration: 160
-                            easing.type: Easing.OutCubic
-                        }
-                    }
+                enabled: !root.viewLocked
+                opacity: enabled ? 1.0 : 0.35
 
-                    Rectangle {
-                        anchors.fill: parent
-                        color: ThemeColors.dark
-                        opacity: 0.75
-                        bottomLeftRadius: Math.round(7 * Scaling.uiScale)
-                    }
+                width: root.originGizmoPanelSize
+                height: width
 
-                    OriginGizmo {
-                        id: originGizmo
-                        targetNode: root.gizmoTarget
+                function removeGizmoBasis(q) {
+                    return root.view3d.gizmoBasisInv.times(q).times(root.view3d.gizmoBasis);
+                }
+                function applyGizmoBasis(q) {
+                    return root.view3d.gizmoBasis.times(q).times(root.view3d.gizmoBasisInv);
+                }
 
-                        enabled: !root.viewLocked
-                        opacity: enabled ? 1.0 : 0.35
-
-                        width: root.originGizmoPanelSize - 2 * root.panelMargin
-                        height: width
-                        anchors.centerIn: parent
-
-                        function removeGizmoBasis(q) {
-                            return root.view3d.gizmoBasisInv.times(q).times(root.view3d.gizmoBasis);
-                        }
-                        function applyGizmoBasis(q) {
-                            return root.view3d.gizmoBasis.times(q).times(root.view3d.gizmoBasisInv);
-                        }
-
-                        function remapAxisForCurrentFrame(axis) {
-                            switch (axis) {
-                            case OriginGizmo.Axis.PositiveX:
-                                return OriginGizmo.Axis.NegativeX;
-                            case OriginGizmo.Axis.NegativeX:
-                                return OriginGizmo.Axis.PositiveX;
-                            case OriginGizmo.Axis.PositiveY:
-                                return OriginGizmo.Axis.NegativeY;
-                            case OriginGizmo.Axis.NegativeY:
-                                return OriginGizmo.Axis.PositiveY;
-                            default:
-                                return axis;
-                            }
-                        }
-
-                        onAxisClicked: axis => {
-                            if (!enabled)
-                                return;
-
-                            const axisFixed = remapAxisForCurrentFrame(axis);
-
-                            const rotUnbased = removeGizmoBasis(root.gizmoTarget.rotation);
-                            const snappedUnbased = originGizmo.quaternionForAxis(axisFixed, rotUnbased);
-                            const snappedBased = applyGizmoBasis(snappedUnbased);
-
-                            orbitRotationAnim.to = root.view3d.gizmoToOrbitRotation(snappedBased);
-                            orbitRotationAnim.start();
-                        }
-
-                        onBallMoved: velocity => {
-                            if (!enabled)
-                                return;
-
-                            const v = velocity.x;
-                            if (Math.abs(v) < 1)
-                                return;
-
-                            const rotUnbased = removeGizmoBasis(root.gizmoTarget.rotation);
-                            const nextUnbased = (v >= 0) ? originGizmo.quaternionRotateRight(rotUnbased) : originGizmo.quaternionRotateLeft(rotUnbased);
-
-                            const nextBased = applyGizmoBasis(nextUnbased);
-                            orbitRotationAnim.to = root.view3d.gizmoToOrbitRotation(nextBased);
-                            orbitRotationAnim.start();
-                        }
+                function remapAxisForCurrentFrame(axis) {
+                    switch (axis) {
+                    case OriginGizmo.Axis.PositiveX:
+                        return OriginGizmo.Axis.NegativeX;
+                    case OriginGizmo.Axis.NegativeX:
+                        return OriginGizmo.Axis.PositiveX;
+                    case OriginGizmo.Axis.PositiveY:
+                        return OriginGizmo.Axis.NegativeY;
+                    case OriginGizmo.Axis.NegativeY:
+                        return OriginGizmo.Axis.PositiveY;
+                    default:
+                        return axis;
                     }
                 }
 
-                IconButton {
-                    id: toggleOriginGizmoButton
-                    width: Math.round(16 * Scaling.uiScale)
-                    implicitHeight: Math.round(11 * Scaling.uiScale)
+                onAxisClicked: axis => {
+                    if (!enabled)
+                        return;
 
-                    anchors.right: parent.right
-                    anchors.rightMargin: root.panelMargin
+                    const axisFixed = remapAxisForCurrentFrame(axis);
 
-                    iconSource: FontAwesome.icon(root.originGizmoCollapsed ? "solid/caret-down" : "solid/caret-up")
-                    iconSize: Math.round(9 * Scaling.uiScale)
-                    iconColor: !pressed ? ThemeColors.mid : ThemeColors.midlight
-                    opacity: 0.75
+                    const rotUnbased = removeGizmoBasis(root.gizmoTarget.rotation);
+                    const snappedUnbased = originGizmo.quaternionForAxis(axisFixed, rotUnbased);
+                    const snappedBased = applyGizmoBasis(snappedUnbased);
 
-                    topLeftRadius: 0
-                    topRightRadius: 0
+                    orbitRotationAnim.to = root.view3d.gizmoToOrbitRotation(snappedBased);
+                    orbitRotationAnim.start();
+                }
 
-                    leftPadding: Math.round(3 * Scaling.uiScale)
-                    rightPadding: Math.round(3 * Scaling.uiScale)
+                onBallMoved: velocity => {
+                    if (!enabled)
+                        return;
 
-                    backgroundColor: ThemeColors.dark
-                    hoverColor: ThemeColors.middark
-                    pressedColor: ThemeColors.mid
+                    const v = velocity.x;
+                    if (Math.abs(v) < 1)
+                        return;
 
-                    borderWidth: 0
-                    onClicked: root.originGizmoCollapsed = !root.originGizmoCollapsed
+                    const rotUnbased = removeGizmoBasis(root.gizmoTarget.rotation);
+                    const nextUnbased = (v >= 0) ? originGizmo.quaternionRotateRight(rotUnbased) : originGizmo.quaternionRotateLeft(rotUnbased);
+
+                    const nextBased = applyGizmoBasis(nextUnbased);
+                    orbitRotationAnim.to = root.view3d.gizmoToOrbitRotation(nextBased);
+                    orbitRotationAnim.start();
                 }
             }
         }
 
-        Item {
+        SessionControlCollapser {
             id: cameraToolbarCollapser
 
-            readonly property int toggleButtonWidth: Math.round(11 * Scaling.uiScale)
-            readonly property int toggleButtonHeight: Math.round(16 * Scaling.uiScale)
+            direction: SessionControlCollapser.CollapseRight
 
-            Layout.fillWidth: true
-            implicitHeight: Math.max(toggleCameraToolbarButton.implicitHeight, cameraToolbar.implicitHeight)
+            collapsed: root.cameraToolbarCollapsed
+            onCollapsedChanged: root.cameraToolbarCollapsed = collapsed
 
-            Column {
-                id: cameraToolbarRow
-                spacing: 0
-                x: parent.width - width
+            anchors.right: parent.right
+            anchors.top: originGizmoCollapser.bottom
+            anchors.topMargin: root.controlSpacing
 
-                IconButton {
-                    id: toggleCameraToolbarButton
-                    width: cameraToolbarCollapser.toggleButtonWidth
-                    implicitHeight: cameraToolbarCollapser.toggleButtonHeight
+            contentItem: Column {
+                spacing: Math.round(6 * Scaling.uiScale)
 
-                    anchors.right: parent.right
+                ToolButton {
+                    id: lockCameraButton
+                    width: Math.round(24 * Scaling.uiScale)
+                    height: Math.round(24 * Scaling.uiScale)
 
-                    iconSource: FontAwesome.icon(root.cameraToolbarCollapsed ? "solid/caret-left" : "solid/caret-right")
-                    iconSize: Math.round(9 * Scaling.uiScale)
-                    iconColor: !pressed ? ThemeColors.mid : ThemeColors.midlight
-                    opacity: 0.75
+                    checkable: true
+                    checked: root.viewLocked
+                    onToggled: root.viewLocked = checked
 
-                    topRightRadius: 0
-                    bottomRightRadius: 0
+                    contentItem: Image {
+                        source: FontAwesome.icon(lockCameraButton.checked ? "solid/lock" : "solid/lock-open")
+                        width: lockCameraButton.checked ? Math.round(12 * Scaling.uiScale) : Math.round(14 * Scaling.uiScale)
+                        height: width
+                        anchors.centerIn: parent
+                        smooth: true
+                        mipmap: true
+                    }
 
-                    topPadding: Math.round(3 * Scaling.uiScale)
-                    bottomPadding: Math.round(3 * Scaling.uiScale)
-
-                    backgroundColor: ThemeColors.dark
-                    hoverColor: ThemeColors.middark
-                    pressedColor: ThemeColors.mid
-
-                    borderWidth: 0
-                    onClicked: root.cameraToolbarCollapsed = !root.cameraToolbarCollapsed
+                    InfoToolTip {
+                        delay: 800
+                        textValue: lockCameraButton.checked ? "Unlock camera" : "Lock camera"
+                    }
                 }
 
-                Item {
-                    id: cameraToolbarPanel
-                    height: cameraToolbar.implicitHeight
-                    clip: true
+                ToolButton {
+                    id: homeCameraButton
+                    enabled: !root.viewLocked
+                    opacity: enabled ? 1.0 : 0.35
 
-                    width: root.cameraToolbarCollapsed ? 0 : cameraToolbar.implicitWidth
+                    width: Math.round(24 * Scaling.uiScale)
+                    height: Math.round(24 * Scaling.uiScale)
 
-                    Behavior on width {
-                        NumberAnimation {
-                            duration: 160
-                            easing.type: Easing.OutCubic
+                    icon.source: FontAwesome.icon("solid/house")
+                    icon.width: Math.round(18 * Scaling.uiScale)
+                    icon.height: Math.round(18 * Scaling.uiScale)
+
+                    onClicked: root.requestHomeCamera()
+
+                    InfoToolTip {
+                        delay: 800
+                        textValue: "Home orientation"
+                    }
+                }
+
+                ToolButton {
+                    id: guidesButton
+                    enabled: !root.viewLocked
+                    opacity: enabled ? 1.0 : 0.35
+
+                    width: Math.round(24 * Scaling.uiScale)
+                    height: Math.round(24 * Scaling.uiScale)
+
+                    checkable: true
+                    checked: root.gridEnabled
+                    onToggled: root.gridEnabled = checked
+
+                    contentItem: Image {
+                        source: FontAwesome.icon("solid/table-cells-large")
+                        width: Math.round(16 * Scaling.uiScale)
+                        height: width
+                        anchors.centerIn: parent
+                        smooth: true
+                        mipmap: true
+                    }
+
+                    InfoToolTip {
+                        delay: 800
+                        textValue: guidesButton.checked ? "Hide floor plane" : "Show floor plane"
+                    }
+                }
+
+                ToolButton {
+                    id: projectionButton
+                    enabled: !root.viewLocked
+                    opacity: enabled ? 1.0 : 0.35
+
+                    width: Math.round(24 * Scaling.uiScale)
+                    height: Math.round(24 * Scaling.uiScale)
+
+                    checkable: true
+                    checked: root.orthographicEnabled
+                    onToggled: root.orthographicEnabled = checked
+
+                    contentItem: Image {
+                        source: FontAwesome.icon("solid/cube")
+                        width: Math.round(16 * Scaling.uiScale)
+                        height: width
+                        anchors.centerIn: parent
+                        smooth: true
+                        mipmap: true
+                    }
+
+                    InfoToolTip {
+                        delay: 800
+                        textValue: projectionButton.checked ? "Disable orthographic projection" : "Enable orthographic projection"
+                    }
+                }
+            }
+        }
+
+        SessionControlCollapser {
+            id: cameraFrameCollapser
+            visible: root.frameSources.length > 0
+            direction: SessionControlCollapser.CollapseUp
+            buttonAlignment: Qt.AlignLeft
+            anchors.top: parent.top
+            anchors.left: parent.left
+
+            contentItem: Item {
+                id: frameContainer
+                width: 200
+                height: 200
+
+                StackLayout {
+                    id: frameStack
+                    currentIndex: _resolvedIndex
+                    anchors.fill: parent
+                    anchors.bottomMargin: navRow.height
+
+                    Repeater {
+                        model: root.frameSources
+                        Image {
+                            source: modelData.url
+                            cache: false
+                            fillMode: Image.PreserveAspectFit
                         }
                     }
 
-                    ToolBar {
-                        id: cameraToolbar
-                        anchors.fill: parent
-                        padding: 0
-                        topPadding: Math.round(5 * Scaling.uiScale)
-                        bottomPadding: Math.round(5 * Scaling.uiScale)
-
-                        background: Rectangle {
-                            color: ThemeColors.dark
-                            opacity: 0.75
-                            topLeftRadius: Math.round(5 * Scaling.uiScale)
-                            bottomLeftRadius: Math.round(5 * Scaling.uiScale)
+                    // track selected frame name so it survives model rebuilds of this stack
+                    property string selectedName: ""
+                    property int _resolvedIndex: {
+                        if (selectedName === "" || root.frameSources.length === 0)
+                            return 0;
+                        for (var i = 0; i < root.frameSources.length; ++i) {
+                            if (root.frameSources[i].name === selectedName)
+                                return i;
                         }
+                        return 0;
+                    }
+                }
 
-                        contentItem: ColumnLayout {
-                            spacing: Math.round(6 * Scaling.uiScale)
+                Row {
+                    id: navRow
+                    anchors.bottom: parent.bottom
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 0
 
-                            ToolButton {
-                                id: lockCameraButton
-                                Layout.preferredWidth: Math.round(24 * Scaling.uiScale)
-                                Layout.preferredHeight: Math.round(24 * Scaling.uiScale)
-
-                                checkable: true
-                                checked: root.viewLocked
-                                onToggled: root.viewLocked = checked
-
-                                contentItem: Image {
-                                    source: FontAwesome.icon(lockCameraButton.checked ? "solid/lock" : "solid/lock-open")
-                                    width: lockCameraButton.checked ? Math.round(12 * Scaling.uiScale) : Math.round(14 * Scaling.uiScale)
-                                    height: width
-                                    anchors.centerIn: parent
-                                    smooth: true
-                                    mipmap: true
-                                }
-
-                                InfoToolTip {
-                                    delay: 800
-                                    textValue: lockCameraButton.checked ? "Unlock camera" : "Lock camera"
-                                }
-                            }
-
-                            ToolButton {
-                                id: homeCameraButton
-                                enabled: !root.viewLocked
-                                opacity: enabled ? 1.0 : 0.35
-
-                                Layout.preferredWidth: Math.round(24 * Scaling.uiScale)
-                                Layout.preferredHeight: Math.round(24 * Scaling.uiScale)
-
-                                icon.source: FontAwesome.icon("solid/house")
-                                icon.width: Math.round(18 * Scaling.uiScale)
-                                icon.height: Math.round(18 * Scaling.uiScale)
-
-                                onClicked: root.requestHomeCamera()
-
-                                InfoToolTip {
-                                    delay: 800
-                                    textValue: "Home orientation"
-                                }
-                            }
-
-                            ToolButton {
-                                id: guidesButton
-                                enabled: !root.viewLocked
-                                opacity: enabled ? 1.0 : 0.35
-
-                                Layout.preferredWidth: Math.round(24 * Scaling.uiScale)
-                                Layout.preferredHeight: Math.round(24 * Scaling.uiScale)
-
-                                checkable: true
-                                checked: root.gridEnabled
-                                onToggled: root.gridEnabled = checked
-
-                                contentItem: Image {
-                                    source: FontAwesome.icon("solid/table-cells-large")
-                                    width: Math.round(16 * Scaling.uiScale)
-                                    height: width
-                                    anchors.centerIn: parent
-                                    smooth: true
-                                    mipmap: true
-                                }
-
-                                InfoToolTip {
-                                    delay: 800
-                                    textValue: guidesButton.checked ? "Hide floor plane" : "Show floor plane"
-                                }
-                            }
-
-                            ToolButton {
-                                id: projectionButton
-                                enabled: !root.viewLocked
-                                opacity: enabled ? 1.0 : 0.35
-
-                                Layout.preferredWidth: Math.round(24 * Scaling.uiScale)
-                                Layout.preferredHeight: Math.round(24 * Scaling.uiScale)
-
-                                checkable: true
-                                checked: root.orthographicEnabled
-                                onToggled: root.orthographicEnabled = checked
-
-                                contentItem: Image {
-                                    source: FontAwesome.icon("solid/cube")
-                                    width: Math.round(16 * Scaling.uiScale)
-                                    height: width
-                                    anchors.centerIn: parent
-                                    smooth: true
-                                    mipmap: true
-                                }
-
-                                InfoToolTip {
-                                    delay: 800
-                                    textValue: projectionButton.checked ? "Disable orthographic projection" : "Enable orthographic projection"
-                                }
-                            }
+                    IconButton {
+                        id: prevBtn
+                        enabled: frameStack.count > 1
+                        tooltip: "Previous frame"
+                        iconSource: FontAwesome.icon("solid/chevron-left")
+                        iconSize: Math.round(12 * Scaling.uiScale)
+                        topPadding: Math.round(4 * Scaling.uiScale)
+                        bottomPadding: Math.round(4 * Scaling.uiScale)
+                        leftPadding: Math.round(5 * Scaling.uiScale)
+                        rightPadding: Math.round(5 * Scaling.uiScale)
+                        onClicked: {
+                            var idx = (frameStack._resolvedIndex - 1 + frameStack.count) % frameStack.count;
+                            frameStack.selectedName = root.frameSources[idx].name;
                         }
+                    }
+
+                    Label {
+                        text: frameStack.count > 0 ? "%1 (%2/%3)".arg(root.frameSources[frameStack._resolvedIndex].name).arg(frameStack._resolvedIndex + 1).arg(frameStack.count) : ""
+                        font: Scaling.uiFont
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideRight
+                        width: frameContainer.width - prevBtn.width - nextBtn.width
+                    }
+
+                    IconButton {
+                        id: nextBtn
+                        enabled: frameStack.count > 1
+                        tooltip: "Next frame"
+                        iconSource: FontAwesome.icon("solid/chevron-right")
+                        iconSize: Math.round(12 * Scaling.uiScale)
+                        topPadding: Math.round(4 * Scaling.uiScale)
+                        bottomPadding: Math.round(4 * Scaling.uiScale)
+                        leftPadding: Math.round(5 * Scaling.uiScale)
+                        rightPadding: Math.round(5 * Scaling.uiScale)
+                        onClicked: {
+                            var idx = (frameStack._resolvedIndex + 1) % frameStack.count;
+                            frameStack.selectedName = root.frameSources[idx].name;
+                        }
+                    }
+                }
+            }
+
+            Shape {
+                id: resizeHandle
+                parent: cameraFrameCollapser.container
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                property real size: Math.round(10 * Scaling.uiScale)
+                property real startWidth
+                property real startHeight
+                width: size
+                height: size
+                ShapePath {
+                    fillColor: resizeHover.hovered ? ThemeColors.midlight : ThemeColors.mid
+                    strokeColor: "transparent"
+                    startX: resizeHandle.size
+                    startY: 0
+                    PathLine {
+                        x: resizeHandle.size
+                        y: resizeHandle.size
+                    }
+                    PathLine {
+                        x: 0
+                        y: resizeHandle.size
+                    }
+                    PathLine {
+                        x: resizeHandle.size
+                        y: 0
+                    }
+                }
+                HoverHandler {
+                    id: resizeHover
+                    cursorShape: Qt.SizeFDiagCursor
+                }
+                DragHandler {
+                    id: resizeDrag
+                    target: null
+                    onActiveChanged: {
+                        if (active) {
+                            resizeHandle.startWidth = cameraFrameCollapser.contentItem.width;
+                            resizeHandle.startHeight = cameraFrameCollapser.contentItem.height;
+                            cameraFrameCollapser.applyTransitions = false;
+                        } else {
+                            cameraFrameCollapser.applyTransitions = true;
+                        }
+                    }
+                    onActiveTranslationChanged: {
+                        cameraFrameCollapser.contentItem.width = Math.max(40, resizeHandle.startWidth + activeTranslation.x);
+                        cameraFrameCollapser.contentItem.height = Math.max(40, resizeHandle.startHeight + activeTranslation.y);
                     }
                 }
             }
@@ -352,8 +393,7 @@ Item {
 
         Item {
             id: workspaceControls
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            anchors.fill: parent
 
             readonly property int consoleRowHeight: 20 * Scaling.uiScale
 
@@ -559,7 +599,7 @@ Item {
                     target: root
                     function onWidthChanged() {
                         if (root.consolePanelWidthExpanded) {
-                            root.consolePanelWidth = root.width
+                            root.consolePanelWidth = root.width;
                         }
                     }
                 }

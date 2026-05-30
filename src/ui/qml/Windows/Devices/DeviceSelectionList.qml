@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 
 import Pointcaster 1.0
 
@@ -34,6 +35,10 @@ Item {
 
             onPressAndHold: held = true
             onReleased: held = false
+            onClicked: {
+                list.forceActiveFocus();
+                setSelectedIndex(index);
+            }
 
             height: content.height
             width: content.width
@@ -42,7 +47,11 @@ Item {
                 id: content
 
                 property bool selected: list.currentIndex === index
-                property bool hovered: deviceRowMouseArea.containsMouse
+                property bool hovered: hoverHandler.hovered
+
+                HoverHandler {
+                    id: hoverHandler
+                }
 
                 width: list.width
                 height: Math.max(Math.round(30 * Scaling.uiScale), Math.ceil(Scaling.pointSize * 2.1))
@@ -67,18 +76,7 @@ Item {
                     }
                 }
 
-                MouseArea {
-                    id: deviceRowMouseArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    propagateComposedEvents: true
-                    onClicked: {
-                        list.forceActiveFocus();
-                        setSelectedIndex(index);
-                    }
-                }
-
-                Row {
+                RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: Math.round(8 * Scaling.uiScale)
                     anchors.rightMargin: Math.round(8 * Scaling.uiScale)
@@ -88,7 +86,8 @@ Item {
                         id: activeToggle
                         checked: modelData.active
                         onToggled: modelData.active = checked
-                        width: Math.round(16 * Scaling.uiScale)
+                        Layout.maximumWidth: Math.round(16 * Scaling.uiScale)
+                        Layout.minimumWidth: Math.round(16 * Scaling.uiScale)
                         height: parent.height
 
                         indicator: Image {
@@ -107,7 +106,8 @@ Item {
                         id: renderToggle
                         checked: modelData.render
                         onToggled: modelData.render = checked
-                        width: Math.round(16 * Scaling.uiScale)
+                        Layout.maximumWidth: Math.round(16 * Scaling.uiScale)
+                        Layout.minimumWidth: Math.round(16 * Scaling.uiScale)
                         height: parent.height
 
                         indicator: Image {
@@ -127,11 +127,6 @@ Item {
                         width: 7 * Scaling.uiScale
                         height: 7 * Scaling.uiScale
                         radius: 3.5 * Scaling.uiScale
-                        anchors {
-                            verticalCenter: parent.verticalCenter
-                            rightMargin: 2 * Scaling.uiScale
-                            leftMargin: 2 * Scaling.uiScale
-                        }
                         color: {
                             if (!modelData || modelData.status === undefined)
                                 return ThemeColors.inactive;
@@ -150,24 +145,70 @@ Item {
                         }
                     }
 
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: "transparent"
 
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: Math.max(Math.round(75 * Scaling.uiScale), parent.width - statusCircle.width - deviceTypeText.width - (parent.spacing * 2))
-                        elide: Text.ElideRight
-                        text: modelData.id
-                        color: ThemeColors.text
-                        font: Scaling.uiFont
+                        border.color: deviceLabelTextEdit.focus ? ThemeColors.highlight : "transparent"
+                        border.width: 1
+
+                        property string _startEditLabel
+
+                        TextInput {
+                            id: deviceLabelTextEdit
+                            anchors.fill: parent
+                            verticalAlignment: TextEdit.AlignVCenter
+                            focus: false
+
+                            color: ThemeColors.text
+                            selectionColor: ThemeColors.highlight
+                            selectedTextColor: ThemeColors.highlightedText
+                            font: Scaling.uiFont
+
+                            opacity: text == modelData.label ? 1 : 0.5
+
+                            Component.onCompleted: {
+                                text =  modelData.label || modelData.id
+                            }
+
+                            function focusForEdit() {
+                                deviceLabelTextEdit.focus = true;
+                                deviceLabelTextEdit.cursorVisible = true;
+                                deviceLabelTextEdit.selectAll();
+                                deviceLabelDoubleClickArea.visible = false;
+                                parent._startEditLabel = deviceLabelTextEdit.text;
+                            }
+
+                            onEditingFinished: {
+                                // TODO
+                                // validate here the label isn't the same as any other
+                                deviceLabelTextEdit.focus = false;
+                                deviceLabelDoubleClickArea.visible = true;
+                                if (text == parent._startEditLabel) return;
+                                modelData.label = text
+                                text = modelData.label || modelData.id
+                            }
+                        }
+
+                        MouseArea {
+                            id: deviceLabelDoubleClickArea
+                            anchors.fill: parent
+                            propagateComposedEvents: true
+                            onClicked: { mouse.accepted = false }
+                            onDoubleClicked: deviceLabelTextEdit.focusForEdit()
+                        }
                     }
+
 
                     Text {
                         id: deviceTypeText
-                        anchors.verticalCenter: parent.verticalCenter
                         elide: Text.ElideRight
                         text: modelData.displayName() + (modelData.pluginNullState ? " (Unloaded)" : "")
                         color: ThemeColors.text
                         opacity: modelData.pluginNullState ? .25 : .5
                         font: Scaling.uiFont
+                        Layout.rightMargin: Scaling.uiScale * 2
                     }
                 }
             }

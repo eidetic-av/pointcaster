@@ -99,7 +99,7 @@ void SessionRecorder::recorder_thread_work(std::stop_token stop_token) {
           // then populate the id map
           device_names.emplace(device.get(), std::move(device_id));
         },
-        device->config());
+        device->config_variant());
   }
 
   // start a file writer thread that waits for this recorder thread to dump

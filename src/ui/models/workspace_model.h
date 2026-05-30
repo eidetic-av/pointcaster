@@ -3,6 +3,7 @@
 #include "config_adapter.h"
 #include "device_adapter.h"
 #include "device_status.h"
+#include "operator_adapter.h"
 #include "session_recorder_model.h"
 #include <QObject>
 #include <QPointer>
@@ -21,6 +22,8 @@ namespace devices {
 class DevicePlugin;
 }
 } // namespace pc
+
+class CameraImageProvider;
 
 namespace pc::ui {
 
@@ -42,6 +45,11 @@ class WorkspaceModel : public QObject {
                  addDeviceMenuEntriesChanged)
   Q_PROPERTY(int selectedDeviceIndex READ selectedDeviceIndex WRITE
                  setSelectedDeviceIndex NOTIFY selectedDeviceIndexChanged)
+
+  // Selected operator (owned by a device)
+  Q_PROPERTY(OperatorAdapter *selectedOperatorAdapter READ
+                 selectedOperatorAdapter WRITE setSelectedOperatorAdapter NOTIFY
+                     selectedOperatorAdapterChanged)
 
   Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl)
 
@@ -87,8 +95,25 @@ public:
   int selectedDeviceIndex() const { return _selectedDeviceIndex; }
   void setSelectedDeviceIndex(int index);
 
+  Q_INVOKABLE DeviceAdapter *deviceAdapterAt(int index) const;
+  Q_INVOKABLE DeviceAdapter *selectedDeviceAdapter() const {
+    return deviceAdapterAt(_selectedDeviceIndex);
+  }
+
+  OperatorAdapter *selectedOperatorAdapter() const {
+    return _selectedOperatorAdapter;
+  }
+  void setSelectedOperatorAdapter(OperatorAdapter *adapter);
+
   Q_INVOKABLE void addOperatorToDevice(int deviceIndex,
                                        const QString &operatorPluginName);
+  Q_INVOKABLE void removeOperatorFromDevice(int deviceIndex, int operatorIndex);
+  Q_INVOKABLE void reorderOperatorOnDevice(int deviceIndex, int fromIndex,
+                                           int toIndex);
+
+  Q_INVOKABLE void attachOperatorConfigAdapters(DeviceAdapter *deviceAdapter);
+  Q_INVOKABLE void initOperatorAdapter(OperatorAdapter *opAdapter,
+                                       DeviceAdapter *deviceAdapter);
 
   QUrl saveFileUrl() const { return _saveFileUrl; }
   void setSaveFileUrl(const QUrl &url) { _saveFileUrl = url; }
@@ -106,6 +131,8 @@ public:
     _foldedPropertyPaths[path] = folded;
     foldedPropertyPathsChanged();
   }
+
+  void setImageProvider(CameraImageProvider *provider);
 
 public slots:
   void syncAdapters();
@@ -128,6 +155,8 @@ signals:
   void deviceAdded();
   void deviceDeleted();
 
+  void selectedOperatorAdapterChanged();
+
   void consoleOverlayEntriesChanged();
   void consoleHistoryEntriesChanged();
 
@@ -138,11 +167,15 @@ signals:
 private:
   pc::Workspace &_workspace;
 
+  CameraImageProvider *_imageProvider = nullptr;
+
   // TODO raw pointer and new? really?
   QUndoStack *_undoStack = new QUndoStack(this);
 
   QList<QObject *> _sessionAdapters;
   QList<QObject *> _deviceAdapters;
+
+  QPointer<OperatorAdapter> _selectedOperatorAdapter;
 
   RecorderModel *_recorderModel;
 
@@ -156,7 +189,9 @@ private:
   QUrl _saveFileUrl;
 
   // applies a new config and syncs adapters on the UI thread
-  void applyWorkspaceConfigAndRebuild(pc::WorkspaceConfiguration new_config);
+  enum class RebuildScope { None, Sessions, Devices, All };
+  void applyWorkspaceConfigAndRebuild(pc::WorkspaceConfiguration new_config,
+                                      RebuildScope scope = RebuildScope::All);
 
   // Helpers to get stable ids from adapters without relying on Q_PROPERTY
   // names.

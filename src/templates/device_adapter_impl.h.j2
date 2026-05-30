@@ -16,6 +16,7 @@
 
 #include <ui/models/config_adapter.h>
 #include <ui/models/device_adapter.h>
+#include <ui/models/camera_image_provider.h>
 #include <plugins/devices/device_variants.h>
 #include <{{ header_include_path }}>
 
@@ -62,8 +63,9 @@ public:
 
     explicit {{ s.adapter_name }}({{ s.struct_name }} &config,
                                  pc::devices::DevicePlugin* plugin,
+                                 CameraImageProvider *imageProvider = nullptr,
                                  QObject *parent = nullptr)
-        : DeviceAdapter(plugin, parent)
+        : DeviceAdapter(plugin, imageProvider, parent)
         , m_config(config)
 {% for m in s.members %}
 {% if m.type.endswith("Configuration") and not (m.type == "std::string" or m.type == "QString" or m.type == "bool" or m.is_enum or is_float3_type(m.type) or is_simple_comparable_type(m.type)) %}

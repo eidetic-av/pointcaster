@@ -28,7 +28,9 @@ qt_add_qml_module(PointcasterQml
         Controls/OriginGizmo.qml
         Controls/OrbitViewController.qml
         Controls/Gizmos/SelectionGizmo.qml
+        Controls/Timeline.qml
         Editors/ConfigurationEditor.qml
+        Editors/OperatorPipelineEditor.qml
         PointCloud/PointCloudMaterial.qml
         PointCloud/PointIndexMaterial.qml
         PointCloud/PointSolidMaterial.qml
@@ -52,6 +54,7 @@ qt_add_qml_module(PointcasterQml
         Windows/Sessions/SessionView.qml
         Windows/Sessions/CentralSessionView.qml
         Windows/Sessions/SessionControls.qml
+        Windows/Sessions/SessionControlCollapser.qml
         Windows/Recording/RecordingWindow.qml
         Windows/Alignment/AlignmentWindow.qml
         Windows/Alignment/AlignmentView.qml
