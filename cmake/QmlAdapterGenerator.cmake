@@ -36,9 +36,9 @@ function(add_qml_adapters)
     set(CONFIG_OUTPUTS "")
 
     foreach(config_header IN LISTS ADAPTER_CONFIG_INPUTS)
-        get_filename_component(CONFIG_INPUT "${config_header}" ABSOLUTE)
-
+        get_filename_component(CONFIG_INPUT "${CMAKE_SOURCE_DIR}/src/${config_header}" ABSOLUTE)
         file(RELATIVE_PATH REL_PATH "${CMAKE_SOURCE_DIR}" "${CONFIG_INPUT}")
+
         string(REPLACE "\\" "/" REL_PATH "${REL_PATH}")
 
         # Strip leading "src/" so the output include root matches <session/...>

@@ -46,21 +46,21 @@ qt_import_qml_plugins(pointcaster)
 
 # for our generated headers that connect configuration structs <-> qml
 set(CONFIG_ADAPTER_INPUTS
-    ${CMAKE_SOURCE_DIR}/src/config/file_config.h
-    ${CMAKE_SOURCE_DIR}/src/config/network_config.h
-    ${CMAKE_SOURCE_DIR}/src/config/transform_config.h
-    ${CMAKE_SOURCE_DIR}/src/config/color_transform_config.h
-    ${CMAKE_SOURCE_DIR}/src/config/sequence_config.h
-    ${CMAKE_SOURCE_DIR}/src/session/session_config.h
-    ${CMAKE_SOURCE_DIR}/src/camera/camera_config.h
-    ${CMAKE_SOURCE_DIR}/src/camera/look_at_camera_config.h
+    config/file_config.h
+    config/network_config.h
+    config/transform_config.h
+    config/color_transform_config.h
+    config/sequence_config.h
+    session/session_config.h
+    camera/camera_config.h
+    camera/look_at_camera_config.h
     # TODO we need some faculty to create these adapters
     # without them being expressed in the main module here...
     # i guess the UI adapters need to be generated inside the 
     # device CMakeLists.txt not here
-    ${CMAKE_SOURCE_DIR}/src/plugins/devices/orbbec/orbbec_device_config.h
-    ${CMAKE_SOURCE_DIR}/src/plugins/devices/ply/ply_device_config.h
-    ${CMAKE_SOURCE_DIR}/src/plugins/operators/fringe_removal/fringe_removal_config.h
+    plugins/devices/orbbec/orbbec_device_config.h
+    plugins/devices/ply/ply_device_config.h
+    plugins/operators/fringe_removal/fringe_removal_config.h
 )
 
 add_qml_adapters(
