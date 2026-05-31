@@ -113,7 +113,6 @@ target_precompile_headers(CudaBackend PRIVATE
   <Corrade/Containers/String.h>
   <Corrade/Containers/StringView.h>
   <Corrade/PluginManager/AbstractPlugin.h>
-  <config/transform_config.h>
   <cpplocate/cpplocate.h>
   <filesystem>
   <functional>
