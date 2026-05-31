@@ -1,21 +1,23 @@
 #pragma once
 
-#include "metrics/prometheus_server.h"
-#include "plugins/backend/backend_plugin.h"
-#include "plugins/devices/device_plugin.h"
-#include "plugins/devices/device_variants.h"
-#include "plugins/operators/operator_plugin.h"
+#include "networking/point_streamer.h"
+#include "pipeline/session_operator_pipeline.h"
+
 #include "recorder/session_recorder.h"
 #include "workspace_config.h"
 
 #include <Corrade/Containers/Pointer.h>
 #include <Corrade/PluginManager/Manager.h>
-
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <metrics/prometheus_server.h>
 #include <mutex>
 #include <optional>
+#include <plugins/backend/backend_plugin.h>
+#include <plugins/devices/device_plugin.h>
+#include <plugins/devices/device_variants.h>
+#include <plugins/operators/operator_plugin.h>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -48,14 +50,16 @@ public:
       operator_plugin_manager;
   std::vector<std::string> loaded_operator_plugin_names{};
 
-  std::unique_ptr<metrics::PrometheusServer> prometheus_server;
-
   std::unique_ptr<recorder::SessionRecorder> session_recorder;
+  std::unique_ptr<networking::PointStreamer> point_streamer;
+
+  pipeline::SessionOperatorPipeline session_operator_pipeline;
 
   explicit Workspace(const WorkspaceConfiguration &initial);
 
   // updates config and syncs (creates/destroys) device plugin instances
-  void apply_new_config(const WorkspaceConfiguration &new_config, bool sync_devices = true);
+  void apply_new_config(const WorkspaceConfiguration &new_config,
+                        bool sync_devices = true);
 
   // sync device plugin instances to match config.devices
   void sync_devices();

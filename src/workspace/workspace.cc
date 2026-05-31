@@ -49,15 +49,18 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
                                  CameraConfiguration{.id = pc::uuid::word()});
   }
 
-  // start recording metrics
-  metrics::PrometheusServer::initialise();
-
   // find and initialise plugins
   backend_plugin_manager = plugins::load_backend_plugins(*this);
   device_plugin_manager = plugins::load_device_plugins(*this);
   operator_plugin_manager = plugins::load_operator_plugins(*this);
 
-  session_recorder = std::make_unique<recorder::SessionRecorder>(this);
+  // TODO maybe the metrics server shouldn't be a singleton and should
+  // follow the same pattern as session_recorder & point_streamer belonging 
+  // to this workspace class and the injected workspace is what grabs it 
+  // wherever it's needed
+  metrics::PrometheusServer::initialise();
+
+  session_recorder = std::make_unique<recorder::SessionRecorder>(*this);
 
   // instantiate device plugins for the initial config
   sync_devices();

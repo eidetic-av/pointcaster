@@ -20,7 +20,7 @@ enum class OutputFileType { PLY };
 
 class SessionRecorder {
 public:
-  explicit SessionRecorder(Workspace *workspace);
+  explicit SessionRecorder(Workspace &workspace);
 
   void start_recording();
   void stop_recording();
@@ -37,7 +37,7 @@ public:
   void set_recording_changed_callback(std::function<void(bool)> callback);
 
 private:
-  Workspace *_workspace;
+  Workspace &_workspace;
   std::function<void(bool)> _recording_changed_callback{};
 
   std::atomic<bool> _recording = false;

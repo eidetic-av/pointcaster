@@ -18,7 +18,7 @@ namespace pc::recorder {
 
 using namespace pc::profiling;
 
-SessionRecorder::SessionRecorder(Workspace *workspace)
+SessionRecorder::SessionRecorder(Workspace &workspace)
     : _workspace(workspace) {
 
       };
@@ -81,7 +81,7 @@ void SessionRecorder::recorder_thread_work(std::stop_token stop_token) {
   // need the device name to write a frame to disk (if recording a sequence of
   // individual files like with PLY)
   std::unordered_map<devices::DevicePlugin *, std::string> device_names;
-  for (auto &device : _workspace->devices) {
+  for (auto &device : _workspace.devices) {
     std::visit(
         [&](auto &device_config) {
           std::string device_id = device_config.id;
@@ -115,7 +115,7 @@ void SessionRecorder::recorder_thread_work(std::stop_token stop_token) {
 
     if (_queue_depth.load(std::memory_order_relaxed) < frame_queue_max) {
       std::vector<DeviceFrame> device_frames;
-      for (auto &device : _workspace->devices) {
+      for (auto &device : _workspace.devices) {
         device_frames.push_back({.device_name = device_names[device.get()],
                                  .data = device->point_cloud()});
       }
