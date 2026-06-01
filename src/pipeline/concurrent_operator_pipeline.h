@@ -1,5 +1,6 @@
 #pragma once
 
+#include "plugins/operators/operator_host.h"
 #include <atomic>
 #include <memory>
 #include <plugins/operators/operator_plugin.h>
@@ -14,17 +15,29 @@
 
 namespace pc::pipeline {
 
+using OperatorPipelineWorkerChain =
+    std::vector<std::unique_ptr<operators::OperatorPlugin>>;
+
+std::vector<OperatorPipelineWorkerChain> build_worker_chains(
+    std::span<const operators::OperatorConfigurationVariant> configs,
+    size_t concurrency, operators::OperatorHost &owner, Workspace &workspace);
+
 class ConcurrentOperatorPipeline {
 public:
   ConcurrentOperatorPipeline(
-      std::vector<std::vector<std::unique_ptr<operators::OperatorPlugin>>>
-          worker_chains,
+      std::vector<OperatorPipelineWorkerChain> worker_chains,
       size_t max_queue_size = 8)
       : _worker_chains(std::move(worker_chains)) {
     _input_queue.set_capacity(max_queue_size);
   }
 
   ~ConcurrentOperatorPipeline() { stop(); }
+
+  ConcurrentOperatorPipeline(const ConcurrentOperatorPipeline &) = delete;
+  ConcurrentOperatorPipeline &
+  operator=(const ConcurrentOperatorPipeline &) = delete;
+  ConcurrentOperatorPipeline(ConcurrentOperatorPipeline &&) = delete;
+  ConcurrentOperatorPipeline &operator=(ConcurrentOperatorPipeline &&) = delete;
 
   void start();
   void stop();

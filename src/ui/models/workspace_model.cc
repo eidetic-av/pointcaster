@@ -10,6 +10,7 @@
 #include <QMetaObject>
 #include <QObject>
 #include <QPointer>
+#include <QSet>
 #include <QString>
 #include <QUndoCommand>
 #include <QVariant>
@@ -22,6 +23,7 @@
 #include <nlohmann/json.hpp>
 #include <plugins/devices/device_variants.h>
 #include <ranges>
+#include <session/session.h>
 #include <session/session_config.h>
 #include <session/session_config_adapter.gen.h>
 #include <spdlog/common.h>
@@ -83,6 +85,16 @@ static int find_operator_index_by_id(
       },
       device_config);
 }
+static int find_session_operator_index_by_id(const pc::SessionConfiguration &s,
+                                             const std::string &operator_id) {
+  for (int i = 0; i < int(s.operators.size()); ++i) {
+    auto [id, pn] =
+        pc::operators::operator_info_from_variant(s.operators[size_t(i)]);
+    if (id == operator_id) return i;
+  }
+  return -1;
+}
+
 // compares current adapter list to plugin operators by id & order
 static bool operator_structure_changed(DeviceAdapter *adapter,
                                        pc::devices::DevicePlugin *plugin) {
@@ -100,6 +112,25 @@ static bool operator_structure_changed(DeviceAdapter *adapter,
   }
   return false;
 }
+// session analogue of operator_structure_changed
+static bool
+session_operator_structure_changed(const QList<OperatorAdapter *> &current,
+                                   pc::Session *session) {
+  if (!session) return !current.isEmpty();
+  const auto &target = session->operators;
+  if (int(target.size()) != current.size()) return true;
+  for (int i = 0; i < current.size(); ++i) {
+    auto *op = current[i];
+    if (!op || !op->plugin() || !target[size_t(i)]) return true;
+    auto [a_id, _] = pc::operators::operator_info_from_variant(
+        op->plugin()->config_variant());
+    auto [b_id, __] = pc::operators::operator_info_from_variant(
+        target[size_t(i)]->config_variant());
+    if (a_id != b_id) return true;
+  }
+  return false;
+}
+
 // -------- undo commands --------
 
 class SetSessionConfigCommand final : public QUndoCommand {
@@ -381,6 +412,34 @@ QList<QObject *> WorkspaceModel::sessionAdapters() const {
   return _sessionAdapters;
 }
 
+void WorkspaceModel::setSelectedSessionId(const QString &id) {
+  if (_selectedSessionId == id) return;
+  _selectedSessionId = id;
+  emit selectedSessionChanged();
+}
+
+QObject *WorkspaceModel::selectedSessionAdapter() const {
+  for (QObject *obj : _sessionAdapters) {
+    auto *a = qobject_cast<SessionConfigurationAdapter *>(obj);
+    if (a && a->id() == _selectedSessionId) return a;
+  }
+  // fall back to the first session when no (valid) selection is set
+  return _sessionAdapters.isEmpty() ? nullptr : _sessionAdapters.first();
+}
+
+QList<OperatorAdapter *>
+WorkspaceModel::selectedSessionOperatorAdapters() const {
+  QString id = _selectedSessionId;
+  if (id.isEmpty() || !_sessionOperatorAdapters.contains(id)) {
+    if (!_sessionAdapters.isEmpty()) {
+      auto *a =
+          qobject_cast<SessionConfigurationAdapter *>(_sessionAdapters.first());
+      if (a) id = a->id();
+    }
+  }
+  return _sessionOperatorAdapters.value(id);
+}
+
 QVariant WorkspaceModel::deviceAdapters() const {
   return QVariant::fromValue(_deviceAdapters);
 }
@@ -517,6 +576,7 @@ DeviceAdapter *WorkspaceModel::deviceAdapterAt(int index) const {
   if (index < 0 || index >= _deviceAdapters.size()) return nullptr;
   return qobject_cast<DeviceAdapter *>(_deviceAdapters[index]);
 }
+
 void WorkspaceModel::addOperatorToDevice(int deviceIndex,
                                          const QString &operatorPluginName) {
   auto *adapter = deviceAdapterAt(deviceIndex);
@@ -622,6 +682,58 @@ void WorkspaceModel::reorderOperatorOnDevice(int deviceIndex, int fromIndex,
   adapter->rebuildOperatorAdapters();
   attachOperatorConfigAdapters(adapter);
 }
+
+void WorkspaceModel::addOperatorToSession(const QString &sessionId,
+                                          const QString &operatorPluginName) {
+  auto new_config = _workspace.config;
+  const int idx = find_session_index_by_id(new_config, sessionId.toStdString());
+  if (idx < 0 || idx >= int(new_config.sessions.size())) return;
+
+  const auto op_name = operatorPluginName.toStdString();
+  bool found_type = false;
+  operators::for_each_operator_config_type([&]<typename OperatorConfigType>() {
+    if (found_type) return;
+    if (op_name == OperatorConfigType::PluginName) {
+      new_config.sessions[size_t(idx)].operators.push_back(
+          OperatorConfigType{.id = pc::uuid::word()});
+      found_type = true;
+    }
+  });
+
+  if (!found_type) {
+    pc::logger()->error("Unknown operator plugin name '{}'", op_name);
+    return;
+  }
+
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Sessions);
+}
+
+void WorkspaceModel::removeOperatorFromSession(const QString &sessionId,
+                                               int operatorIndex) {
+  auto new_config = _workspace.config;
+  const int idx = find_session_index_by_id(new_config, sessionId.toStdString());
+  if (idx < 0 || idx >= int(new_config.sessions.size())) return;
+  auto &ops = new_config.sessions[size_t(idx)].operators;
+  if (operatorIndex < 0 || operatorIndex >= int(ops.size())) return;
+  ops.erase(ops.begin() + operatorIndex);
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Sessions);
+}
+
+void WorkspaceModel::reorderOperatorOnSession(const QString &sessionId,
+                                              int fromIndex, int toIndex) {
+  if (fromIndex == toIndex) return;
+  auto new_config = _workspace.config;
+  const int idx = find_session_index_by_id(new_config, sessionId.toStdString());
+  if (idx < 0 || idx >= int(new_config.sessions.size())) return;
+  auto &ops = new_config.sessions[size_t(idx)].operators;
+  if (fromIndex < 0 || fromIndex >= int(ops.size())) return;
+  if (toIndex < 0 || toIndex >= int(ops.size())) return;
+  auto item = std::move(ops[size_t(fromIndex)]);
+  ops.erase(ops.begin() + fromIndex);
+  ops.insert(ops.begin() + toIndex, std::move(item));
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Sessions);
+}
+
 void WorkspaceModel::attachOperatorConfigAdapters(
     DeviceAdapter *deviceAdapter) {
   for (auto *opAdapter : deviceAdapter->operatorAdapters()) {
@@ -717,20 +829,23 @@ void WorkspaceModel::initOperatorAdapter(OperatorAdapter *opAdapter,
         }
 
         // TODO
-        // sync the new operator config with plugin's versions... but this seems like it should have happened automatically because of above ^
-        // i think we want workspace config to be canonical source of truth throughout application somehow
-          const int dev_idx = find_device_index_by_id(_workspace.config,
-                                                      device_id.toStdString());
-          if (dev_idx >= 0 && dev_idx < int(_workspace.devices.size()) &&
-              _workspace.devices[dev_idx]) {
-            const int op_idx = find_operator_index_by_id(
-                _workspace.devices[dev_idx]->config_variant(),
-                operator_id.toStdString());
-            if (op_idx >= 0) {
-              std::visit([&](auto &dev) { dev.operators[size_t(op_idx)] = after; },
-                         _workspace.devices[dev_idx]->config_variant());
-            }
+        // sync the new operator config with plugin's versions... but this seems
+        // like it should have happened automatically because of above ^ i think
+        // we want workspace config to be canonical source of truth throughout
+        // application somehow
+        const int dev_idx =
+            find_device_index_by_id(_workspace.config, device_id.toStdString());
+        if (dev_idx >= 0 && dev_idx < int(_workspace.devices.size()) &&
+            _workspace.devices[dev_idx]) {
+          const int op_idx = find_operator_index_by_id(
+              _workspace.devices[dev_idx]->config_variant(),
+              operator_id.toStdString());
+          if (op_idx >= 0) {
+            std::visit(
+                [&](auto &dev) { dev.operators[size_t(op_idx)] = after; },
+                _workspace.devices[dev_idx]->config_variant());
           }
+        }
 
         // configAdapter->notifyFieldChanged(path);
 
@@ -747,6 +862,150 @@ void WorkspaceModel::initOperatorAdapter(OperatorAdapter *opAdapter,
                   Qt::QueuedConnection);
             }));
       });
+}
+
+void WorkspaceModel::attachSessionOperatorConfigAdapters(
+    const QString &sessionId, const QList<OperatorAdapter *> &ops) {
+  for (auto *opAdapter : ops) {
+    auto *plugin = opAdapter->plugin();
+    if (!plugin) continue;
+    auto &config_variant = plugin->config_variant();
+    ConfigAdapter *adapter = nullptr;
+    std::visit(
+        [opAdapter, &adapter](auto &config) {
+          using ConfigType = std::decay_t<decltype(config)>;
+          if constexpr (std::is_same_v<
+                            ConfigType,
+                            pc::operators::FringeRemovalConfiguration>) {
+            adapter = new pc::operators::FringeRemovalConfigurationAdapter(
+                const_cast<pc::operators::FringeRemovalConfiguration &>(config),
+                opAdapter);
+          }
+          // TODO
+          // Add branches here for future operator types, mirroring the device
+          // attachOperatorConfigAdapters().
+        },
+        config_variant);
+    if (adapter) {
+      opAdapter->setConfigAdapter(adapter);
+      initSessionOperatorAdapter(opAdapter, sessionId);
+    }
+  }
+}
+
+void WorkspaceModel::initSessionOperatorAdapter(OperatorAdapter *opAdapter,
+                                                const QString &sessionId) {
+  auto *innerAdapter = opAdapter->configAdapter();
+  if (!innerAdapter) return;
+  QObject::connect(
+      innerAdapter, &ConfigAdapter::editRequested, this,
+      [this, opAdapter, sessionId](const QString &path, const QVariant &value) {
+        auto *configAdapter = opAdapter->configAdapter();
+        if (!configAdapter) return;
+        auto *plugin = opAdapter->plugin();
+        if (!plugin) return;
+        auto [op_id_sv, op_pn] =
+            pc::operators::operator_info_from_variant(plugin->config_variant());
+        const QString operator_id =
+            QString::fromStdString(std::string(op_id_sv));
+
+        SessionConfiguration before;
+        SessionConfiguration after;
+        pc::WorkspaceConfiguration base_snapshot;
+        {
+          std::scoped_lock lock(_workspace.config_access);
+          base_snapshot = _workspace.config;
+          const int s = find_session_index_by_id(_workspace.config,
+                                                 sessionId.toStdString());
+          if (s < 0) return;
+          before = _workspace.config.sessions[size_t(s)];
+        }
+
+        const bool changed = configAdapter->apply(path, value);
+        if (!changed) return;
+        pc::operators::OperatorConfigurationVariant updated =
+            plugin->config_variant();
+
+        {
+          std::scoped_lock lock(_workspace.config_access);
+          const int s = find_session_index_by_id(_workspace.config,
+                                                 sessionId.toStdString());
+          if (s < 0) return;
+          auto &session = _workspace.config.sessions[size_t(s)];
+          const int o = find_session_operator_index_by_id(
+              session, operator_id.toStdString());
+          if (o < 0) return;
+          session.operators[size_t(o)] = std::move(updated);
+          after = session;
+        }
+
+        QString command_text = QStringLiteral("Edit %1").arg(path);
+        _undoStack->push(new SetSessionConfigCommand(
+            sessionId, std::move(before), std::move(after),
+            std::move(command_text), std::move(base_snapshot),
+            [this](pc::WorkspaceConfiguration config) {
+              QMetaObject::invokeMethod(
+                  this,
+                  [this, config = std::move(config)]() mutable {
+                    // update config + sessions, don't rebuild devices
+                    _workspace.apply_new_config(std::move(config), false);
+                    syncSessionAdapters();
+                  },
+                  Qt::QueuedConnection);
+            }));
+      });
+}
+
+void WorkspaceModel::rebuildSessionOperatorAdapters(
+    const QString &sessionId, SessionConfigurationAdapter *adapter,
+    pc::Session *session) {
+  auto &list = _sessionOperatorAdapters[sessionId];
+  qDeleteAll(list);
+  list.clear();
+  if (session) {
+    for (auto &op : session->operators) {
+      if (!op) continue;
+      auto *opAdapter = new OperatorAdapter(op.get(), session, adapter);
+      list.append(opAdapter);
+    }
+  }
+  attachSessionOperatorConfigAdapters(sessionId, list);
+}
+
+void WorkspaceModel::syncSessionOperatorAdapters() {
+  QSet<QString> live_ids;
+  for (QObject *obj : _sessionAdapters) {
+    auto *adapter = qobject_cast<SessionConfigurationAdapter *>(obj);
+    if (!adapter) continue;
+    const QString id = adapter->id();
+    if (id.isEmpty()) continue;
+    live_ids.insert(id);
+
+    pc::Session *session = nullptr;
+    {
+      auto it = _workspace.sessions.find(id.toStdString());
+      if (it != _workspace.sessions.end()) session = it->second.get();
+    }
+
+    const bool has_entry = _sessionOperatorAdapters.contains(id);
+    const auto &current = _sessionOperatorAdapters[id];
+    if (!has_entry || session_operator_structure_changed(current, session)) {
+      rebuildSessionOperatorAdapters(id, adapter, session);
+    }
+  }
+
+  // drop operator adapters for sessions that no longer exist; they were
+  // parented to their (now-deleted) session adapter, so just drop references
+  for (auto it = _sessionOperatorAdapters.begin();
+       it != _sessionOperatorAdapters.end();) {
+    if (!live_ids.contains(it.key())) {
+      it = _sessionOperatorAdapters.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  emit selectedSessionChanged();
 }
 
 void WorkspaceModel::setSelectedOperatorAdapter(OperatorAdapter *adapter) {
@@ -979,9 +1238,11 @@ void WorkspaceModel::syncSessionAdapters() {
                                (_sessionConfigPtrById.value(id) == current_ptr);
       if (adapter && !ptr_matches) {
         // Underlying SessionConfiguration moved (vector realloc / reorder).
-        // Old adapter holds a dangling reference: must recreate.
+        // Old adapter holds a dangling reference: must recreate. Its operator
+        // adapters are children and will be deleted with it; drop our refs.
         adapter->deleteLater();
         adapter = nullptr;
+        _sessionOperatorAdapters.remove(id);
       }
       if (adapter) {
         (void)adapter->setConfig(session_config);
@@ -1007,6 +1268,11 @@ void WorkspaceModel::syncSessionAdapters() {
   _sessionConfigPtrById = std::move(new_ptrs_by_id);
 
   emit sessionAdaptersChanged();
+
+  // Rebuild per-session operator adapters from each session's live
+  // OperatorPlugin instances.
+  syncSessionOperatorAdapters();
+
   pc::logger()->trace("Finished syncing sessionAdapters");
 }
 

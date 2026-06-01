@@ -1,9 +1,10 @@
 #pragma once
 
 #include "networking/point_streamer.h"
-#include "pipeline/session_operator_pipeline.h"
+#include "session/session.h"
 
 #include "recorder/session_recorder.h"
+#include "session/session.h"
 #include "workspace_config.h"
 
 #include <Corrade/Containers/Pointer.h>
@@ -53,7 +54,7 @@ public:
   std::unique_ptr<recorder::SessionRecorder> session_recorder;
   std::unique_ptr<networking::PointStreamer> point_streamer;
 
-  pipeline::SessionOperatorPipeline session_operator_pipeline;
+  std::unordered_map<std::string, std::unique_ptr<Session>> sessions;
 
   explicit Workspace(const WorkspaceConfiguration &initial);
 
@@ -63,6 +64,8 @@ public:
 
   // sync device plugin instances to match config.devices
   void sync_devices();
+
+  void sync_sessions();
 };
 
 } // namespace pc

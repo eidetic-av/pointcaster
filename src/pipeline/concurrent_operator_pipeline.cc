@@ -1,8 +1,32 @@
 #include "concurrent_operator_pipeline.h"
 
 #include <logger/logger.h>
+#include <workspace/workspace.h>
 
 namespace pc::pipeline {
+
+std::vector<OperatorPipelineWorkerChain> build_worker_chains(
+    std::span<const operators::OperatorConfigurationVariant> configs,
+    size_t concurrency, operators::OperatorHost &owner, Workspace &workspace) {
+
+  std::vector<OperatorPipelineWorkerChain> chains(concurrency);
+
+  for (auto &chain : chains) {
+    chain.reserve(configs.size());
+    for (const auto &variant : configs) {
+      const auto [operator_id, plugin_name] =
+          operators::operator_info_from_variant(variant);
+
+      auto op = workspace.operator_plugin_manager->instantiate(plugin_name);
+      op->update_config(variant);
+      op->init(&owner, *workspace.backend_plugin_manager);
+
+      chain.push_back(std::unique_ptr<operators::OperatorPlugin>(op.release()));
+    }
+  }
+
+  return chains;
+}
 
 void ConcurrentOperatorPipeline::start() {
   _latest.store(nullptr);

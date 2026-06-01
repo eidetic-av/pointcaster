@@ -124,6 +124,7 @@ KDDW.DockWidget {
                         model: root.workspace ? root.workspace.deviceAdapters : 0
 
                         Column {
+                            id: deviceDelegate
                             required property var modelData
                             required property int index
                             width: parent.width
@@ -131,7 +132,7 @@ KDDW.DockWidget {
 
                             ConfigurationEditor {
                                 id: deviceConfigEditor
-                                configAdapter: modelData
+                                configAdapter: deviceDelegate.modelData
                                 workspace: root.workspace
                                 flattenFields: false
                                 width: parent.width
@@ -141,9 +142,11 @@ KDDW.DockWidget {
 
                             OperatorPipelineEditor {
                                 workspace: root.workspace
-                                deviceIndex: index
-                                deviceAdapter: modelData
+                                operators: deviceDelegate.modelData && deviceDelegate.modelData.operatorAdapters ? deviceDelegate.modelData.operatorAdapters : []
                                 width: parent.width
+
+                                onAddOperatorRequested: operatorType => root.workspace.addOperatorToDevice(deviceDelegate.index, operatorType)
+                                onRemoveOperatorRequested: operatorIndex => root.workspace.removeOperatorFromDevice(deviceDelegate.index, operatorIndex)
                             }
                         }
                     }

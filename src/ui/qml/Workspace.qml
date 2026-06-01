@@ -8,6 +8,8 @@ QtObject {
     property int labelColumnWidth: 150
     property real inputDragSpeed: 0.5
 
+    property int selectedSessionIndex: 0
+
     property list<SessionView> sessionViews: []
 
     function addSessionView(sessionView) {

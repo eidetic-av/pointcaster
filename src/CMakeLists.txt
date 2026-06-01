@@ -20,11 +20,15 @@ qt_add_executable(pointcaster
   #WIN32
   pointcaster.cc
   workspace/workspace.cc
+  session/session.cc
   workspace/workspace_config.cc
   camera/look_at_camera.cc
   camera/camera_frame.cc
   recorder/session_recorder.cc
   pipeline/concurrent_operator_pipeline.cc
+  networking/point_streamer.cc
+  # TODO should probs be part of plugin lib? but other deps cant find it if it is atm
+  plugins/operators/operator_host.cc
   ${app_icon_resource}
 )
 
@@ -52,8 +56,8 @@ add_subdirectory(plugins)
 find_package(reflectcpp CONFIG REQUIRED)
 find_package(TBB REQUIRED)
 find_package(PCL CONFIG REQUIRED)
-find_package(OpenCV CONFIG REQUIRED 
-  COMPONENTS 
+find_package(OpenCV CONFIG REQUIRED
+  COMPONENTS
   opencv_core
   opencv_imgproc
 )
@@ -73,7 +77,7 @@ target_link_libraries(pointcaster PRIVATE
   ${PCL_LIBRARIES}
 )
 
-target_include_directories(pointcaster PRIVATE 
+target_include_directories(pointcaster PRIVATE
   "${CMAKE_SOURCE_DIR}/src"
   ${OpenCV_INCLUDE_DIRS}
   ${TBB_INCLUDE_DIRS}

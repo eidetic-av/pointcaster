@@ -8,14 +8,16 @@ Column {
     id: root
 
     required property var workspace
-    required property int deviceIndex
-    required property var deviceAdapter
+
+    property var operators: []
+
+    signal addOperatorRequested(string operatorType)
+    signal removeOperatorRequested(int operatorIndex)
 
     property bool sectionExpanded: true
 
     spacing: 0
 
-    readonly property var operators: deviceAdapter && deviceAdapter.operatorAdapters ? deviceAdapter.operatorAdapters : []
     readonly property int operatorCount: operators.length
 
     Rectangle {
@@ -285,7 +287,7 @@ Column {
                                         rightPadding: Math.round(4 * Scaling.uiScale)
                                         tooltip: "Remove operator"
 
-                                        onClicked: root.workspace.removeOperatorFromDevice(root.deviceIndex, operatorDelegate.index)
+                                        onClicked: root.removeOperatorRequested(operatorDelegate.index)
                                     }
                                 }
                             }
@@ -354,7 +356,7 @@ Column {
 
                         MenuItem {
                             text: "Fringe Removal"
-                            onTriggered: root.workspace.addOperatorToDevice(root.deviceIndex, "FringeRemovalOperator")
+                            onTriggered: root.addOperatorRequested("FringeRemovalOperator")
                         }
                     }
                 }

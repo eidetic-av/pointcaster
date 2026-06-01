@@ -1,4 +1,5 @@
 #include "workspace_config.h"
+#include <algorithm>
 #include <exception>
 #include <iostream>
 #include <logger/logger.h>
@@ -51,6 +52,16 @@ void save_workspace_to_file(const WorkspaceConfiguration &config,
   } catch (const std::exception &e) {
     pc::logger()->error("Failed to save '{}': {}", file_path, e.what());
   }
+}
+
+std::optional<std::reference_wrapper<SessionConfiguration>>
+session_config_from_workspace(WorkspaceConfiguration &config,
+                              std::string_view session_id) {
+  auto it = std::find_if(
+      config.sessions.begin(), config.sessions.end(),
+      [session_id](auto &session) { return session.id == session_id; });
+  if (it == config.sessions.end()) return std::nullopt;
+  return std::ref(*it);
 }
 
 } // namespace pc

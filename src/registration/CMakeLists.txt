@@ -18,4 +18,5 @@ target_include_directories(pointcaster_registration PRIVATE ${CMAKE_SOURCE_DIR}/
 install(TARGETS pointcaster_registration
   RUNTIME DESTINATION bin
   LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib                                                            )
+  ARCHIVE DESTINATION lib
+)

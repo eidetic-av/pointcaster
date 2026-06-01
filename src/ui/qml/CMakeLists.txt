@@ -50,6 +50,7 @@ qt_add_qml_module(PointcasterQml
         Windows/Devices/DevicesWindow.qml
         Windows/Devices/DeviceControlRow.qml
         Windows/Devices/AddDeviceMenu.qml
+        Windows/Sessions/SessionPropertiesWindow.qml
         Windows/Sessions/SessionCamera.qml
         Windows/Sessions/SessionView.qml
         Windows/Sessions/CentralSessionView.qml

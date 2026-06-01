@@ -1,6 +1,9 @@
 #include "workspace.h"
 
 #include "camera/camera_config.h"
+#include "networking/point_streamer.h"
+#include "session/session.h"
+#include "session/session_config.h"
 #include "workspace_config.h"
 
 #include <Corrade/Containers/StringView.h>
@@ -17,12 +20,14 @@
 
 #include <memory>
 #include <mutex>
+#include <ranges>
 #include <string>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
+
 
 #ifdef _WIN32
 #include <filesystem>
@@ -55,15 +60,19 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   operator_plugin_manager = plugins::load_operator_plugins(*this);
 
   // TODO maybe the metrics server shouldn't be a singleton and should
-  // follow the same pattern as session_recorder & point_streamer belonging 
-  // to this workspace class and the injected workspace is what grabs it 
+  // follow the same pattern as session_recorder & point_streamer belonging
+  // to this workspace class and the injected workspace is what grabs it
   // wherever it's needed
   metrics::PrometheusServer::initialise();
 
   session_recorder = std::make_unique<recorder::SessionRecorder>(*this);
+  point_streamer = std::make_unique<networking::PointStreamer>(*this);
 
   // instantiate device plugins for the initial config
   sync_devices();
+
+  // instantiate session operator pipelines
+  sync_sessions();
 }
 
 void Workspace::apply_new_config(const WorkspaceConfiguration &new_config,
@@ -73,6 +82,41 @@ void Workspace::apply_new_config(const WorkspaceConfiguration &new_config,
     config = new_config;
   }
   if (should_sync_devices) sync_devices();
+  sync_sessions();
+}
+
+void Workspace::sync_sessions() {
+  pc::logger()->trace("Syncing sessions");
+
+  std::vector<SessionConfiguration> session_configs;
+  {
+    std::scoped_lock lock(config_access);
+    session_configs = config.sessions;
+  }
+
+  // create any new sessions, and push updated config into existing ones so
+  // their operator set / pipeline reflects the latest configuration
+  for (auto &session_config : session_configs) {
+    auto it = sessions.find(session_config.id);
+    if (it == sessions.end()) {
+      sessions.emplace(session_config.id,
+                       std::make_unique<Session>(*this, session_config));
+    } else if (it->second) {
+      it->second->update_config(session_config);
+    }
+  }
+
+  // erase any removed sessions
+  std::vector<std::string> sessions_to_erase;
+  for (auto &[session_id, session] : sessions) {
+    auto it = std::ranges::find(session_configs, session_id,
+                                &SessionConfiguration::id);
+    if (!session || it == session_configs.end())
+      sessions_to_erase.emplace_back(session_id);
+  }
+  for (auto &session_id : sessions_to_erase) {
+    sessions.erase(session_id);
+  }
 }
 
 void Workspace::sync_devices() {

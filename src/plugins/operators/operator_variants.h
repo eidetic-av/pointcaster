@@ -2,7 +2,6 @@
 
 #include "fringe_removal/fringe_removal_config.h"
 #include <concepts>
-#include <config/config_variant.h>
 #include <type_traits>
 #include <utility>
 #include <variant>

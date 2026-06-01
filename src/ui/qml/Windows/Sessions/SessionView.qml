@@ -5,6 +5,8 @@ import QtQuick3D.Helpers
 
 import Pointcaster 1.0
 
+import Gizmo3D
+
 Item {
     id: root
 

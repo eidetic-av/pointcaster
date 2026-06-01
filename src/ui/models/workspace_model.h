@@ -17,10 +17,13 @@
 
 namespace pc {
 class Workspace;
+class Session;
 struct SessionConfiguration;
+
 namespace devices {
 class DevicePlugin;
 }
+
 } // namespace pc
 
 class CameraImageProvider;
@@ -35,6 +38,12 @@ class WorkspaceModel : public QObject {
   // Sessions
   Q_PROPERTY(QList<QObject *> sessionAdapters READ sessionAdapters NOTIFY
                  sessionAdaptersChanged)
+  Q_PROPERTY(QString selectedSessionId READ selectedSessionId WRITE
+                 setSelectedSessionId NOTIFY selectedSessionChanged)
+  Q_PROPERTY(QObject *selectedSessionAdapter READ selectedSessionAdapter NOTIFY
+                 selectedSessionChanged)
+  Q_PROPERTY(QList<OperatorAdapter *> selectedSessionOperatorAdapters READ
+                 selectedSessionOperatorAdapters NOTIFY selectedSessionChanged)
 
   // Devices
   Q_PROPERTY(
@@ -86,6 +95,18 @@ public:
   Q_INVOKABLE QList<QObject *> sessionAdaptersCallable() const {
     return sessionAdapters();
   }
+
+  QString selectedSessionId() const { return _selectedSessionId; }
+  void setSelectedSessionId(const QString &id);
+  QObject *selectedSessionAdapter() const;
+  QList<OperatorAdapter *> selectedSessionOperatorAdapters() const;
+
+  Q_INVOKABLE void addOperatorToSession(const QString &sessionId,
+                                        const QString &operatorPluginName);
+  Q_INVOKABLE void removeOperatorFromSession(const QString &sessionId,
+                                             int operatorIndex);
+  Q_INVOKABLE void reorderOperatorOnSession(const QString &sessionId,
+                                            int fromIndex, int toIndex);
 
   QVariant deviceAdapters() const;
 
@@ -146,6 +167,7 @@ signals:
   void newWorkspaceLoaded();
 
   void sessionAdaptersChanged();
+  void selectedSessionChanged();
 
   void deviceAdaptersChanged();
   void deviceVariantNamesChanged();
@@ -183,6 +205,11 @@ private:
   // a valid underlying SessionConfiguration object address.
   QHash<QString, const pc::SessionConfiguration *> _sessionConfigPtrById;
 
+  // Currently selected (focused) session, and the per-session operator
+  // adapters wrapping each session's live OperatorPlugin instances.
+  QString _selectedSessionId;
+  QHash<QString, QList<OperatorAdapter *>> _sessionOperatorAdapters;
+
   QVariantMap _foldedPropertyPaths;
 
   int _selectedDeviceIndex = 0;
@@ -200,6 +227,16 @@ private:
 
   void initDeviceAdapter(auto *adapter, pc::devices::DevicePlugin *plugin);
   void initSessionAdapter(pc::SessionConfigurationAdapter *adapter);
+
+  // Session operator adapters (analogous to attach/init for devices).
+  void attachSessionOperatorConfigAdapters(const QString &sessionId,
+                                           const QList<OperatorAdapter *> &ops);
+  void initSessionOperatorAdapter(OperatorAdapter *opAdapter,
+                                  const QString &sessionId);
+  void rebuildSessionOperatorAdapters(const QString &sessionId,
+                                      pc::SessionConfigurationAdapter *adapter,
+                                      pc::Session *session);
+  void syncSessionOperatorAdapters();
 
   DeviceAdapter *makeDeviceAdapterForPlugin(
       pc::devices::DevicePlugin *plugin,

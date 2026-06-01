@@ -12,7 +12,7 @@ add_library(pointcaster_ui
 )
 add_library(pointcaster::ui ALIAS pointcaster_ui)
 
-target_include_directories(pointcaster_ui PRIVATE 
+target_include_directories(pointcaster_ui PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
 )
@@ -26,14 +26,15 @@ find_package(QtAwesome CONFIG REQUIRED)
 find_package(TBB REQUIRED)
 
 target_link_libraries(pointcaster_ui PRIVATE
-    pointcaster::core 
+    pointcaster::core
     pointcaster::app_settings
+    pointcaster::plugins
     PointcasterQml
     # TODO which of these aren't already brought in by above
     Corrade::Main Corrade::Utility
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::OpenGL
     Qt6::Quick Qt6::QuickControls2 Qt6::Quick3D
-    KDAB::kddockwidgets 
+    KDAB::kddockwidgets
     QtAwesome::QtAwesome
     #
     TBB::tbb
@@ -54,6 +55,8 @@ set(CONFIG_ADAPTER_INPUTS
     session/session_config.h
     camera/camera_config.h
     camera/look_at_camera_config.h
+    networking/point_streamer_config.h
+    pipeline/session_operator_pipeline_config.h
     # TODO we need some faculty to create these adapters
     # without them being expressed in the main module here...
     # i guess the UI adapters need to be generated inside the 
@@ -71,20 +74,23 @@ add_qml_adapters(
 )
 
 target_precompile_headers(pointcaster_ui PRIVATE
-  <string>
-  <string_view>
-  <vector>
-  <memory>
-  <mutex>
-  <optional>
-  <QObject>
-  <QString>
-  <QVariant>
-  <QUrl>
-  <QCoreApplication>
-  <QThread>
-  <QMetaObject>
-  <QUndoCommand>
-  <QByteArray>
-  <QQuick3DGeometry>
+    <string>
+    <string_view>
+    <vector>
+    <memory>
+    <mutex>
+    <functional>
+    <chrono>
+    <algorithm>
+    <optional>
+    <QObject>
+    <QString>
+    <QVariant>
+    <QUrl>
+    <QCoreApplication>
+    <QThread>
+    <QMetaObject>
+    <QUndoCommand>
+    <QByteArray>
+    <QQuick3DGeometry>
 )

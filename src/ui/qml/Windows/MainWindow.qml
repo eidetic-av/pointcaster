@@ -111,6 +111,11 @@ ApplicationWindow {
                     // TODO
                     // Component.onDestroyed: Workspace.eraseSessionView(this)
                 }
+
+                onIsFocusedChanged: {
+                    if (isFocused && sessionAdapter)
+                        workspaceModel.selectedSessionId = String(sessionAdapter.id);
+                }
             }
         }
 
@@ -127,6 +132,12 @@ ApplicationWindow {
             }
         }
 
+        SessionPropertiesWindow {
+            id: sessionPropertiesWindow
+            workspace: workspaceModel
+            affinities: ["edit"]
+        }
+
         RecordingWindow {
             id: recordingWindow
             workspace: workspaceModel
@@ -134,6 +145,7 @@ ApplicationWindow {
             affinities: ["edit"]
         }
 
+        // TODO: can/should window loading be deffered?
         AlignmentWindow {
             id: alignmentWindow
             workspace: workspaceModel
@@ -214,8 +226,15 @@ ApplicationWindow {
         }
 
         Component.onCompleted: {
-            addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(400, 400));
-            addDockWidget(recordingWindow, KDDW.KDDockWidgets.Location_OnBottom, null, Qt.size(500, 150), KDDW.KDDockWidgets.StartHidden);
+            addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(350, 350));
+            devicesWindow.addDockWidgetAsTab(sessionPropertiesWindow)
+
+            // TODO unecessary?
+            devicesWindow.addDockWidgetAsTab(recordingWindow);
+            recordingWindow.close();
+
+            devicesWindow.setAsCurrentTab();
+
             mainDockingArea.syncSessionWindows();
         }
 
