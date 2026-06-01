@@ -26,7 +26,8 @@ class DeviceAdapter : public ConfigAdapter, public PointCloudAdapter {
   Q_PROPERTY(QList<OperatorAdapter *> operatorAdapters READ operatorAdapters
                  NOTIFY operatorAdaptersChanged)
 
-  Q_PROPERTY(QVariantList frameSources READ frameSources NOTIFY framesUpdated)
+  Q_PROPERTY(QStringList frameSlots READ frameSlots NOTIFY frameSlotsChanged)
+  Q_PROPERTY(QVariantMap frameUrls READ frameUrls NOTIFY frameUrlsChanged)
 
   Q_PROPERTY(bool hasSequence READ hasSequence NOTIFY sequenceStateChanged)
   Q_PROPERTY(bool isPlaying READ isPlaying NOTIFY sequenceStateChanged)
@@ -68,18 +69,31 @@ public:
 
   // --- camera frame visualisation
 
-  QVariantList frameSources() const { return _frameSources; }
+  QStringList frameSlots() const { return _frameSlotNames; }
+  QVariantMap frameUrls() const { return _frameUrls; }
 
   void syncCameraFrames() {
     if (!_plugin || !_imageProvider) return;
 
     auto frames = _plugin->latest_camera_frames();
-    if (frames.empty() && _frameSources.isEmpty()) return;
+
+    // Operator removed or no frames yet: clear slots if we had some.
+    if (frames.empty()) {
+      if (!_frameSlotNames.isEmpty()) {
+        _imageProvider->removeFrames(deviceKeyPrefix());
+        _frameSlotNames.clear();
+        _frameUrls.clear();
+        emit frameSlotsChanged();
+        emit frameUrlsChanged();
+      }
+      return;
+    }
 
     const auto prefix = deviceKeyPrefix();
-    _imageProvider->removeFrames(prefix);
 
-    QVariantList sources;
+    QStringList newSlotNames;
+    QVariantMap newUrls;
+
     for (const auto &frame : frames) {
       if (!frame.frame_data) continue;
       auto &data = *frame.frame_data.value();
@@ -90,21 +104,27 @@ public:
 
       QImage img(reinterpret_cast<const uchar *>(colors.data()), w, h, w * 4,
                  QImage::Format_RGBA8888);
-      // QImage from external data needs a deep copy before the frame goes
-      // out of scope
       img = img.copy();
 
-      auto key = prefix + QString::fromStdString(frame.name);
+      const auto name = QString::fromStdString(frame.name);
+      const auto key = prefix + name;
+
       _imageProvider->registerFrame(key, img);
-      sources.append(
-          QVariantMap{{"name", QString::fromStdString(frame.name)},
-                      {"url", QStringLiteral("image://camera/") + key + "?" +
-                                  QString::number(_frameRevision)}});
+
+      newSlotNames.append(name);
+      newUrls[name] = QStringLiteral("image://camera/") + key + "?" +
+                      QString::number(_frameRevision);
     }
 
-    _frameSources = std::move(sources);
     _frameRevision++;
-    emit framesUpdated();
+
+    if (newSlotNames != _frameSlotNames) {
+      _frameSlotNames = std::move(newSlotNames);
+      emit frameSlotsChanged();
+    }
+
+    _frameUrls = std::move(newUrls);
+    emit frameUrlsChanged();
   }
 
   // ----------------- identity -----------------
@@ -215,7 +235,8 @@ signals:
   void pluginNullStateChanged();
   void pointCloudUpdated();
   void operatorAdaptersChanged();
-  void framesUpdated();
+  void frameSlotsChanged();
+  void frameUrlsChanged();
   void sequenceStateChanged();
 
 protected:
@@ -227,7 +248,9 @@ protected:
   int _deviceIndex = -1;
 
   QList<OperatorAdapter *> _operatorAdapters;
-  QVariantList _frameSources;
+
+  QStringList _frameSlotNames;
+  QVariantMap _frameUrls;
   int _frameRevision = 0;
 
   int _currentFrame = 0;

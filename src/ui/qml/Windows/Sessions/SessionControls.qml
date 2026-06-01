@@ -42,14 +42,13 @@ Item {
 
     anchors.fill: parent
 
-    // TODO
-
-    readonly property var frameSources: sessionView && sessionView.selectedDeviceAdapter ? sessionView.selectedDeviceAdapter.frameSources : []
+    readonly property var frameSlots: sessionView && sessionView.selectedDeviceAdapter ? sessionView.selectedDeviceAdapter.frameSlots : []
+    readonly property var frameUrls: sessionView && sessionView.selectedDeviceAdapter ? sessionView.selectedDeviceAdapter.frameUrls : ({})
 
     Connections {
         target: root.workspace
         function onSelectedOperatorAdapterChanged() {
-            console.log('eyy: ' + frameSources.length);
+            console.log('eyy: ' + frameSlots.length);
         }
     }
 
@@ -251,7 +250,7 @@ Item {
 
         SessionControlCollapser {
             id: cameraFrameCollapser
-            visible: root.frameSources.length > 0
+            visible: root.frameSlots.length > 0
             direction: SessionControlCollapser.CollapseUp
             buttonAlignment: Qt.AlignLeft
             anchors.top: parent.top
@@ -264,29 +263,43 @@ Item {
 
                 StackLayout {
                     id: frameStack
-                    currentIndex: _resolvedIndex
+                    currentIndex: 0
                     anchors.fill: parent
                     anchors.bottomMargin: navRow.height
 
+                    // model = frameSlots (channel names, stable across frames)
                     Repeater {
-                        model: root.frameSources
+                        model: root.frameSlots
                         Image {
-                            source: modelData.url
+                            // modelData is the channel name string
+                            source: root.frameUrls[modelData] || ""
                             cache: false
                             fillMode: Image.PreserveAspectFit
                         }
                     }
 
-                    // track selected frame name so it survives model rebuilds of this stack
                     property string selectedName: ""
-                    property int _resolvedIndex: {
-                        if (selectedName === "" || root.frameSources.length === 0)
+
+                    function resolveIndex() {
+                        if (selectedName === "" || root.frameSlots.length === 0)
                             return 0;
-                        for (var i = 0; i < root.frameSources.length; ++i) {
-                            if (root.frameSources[i].name === selectedName)
+                        for (var i = 0; i < root.frameSlots.length; ++i) {
+                            if (root.frameSlots[i] === selectedName)
                                 return i;
                         }
                         return 0;
+                    }
+
+                    onSelectedNameChanged: currentIndex = resolveIndex()
+                }
+
+                Connections {
+                    target: root
+                    function onFrameSlotsChanged() {
+                        Qt.callLater(function () {
+                            if (frameStack.count > 0)
+                                frameStack.currentIndex = frameStack.resolveIndex();
+                        });
                     }
                 }
 
@@ -307,13 +320,13 @@ Item {
                         leftPadding: Math.round(5 * Scaling.uiScale)
                         rightPadding: Math.round(5 * Scaling.uiScale)
                         onClicked: {
-                            var idx = (frameStack._resolvedIndex - 1 + frameStack.count) % frameStack.count;
-                            frameStack.selectedName = root.frameSources[idx].name;
+                            var idx = (frameStack.currentIndex - 1 + frameStack.count) % frameStack.count;
+                            frameStack.selectedName = root.frameSlots[idx];
                         }
                     }
 
                     Label {
-                        text: frameStack.count > 0 ? "%1 (%2/%3)".arg(root.frameSources[frameStack._resolvedIndex].name).arg(frameStack._resolvedIndex + 1).arg(frameStack.count) : ""
+                        text: frameStack.count > 0 ? "%1 (%2/%3)".arg(root.frameSlots[frameStack.currentIndex]).arg(frameStack.currentIndex + 1).arg(frameStack.count) : ""
                         font: Scaling.uiFont
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -332,8 +345,8 @@ Item {
                         leftPadding: Math.round(5 * Scaling.uiScale)
                         rightPadding: Math.round(5 * Scaling.uiScale)
                         onClicked: {
-                            var idx = (frameStack._resolvedIndex + 1) % frameStack.count;
-                            frameStack.selectedName = root.frameSources[idx].name;
+                            var idx = (frameStack.currentIndex + 1) % frameStack.count;
+                            frameStack.selectedName = root.frameSlots[idx];
                         }
                     }
                 }
@@ -522,7 +535,6 @@ Item {
                     Connections {
                         target: workspace
                         function onConsoleHistoryEntriesChanged() {
-                            // scroll to bottom when new console entries added
                             consolePanelScrollView.ScrollBar.vertical.position = consolePanelScrollView.contentHeight;
                         }
                     }
@@ -606,13 +618,11 @@ Item {
             }
 
             Timer {
-                // update the console every 100ms
                 interval: 100
                 running: true
                 repeat: true
                 onTriggered: {
                     root.workspace.syncConsole();
-                    // console.log(root.workspace.consoleOverlayEntries())
                 }
             }
         }

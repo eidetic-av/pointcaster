@@ -29,6 +29,25 @@ Item {
         return Qt.vector3d(pos_mm.x * 100, pos_mm.y * 100, pos_mm.z * 100);
     }
 
+    // look-at position for operators that expose camera/look_at_position
+    property var selectionLookAtPosition: selectionLookAtPositionOrDefault()
+    function selectionLookAtPositionOrDefault() {
+        if (!selectedOperatorAdapter)
+            return Qt.vector3d(0, 0, 0);
+        var v = selectedOperatorAdapter.value("camera/look_at_position");
+        if (v === undefined || v === null || v.x === undefined)
+            return Qt.vector3d(0, 0, 0);
+        return Qt.vector3d(v.x * 100, v.y * 100, v.z * 100);
+    }
+
+    // true when the selected operator exposes camera/look_at_position
+    readonly property bool _selectionHasLookAt: {
+        if (!selectedOperatorAdapter)
+            return false;
+        var v = selectedOperatorAdapter.value("camera/look_at_position");
+        return v !== undefined && v !== null && v.x !== undefined;
+    }
+
     property var selectionScale: selectionScaleOrDefault()
     function selectionScaleOrDefault() {
         var scale = Qt.vector3d(1, 1, 1);
@@ -51,6 +70,7 @@ Item {
 
     onSelectionTransformUpdate: {
         selectionPosition = selectionPositionOrDefault();
+        selectionLookAtPosition = selectionLookAtPositionOrDefault();
         selectionScale = selectionScaleOrDefault();
         selectionRotation = selectionRotationOrDefault();
     }
@@ -262,6 +282,7 @@ Item {
         anchors.fill: parent
         camera: camera
 
+        // Primary selection proxy... used by selectionGizmo for position/rotation/scale
         Node {
             id: selectionProxy
             x: selectionGizmo.dragging ? selectionGizmo.dragPosition.x : selectionPosition.x
@@ -269,6 +290,15 @@ Item {
             z: selectionGizmo.dragging ? selectionGizmo.dragPosition.z : selectionPosition.z
             scale: selectionGizmo.dragging ? selectionGizmo.dragScale : selectionScale
             eulerRotation: selectionGizmo.dragging ? selectionGizmo.dragRotation : selectionRotation
+        }
+
+        // Look-at proxy... used by lookAtGizmo when the operator exposes
+        // camera/look_at_position.
+        Node {
+            id: lookAtProxy
+            x: lookAtGizmo.dragging ? lookAtGizmo.dragPosition.x : selectionLookAtPosition.x
+            y: lookAtGizmo.dragging ? lookAtGizmo.dragPosition.y : selectionLookAtPosition.y
+            z: lookAtGizmo.dragging ? lookAtGizmo.dragPosition.z : selectionLookAtPosition.z
         }
 
         Connections {
@@ -502,8 +532,8 @@ Item {
         }
     }
 
-    // transform controls for selected device/operator
-
+    // Primary transform gizmo: position/rotation/scale for devices; position
+    // (camera/position) for operators
     SelectionGizmo {
         id: selectionGizmo
         visible: root.selectedOperatorAdapter || root.selectedDeviceAdapter && !sessionControls.viewLocked
@@ -513,6 +543,20 @@ Item {
         mode: GizmoEnums.Mode.All
         targetAdapter: root.selectedOperatorAdapter || root.selectedDeviceAdapter
         cameraTarget: root.selectedOperatorAdapter !== null
+        cameraPositionPath: "camera/position"
+        z: 99
+    }
+
+    // Look-at gizmo: translation-only handle for camera/look_at_position
+    SelectionGizmo {
+        id: lookAtGizmo
+        visible: root._selectionHasLookAt && !sessionControls.viewLocked
+        view3d: view
+        targetNode: lookAtProxy
+        mode: GizmoEnums.Mode.Translate
+        targetAdapter: root.selectedOperatorAdapter
+        cameraTarget: true
+        cameraPositionPath: "camera/look_at_position"
         z: 99
     }
 

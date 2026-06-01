@@ -11,7 +11,9 @@ Item {
     required property var targetAdapter
     required property bool cameraTarget
 
-    required property GizmoEnums.Mode mode
+    required property int mode
+
+    property string cameraPositionPath: "camera/position"
 
     property real size: 80
 
@@ -39,10 +41,25 @@ Item {
 
     // ── Helpers ──
 
+    function _vec3(val, fallback) {
+        if (val === undefined || val === null || val.x === undefined)
+            return fallback;
+        return Qt.vector3d(val.x, val.y, val.z);
+    }
+
     function snapshotCurrent() {
         dragPosition = targetNode.position;
-        dragRotation = targetAdapter ? targetAdapter.value("transform/rotation") : targetNode.eulerRotation;
-        dragScale = targetAdapter ? targetAdapter.value("transform/scale") : targetNode.scale;
+
+        if (cameraTarget) {
+            // Camera/operator targets only carry a position; take orientation
+            // and scale from the node rather than reading absent transform/* paths.
+            dragRotation = targetNode.eulerRotation;
+            dragScale = targetNode.scale;
+        } else {
+            dragRotation = targetAdapter ? _vec3(targetAdapter.value("transform/rotation"), targetNode.eulerRotation) : targetNode.eulerRotation;
+            dragScale = targetAdapter ? _vec3(targetAdapter.value("transform/scale"), targetNode.scale) : targetNode.scale;
+        }
+
         _startPos = dragPosition;
         _startEuler = dragRotation;
         _startScale = dragScale;
@@ -57,7 +74,7 @@ Item {
         }
 
         if (cameraTarget) {
-            targetAdapter.set("camera/position", Qt.vector3d(dragPosition.x * 0.01, dragPosition.y * 0.01, dragPosition.z * 0.01));
+            targetAdapter.set(root.cameraPositionPath, Qt.vector3d(dragPosition.x * 0.01, dragPosition.y * 0.01, dragPosition.z * 0.01));
         } else {
             targetAdapter.set("transform/position", Qt.vector3d(dragPosition.x * 0.01, dragPosition.y * 0.01, dragPosition.z * 0.01));
             targetAdapter.set("transform/rotation", dragRotation);

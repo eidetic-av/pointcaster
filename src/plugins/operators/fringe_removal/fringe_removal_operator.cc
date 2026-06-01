@@ -241,9 +241,8 @@ FringeRemovalOperator::process(const PointCloud &input) {
                         .frame_data = std::move(drop_visualisation)};
   }
 
-  // Apply mask to output point cloud
-
-  auto output = std::make_shared<PointCloud>();
+  // apply the output pixel mask to input point cloud to create our result
+  auto output = std::make_shared<PointCloud>(input);
   {
     ProfilingZone filter_pointcloud_zone("filter_cloud_by_mask");
     camera::filter_cloud_by_pixel_mask(input_frame, drop_mask, *output,
