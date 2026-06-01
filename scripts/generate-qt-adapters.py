@@ -30,6 +30,11 @@ class Member:
     is_enum: bool
     enum_qualified_type: str
     enum_entries: list[EnumEntry]
+    is_rfl: bool = False
+    is_nested: bool = False
+    inner_type: str = ""
+    adapter_type: str = ""
+    config_ref: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +56,7 @@ STRUCTS_RE = re.compile(
 
 TYPE_PATTERN = r"([\w:]+(?:\:\:)?[\w:]+(?:<[\w\s:,]+>)?)"
 NAME_PATTERN = r"(\w+)"
-INITIAL_VALUE_PATTERN = r"(?:\s*=\s*([^;{]+)|\s*{\s*([^}]+)\s*})?"
+INITIAL_VALUE_PATTERN = r"(?:\s*=\s*([^;]+)|\s*\{([^}]*)\})?"
 COMMENT_PATTERN = r"(?:\s*//\s*(.*))?"
 
 MEMBER_RE = re.compile(
@@ -280,6 +285,35 @@ def minmax_case_cpp(member: Member) -> str:
         return f"return QVariantList{{ QVariant({min_value}), QVariant({max_value}) }};"
     return "return {};"
 
+def _bare_type_name(type_name: str) -> str:
+    t = type_name.strip().split("<", 1)[0].strip()
+    return t.rsplit("::", 1)[-1] if "::" in t else t
+
+# Assumes all rfl wrappers are of the form `rfl::WrapperType<SingleInnerArgument>`.
+RFL_WRAPPER_RE = re.compile(r"^rfl::\w+<\s*(.+)\s*>$")
+
+def _rfl_inner_type(type_name: str) -> str | None:
+    m = RFL_WRAPPER_RE.match(type_name.strip())
+    return m.group(1).strip() if m else None
+
+def _effective_type(type_name: str) -> str:
+    """The underlying type, unwrapping a single rfl wrapper if present."""
+    inner = _rfl_inner_type(type_name)
+    return inner if inner is not None else type_name.strip()
+
+def _is_nested_config_type(type_name: str) -> bool:
+    """
+    True if the (rfl-unwrapped) type is a Configuration struct that gets its
+    own generated adapter, i.e. not a scalar/string/bool/float3/quaternion/simple.
+    """
+    t = _effective_type(type_name)
+    if not t.endswith("Configuration"):
+        return False
+    if t in ("std::string", "QString", "bool"):
+        return False
+    if is_float3_type(t) or is_quaternion_type(t) or _is_simple_comparable_type(t):
+        return False
+    return True
 
 # ----------------------------
 # Path helpers
@@ -320,18 +354,8 @@ def _scan_structs_in_header(input_text: str) -> list[str]:
 # ----------------------------
 
 def _is_nested_config_member(member: Member) -> bool:
-    """
-    "Nested" means: endswith Configuration AND has an adapter generated (i.e. not a scalar/string/bool/enum/float3/quaternion/simple).
-    """
-    if not member.type.endswith("Configuration"):
-        return False
-    if member.type in ("std::string", "QString", "bool"):
-        return False
-    if member.is_enum:
-        return False
-    if is_float3_type(member.type) or is_quaternion_type(member.type) or _is_simple_comparable_type(member.type):
-        return False
-    return True
+    """Nested config decision, computed at parse time (rfl-aware)."""
+    return member.is_nested
 
 
 def compute_flattened_paths(
@@ -356,13 +380,11 @@ def compute_flattened_paths(
 
         for member in members:
             member_path = f"{prefix}{member.name}" if prefix else member.name
-
-            if _is_nested_config_member(member) and (member.type in struct_members_map):
-                # Expand nested config and prefix with "member/"
+            nested_struct = _bare_type_name(member.inner_type)
+            if _is_nested_config_member(member) and (nested_struct in struct_members_map):
                 nested_prefix = f"{member_path}/"
-                out.extend(_recurse(member.type, nested_prefix, visiting))
+                out.extend(_recurse(nested_struct, nested_prefix, visiting))
             else:
-                # Leaf (or unknown nested type): keep as leaf path
                 out.append(member_path)
 
         visiting.remove(current_struct_name)
@@ -423,6 +445,13 @@ def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[
             enum_entries = [EnumEntry("CPU", 0), EnumEntry("CUDA", 1)]
             enum_qualified_type = "BackendType"
 
+        # rfl-aware nested/scalar classification
+        inner_type = _effective_type(raw_type)
+        is_rfl = _rfl_inner_type(raw_type) is not None
+        is_nested = (not is_enum) and _is_nested_config_type(raw_type)
+        config_ref = f"m_config.{raw_name}.value()" if is_rfl else f"m_config.{raw_name}"
+        adapter_type = f"{inner_type}Adapter" if is_nested else ""
+
         members.append(
             Member(
                 type=raw_type,
@@ -436,6 +465,11 @@ def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[
                 is_enum=is_enum,
                 enum_qualified_type=enum_qualified_type,
                 enum_entries=enum_entries,
+                is_rfl=is_rfl,
+                is_nested=is_nested,
+                inner_type=inner_type,
+                adapter_type=adapter_type,
+                config_ref=config_ref,
             )
         )
 
@@ -487,7 +521,7 @@ def process_cpp_header(
             if not _is_nested_config_member(m):
                 continue
 
-            inc = struct_to_adapter_include.get(m.type)
+            inc = struct_to_adapter_include.get(_bare_type_name(m.inner_type))
             if inc and inc not in nested_adapter_includes:
                 nested_adapter_includes.append(inc)
 
