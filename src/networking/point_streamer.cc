@@ -41,8 +41,9 @@ void streaming_thread_loop(std::stop_token stop_token, Workspace &workspace) {
 
     // TODO streaming per device
 
-    // streaming of entire session
-
+    // TODO streaming of entire session
+    // SO THIS IS WHERE I WOULD THEN HAVE ACCESS TO MY SESSION POINT CLOUD ALSO,
+    // SO I CAN USE IT TO STREAM USING ZMQ
 
     next_tick += this_loop_period;
     next_tick = std::max(next_tick, steady_clock::now());

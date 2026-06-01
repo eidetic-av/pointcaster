@@ -3,7 +3,7 @@
 #include <functional>
 #include <networking/point_streamer_config.h>
 #include <optional>
-#include <pipeline/session_operator_pipeline_config.h>
+#include <pipeline/concurrent_operator_pipeline_config.h>
 #include <plugins/devices/device_variants.h>
 #include <rfl/DefaultVal.hpp>
 #include <session/session_config.h>

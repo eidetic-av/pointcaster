@@ -167,6 +167,16 @@ public:
     return {};
   }
 
+  pipeline::ConcurrentOperatorPipelineConfiguration &
+  pipeline_config() override {
+    return std::visit(
+        [](auto &device_config)
+            -> pipeline::ConcurrentOperatorPipelineConfiguration & {
+          return device_config.operator_pipeline.value();
+        },
+        _config);
+  }
+
 protected:
   DeviceConfigurationVariant _config;
   std::function<void(DeviceStatus)> _status_callback;

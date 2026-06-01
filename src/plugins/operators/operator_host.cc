@@ -113,9 +113,8 @@ void OperatorHost::rebuild_pipeline(
     _pipeline.reset();
   }
 
-  // TODO queue length???
   _pipeline = std::make_unique<pipeline::ConcurrentOperatorPipeline>(
-      std::move(pipeline_worker_chains), /*queue=*/8);
+      std::move(pipeline_worker_chains));
 
   _pipeline->set_on_complete([this](std::shared_ptr<PointCloud> output_cloud) {
     on_pipeline_output(output_cloud);

@@ -4,6 +4,7 @@
 #include "device_adapter.h"
 #include "device_status.h"
 #include "operator_adapter.h"
+#include "session_adapter.h"
 #include "session_recorder_model.h"
 #include <QObject>
 #include <QPointer>
@@ -108,6 +109,9 @@ public:
   Q_INVOKABLE void reorderOperatorOnSession(const QString &sessionId,
                                             int fromIndex, int toIndex);
 
+  Q_INVOKABLE SessionAdapter *
+  sessionPointCloudAdapterFor(const QString &sessionId) const;
+
   QVariant deviceAdapters() const;
 
   QStringList deviceVariantNames() const;
@@ -197,6 +201,8 @@ private:
   QList<QObject *> _sessionAdapters;
   QList<QObject *> _deviceAdapters;
 
+  QHash<QString, QPointer<SessionAdapter>> _sessionPointCloudAdapters;
+
   QPointer<OperatorAdapter> _selectedOperatorAdapter;
 
   RecorderModel *_recorderModel;
@@ -227,6 +233,8 @@ private:
 
   void initDeviceAdapter(auto *adapter, pc::devices::DevicePlugin *plugin);
   void initSessionAdapter(pc::SessionConfigurationAdapter *adapter);
+
+  void syncSessionPointCloudAdapters();
 
   // Session operator adapters (analogous to attach/init for devices).
   void attachSessionOperatorConfigAdapters(const QString &sessionId,

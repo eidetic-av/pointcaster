@@ -75,10 +75,10 @@ static int find_operator_index_by_id(
     const pc::devices::DeviceConfigurationVariant &device_config,
     const std::string &operator_id) {
   return std::visit(
-      [&](const auto &dev) -> int {
-        for (int i = 0; i < int(dev.operators.size()); ++i) {
+      [&](const auto &config) -> int {
+        for (int i = 0; i < int(config.operators.size()); ++i) {
           auto [id, pn] =
-              pc::operators::operator_info_from_variant(dev.operators[i]);
+              pc::operators::operator_info_from_variant(config.operators[i]);
           if (id == operator_id) return i;
         }
         return -1;
@@ -251,6 +251,11 @@ private:
                new_config.devices[size_t(dev_idx)]);
     if (_apply_fn) _apply_fn(std::move(new_config));
   }
+};
+
+struct SessionUpdateGate {
+  std::atomic<bool> pending{false};
+  QPointer<SessionAdapter> adapter;
 };
 
 } // namespace
@@ -525,10 +530,12 @@ void WorkspaceModel::addNewDevice(const QString &plugin_name,
   auto result_config = _workspace.config;
   // TODO this needs to be polymorphic runtime access
   if (plugin_name == OrbbecDeviceConfiguration::PluginName) {
-    result_config.devices.push_back(OrbbecDeviceConfiguration{
-        .id = target_id.isEmpty() ? pc::uuid::word() : target_id.toStdString(),
-        .network = {.ip_address =
-                        target_ip.isEmpty() ? "" : target_ip.toStdString()}});
+    OrbbecDeviceConfiguration orbbec_config{
+        .id = target_id.isEmpty() ? pc::uuid::word() : target_id.toStdString()};
+    if (!target_ip.isEmpty()) {
+      orbbec_config.network.set({.ip_address = target_ip.toStdString()});
+    }
+    result_config.devices.push_back(std::move(orbbec_config));
   } else if (plugin_name == PlyDeviceConfiguration::PluginName) {
     result_config.devices.push_back(
         PlyDeviceConfiguration{.id = pc::uuid::word()});
@@ -972,6 +979,62 @@ void WorkspaceModel::rebuildSessionOperatorAdapters(
   attachSessionOperatorConfigAdapters(sessionId, list);
 }
 
+void WorkspaceModel::syncSessionPointCloudAdapters() {
+  // Sync session point cloud adapters (one per live session).
+  // Same callback pattern as device adapters.
+  QSet<QString> live_session_ids;
+  for (auto &[session_id_str, session_ptr] : _workspace.sessions) {
+    const QString id = QString::fromStdString(session_id_str);
+    live_session_ids.insert(id);
+
+    if (!_sessionPointCloudAdapters.contains(id) ||
+        !_sessionPointCloudAdapters[id]) {
+      auto *adapter =
+          new SessionAdapter(session_ptr.get(), _imageProvider, this);
+      _sessionPointCloudAdapters[id] = adapter;
+    }
+
+    // Re-wire the callback every sync so a rebuilt session gets a fresh hook.
+    auto gate = std::make_shared<SessionUpdateGate>();
+    gate->adapter = QPointer<SessionAdapter>(_sessionPointCloudAdapters[id]);
+    auto *model = this; // outlives all sessions; safe to capture raw
+
+    session_ptr->set_point_cloud_updated_callback([gate, model]() {
+      // Called on a pipeline worker thread... but if an update is already
+      // queued for the UI thread, just drop this one
+      bool expected = false;
+      if (!gate->pending.compare_exchange_strong(expected, true,
+                                                 std::memory_order_acq_rel))
+        return;
+      QMetaObject::invokeMethod(
+          model,
+          [gate]() {
+            gate->pending.store(false, std::memory_order_release);
+            if (gate->adapter) gate->adapter->notifyPointCloudUpdated();
+          },
+          Qt::QueuedConnection);
+    });
+  }
+  // Remove adapters for sessions that no longer exist
+  for (auto it = _sessionPointCloudAdapters.begin();
+       it != _sessionPointCloudAdapters.end();) {
+    if (!live_session_ids.contains(it.key())) {
+      if (it.value()) it.value()->deleteLater();
+      it = _sessionPointCloudAdapters.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+SessionAdapter *
+WorkspaceModel::sessionPointCloudAdapterFor(const QString &sessionId) const {
+  auto it = _sessionPointCloudAdapters.find(sessionId);
+  return (it != _sessionPointCloudAdapters.end() && it.value())
+             ? it.value().data()
+             : nullptr;
+}
+
 void WorkspaceModel::syncSessionOperatorAdapters() {
   QSet<QString> live_ids;
   for (QObject *obj : _sessionAdapters) {
@@ -1077,6 +1140,7 @@ QVariantList WorkspaceModel::consoleHistoryEntries() const {
   }
   return entries;
 }
+
 // TODO whats the change here?
 void WorkspaceModel::initSessionAdapter(SessionConfigurationAdapter *adapter) {
   if (!adapter) return;
@@ -1119,6 +1183,7 @@ void WorkspaceModel::initSessionAdapter(SessionConfigurationAdapter *adapter) {
                          }));
                    });
 }
+
 template <typename AdapterT>
 void WorkspaceModel::initDeviceAdapter(AdapterT *adapter,
                                        pc::devices::DevicePlugin *plugin) {
@@ -1268,6 +1333,8 @@ void WorkspaceModel::syncSessionAdapters() {
   _sessionConfigPtrById = std::move(new_ptrs_by_id);
 
   emit sessionAdaptersChanged();
+
+  syncSessionPointCloudAdapters();
 
   // Rebuild per-session operator adapters from each session's live
   // OperatorPlugin instances.

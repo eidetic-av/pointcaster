@@ -3,6 +3,7 @@
 #include <config/color_transform_config.h>
 #include <config/network_config.h>
 #include <config/transform_config.h>
+#include <pipeline/concurrent_operator_pipeline_config.h>
 #include <plugins/operators/operator_variants.h>
 #include <pointcaster/point_cloud.h>
 #include <rfl/Literal.hpp>
@@ -15,19 +16,20 @@ class OrbbecDevice;
 struct OrbbecDeviceConfiguration {
   std::string id;                          // @hidden
   rfl::DefaultVal<std::string> label = ""; // @hidden
-  bool active = true;                      // @hidden
-  bool render = true;                      // @hidden;
+  rfl::DefaultVal<bool> active = true;     // @hidden
+  rfl::DefaultVal<bool> render = true;     // @hidden;
 
   std::string ob_uid; // @disabled
 
   enum class DepthMode { Narrow, Wide };
-  DepthMode depth_mode = DepthMode::Narrow;
+  rfl::DefaultVal<DepthMode> depth_mode = DepthMode::Narrow;
 
   enum class AcquisitionMode { XYZRGB, XYZ };
-  AcquisitionMode acquisition_mode = AcquisitionMode::XYZRGB;
+  rfl::DefaultVal<AcquisitionMode> acquisition_mode = AcquisitionMode::XYZRGB;
 
   enum class PointConversionMode { D2C, C2D };
-  PointConversionMode conversion_mode = PointConversionMode::D2C;
+  rfl::DefaultVal<PointConversionMode> conversion_mode =
+      PointConversionMode::D2C;
 
   enum class ColorResolution {
     HD_1280x720,
@@ -36,7 +38,8 @@ struct OrbbecDeviceConfiguration {
     QHD_2560x1440,
     UHD_3840x2160
   };
-  ColorResolution color_resolution = ColorResolution::HD_1280x720;
+  rfl::DefaultVal<ColorResolution> color_resolution =
+      ColorResolution::HD_1280x720;
 
   enum class DepthResolution {
     NFOV_320x288,
@@ -44,18 +47,21 @@ struct OrbbecDeviceConfiguration {
     NFOV_640x576,
     WFOV_1024x1024
   };
-  DepthResolution depth_resolution = DepthResolution::NFOV_640x576;
+  rfl::DefaultVal<DepthResolution> depth_resolution =
+      DepthResolution::NFOV_640x576;
 
   rfl::Skip<int> fps; // @disabled
 
   enum class SyncMode { Standalone, Software };
   rfl::DefaultVal<SyncMode> sync_mode = SyncMode::Standalone;
 
-  NetworkConfiguration network;
-  TransformConfiguration transform;
-  ColorTransformConfiguration color;
+  rfl::DefaultVal<NetworkConfiguration> network;
+  rfl::DefaultVal<TransformConfiguration> transform;
+  rfl::DefaultVal<ColorTransformConfiguration> color;
 
-  std::vector<operators::OperatorConfigurationVariant> operators;
+  rfl::DefaultVal<pipeline::ConcurrentOperatorPipelineConfiguration>
+      operator_pipeline;                                          // @hidden
+  std::vector<operators::OperatorConfigurationVariant> operators; // @hidden
 
   using DeviceType = OrbbecDevice;
   using Tag = rfl::Literal<"orbbec">;

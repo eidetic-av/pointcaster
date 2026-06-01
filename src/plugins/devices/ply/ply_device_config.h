@@ -4,6 +4,7 @@
 #include <config/file_config.h>
 #include <config/sequence_config.h>
 #include <config/transform_config.h>
+#include <pipeline/concurrent_operator_pipeline_config.h>
 #include <plugins/operators/operator_variants.h>
 #include <rfl/DefaultVal.hpp>
 #include <rfl/Literal.hpp>
@@ -15,16 +16,19 @@ namespace pc::devices {
 class PlyDevice;
 
 struct PlyDeviceConfiguration {
-  std::string id;                          // @hidden
+  std::string id; // @hidden
+
   rfl::DefaultVal<std::string> label = ""; // @hidden
-  bool active = true;                      // @hidden
-  bool render = true;                      // @hidden;
+  rfl::DefaultVal<bool> active = true;     // @hidden
+  rfl::DefaultVal<bool> render = true;     // @hidden;
 
-  FileFolderConfiguration file;
-  SequenceConfiguration sequence;
-  TransformConfiguration transform;
-  ColorTransformConfiguration color;
+  rfl::DefaultVal<FileFolderConfiguration> file;
+  rfl::DefaultVal<SequenceConfiguration> sequence;
+  rfl::DefaultVal<TransformConfiguration> transform;
+  rfl::DefaultVal<ColorTransformConfiguration> color;
 
+  rfl::DefaultVal<pipeline::ConcurrentOperatorPipelineConfiguration>
+      operator_pipeline;                                          // @hidden
   std::vector<operators::OperatorConfigurationVariant> operators; // @hidden
 
   using DeviceType = PlyDevice;

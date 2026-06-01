@@ -143,6 +143,7 @@ KDDW.DockWidget {
                             OperatorPipelineEditor {
                                 workspace: root.workspace
                                 operators: deviceDelegate.modelData && deviceDelegate.modelData.operatorAdapters ? deviceDelegate.modelData.operatorAdapters : []
+                                pipelineAdapter: deviceDelegate.modelData && deviceDelegate.modelData.operator_pipelineAdapter ? deviceDelegate.modelData.operator_pipelineAdapter : []
                                 width: parent.width
 
                                 onAddOperatorRequested: operatorType => root.workspace.addOperatorToDevice(deviceDelegate.index, operatorType)

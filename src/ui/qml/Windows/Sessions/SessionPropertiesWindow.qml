@@ -95,6 +95,7 @@ KDDW.DockWidget {
                     OperatorPipelineEditor {
                         workspace: root.workspace
                         operators: root.operators
+                        pipelineAdapter: root.operator_pipelineAdapter
                         width: parent.width
 
                         onAddOperatorRequested: operatorType => root.workspace.addOperatorToSession(root.sessionId, operatorType)

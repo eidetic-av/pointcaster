@@ -29,7 +29,7 @@ Item {
         return Qt.vector3d(pos_mm.x * 100, pos_mm.y * 100, pos_mm.z * 100);
     }
 
-    // look-at position for operators that expose camera/look_at_position
+    // Look-at position for operators that expose camera/look_at_position.
     property var selectionLookAtPosition: selectionLookAtPositionOrDefault()
     function selectionLookAtPositionOrDefault() {
         if (!selectedOperatorAdapter)
@@ -40,7 +40,9 @@ Item {
         return Qt.vector3d(v.x * 100, v.y * 100, v.z * 100);
     }
 
-    // true when the selected operator exposes camera/look_at_position
+    // True when the selected operator exposes camera/look_at_position.
+    // Operator types either have this path or don't; only needs to update on
+    // operator selection change, which the selectedOperatorAdapter binding covers.
     readonly property bool _selectionHasLookAt: {
         if (!selectedOperatorAdapter)
             return false;
@@ -282,7 +284,7 @@ Item {
         anchors.fill: parent
         camera: camera
 
-        // Primary selection proxy... used by selectionGizmo for position/rotation/scale
+        // Primary selection proxy — used by selectionGizmo for position/rotation/scale.
         Node {
             id: selectionProxy
             x: selectionGizmo.dragging ? selectionGizmo.dragPosition.x : selectionPosition.x
@@ -292,7 +294,7 @@ Item {
             eulerRotation: selectionGizmo.dragging ? selectionGizmo.dragRotation : selectionRotation
         }
 
-        // Look-at proxy... used by lookAtGizmo when the operator exposes
+        // Look-at proxy — used by lookAtGizmo when the operator exposes
         // camera/look_at_position.
         Node {
             id: lookAtProxy
@@ -300,6 +302,78 @@ Item {
             y: lookAtGizmo.dragging ? lookAtGizmo.dragPosition.y : selectionLookAtPosition.y
             z: lookAtGizmo.dragging ? lookAtGizmo.dragPosition.z : selectionLookAtPosition.z
         }
+
+        Node {
+            id: sessionCloudNode
+
+            property var adapter: root.workspace && root.sessionAdapter ? root.workspace.sessionPointCloudAdapterFor(root.sessionAdapter.id) : null
+
+            Model {
+                geometry: PointCloudGeometry {
+                    id: sessionGeo
+                    pointCloudAdapter: sessionCloudNode.adapter ? sessionCloudNode.adapter.pointCloudAdapter() : null
+                    enabled: sessionCloudNode.adapter !== null
+                }
+                materials: [
+                    PointCloudMaterial {
+                        uPointSize: viewController.shaderPointSize
+                    }
+                ]
+            }
+
+            Connections {
+                target: sessionCloudNode.adapter
+                enabled: sessionCloudNode.adapter !== null
+                ignoreUnknownSignals: true
+                function onPointCloudUpdated() {
+                    sessionGeo.updateGeometry();
+                }
+            }
+        }
+
+        // Repeater3D {
+        //     model: root.deviceAdapters
+
+        //     Node {
+        //         id: deviceNode
+
+        //         property bool isSelected: index === root.workspace.selectedDeviceIndex && !root.selectedOperatorAdapter
+
+        //         // TODO
+        //         // visual offset during gizmo drag (translation only for now cause that's easier than figuring out how to update rotation origins lol)
+        //         x: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.x - selectionPosition.x : 0
+        //         y: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.y - selectionPosition.y : 0
+        //         z: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.z - selectionPosition.z : 0
+
+        //         Model {
+        //             id: model
+
+        //             property string model: modelData ? modelData.id + "_model" : ""
+        //             property string geo: model + "_geo"
+
+        //             pickable: true
+
+        //             geometry: PointCloudGeometry {
+        //                 id: geo
+        //                 pointCloudAdapter: modelData.pointCloudAdapter() ?? []
+        //                 enabled: modelData.render
+        //             }
+
+        //             materials: [
+        //                 PointCloudMaterial {
+        //                     uPointSize: viewController.shaderPointSize
+        //                 }
+        //             ]
+        //         }
+
+        //         Connections {
+        //             target: modelData
+        //             function onPointCloudUpdated() {
+        //                 geo.updateGeometry();
+        //             }
+        //         }
+        //     }
+        // }
 
         Connections {
             target: selectedDeviceAdapter
@@ -533,7 +607,7 @@ Item {
     }
 
     // Primary transform gizmo: position/rotation/scale for devices; position
-    // (camera/position) for operators
+    // (camera/position) for operators.
     SelectionGizmo {
         id: selectionGizmo
         visible: root.selectedOperatorAdapter || root.selectedDeviceAdapter && !sessionControls.viewLocked
@@ -547,7 +621,9 @@ Item {
         z: 99
     }
 
-    // Look-at gizmo: translation-only handle for camera/look_at_position
+    // Look-at gizmo: translation-only handle for camera/look_at_position.
+    // Only visible when the selected operator exposes that path.
+    // Verify GizmoEnums.Mode.Translate matches your GizmoEnums enum value name.
     SelectionGizmo {
         id: lookAtGizmo
         visible: root._selectionHasLookAt && !sessionControls.viewLocked

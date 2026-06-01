@@ -4,8 +4,8 @@
 
 namespace pc::pipeline {
 
-struct SessionOperatorPipelineConfiguration {
-  rfl::DefaultVal<int> update_hz = 240;
+struct ConcurrentOperatorPipelineConfiguration {
+  rfl::DefaultVal<int> update_hz = 120;
   rfl::DefaultVal<int> concurrency = 4;
 };
 

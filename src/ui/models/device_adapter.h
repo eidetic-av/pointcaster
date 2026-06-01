@@ -187,9 +187,9 @@ public:
 
     int frame = 0;
     std::visit(
-        [&](const auto &cfg) {
-          if constexpr (requires { cfg.sequence.current_frame; })
-            frame = cfg.sequence.current_frame.value();
+        [&](const auto &config) {
+          if constexpr (requires { config.sequence.value().current_frame; })
+            frame = config.sequence.value().current_frame.value();
         },
         _plugin->config());
     updateSequenceState(frame);
@@ -207,9 +207,9 @@ public:
   void updateSequenceState(int frame) {
     bool playing = false;
     std::visit(
-        [&](const auto &cfg) {
-          if constexpr (requires { cfg.sequence.playing; })
-            playing = cfg.sequence.playing.value();
+        [&](const auto &config) {
+          if constexpr (requires { config.sequence.value().playing; })
+            playing = config.sequence.value().playing.value();
         },
         _plugin->config());
 
@@ -262,8 +262,9 @@ private:
   QString deviceKeyPrefix() const {
     if (!_plugin) return {};
     QString id;
-    std::visit([&](const auto &cfg) { id = QString::fromStdString(cfg.id); },
-               _plugin->config());
+    std::visit(
+        [&](const auto &config) { id = QString::fromStdString(config.id); },
+        _plugin->config());
     return id + "/";
   }
 };

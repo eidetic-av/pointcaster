@@ -9,7 +9,8 @@ Column {
 
     required property var workspace
 
-    property var operators: []
+    required property var operators
+    required property var pipelineAdapter
 
     signal addOperatorRequested(string operatorType)
     signal removeOperatorRequested(int operatorIndex)
@@ -19,6 +20,14 @@ Column {
     spacing: 0
 
     readonly property int operatorCount: operators.length
+
+    ConfigurationEditor {
+        id: pipelineConfigEditor
+        configAdapter: root.pipelineAdapter
+        workspace: root.workspace
+        flattenFields: true
+        width: parent.width
+    }
 
     Rectangle {
         id: sectionHeader

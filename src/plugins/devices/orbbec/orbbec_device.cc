@@ -199,7 +199,8 @@ void OrbbecDevice::start_sync() {
   }
 
   constexpr uint16_t net_device_port = 8090; // Femto Mega default
-  const auto &ip = config.network.ip_address.value();
+  const auto &network_config = config.network.value();
+  const auto &ip = network_config.ip_address.value();
 
   if (!ob_device && !ip.empty()) {
     try {
@@ -208,13 +209,13 @@ void OrbbecDevice::start_sync() {
       ob_device = ob_ctx->createNetDevice(ip.c_str(), net_device_port);
     } catch (const ob::Error &e) {
       pc::logger()->error("Failed to create OrbbecDevice at {}:{} {}",
-                          config.network.ip_address.value(), net_device_port,
+                          network_config.ip_address.value(), net_device_port,
                           e.getMessage());
       set_error_state(true);
       return;
     } catch (...) {
       pc::logger()->error("Unknown error creating Orbbec NetDevice at {}:{}",
-                          config.network.ip_address.value(), net_device_port);
+                          network_config.ip_address.value(), net_device_port);
       set_error_state(true);
       return;
     }
@@ -230,9 +231,9 @@ void OrbbecDevice::start_sync() {
                       net_device_port);
 
   const auto [colour_width, colour_height] =
-      orbbec::resolution(config.color_resolution);
+      orbbec::resolution(config.color_resolution.value());
   const auto [depth_width, depth_height] =
-      orbbec::resolution(config.depth_resolution);
+      orbbec::resolution(config.depth_resolution.value());
 
   _pipeline_thread =
       std::jthread([this, ob_device = std::move(ob_device)](auto stop_token) {
@@ -249,7 +250,7 @@ void OrbbecDevice::stop_sync() {
   auto config = std::get<OrbbecDeviceConfiguration>(this->config_variant());
   std::lock_guard lock(orbbec_context().device_api_access);
   pc::logger()->info("Closing OrbbecDevice {}",
-                     config.network.ip_address.value());
+                     config.network.value().ip_address.value());
   pc::logger()->trace("Joining pipeline thread");
   _pipeline_thread.request_stop();
   _pipeline_thread.join();
@@ -310,9 +311,9 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     auto &device_config = std::get<OrbbecDeviceConfiguration>(_config);
 
     const auto [colour_width, colour_height] =
-        orbbec::resolution(device_config.color_resolution);
+        orbbec::resolution(device_config.color_resolution.value());
     const auto [depth_width, depth_height] =
-        orbbec::resolution(device_config.depth_resolution);
+        orbbec::resolution(device_config.depth_resolution.value());
 
     auto colour_profile_list = pipeline.getStreamProfileList(OB_SENSOR_COLOR);
     // TODO enable without colour too
@@ -334,7 +335,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
     std::shared_ptr<ob::VideoStreamProfile> depth_profile;
 
-    if (device_config.conversion_mode ==
+    if (device_config.conversion_mode.value() ==
         OrbbecDeviceConfiguration::PointConversionMode::D2C) {
 
       // try hardware D2C first
@@ -373,7 +374,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
         throw std::format_error("Device does not support D2C conversion mode");
       }
 
-    } else if (device_config.conversion_mode ==
+    } else if (device_config.conversion_mode.value() ==
                OrbbecDeviceConfiguration::PointConversionMode::C2D) {
       // need to do stuff here
     }
@@ -422,7 +423,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     backend::CameraIntrinsics color_intrinsics;
     size_t max_point_count{};
 
-    if (device_config.conversion_mode ==
+    if (device_config.conversion_mode.value() ==
         OrbbecDeviceConfiguration::PointConversionMode::D2C) {
       // we need the colour intrinsic to transform the depth point to
       // colour space
@@ -435,7 +436,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
       max_point_count = colour_width * colour_height;
 
-    } else if (device_config.conversion_mode ==
+    } else if (device_config.conversion_mode.value() ==
                OrbbecDeviceConfiguration::PointConversionMode::C2D) {
     }
 
@@ -523,7 +524,8 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             // TODO backend instances should be inside the device plugin class
             // more like operators
             backend::BackendPlugin *backend =
-                (device_config.transform.backend.value() == BackendType::CUDA &&
+                (device_config.transform.value().backend.value() ==
+                     BackendType::CUDA &&
                  cuda_backend)
                     ? cuda_backend.get()
                     : cpu_backend.get();
@@ -534,7 +536,8 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
               if (backend) {
                 backend->project_transform_frame_data(
                     ob_depth_data, ob_color_data, point_cloud, color_intrinsics,
-                    device_config.transform, device_config.color);
+                    device_config.transform.value(),
+                    device_config.color.value());
               }
             }
 
@@ -542,7 +545,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
             // Render from the latest *processed* cloud (may lag one frame —
             // fine for real-time)
-            if (device_config.render && backend) {
+            if (device_config.render.value() && backend) {
               if (auto processed = _pipeline->latest_cloud()) {
                 auto render_buffer = std::make_shared<std::vector<std::byte>>(
                     processed->size() * 16);
@@ -627,12 +630,13 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
 
 void OrbbecDevice::on_config_field_changed(std::string_view) {
   auto &config = std::get<OrbbecDeviceConfiguration>(_config);
+  auto &network_config = config.network.value();
 
-  if (config.network.apply.value()) {
-    config.network.apply.set(false);
-    set_ip(config.network.ip_address.value(),
-           config.network.subnet_mask.value(),
-           config.network.gateway_address.value());
+  if (network_config.apply.value()) {
+    network_config.apply.set(false);
+    set_ip(network_config.ip_address.value(),
+           network_config.subnet_mask.value(),
+           network_config.gateway_address.value());
   }
 }
 

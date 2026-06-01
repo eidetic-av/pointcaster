@@ -8,6 +8,7 @@ add_library(pointcaster_ui
     models/commands/device_config_commands.cc
     models/session_recorder_model.cc
     models/operator_adapter.cc
+    models/session_adapter.cc
     window/view_factory.cc
 )
 add_library(pointcaster::ui ALIAS pointcaster_ui)
@@ -56,7 +57,7 @@ set(CONFIG_ADAPTER_INPUTS
     camera/camera_config.h
     camera/look_at_camera_config.h
     networking/point_streamer_config.h
-    pipeline/session_operator_pipeline_config.h
+    pipeline/concurrent_operator_pipeline_config.h
     # TODO we need some faculty to create these adapters
     # without them being expressed in the main module here...
     # i guess the UI adapters need to be generated inside the 
