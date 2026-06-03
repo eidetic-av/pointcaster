@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <pointcaster/core.h>
+#include <span>
 #include <vector>
 
 namespace pc {
@@ -27,8 +29,11 @@ public:
     colors.reserve(new_capacity);
   }
 
-  std::vector<std::byte> serialize(bool compress = false) const;
-  static PointCloud deserialize(const std::vector<std::byte> &buffer);
+  POINTCASTER_CORE_EXPORT std::vector<std::byte>
+  serialize(bool compress = false) const;
+
+  POINTCASTER_CORE_EXPORT static PointCloud
+  deserialize(std::span<const std::byte> buffer);
 
 private:
   std::vector<std::byte> compress() const;
@@ -55,6 +60,11 @@ struct PointCloudPacket {
   uint64_t point_count;
   uint8_t compressed;
   std::vector<std::byte> data;
+
+  static constexpr std::size_t header_bytes =
+      sizeof(uint64_t)   // timestamp
+      + sizeof(uint64_t) // point_count
+      + sizeof(uint8_t); // compressed flag
 };
 
 } // namespace pc

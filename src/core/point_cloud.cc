@@ -8,57 +8,47 @@ namespace pc {
 using namespace std::chrono;
 
 auto PointCloud::serialize(bool compress) const -> std::vector<std::byte> {
-  auto now = system_clock::now().time_since_epoch();
-  uint64_t point_count = size();
+  const auto timestamp = static_cast<uint64_t>(
+      duration_cast<milliseconds>(system_clock::now().time_since_epoch())
+          .count());
+  const uint64_t point_count = size();
+  const auto compression_flag = static_cast<uint8_t>(compress);
+
+  std::vector<std::byte> buffer;
 
   if (compress) {
-    // PointCloud::compress is implemented by whatever codec we build the lib
-    // with
-    PointCloudPacket packet{
-        static_cast<uint64_t>(duration_cast<milliseconds>(now).count()),
-        point_count, static_cast<uint8_t>(compress), this->compress()};
-    auto [output_data, zpp_serialize] = zpp::bits::data_out();
-    zpp_serialize(packet).or_throw();
-    return output_data;
+    const auto payload = this->compress();
+    buffer.reserve(PointCloudPacket::header_bytes + payload.size());
+    zpp::bits::out serializer{buffer};
+    serializer(timestamp, point_count, compression_flag, payload).or_throw();
+  } else {
+    buffer.reserve(PointCloudPacket::header_bytes +
+                   positions.size() * sizeof(positions[0]) +
+                   colors.size() * sizeof(colors[0]));
+    zpp::bits::out serializer{buffer};
+    serializer(timestamp, point_count, compression_flag).or_throw();
+    serializer(*this).or_throw();
   }
 
-  auto [point_cloud_bytes, serialize_inner] = zpp::bits::data_out();
-  serialize_inner(*this).or_throw();
-
-  PointCloudPacket packet{
-      static_cast<uint64_t>(duration_cast<milliseconds>(now).count()),
-      point_count, static_cast<uint8_t>(compress),
-      std::move(point_cloud_bytes)};
-  auto [output_data, zpp_serialize] = zpp::bits::data_out();
-  zpp_serialize(packet).or_throw();
-
-  return output_data;
+  return buffer;
 }
 
-auto PointCloud::deserialize(const std::vector<std::byte> &buffer)
-    -> PointCloud {
-  // first, deserialize to a PointCloudPacket
-  PointCloudPacket packet;
-  auto zpp_deserialize = zpp::bits::in(buffer);
-  zpp_deserialize(packet).or_throw();
+auto PointCloud::deserialize(std::span<const std::byte> buffer) -> PointCloud {
+  zpp::bits::in zpp_deserialize{buffer};
 
-  // then decode the internal data buffer differently based on whether the
-  // packet is compressed or not, and move the resulting points and colors
-  // into a PointCloud class instance
-  if (packet.compressed) {
-    // PointCloud::decompress is implemented by whatever codec we choose to
-    // build the lib with
-    auto point_count = packet.point_count;
-    return PointCloud::decompress(packet.data, point_count);
+  uint64_t timestamp = 0;
+  uint64_t point_count = 0;
+  uint8_t compression_flag = 0;
+  zpp_deserialize(timestamp, point_count, compression_flag).or_throw();
+
+  if (compression_flag != 0) {
+    std::vector<std::byte> payload;
+    zpp_deserialize(payload).or_throw();
+    return PointCloud::decompress(payload, point_count);
   }
-  if (packet.compressed)
-    std::cerr << "You are trying to deserialize a compressed \
-	PointCloudPacket, but this library was built without codec support";
 
-  // if it's not compressed, our packet contains a serialized PointCloud
   PointCloud point_cloud;
-  auto deserialize_inner = zpp::bits::in(packet.data);
-  deserialize_inner(point_cloud).or_throw();
+  zpp_deserialize(point_cloud).or_throw();
   return point_cloud;
 }
 
