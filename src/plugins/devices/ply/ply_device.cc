@@ -182,7 +182,6 @@ void PlyDevice::tick(float delta_time) {
 
   if (next == _current_frame) return;
   _current_frame = next;
-  _current_frame = next;
   seq.current_frame.set(_current_frame);
 
   if (auto frame =
@@ -313,10 +312,6 @@ void PlyDevice::apply_transform() {
 }
 
 void PlyDevice::on_pipeline_output(std::shared_ptr<PointCloud> processed) {
-  pc::logger()->trace("on_pipeline_output: size={} render={} backend={}",
-                      processed ? processed->size() : 0,
-                      std::get<PlyDeviceConfiguration>(_config).render.value(),
-                      _cpu_backend != nullptr);
   const auto config = std::get<PlyDeviceConfiguration>(_config);
   if (config.render.value() && _cpu_backend) {
     auto buf = std::make_shared<std::vector<std::byte>>(processed->size() * 16);
@@ -324,9 +319,6 @@ void PlyDevice::on_pipeline_output(std::shared_ptr<PointCloud> processed) {
     _latest_render_data.store(std::move(buf), std::memory_order_release);
   }
   _current_point_cloud.store(std::move(processed), std::memory_order_release);
-  pc::logger()->trace(
-      "on_pipeline_output: calling notify_point_cloud_updated, callback={}",
-      _point_cloud_updated_callback != nullptr);
   notify_point_cloud_updated();
 }
 
