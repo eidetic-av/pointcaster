@@ -29,8 +29,10 @@ void PointCloudGeometry::updateGeometry() {
   auto cloud = _pointCloudAdapter->point_cloud();
   auto render_buffer = _pointCloudAdapter->render_data();
 
-  if (!cloud || cloud->empty()) return;
-  if (!render_buffer || render_buffer->empty()) return;
+  if (!cloud || cloud->empty() || !render_buffer || render_buffer->empty()) {
+    reset();
+    return;
+  }
 
   _vertexBuffer =
       QByteArray(reinterpret_cast<const char *>(render_buffer->data()),
