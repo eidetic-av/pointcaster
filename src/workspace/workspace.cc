@@ -1,6 +1,8 @@
 #include "workspace.h"
 
 #include "camera/camera_config.h"
+#include "config/config_registry.h"
+#include "networking/osc/osc_receiver.h"
 #include "networking/point_streamer.h"
 #include "session/session.h"
 #include "session/session_config.h"
@@ -27,7 +29,6 @@
 #include <utility>
 #include <variant>
 #include <vector>
-
 
 #ifdef _WIN32
 #include <filesystem>
@@ -59,20 +60,25 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   device_plugin_manager = plugins::load_device_plugins(*this);
   operator_plugin_manager = plugins::load_operator_plugins(*this);
 
-  // TODO maybe the metrics server shouldn't be a singleton and should
-  // follow the same pattern as session_recorder & point_streamer belonging
-  // to this workspace class and the injected workspace is what grabs it
-  // wherever it's needed
-  metrics::PrometheusServer::initialise();
-
-  session_recorder = std::make_unique<recorder::SessionRecorder>(*this);
-  point_streamer = std::make_unique<networking::PointStreamer>(*this);
-
   // instantiate device plugins for the initial config
   sync_devices();
 
   // instantiate session operator pipelines
   sync_sessions();
+
+  rebuild_config_registry();
+
+  // initialise workspace instances
+  osc_receiver = std::make_unique<networking::osc::OscReceiver>(*this);
+  session_recorder = std::make_unique<recorder::SessionRecorder>(*this);
+  point_streamer = std::make_unique<networking::PointStreamer>(*this);
+
+  // TODO maybe the metrics server shouldn't be a singleton and should
+  // follow the same pattern as session_recorder & point_streamer belonging
+  // to this workspace class and the injected workspace is what grabs it
+  // wherever it's needed... at least just so it can be torn down and restarted
+  // at will
+  metrics::PrometheusServer::initialise();
 }
 
 void Workspace::apply_new_config(const WorkspaceConfiguration &new_config,
@@ -83,6 +89,31 @@ void Workspace::apply_new_config(const WorkspaceConfiguration &new_config,
   }
   if (should_sync_devices) sync_devices();
   sync_sessions();
+  rebuild_config_registry();
+  if (osc_receiver) osc_receiver->reconfigure();
+}
+
+// TODO not sure about this...
+// could probs be comp time registry? idk at least
+// it probs doesn't need to be rebuilt often
+void Workspace::rebuild_config_registry() {
+  config_registry.clear();
+  for (auto &session_config : config.sessions) {
+    pc::register_config(config_registry, "session/" + session_config.id,
+                        session_config);
+  }
+  for (auto &device_plugin : devices) {
+    if (!device_plugin) continue;
+    std::visit(
+        [this](auto &device_config) {
+          pc::register_config(config_registry, "device/" + device_config.id,
+                              device_config);
+        },
+        device_plugin->config_variant());
+  }
+  pc::register_config(config_registry, "streaming",
+                      config.point_streamer.value());
+  pc::register_config(config_registry, "osc", config.osc_receiver.value());
 }
 
 void Workspace::sync_sessions() {

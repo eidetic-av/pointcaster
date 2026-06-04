@@ -27,6 +27,8 @@ qt_add_executable(pointcaster
   recorder/session_recorder.cc
   pipeline/concurrent_operator_pipeline.cc
   networking/point_streamer.cc
+  networking/osc/osc_receiver.cc
+  config/config_registry.cc
   # TODO should probs be part of plugin lib? but other deps cant find it if it is atm
   plugins/operators/operator_host.cc
   ${app_icon_resource}
@@ -54,6 +56,7 @@ add_subdirectory(plugins)
 #----- Dependencies
 
 find_package(reflectcpp CONFIG REQUIRED)
+find_package(liblo CONFIG REQUIRED)
 find_package(TBB REQUIRED)
 find_package(PCL CONFIG REQUIRED)
 find_package(OpenCV CONFIG REQUIRED
@@ -72,6 +75,7 @@ target_link_libraries(pointcaster PRIVATE
   Corrade::Main
   Corrade::PluginManager
   reflectcpp::reflectcpp
+  liblo::liblo
   TBB::tbb
   ${OpenCV_LIBS}
   ${PCL_LIBRARIES}

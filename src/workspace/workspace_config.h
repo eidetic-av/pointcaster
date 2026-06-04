@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <networking/osc/osc_receiver_config.h>
 #include <networking/point_streamer_config.h>
 #include <optional>
 #include <pipeline/concurrent_operator_pipeline_config.h>
@@ -18,7 +19,7 @@ struct WorkspaceConfiguration {
   rfl::DefaultVal<int> selectedSessionIndex = 0;
   std::vector<devices::DeviceConfigurationVariant> devices{};
   std::vector<SessionConfiguration> sessions{};
-  rfl::DefaultVal<networking::PointStreamerConfiguration> point_streamer = {};
+  rfl::DefaultVal<networking::osc::OscReceiverConfiguration> osc_receiver;
 };
 
 bool load_workspace_from_file(WorkspaceConfiguration &config,

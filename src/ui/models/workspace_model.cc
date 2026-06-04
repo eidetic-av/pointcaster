@@ -1332,6 +1332,34 @@ void WorkspaceModel::syncSessionAdapters() {
   _sessionAdapters = new_ordered_sessions;
   _sessionConfigPtrById = std::move(new_ptrs_by_id);
 
+  // Refresh registry subscriptions so OSC/external changes notify QML.
+  _workspace.config_registry.remove_subscriptions("session/");
+  for (QObject *obj : _sessionAdapters) {
+    auto *adapter = qobject_cast<ConfigAdapter *>(obj);
+    if (!adapter) continue;
+    const std::string id = adapterStableId(adapter).toStdString();
+    if (id.empty()) continue;
+    const std::string prefix = "session/" + id + "/";
+    auto adapterPtr = QPointer<ConfigAdapter>(adapter);
+    _workspace.config_registry.on_change(
+        prefix, [adapterPtr, prefix](std::string_view path) {
+          if (!adapterPtr) return;
+          std::string local(path.substr(prefix.size()));
+          // collapse float3 component sub-paths to the parent path
+          // e.g. "transform/position/x" becomes "transform/position"
+          for (std::string_view sfx : {"/x", "/y", "/z"}) {
+            if (local.ends_with(sfx)) {
+              local = local.substr(0, local.size() - sfx.size());
+              break;
+            }
+          }
+          const QString qpath = QString::fromStdString(local);
+          QMetaObject::invokeMethod(adapterPtr.data(), [adapterPtr, qpath]() {
+            if (adapterPtr) adapterPtr->notifyFieldChanged(qpath);
+          }, Qt::QueuedConnection);
+        });
+  }
+
   emit sessionAdaptersChanged();
 
   syncSessionPointCloudAdapters();
@@ -1442,6 +1470,55 @@ void WorkspaceModel::syncDeviceAdapters() {
     if (it.value()) it.value()->deleteLater();
   }
   _deviceAdapters = new_ordered_devices;
+
+  // TODO all of this seems so complex...
+  // Refresh registry subscriptions for device adapters.
+  _workspace.config_registry.remove_subscriptions("device/");
+  for (QObject *obj : _deviceAdapters) {
+    auto *adapter = qobject_cast<ConfigAdapter *>(obj);
+    if (!adapter) continue;
+    const std::string id = adapterStableId(adapter).toStdString();
+    if (id.empty()) continue;
+    const std::string prefix = "device/" + id + "/";
+    auto adapterPtr = QPointer<ConfigAdapter>(adapter);
+    _workspace.config_registry.on_change(
+        prefix, [adapterPtr, prefix, id, &workspace = _workspace](std::string_view path) {
+          // The registry setter wrote to the plugin config...
+          // Sync that change back to
+          // workspace.config so serialization and undo snapshots see it.
+          {
+            std::scoped_lock lock(workspace.config_access);
+            for (auto &device_plugin : workspace.devices) {
+              if (!device_plugin) continue;
+              auto [did, _] = pc::devices::device_info_from_variant(
+                  device_plugin->config_variant());
+              if (std::string(did) != id) continue;
+              for (auto &wc : workspace.config.devices) {
+                const bool match = std::visit(
+                    [&id](const auto &d) { return d.id == id; }, wc);
+                if (match) {
+                  wc = device_plugin->config_variant();
+                  break;
+                }
+              }
+              break;
+            }
+          }
+          if (!adapterPtr) return;
+          std::string local(path.substr(prefix.size()));
+          for (std::string_view sfx : {"/x", "/y", "/z"}) {
+            if (local.ends_with(sfx)) {
+              local = local.substr(0, local.size() - sfx.size());
+              break;
+            }
+          }
+          const QString qpath = QString::fromStdString(local);
+          QMetaObject::invokeMethod(adapterPtr.data(), [adapterPtr, qpath]() {
+            if (adapterPtr) adapterPtr->notifyFieldChanged(qpath);
+          }, Qt::QueuedConnection);
+        });
+  }
+
   int selectedDeviceIndex = _workspace.config.selectedDeviceIndex.value();
   if (selectedDeviceIndex >= _deviceAdapters.size() || selectedDeviceIndex < 0)
     selectedDeviceIndex = 0;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config/config_registry.h"
+#include "networking/osc/osc_receiver.h"
 #include "networking/point_streamer.h"
 #include "session/session.h"
 
@@ -31,6 +33,7 @@ class Workspace {
 public:
   WorkspaceConfiguration config;
   std::mutex config_access;
+  pc::ConfigRegistry config_registry;
 
   bool auto_loaded_config = false;
 
@@ -56,6 +59,8 @@ public:
 
   std::unordered_map<std::string, std::unique_ptr<Session>> sessions;
 
+  std::unique_ptr<networking::osc::OscReceiver> osc_receiver;
+
   explicit Workspace(const WorkspaceConfiguration &initial);
 
   // updates config and syncs (creates/destroys) device plugin instances
@@ -66,6 +71,8 @@ public:
   void sync_devices();
 
   void sync_sessions();
+
+  void rebuild_config_registry();
 };
 
 } // namespace pc
