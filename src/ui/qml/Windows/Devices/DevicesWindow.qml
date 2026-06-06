@@ -19,7 +19,7 @@ KDDW.DockWidget {
     function init() {
         if (workspace) {
             workspace.triggerDeviceDiscovery();
-            deviceSelectionList.setSelectedIndex(workspace.selectedDeviceIndex);
+            deviceSelectionList.selectDevice(workspace.selectedDeviceIndex);
             currentDeviceIndex = workspace.selectedDeviceIndex;
         }
     }
@@ -37,7 +37,7 @@ KDDW.DockWidget {
     Connections {
         target: workspace
         function onDeviceAdded() {
-            deviceSelectionList.setSelectedIndex(workspace.deviceAdapters.length - 1);
+            deviceSelectionList.selectDevice(workspace.deviceAdapters.length - 1);
             currentDeviceIndex = workspace.deviceAdapters.length - 1;
         }
     }
@@ -78,13 +78,22 @@ KDDW.DockWidget {
             }
 
             Item {
+                id: deviceListContainer
+
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.round(160 * Scaling.uiScale)
+                Layout.preferredHeight: Math.round(Workspace.deviceListHeight * Scaling.uiScale)
 
                 DeviceSelectionList {
                     id: deviceSelectionList
                     workspace: root.workspace
-                    anchors.fill: parent
+
+                    anchors {
+                        top: parent.top
+                        left: parent.left
+                        right: parent.right
+                        bottom: resizeHandle.top
+                    }
+
                     onActivated: function (index) {
                         root.currentDeviceIndex = index;
                         root.deviceSelected();
@@ -93,6 +102,64 @@ KDDW.DockWidget {
 
                 TapHandler {
                     onTapped: root.workspace.selectedOperatorAdapter = null
+                }
+
+                Rectangle {
+                    id: resizeHandle
+
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        bottom: parent.bottom
+                    }
+
+                    height: Math.round(5 * Scaling.uiScale)
+                    color: "transparent"
+
+                    Rectangle {
+                        anchors.centerIn: parent
+
+                        width: parent.width
+                        height: (resizeMouseArea.containsMouse || resizeMouseArea.dragging) ? Math.round(3 * Scaling.uiScale) : Math.max(1, Math.round(1 * Scaling.uiScale))
+
+                        color: resizeMouseArea.dragging ? ThemeColors.mid : (resizeMouseArea.containsMouse ? ThemeColors.middark : ThemeColors.almostdark)
+
+                        Behavior on height {
+                            NumberAnimation {
+                                duration: Math.round(120 * Scaling.uiScale)
+                                easing.type: Easing.InCubic
+                            }
+                        }
+
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: Math.round(90 * Scaling.uiScale)
+                                easing.type: Easing.InCubic
+                            }
+                        }
+                    }
+
+                    MouseArea {
+                        id: resizeMouseArea
+
+                        anchors.fill: parent
+
+                        cursorShape: Qt.SizeVerCursor
+                        hoverEnabled: true
+
+                        property bool dragging: false
+
+                        onPressed: dragging = true
+                        onReleased: dragging = false
+                        onCanceled: dragging = false
+
+                        onPositionChanged: {
+                            if (!dragging)
+                                return;
+
+                            Workspace.deviceListHeight = Math.max((80 * Scaling.uiScale), Math.round(deviceListContainer.height + mouseY));
+                        }
+                    }
                 }
             }
 
@@ -112,6 +179,7 @@ KDDW.DockWidget {
                 id: deviceConfigScrollView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.minimumHeight: Math.round(140 * Scaling.uiScale)
                 clip: true
 
                 Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds

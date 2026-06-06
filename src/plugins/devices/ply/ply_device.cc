@@ -16,9 +16,7 @@ namespace pc::devices {
 
 // using pc::profiling::ProfilingZone;
 
-void PlyDevice::init(Workspace &workspace) {
-  _workspace = &workspace;
-
+void PlyDevice::init() {
   auto &backend_manager = _workspace->backend_plugin_manager;
   _cpu_backend = backend_manager->instantiate("CpuBackend");
 
@@ -184,6 +182,9 @@ void PlyDevice::tick(float delta_time) {
   _current_frame = next;
   seq.current_frame.set(_current_frame);
 
+  _sequence_loader->set_loop(static_cast<size_t>(start),
+                             static_cast<size_t>(end));
+
   if (auto frame =
           _sequence_loader->get_frame(static_cast<size_t>(_current_frame))) {
     _input_cloud = std::move(frame);
@@ -227,6 +228,16 @@ void PlyDevice::on_config_field_changed(std::string_view path) {
     // scrub...
     if (path.find("current_frame") != std::string_view::npos) {
       _current_frame = config.sequence.value().current_frame.value();
+      const auto &scrub_seq = config.sequence.value();
+      const auto total = static_cast<int>(_sequence_loader->frame_count());
+      const auto start =
+          std::clamp(scrub_seq.start_frame.value(), 0, total - 1);
+      const auto end =
+          (scrub_seq.end_frame.value() < 0)
+              ? total - 1
+              : std::clamp(scrub_seq.end_frame.value(), start, total - 1);
+      _sequence_loader->set_loop(static_cast<size_t>(start),
+                                 static_cast<size_t>(end));
       auto frame =
           _sequence_loader->get_frame(static_cast<size_t>(_current_frame));
       if (frame) {
@@ -256,7 +267,7 @@ void PlyDevice::update_config(
     if (!std::holds_alternative<PlyDeviceConfiguration>(_config)) return;
     const auto &config = std::get<PlyDeviceConfiguration>(_config);
     const auto &file_config = config.file.value();
-    if (config.active.value() && !file_config.path.empty() &&
+    if (active() && !file_config.path.empty() &&
         file_config.path != _loaded_file_path) {
       path_to_load = file_config.path;
     }
@@ -313,7 +324,7 @@ void PlyDevice::apply_transform() {
 
 void PlyDevice::on_pipeline_output(std::shared_ptr<PointCloud> processed) {
   const auto config = std::get<PlyDeviceConfiguration>(_config);
-  if (config.render.value() && _cpu_backend) {
+  if (rendering() && _cpu_backend) {
     auto buf = std::make_shared<std::vector<std::byte>>(processed->size() * 16);
     _cpu_backend->pack_render_buffer(*processed, *buf);
     _latest_render_data.store(std::move(buf), std::memory_order_release);

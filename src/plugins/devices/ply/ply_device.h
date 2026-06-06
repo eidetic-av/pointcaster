@@ -35,8 +35,6 @@ public:
   PlyDevice(PlyDevice &&) = delete;
   PlyDevice &operator=(PlyDevice &&) = delete;
 
-  void init(Workspace &workspace) override;
-
   DeviceStatus status() const override { return _status; };
 
   std::shared_ptr<PointCloud> point_cloud() override;
@@ -83,6 +81,8 @@ private:
   // TODO change this to a device-global or workspace-global timer thread
   std::jthread _tick_thread;
   std::mutex _device_mutex;
+
+  void init() override;
 
   bool load_directory(const std::filesystem::path &dir);
 

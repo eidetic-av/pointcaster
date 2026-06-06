@@ -60,6 +60,8 @@ DoubleSpinBox {
     from: effectiveFrom
     to: effectiveTo
 
+    Component.onCompleted: syncDisplayedValue()
+
     function clampToRange(v) {
         var x = Number(v);
         if (isNaN(x))
@@ -100,8 +102,6 @@ DoubleSpinBox {
             return;
         value = v;
     }
-
-    Component.onCompleted: value = clampToRange(boundValue)
 
     onValueModified: {
         boundValue = value;
@@ -145,7 +145,9 @@ DoubleSpinBox {
 
         onActiveFocusChanged: {
             if (activeFocus && !dragBehaviour.dragModeActive)
-                Qt.callLater(function () { spinTextInput.selectAll(); });
+                Qt.callLater(function () {
+                    spinTextInput.selectAll();
+                });
         }
 
         DragInput {
@@ -167,22 +169,30 @@ DoubleSpinBox {
 
             quantiseDeltaToInteger: false
 
-            numericValue: function () { return root.value; }
+            numericValue: function () {
+                return root.value;
+            }
             setNumericValue: function (v) {
                 var clamped = root.clampToRange(v);
                 if (clamped !== root.value)
                     root.value = clamped;
             }
 
-            stepSize: function () { return root.dragStepSize; }
+            stepSize: function () {
+                return root.dragStepSize;
+            }
 
             modifierMultiplier: function (mods) {
-                if (mods & Qt.ShiftModifier)   return 10.0;
-                if (mods & Qt.ControlModifier) return 0.1;
+                if (mods & Qt.ShiftModifier)
+                    return 10.0;
+                if (mods & Qt.ControlModifier)
+                    return 0.1;
                 return 1.0;
             }
 
-            resetToDefault: function () { root.resetToDefault(); }
+            resetToDefault: function () {
+                root.resetToDefault();
+            }
 
             onEdited: {
                 root.boundValue = root.value;
@@ -194,41 +204,16 @@ DoubleSpinBox {
         }
     }
 
-    onBoundValueChanged: {
+    function syncDisplayedValue() {
         if (spinTextInput.activeFocus || dragBehaviour.dragModeActive)
             return;
-
         var clamped = clampToRange(boundValue);
         if (root.value !== clamped)
             root.value = clamped;
     }
 
-    onClampEnabledChanged: {
-        var clamped = clampToRange(root.value);
-        if (clamped !== root.value) {
-            root.value = clamped;
-            boundValue = clamped;
-            commitValue(clamped);
-        }
-    }
-    onMinValueChanged: {
-        if (!clampEnabled)
-            return;
-        var clamped = clampToRange(root.value);
-        if (clamped !== root.value) {
-            root.value = clamped;
-            boundValue = clamped;
-            commitValue(clamped);
-        }
-    }
-    onMaxValueChanged: {
-        if (!clampEnabled)
-            return;
-        var clamped = clampToRange(root.value);
-        if (clamped !== root.value) {
-            root.value = clamped;
-            boundValue = clamped;
-            commitValue(clamped);
-        }
-    }
+    onBoundValueChanged: syncDisplayedValue()
+    onClampEnabledChanged: syncDisplayedValue()
+    onMinValueChanged: syncDisplayedValue()
+    onMaxValueChanged: syncDisplayedValue()
 }

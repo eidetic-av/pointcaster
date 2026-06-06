@@ -240,7 +240,7 @@ Column {
                                     return floatEditor;
                                 if (typeName.includes("pc::float3") || typeName.includes("float3"))
                                     return float3Editor;
-                                if (typeName === "bool" || typeName === "rfl::skip<bool>")
+                                if (typeName === "bool")
                                     return boolEditor;
                                 return stringEditor;
                             }

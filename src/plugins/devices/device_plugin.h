@@ -1,6 +1,7 @@
 #pragma once
 
 #include "device_status.h"
+#include "device_tree.h"
 #include "device_variants.h"
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/GrowableArray.h>
@@ -97,7 +98,10 @@ public:
 
   virtual ~DevicePlugin() = default;
 
-  virtual void init(Workspace &workspace) = 0;
+  void init(Workspace &workspace) {
+    _workspace = &workspace;
+    init();
+  }
 
   void set_is_discovery_instance(bool v) { _is_discovery_instance = v; }
   bool is_discovery_instance() { return _is_discovery_instance; };
@@ -106,6 +110,9 @@ public:
     return {};
   };
   virtual void refresh_discovery() {};
+
+  bool active();
+  bool rendering();
 
   virtual void add_discovery_change_callback(std::function<void()>){};
   virtual bool has_discovery_change_callback() const { return false; };
@@ -178,6 +185,7 @@ public:
   }
 
 protected:
+  Workspace *_workspace;
   DeviceConfigurationVariant _config;
   std::function<void(DeviceStatus)> _status_callback;
   std::function<void()> _point_cloud_updated_callback;
@@ -190,6 +198,9 @@ protected:
   void on_pipeline_output(std::shared_ptr<PointCloud>) override {
     notify_point_cloud_updated();
   }
+
+private:
+  virtual void init() {};
 };
 
 } // namespace pc::devices

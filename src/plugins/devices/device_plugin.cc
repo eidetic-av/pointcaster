@@ -12,6 +12,22 @@
 
 namespace pc::devices {
 
+bool DevicePlugin::active() {
+  return std::visit(
+      [this](auto &device_config) {
+        return effective_active(_workspace->config, device_config.id);
+      },
+      _config);
+}
+
+bool DevicePlugin::rendering() {
+  return std::visit(
+      [this](auto &device_config) {
+        return effective_render(_workspace->config, device_config.id);
+      },
+      _config);
+}
+
 void DevicePlugin::on_config_field_changed(std::string_view path) {
   // For operator changes, forward the new config to all pipeline worker
   // instances

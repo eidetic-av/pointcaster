@@ -75,10 +75,6 @@ OrbbecDevice::~OrbbecDevice() {
                       _is_discovery_instance ? " discovery instance" : "");
 }
 
-void OrbbecDevice::init(Workspace &workspace) {
-  _workspace = &workspace;
-}
-
 std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
   std::vector<DiscoveredDevice> out;
 
@@ -543,9 +539,8 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
             feed_operator_pipeline(point_cloud);
 
-            // Render from the latest *processed* cloud (may lag one frame —
-            // fine for real-time)
-            if (device_config.render.value() && backend) {
+            if (rendering() && backend) {
+              // render from the latest finished/processed cloud
               if (auto processed = _pipeline->latest_cloud()) {
                 auto render_buffer = std::make_shared<std::vector<std::byte>>(
                     processed->size() * 16);

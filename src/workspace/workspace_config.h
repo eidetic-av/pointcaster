@@ -5,6 +5,7 @@
 #include <networking/point_streamer_config.h>
 #include <optional>
 #include <pipeline/concurrent_operator_pipeline_config.h>
+#include <plugins/devices/device_group.h>
 #include <plugins/devices/device_variants.h>
 #include <rfl/DefaultVal.hpp>
 #include <session/session_config.h>
@@ -15,10 +16,12 @@ namespace pc {
 // simulation state for the running application.
 struct WorkspaceConfiguration {
   std::string id;
-  rfl::DefaultVal<int> selectedDeviceIndex = 0;
   rfl::DefaultVal<int> selectedSessionIndex = 0;
-  std::vector<devices::DeviceConfigurationVariant> devices{};
+  rfl::DefaultVal<int> selectedDeviceIndex = 0;
   std::vector<SessionConfiguration> sessions{};
+  std::vector<devices::DeviceConfigurationVariant> devices{};
+  std::vector<devices::DeviceGroup> device_groups;
+  rfl::DefaultVal<networking::PointStreamerConfiguration> point_streamer;
   rfl::DefaultVal<networking::osc::OscReceiverConfiguration> osc_receiver;
 };
 

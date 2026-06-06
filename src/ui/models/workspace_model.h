@@ -11,7 +11,9 @@
 #include <QUndoStack>
 #include <QUrl>
 #include <QVariant>
+#include <config/config_variant.h>
 #include <functional>
+#include <networking/point_streamer_config_adapter.gen.h>
 #include <qtmetamacros.h>
 #include <session/session_config_adapter.gen.h>
 #include <workspace/workspace_config.h>
@@ -55,6 +57,8 @@ class WorkspaceModel : public QObject {
                  addDeviceMenuEntriesChanged)
   Q_PROPERTY(int selectedDeviceIndex READ selectedDeviceIndex WRITE
                  setSelectedDeviceIndex NOTIFY selectedDeviceIndexChanged)
+  Q_PROPERTY(QVariantList deviceTreeRows READ deviceTreeRows NOTIFY
+                 deviceTreeRowsChanged)
 
   // Selected operator (owned by a device)
   Q_PROPERTY(OperatorAdapter *selectedOperatorAdapter READ
@@ -71,6 +75,9 @@ class WorkspaceModel : public QObject {
 
   Q_PROPERTY(QVariantMap foldedPropertyPaths READ foldedPropertyPaths NOTIFY
                  foldedPropertyPathsChanged)
+
+  // Streaming
+  Q_PROPERTY(QObject *pointStreamerAdapter READ pointStreamerAdapter CONSTANT)
 
   // Recording
   Q_PROPERTY(RecorderModel *recorder READ recorder NOTIFY recorderChanged)
@@ -125,6 +132,22 @@ public:
     return deviceAdapterAt(_selectedDeviceIndex);
   }
 
+  QVariantList deviceTreeRows() const;
+
+  Q_INVOKABLE void moveDeviceNode(const QString &node_id,
+                                  const QString &new_parent_id,
+                                  const QString &before_node_id = "");
+
+  Q_INVOKABLE void createDeviceGroup(const QString &label,
+                                     const QString &parent_id = "");
+  Q_INVOKABLE void deleteDeviceGroup(const QString &group_id);
+  Q_INVOKABLE void setDeviceGroupActive(const QString &group_id, bool active);
+  Q_INVOKABLE void setDeviceGroupRender(const QString &group_id, bool render);
+  Q_INVOKABLE void setDeviceGroupCollapsed(const QString &group_id,
+                                           bool collapsed);
+  Q_INVOKABLE void setDeviceGroupLabel(const QString &group_id,
+                                       const QString &label);
+
   OperatorAdapter *selectedOperatorAdapter() const {
     return _selectedOperatorAdapter;
   }
@@ -145,6 +168,8 @@ public:
 
   QVariantList consoleOverlayEntries() const;
   QVariantList consoleHistoryEntries() const;
+
+  QObject *pointStreamerAdapter() const { return _pointStreamerAdapter.data(); }
 
   RecorderModel *recorder() const { return _recorderModel; }
 
@@ -181,6 +206,8 @@ signals:
   void deviceAdded();
   void deviceDeleted();
 
+  void deviceTreeRowsChanged();
+
   void selectedOperatorAdapterChanged();
 
   void consoleOverlayEntriesChanged();
@@ -204,6 +231,8 @@ private:
   QHash<QString, QPointer<SessionAdapter>> _sessionPointCloudAdapters;
 
   QPointer<OperatorAdapter> _selectedOperatorAdapter;
+
+  QPointer<ConfigAdapter> _pointStreamerAdapter;
 
   RecorderModel *_recorderModel;
 
@@ -249,6 +278,11 @@ private:
   DeviceAdapter *makeDeviceAdapterForPlugin(
       pc::devices::DevicePlugin *plugin,
       pc::devices::DeviceConfigurationVariant &config_variant);
+
+  bool isDescendantOf(const std::string &node_id,
+                      const std::string &maybe_ancestor_id) const;
+
+  void initPointStreamerAdapter();
 };
 
 } // namespace pc::ui

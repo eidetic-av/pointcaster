@@ -14,10 +14,12 @@ namespace pc::devices {
 class OrbbecDevice;
 
 struct OrbbecDeviceConfiguration {
-  std::string id;                          // @hidden
-  rfl::DefaultVal<std::string> label = ""; // @hidden
-  rfl::DefaultVal<bool> active = true;     // @hidden
-  rfl::DefaultVal<bool> render = true;     // @hidden;
+  std::string id;                              // @hidden
+  rfl::DefaultVal<std::string> label;     // @hidden
+  rfl::DefaultVal<bool> active = true;         // @hidden
+  rfl::DefaultVal<bool> render = true;         // @hidden;
+  rfl::DefaultVal<std::string> parent_id; // @hidden
+  rfl::DefaultVal<int> order = 0;              // @hidden
 
   std::string ob_uid; // @disabled
 

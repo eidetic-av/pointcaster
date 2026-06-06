@@ -23,8 +23,6 @@ public:
   NullDevice(NullDevice &&) = delete;
   NullDevice &operator=(NullDevice &&) = delete;
 
-  void init(Workspace &workspace) override { _workspace = &workspace; }
-
   std::vector<DiscoveredDevice> discovered_devices() const override {
     return {};
   };

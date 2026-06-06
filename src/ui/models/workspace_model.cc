@@ -21,6 +21,8 @@
 #include <filesystem>
 #include <functional>
 #include <nlohmann/json.hpp>
+#include <optional>
+#include <plugins/devices/device_tree.h>
 #include <plugins/devices/device_variants.h>
 #include <ranges>
 #include <session/session.h>
@@ -71,6 +73,16 @@ static int find_device_index_by_id(const pc::WorkspaceConfiguration &config,
   }
   return -1;
 }
+
+static int
+find_device_group_index_by_id(const pc::WorkspaceConfiguration &config,
+                              const std::string &group_id) {
+  for (int i = 0; i < int(config.device_groups.size()); ++i) {
+    if (config.device_groups[size_t(i)].id == group_id) return i;
+  }
+  return -1;
+}
+
 static int find_operator_index_by_id(
     const pc::devices::DeviceConfigurationVariant &device_config,
     const std::string &operator_id) {
@@ -85,6 +97,7 @@ static int find_operator_index_by_id(
       },
       device_config);
 }
+
 static int find_session_operator_index_by_id(const pc::SessionConfiguration &s,
                                              const std::string &operator_id) {
   for (int i = 0; i < int(s.operators.size()); ++i) {
@@ -253,6 +266,31 @@ private:
   }
 };
 
+class SetPointStreamerConfigCommand final : public QUndoCommand {
+public:
+  using ApplyFn = std::function<void(pc::WorkspaceConfiguration)>;
+  SetPointStreamerConfigCommand(
+      pc::networking::PointStreamerConfiguration before,
+      pc::networking::PointStreamerConfiguration after, QString command_text,
+      pc::WorkspaceConfiguration base_snapshot, ApplyFn apply_fn)
+      : QUndoCommand(std::move(command_text)), _before(std::move(before)),
+        _after(std::move(after)), _base_snapshot(std::move(base_snapshot)),
+        _apply_fn(std::move(apply_fn)) {}
+  void undo() override { apply(_before); }
+  void redo() override { apply(_after); }
+
+private:
+  pc::networking::PointStreamerConfiguration _before;
+  pc::networking::PointStreamerConfiguration _after;
+  pc::WorkspaceConfiguration _base_snapshot;
+  ApplyFn _apply_fn;
+  void apply(const pc::networking::PointStreamerConfiguration &value) {
+    auto new_config = _base_snapshot;
+    new_config.point_streamer.set(value);
+    if (_apply_fn) _apply_fn(std::move(new_config));
+  }
+};
+
 struct SessionUpdateGate {
   std::atomic<bool> pending{false};
   QPointer<SessionAdapter> adapter;
@@ -281,6 +319,10 @@ void WorkspaceModel::applyWorkspaceConfigAndRebuild(
   const bool sync_devices =
       (scope == RebuildScope::Devices || scope == RebuildScope::All);
   _workspace.apply_new_config(std::move(new_config), sync_devices);
+  if (_pointStreamerAdapter) {
+    _pointStreamerAdapter->setConfig(
+        pc::ConfigurationVariant{_workspace.config.point_streamer.value()});
+  }
   switch (scope) {
   case RebuildScope::None: {
     break;
@@ -310,6 +352,10 @@ WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
 
   _recorderModel = new RecorderModel(workspace->session_recorder.get(), this);
   emit recorderChanged();
+
+  _pointStreamerAdapter = new pc::networking::PointStreamerConfigurationAdapter(
+      _workspace.config.point_streamer.value(), this);
+  initPointStreamerAdapter();
 }
 
 void WorkspaceModel::close() {
@@ -963,6 +1009,64 @@ void WorkspaceModel::initSessionOperatorAdapter(OperatorAdapter *opAdapter,
       });
 }
 
+void WorkspaceModel::initPointStreamerAdapter() {
+  if (!_pointStreamerAdapter) return;
+
+  // Subscribe to external (OSC/etc.) changes on the streamer config
+  _workspace.config_registry.remove_subscriptions("streaming/");
+  auto adapterPtr = QPointer<ConfigAdapter>(_pointStreamerAdapter.data());
+  _workspace.config_registry.on_change(
+      "streaming/", [adapterPtr](std::string_view path) {
+        if (!adapterPtr) return;
+        const std::string local(
+            path.substr(std::string_view("streaming/").size()));
+        const QString qpath = QString::fromStdString(local);
+        QMetaObject::invokeMethod(
+            adapterPtr.data(),
+            [adapterPtr, qpath]() {
+              if (adapterPtr) adapterPtr->notifyFieldChanged(qpath);
+            },
+            Qt::QueuedConnection);
+      });
+
+  QObject::connect(
+      _pointStreamerAdapter, &ConfigAdapter::editRequested, this,
+      [this](const QString &path, const QVariant &value) {
+        auto *adapter = _pointStreamerAdapter.data();
+        if (!adapter) return;
+
+        pc::networking::PointStreamerConfiguration before;
+        pc::networking::PointStreamerConfiguration after;
+        pc::WorkspaceConfiguration base_snapshot;
+        {
+          std::scoped_lock lock(_workspace.config_access);
+          base_snapshot = _workspace.config;
+          before = _workspace.config.point_streamer.value();
+          // apply() mutates the live config member directly (m_config aliases
+          // it)
+          const bool changed = adapter->apply(path, value);
+          if (!changed) return;
+          after = _workspace.config.point_streamer.value();
+        }
+
+        QString command_text = QStringLiteral("Edit %1").arg(path);
+        _undoStack->push(new SetPointStreamerConfigCommand(
+            std::move(before), std::move(after), std::move(command_text),
+            std::move(base_snapshot),
+            [this](pc::WorkspaceConfiguration config) {
+              QMetaObject::invokeMethod(
+                  this,
+                  [this, config = std::move(config)]() mutable {
+                    _workspace.apply_new_config(std::move(config), false);
+                    if (_pointStreamerAdapter)
+                      _pointStreamerAdapter->setConfig(pc::ConfigurationVariant{
+                          _workspace.config.point_streamer.value()});
+                  },
+                  Qt::QueuedConnection);
+            }));
+      });
+}
+
 void WorkspaceModel::rebuildSessionOperatorAdapters(
     const QString &sessionId, SessionConfigurationAdapter *adapter,
     pc::Session *session) {
@@ -1011,6 +1115,23 @@ void WorkspaceModel::syncSessionPointCloudAdapters() {
           [gate]() {
             gate->pending.store(false, std::memory_order_release);
             if (gate->adapter) gate->adapter->notifyPointCloudUpdated();
+          },
+          Qt::QueuedConnection);
+    });
+
+    auto pbGate = std::make_shared<SessionUpdateGate>();
+    pbGate->adapter = QPointer<SessionAdapter>(_sessionPointCloudAdapters[id]);
+
+    session_ptr->set_playback_changed_callback([pbGate, model]() {
+      bool expected = false;
+      if (!pbGate->pending.compare_exchange_strong(expected, true,
+                                                   std::memory_order_acq_rel))
+        return;
+      QMetaObject::invokeMethod(
+          model,
+          [pbGate]() {
+            pbGate->pending.store(false, std::memory_order_release);
+            if (pbGate->adapter) pbGate->adapter->notifyPlaybackChanged();
           },
           Qt::QueuedConnection);
     });
@@ -1354,9 +1475,12 @@ void WorkspaceModel::syncSessionAdapters() {
             }
           }
           const QString qpath = QString::fromStdString(local);
-          QMetaObject::invokeMethod(adapterPtr.data(), [adapterPtr, qpath]() {
-            if (adapterPtr) adapterPtr->notifyFieldChanged(qpath);
-          }, Qt::QueuedConnection);
+          QMetaObject::invokeMethod(
+              adapterPtr.data(),
+              [adapterPtr, qpath]() {
+                if (adapterPtr) adapterPtr->notifyFieldChanged(qpath);
+              },
+              Qt::QueuedConnection);
         });
   }
 
@@ -1482,7 +1606,8 @@ void WorkspaceModel::syncDeviceAdapters() {
     const std::string prefix = "device/" + id + "/";
     auto adapterPtr = QPointer<ConfigAdapter>(adapter);
     _workspace.config_registry.on_change(
-        prefix, [adapterPtr, prefix, id, &workspace = _workspace](std::string_view path) {
+        prefix, [adapterPtr, prefix, id,
+                 &workspace = _workspace](std::string_view path) {
           // The registry setter wrote to the plugin config...
           // Sync that change back to
           // workspace.config so serialization and undo snapshots see it.
@@ -1494,8 +1619,8 @@ void WorkspaceModel::syncDeviceAdapters() {
                   device_plugin->config_variant());
               if (std::string(did) != id) continue;
               for (auto &wc : workspace.config.devices) {
-                const bool match = std::visit(
-                    [&id](const auto &d) { return d.id == id; }, wc);
+                const bool match =
+                    std::visit([&id](const auto &d) { return d.id == id; }, wc);
                 if (match) {
                   wc = device_plugin->config_variant();
                   break;
@@ -1513,9 +1638,12 @@ void WorkspaceModel::syncDeviceAdapters() {
             }
           }
           const QString qpath = QString::fromStdString(local);
-          QMetaObject::invokeMethod(adapterPtr.data(), [adapterPtr, qpath]() {
-            if (adapterPtr) adapterPtr->notifyFieldChanged(qpath);
-          }, Qt::QueuedConnection);
+          QMetaObject::invokeMethod(
+              adapterPtr.data(),
+              [adapterPtr, qpath]() {
+                if (adapterPtr) adapterPtr->notifyFieldChanged(qpath);
+              },
+              Qt::QueuedConnection);
         });
   }
 
@@ -1526,6 +1654,7 @@ void WorkspaceModel::syncDeviceAdapters() {
   emit deviceAdaptersChanged();
   emit deviceVariantNamesChanged();
   emit addDeviceMenuEntriesChanged();
+  emit deviceTreeRowsChanged();
   pc::logger()->trace("Workspace device count: {}", _workspace.devices.size());
 }
 
@@ -1553,6 +1682,322 @@ void WorkspaceModel::triggerDeviceDiscovery() {
     }
     discovery_device->refresh_discovery();
   }
+}
+
+bool WorkspaceModel::isDescendantOf(
+    const std::string &node_id, const std::string &maybe_ancestor_id) const {
+  std::string current_id = node_id;
+  while (!current_id.empty()) {
+    if (current_id == maybe_ancestor_id) return true;
+    const int group_index =
+        find_device_group_index_by_id(_workspace.config, current_id);
+    if (group_index < 0) break;
+    current_id =
+        _workspace.config.device_groups[size_t(group_index)].parent_id.value();
+  }
+  return false;
+}
+
+void WorkspaceModel::setDeviceGroupRender(const QString &group_id,
+                                          bool render) {
+  auto new_config = _workspace.config;
+  const int group_index =
+      find_device_group_index_by_id(new_config, group_id.toStdString());
+  if (group_index < 0) return;
+  new_config.device_groups[size_t(group_index)].render.set(render);
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
+}
+
+void WorkspaceModel::setDeviceGroupActive(const QString &group_id,
+                                          bool active) {
+  auto new_config = _workspace.config;
+  const int group_index =
+      find_device_group_index_by_id(new_config, group_id.toStdString());
+  if (group_index < 0) return;
+  new_config.device_groups[size_t(group_index)].active.set(active);
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
+}
+
+void WorkspaceModel::createDeviceGroup(const QString &label,
+                                       const QString &parent_id) {
+  auto new_config = _workspace.config;
+
+  // reject a parent that doesn't exist (empty string is valid, root level)
+  const std::string parent = parent_id.toStdString();
+  if (!parent.empty() &&
+      find_device_group_index_by_id(new_config, parent) < 0) {
+    pc::logger()->warn("createDeviceGroup: parent group not found '{}'",
+                       parent);
+    return;
+  }
+
+  pc::devices::DeviceGroup group_config{.id = pc::uuid::word()};
+  group_config.label.set(label.toStdString());
+  group_config.parent_id.set(parent);
+  new_config.device_groups.push_back(std::move(group_config));
+
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
+}
+
+void WorkspaceModel::deleteDeviceGroup(const QString &group_id) {
+  auto new_config = _workspace.config;
+  const std::string target_group_id = group_id.toStdString();
+
+  const int group_index =
+      find_device_group_index_by_id(new_config, target_group_id);
+  if (group_index < 0) {
+    pc::logger()->warn("deleteDeviceGroup: group id not found '{}'",
+                       target_group_id);
+    return;
+  }
+
+  // children (groups and devices) are reparented to the deleted group's parent
+  const std::string surviving_parent_id =
+      new_config.device_groups[size_t(group_index)].parent_id.value();
+
+  for (auto &group_config : new_config.device_groups) {
+    if (group_config.parent_id.value() == target_group_id)
+      group_config.parent_id.set(surviving_parent_id);
+  }
+  for (auto &device_variant : new_config.devices) {
+    std::visit(
+        [&](auto &device_config) {
+          if (device_config.parent_id.value() == target_group_id)
+            device_config.parent_id.set(surviving_parent_id);
+        },
+        device_variant);
+  }
+
+  new_config.device_groups.erase(new_config.device_groups.begin() +
+                                 group_index);
+
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
+}
+
+void WorkspaceModel::setDeviceGroupCollapsed(const QString &group_id,
+                                             bool collapsed) {
+  auto new_config = _workspace.config;
+  const int group_index =
+      find_device_group_index_by_id(new_config, group_id.toStdString());
+  if (group_index < 0) return;
+  new_config.device_groups[size_t(group_index)].collapsed.set(collapsed);
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
+}
+
+void WorkspaceModel::setDeviceGroupLabel(const QString &group_id,
+                                         const QString &label) {
+  auto new_config = _workspace.config;
+  const int group_index =
+      find_device_group_index_by_id(new_config, group_id.toStdString());
+  if (group_index < 0) return;
+  new_config.device_groups[size_t(group_index)].label.set(label.toStdString());
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
+}
+
+QVariantList WorkspaceModel::deviceTreeRows() const {
+  QVariantList rows;
+
+  struct Entry {
+    bool is_group;
+    int order;
+    int index;
+  };
+
+  std::function<void(const std::string &, int)> walk = [&](const std::string
+                                                               &parent_id,
+                                                           int depth) {
+    std::vector<Entry> entries;
+
+    for (int gi = 0; gi < int(_workspace.config.device_groups.size()); ++gi) {
+      const auto &group_config = _workspace.config.device_groups[size_t(gi)];
+      if (group_config.parent_id.value() == parent_id)
+        entries.push_back({true, group_config.order.value(), gi});
+    }
+    for (int i = 0; i < int(_workspace.config.devices.size()); ++i) {
+      const auto &device_variant = _workspace.config.devices[size_t(i)];
+      const std::string device_parent = std::visit(
+          [](const auto &device_config) {
+            return device_config.parent_id.value();
+          },
+          device_variant);
+      if (device_parent != parent_id) continue;
+      const int device_order = std::visit(
+          [](const auto &device_config) { return device_config.order.value(); },
+          device_variant);
+      entries.push_back({false, device_order, i});
+    }
+
+    std::stable_sort(
+        entries.begin(), entries.end(),
+        [](const Entry &a, const Entry &b) { return a.order < b.order; });
+
+    for (const auto &entry : entries) {
+      if (entry.is_group) {
+        const auto &group_config =
+            _workspace.config.device_groups[size_t(entry.index)];
+        QVariantMap group_row;
+        group_row["kind"] = "group";
+        group_row["id"] = QString::fromStdString(group_config.id);
+        group_row["parentId"] = QString::fromStdString(parent_id);
+        group_row["label"] = QString::fromStdString(group_config.label.value());
+        group_row["depth"] = depth;
+        group_row["collapsed"] = group_config.collapsed.value();
+        group_row["render"] = group_config.render.value();
+        group_row["active"] = group_config.active.value();
+        group_row["effectiveRender"] =
+            pc::devices::effective_render(_workspace.config, group_config.id);
+        group_row["effectiveActive"] =
+            pc::devices::effective_active(_workspace.config, group_config.id);
+        rows.push_back(std::move(group_row));
+        if (!group_config.collapsed.value()) walk(group_config.id, depth + 1);
+      } else {
+        const auto &device_variant =
+            _workspace.config.devices[size_t(entry.index)];
+        const std::string device_id = std::visit(
+            [](const auto &device_config) { return device_config.id; },
+            device_variant);
+        QVariantMap device_row;
+        device_row["kind"] = "device";
+        device_row["id"] = QString::fromStdString(device_id);
+        device_row["parentId"] = QString::fromStdString(parent_id);
+        device_row["deviceIndex"] = entry.index;
+        device_row["depth"] = depth;
+        device_row["effectiveRender"] =
+            pc::devices::effective_render(_workspace.config, device_id);
+        device_row["effectiveActive"] =
+            pc::devices::effective_active(_workspace.config, device_id);
+        rows.push_back(std::move(device_row));
+      }
+    }
+  };
+
+  walk("", 0);
+  return rows;
+}
+
+void WorkspaceModel::moveDeviceNode(const QString &node_id,
+                                    const QString &new_parent_id,
+                                    const QString &before_node_id) {
+  const std::string id = node_id.toStdString();
+  const std::string new_parent = new_parent_id.toStdString();
+  const std::string before = before_node_id.toStdString();
+
+  if (id.empty() || id == new_parent) return;
+
+  // accessors that work uniformly across groups and the device variant
+  const auto node_parent =
+      [&](const std::string &nid) -> std::optional<std::string> {
+    if (const int gi = find_device_group_index_by_id(_workspace.config, nid);
+        gi >= 0)
+      return _workspace.config.device_groups[size_t(gi)].parent_id.value();
+    for (const auto &device_variant : _workspace.config.devices) {
+      std::optional<std::string> found;
+      std::visit(
+          [&](const auto &device_config) {
+            if (device_config.id == nid)
+              found = device_config.parent_id.value();
+          },
+          device_variant);
+      if (found.has_value()) return found;
+    }
+    return std::nullopt;
+  };
+  const auto set_parent = [&](const std::string &nid,
+                              const std::string &parent) {
+    if (const int gi = find_device_group_index_by_id(_workspace.config, nid);
+        gi >= 0) {
+      _workspace.config.device_groups[size_t(gi)].parent_id = parent;
+      return;
+    }
+    for (auto &device_variant : _workspace.config.devices)
+      std::visit(
+          [&](auto &device_config) {
+            if (device_config.id == nid) device_config.parent_id = parent;
+          },
+          device_variant);
+  };
+  const auto set_order = [&](const std::string &nid, int order) {
+    if (const int gi = find_device_group_index_by_id(_workspace.config, nid);
+        gi >= 0) {
+      _workspace.config.device_groups[size_t(gi)].order = order;
+      return;
+    }
+    for (auto &device_variant : _workspace.config.devices)
+      std::visit(
+          [&](auto &device_config) {
+            if (device_config.id == nid) device_config.order = order;
+          },
+          device_variant);
+  };
+
+  // node must exist
+  if (!node_parent(id).has_value()) return;
+
+  // prevent moving a group into its own subtree (walk up from the new parent)
+  for (std::string p = new_parent; !p.empty();) {
+    if (p == id) return;
+    const auto pp = node_parent(p);
+    if (!pp.has_value()) break;
+    p = *pp;
+  }
+
+  // reparent first so sibling gathering reflects the destination
+  set_parent(id, new_parent);
+
+  // gather destination siblings (both kinds), excluding the moved node,
+  // in their current visual order
+  struct Sibling {
+    std::string id;
+    int order;
+  };
+  std::vector<Sibling> siblings;
+  for (const auto &group_config : _workspace.config.device_groups) {
+    if (group_config.id == id) continue;
+    if (group_config.parent_id.value() == new_parent)
+      siblings.push_back({group_config.id, group_config.order.value()});
+  }
+  for (const auto &device_variant : _workspace.config.devices) {
+    std::string did;
+    std::string dparent;
+    int dorder = 0;
+    std::visit(
+        [&](const auto &device_config) {
+          did = device_config.id;
+          dparent = device_config.parent_id.value();
+          dorder = device_config.order.value();
+        },
+        device_variant);
+    if (did == id) continue;
+    if (dparent == new_parent) siblings.push_back({did, dorder});
+  }
+  std::stable_sort(
+      siblings.begin(), siblings.end(),
+      [](const Sibling &a, const Sibling &b) { return a.order < b.order; });
+
+  // resolve insertion position (append when before is empty or not found)
+  size_t insert_at = siblings.size();
+  if (!before.empty()) {
+    for (size_t i = 0; i < siblings.size(); ++i) {
+      if (siblings[i].id == before) {
+        insert_at = i;
+        break;
+      }
+    }
+  }
+
+  // build the resulting order and reassign contiguous indices to all siblings
+  std::vector<std::string> ordered;
+  ordered.reserve(siblings.size() + 1);
+  for (size_t i = 0; i < siblings.size(); ++i) {
+    if (i == insert_at) ordered.push_back(id);
+    ordered.push_back(siblings[i].id);
+  }
+  if (insert_at >= siblings.size()) ordered.push_back(id);
+
+  for (int i = 0; i < int(ordered.size()); ++i)
+    set_order(ordered[size_t(i)], i);
+
+  syncDeviceAdapters();
 }
 
 } // namespace pc::ui

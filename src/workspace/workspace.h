@@ -33,6 +33,7 @@ class Workspace {
 public:
   WorkspaceConfiguration config;
   std::mutex config_access;
+
   pc::ConfigRegistry config_registry;
 
   bool auto_loaded_config = false;

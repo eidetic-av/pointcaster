@@ -6,9 +6,11 @@ import Pointcaster 1.0
 
 QtObject {
     property int labelColumnWidth: 150
-    property real inputDragSpeed: 0.5
+    property int deviceListHeight: 160
 
     property int selectedSessionIndex: 0
+
+    property real inputDragSpeed: 0.5
 
     property list<SessionView> sessionViews: []
 

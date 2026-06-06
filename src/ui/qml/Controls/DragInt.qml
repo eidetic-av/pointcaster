@@ -32,7 +32,7 @@ SpinBox {
     }
     readonly property int effectiveTo: {
         var n = Number(maxValue);
-        return (minValue === undefined || minValue === null || isNaN(n)) ?  2147483647 : Math.trunc(n);
+        return (maxValue === undefined || maxValue === null || isNaN(n)) ? 2147483647 : Math.trunc(n);
     }
 
     from: effectiveFrom
@@ -81,11 +81,12 @@ SpinBox {
         value = v;
     }
 
-    Component.onCompleted: value = clampToRange(boundValue);
+    Component.onCompleted: syncDisplayedValue()
 
     onValueModified: {
         boundValue = value;
-        if (commitOnEdit) commitValue(value);
+        if (commitOnEdit)
+            commitValue(value);
     }
 
     onActiveFocusChanged: {
@@ -126,7 +127,9 @@ SpinBox {
 
         onActiveFocusChanged: {
             if (activeFocus && !dragBehaviour.dragModeActive)
-                Qt.callLater(function () { spinTextInput.selectAll(); });
+                Qt.callLater(function () {
+                    spinTextInput.selectAll();
+                });
         }
 
         DragInput {
@@ -148,20 +151,28 @@ SpinBox {
 
             quantiseDeltaToInteger: true
 
-            numericValue: function () { return root.value; }
+            numericValue: function () {
+                return root.value;
+            }
             setNumericValue: function (v) {
                 var clamped = root.clampToRange(v);
                 if (clamped !== root.value)
                     root.value = clamped;
             }
 
-            stepSize: function () { return root.dragStepSize; }
+            stepSize: function () {
+                return root.dragStepSize;
+            }
 
-            resetToDefault: function () { root.resetToDefault(); }
+            resetToDefault: function () {
+                root.resetToDefault();
+            }
 
             modifierMultiplier: function (mods) {
-                if (mods & Qt.ShiftModifier)   return 10.0;
-                if (mods & Qt.ControlModifier) return 0.1;
+                if (mods & Qt.ShiftModifier)
+                    return 10.0;
+                if (mods & Qt.ControlModifier)
+                    return 0.1;
                 return 1.0;
             }
 
@@ -175,30 +186,15 @@ SpinBox {
         }
     }
 
-    onBoundValueChanged: {
+    function syncDisplayedValue() {
         if (spinTextInput.activeFocus || dragBehaviour.dragModeActive)
             return;
-
         var clamped = clampToRange(boundValue);
         if (root.value !== clamped)
             root.value = clamped;
     }
 
-    onEffectiveFromChanged: {
-        var clamped = clampToRange(root.value);
-        if (clamped !== root.value) {
-            root.value = clamped;
-            boundValue = clamped;
-            commitValue(clamped);
-        }
-    }
-
-    onEffectiveToChanged: {
-        var clamped = clampToRange(root.value);
-        if (clamped !== root.value) {
-            root.value = clamped;
-            boundValue = clamped;
-            commitValue(clamped);
-        }
-    }
+    onBoundValueChanged: syncDisplayedValue()
+    onEffectiveFromChanged: syncDisplayedValue()
+    onEffectiveToChanged: syncDisplayedValue()
 }
