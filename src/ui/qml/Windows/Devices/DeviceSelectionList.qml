@@ -16,6 +16,13 @@ Item {
     readonly property real deviceRowHeight: Math.max(Math.round(30 * Scaling.uiScale), Math.ceil(Scaling.pointSize * 2.1))
     readonly property real groupRowHeight: root.deviceRowHeight
 
+    // shared sizing for the tree, rails align disclosure controls into columns
+    readonly property color treeRailColor: ThemeColors.mid
+    readonly property real railThickness: Math.max(1, Math.round(1 * Scaling.uiScale))
+    readonly property real rowEdgeMargin: Math.round(8 * Scaling.uiScale)
+    readonly property real rowItemSpacing: Math.round(8 * Scaling.uiScale)
+    readonly property real caretSize: Math.round(11 * Scaling.uiScale)
+
     // drag state, shared across delegates
     property int dragOverIndex: -1
     property string dragOverZone: "" // "before" | "after" | "into"
@@ -44,15 +51,6 @@ Item {
         workspace.selectedDeviceIndex = deviceIndex;
         selectedDevice = workspace.deviceAdapters[deviceIndex];
         activated(deviceIndex);
-    }
-
-    // 0 off, 1 mixed, 2 on -> Qt.CheckState
-    function toCheckState(state) {
-        if (state === 2)
-            return Qt.Checked;
-        if (state === 1)
-            return Qt.PartiallyChecked;
-        return Qt.Unchecked;
     }
 
     // id of the next row sharing the same parent and kind, the insert-before
@@ -165,6 +163,122 @@ Item {
         workspace.moveDeviceNode(sourceId, parent, before);
     }
 
+    //
+    // REUSABLE ROW PARTS
+    //
+
+    // inline editable label, falls back to a greyed placeholder. commits on
+    // enter or focus loss and reports the new text through committed
+    component EditableLabel: Rectangle {
+        id: labelRoot
+
+        property string value: ""
+        property string placeholder: ""
+        property real placeholderOpacity: 0.4
+        property bool editing: false
+        property string startText: ""
+
+        signal committed(string text)
+
+        function beginEdit() {
+            startText = field.text;
+            editing = true;
+            field.forceActiveFocus();
+            field.selectAll();
+        }
+
+        function commit() {
+            if (!editing)
+                return;
+            editing = false;
+            if (field.text !== startText)
+                committed(field.text);
+        }
+
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        color: "transparent"
+        border.color: field.activeFocus ? ThemeColors.highlight : "transparent"
+        border.width: 1
+
+        TextInput {
+            id: field
+            anchors.fill: parent
+            verticalAlignment: TextEdit.AlignVCenter
+            font: Scaling.uiFont
+            color: ThemeColors.text
+            selectionColor: ThemeColors.highlight
+            selectedTextColor: ThemeColors.highlightedText
+
+            enabled: labelRoot.editing
+            selectByMouse: labelRoot.editing
+
+            text: labelRoot.value.length > 0 ? labelRoot.value : labelRoot.placeholder
+            opacity: labelRoot.value.length > 0 ? 1.0 : labelRoot.placeholderOpacity
+
+            onEditingFinished: labelRoot.commit()
+            onActiveFocusChanged: if (!activeFocus && labelRoot.editing)
+                labelRoot.commit()
+        }
+    }
+
+    // icon toggle for the active and render columns. dims when the node is on
+    // but an ancestor gates it off
+    component GateToggle: CheckBox {
+        id: toggleRoot
+
+        property url iconOn
+        property url iconOff
+        property bool gated: false
+        property string tip: ""
+        property real baseOpacity: 0.6
+        property real hoverOpacity: 0.6
+
+        Layout.fillHeight: true
+        Layout.minimumWidth: Math.round(16 * Scaling.uiScale)
+        Layout.maximumWidth: Math.round(16 * Scaling.uiScale)
+
+        indicator: Image {
+            anchors.centerIn: parent
+            source: toggleRoot.checked ? toggleRoot.iconOn : toggleRoot.iconOff
+            sourceSize: Qt.size(9.5 * Scaling.uiScale, 9.5 * Scaling.uiScale)
+            opacity: toggleRoot.gated ? 0.25 : (toggleRoot.hovered ? toggleRoot.hoverOpacity : toggleRoot.baseOpacity)
+        }
+
+        InfoToolTip {
+            textValue: toggleRoot.tip
+        }
+    }
+
+    // reorder drop hints at the top and bottom edges of a row
+    component InsertMarkers: Item {
+        id: markersRoot
+
+        property bool showBefore: false
+        property bool showAfter: false
+
+        Rectangle {
+            anchors {
+                left: parent.left
+                right: parent.right
+                top: parent.top
+            }
+            height: Math.max(2, Math.round(2 * Scaling.uiScale))
+            color: ThemeColors.highlight
+            visible: markersRoot.showBefore
+        }
+        Rectangle {
+            anchors {
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+            }
+            height: Math.max(2, Math.round(2 * Scaling.uiScale))
+            color: ThemeColors.highlight
+            visible: markersRoot.showAfter
+        }
+    }
+
     // context menu for group operations, target set before popup
     Menu {
         id: contextMenu
@@ -218,7 +332,7 @@ Item {
             property int rowIndex: -1
             property string nodeId: row.id !== undefined ? String(row.id) : ""
             property string nodeKind: "group"
-            property real indent: (row.depth || 0) * root.indentStep
+            property int depth: row.depth || 0
             readonly property real rowHeight: root.groupRowHeight
 
             width: list.width
@@ -248,7 +362,7 @@ Item {
                 DragHandler {
                     id: groupDrag
                     target: null
-                    enabled: !groupLabelBox.editing
+                    enabled: !groupLabel.editing
                     xAxis.enabled: false
                     yAxis.enabled: true
                     onActiveChanged: {
@@ -267,7 +381,7 @@ Item {
 
                 TapHandler {
                     id: groupTap
-                    enabled: !groupLabelBox.editing
+                    enabled: !groupLabel.editing
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     onTapped: (point, button) => {
                         list.forceActiveFocus();
@@ -280,143 +394,108 @@ Item {
                     onDoubleTapped: (point, button) => {
                         if (button !== Qt.LeftButton)
                             return;
-                        const p = groupLabelBox.mapFromItem(content, point.position.x, point.position.y);
-                        if (p.x >= 0 && p.x <= groupLabelBox.width && p.y >= 0 && p.y <= groupLabelBox.height) {
-                            groupLabelBox.editing = true;
-                            groupLabelBox.startText = groupLabelInput.text;
-                            groupLabelInput.forceActiveFocus();
-                            groupLabelInput.selectAll();
-                        }
+                        const p = groupLabel.mapFromItem(content, point.position.x, point.position.y);
+                        if (p.x >= 0 && p.x <= groupLabel.width && p.y >= 0 && p.y <= groupLabel.height)
+                            groupLabel.beginEdit();
                     }
                 }
 
-                // insert-before / insert-after indicators
+                // subtle accent tint marking the row as a group container
                 Rectangle {
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        top: parent.top
-                    }
-                    height: Math.max(2, Math.round(2 * Scaling.uiScale))
+                    anchors.fill: parent
                     color: ThemeColors.highlight
-                    visible: root.dragOverIndex === groupArea.rowIndex && root.dragOverZone === "before"
+                    opacity: 0.05
+                    visible: !content.intoTarget
                 }
+
+                // left accent stripe, fading with depth to read as nesting
                 Rectangle {
                     anchors {
                         left: parent.left
-                        right: parent.right
+                        top: parent.top
                         bottom: parent.bottom
                     }
-                    height: Math.max(2, Math.round(2 * Scaling.uiScale))
+                    width: Math.max(2, Math.round(2 * Scaling.uiScale))
                     color: ThemeColors.highlight
-                    visible: root.dragOverIndex === groupArea.rowIndex && root.dragOverZone === "after"
+                    opacity: Math.max(0.25, 0.7 - groupArea.depth * 0.18)
+                }
+
+                InsertMarkers {
+                    anchors.fill: parent
+                    showBefore: root.dragOverIndex === groupArea.rowIndex && root.dragOverZone === "before"
+                    showAfter: root.dragOverIndex === groupArea.rowIndex && root.dragOverZone === "after"
                 }
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: Math.round(8 * Scaling.uiScale) + groupArea.indent
-                    anchors.rightMargin: Math.round(8 * Scaling.uiScale)
-                    spacing: Math.round(8 * Scaling.uiScale)
+                    anchors.leftMargin: root.rowEdgeMargin
+                    anchors.rightMargin: root.rowEdgeMargin
+                    spacing: root.rowItemSpacing
 
-                    Image {
-                        id: chevron
-                        Layout.alignment: Qt.AlignVCenter
-                        Layout.preferredWidth: Math.round(11 * Scaling.uiScale)
-                        Layout.preferredHeight: Math.round(11 * Scaling.uiScale)
-                        fillMode: Image.PreserveAspectFit
-                        sourceSize: Qt.size(Math.round(11 * Scaling.uiScale), Math.round(11 * Scaling.uiScale))
-                        source: groupArea.row.collapsed ? FontAwesome.icon("solid/caret-right") : FontAwesome.icon("solid/caret-down")
-                        opacity: 0.6
+                    // indent rails plus the caret column, explicit width so
+                    // depth offsets the row. each rail centres on its level's
+                    // caret, the caret sits in the next column
+                    Item {
+                        Layout.fillHeight: true
+                        Layout.preferredWidth: (groupArea.depth + 1) * root.indentStep
 
-                        TapHandler {
-                            onTapped: {
-                                list.forceActiveFocus();
-                                root.workspace.setDeviceGroupCollapsed(groupArea.nodeId, !groupArea.row.collapsed);
+                        Repeater {
+                            model: groupArea.depth
+                            delegate: Rectangle {
+                                required property int index
+                                x: index * root.indentStep + Math.round((root.indentStep - root.railThickness) / 2)
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                width: root.railThickness
+                                color: root.treeRailColor
+                                opacity: 0.4
+                            }
+                        }
+
+                        Image {
+                            id: caret
+                            x: groupArea.depth * root.indentStep + Math.round((root.indentStep - width) / 2)
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: root.caretSize
+                            height: root.caretSize
+                            fillMode: Image.PreserveAspectFit
+                            sourceSize: Qt.size(root.caretSize, root.caretSize)
+                            source: groupArea.row.collapsed ? FontAwesome.icon("solid/caret-right") : FontAwesome.icon("solid/caret-down")
+                            opacity: 0.6
+
+                            TapHandler {
+                                onTapped: {
+                                    list.forceActiveFocus();
+                                    root.workspace.setDeviceGroupCollapsed(groupArea.nodeId, !groupArea.row.collapsed);
+                                }
                             }
                         }
                     }
 
-                    CheckBox {
-                        id: groupActiveToggle
-                        Layout.maximumWidth: Math.round(12 * Scaling.uiScale)
-                        Layout.minimumWidth: Math.round(12 * Scaling.uiScale)
-                        height: parent.height
+                    EditableLabel {
+                        id: groupLabel
+                        value: (groupArea.row.label && String(groupArea.row.label).length > 0) ? String(groupArea.row.label) : ""
+                        placeholder: groupArea.nodeId
+                        onCommitted: text => root.workspace.setDeviceGroupLabel(groupArea.nodeId, text)
+                    }
+
+                    // trailing control column, shared alignment with device rows
+                    GateToggle {
+                        iconOn: FontAwesome.icon("solid/toggle-on")
+                        iconOff: FontAwesome.icon("solid/toggle-off")
                         checked: groupArea.row.active === true
+                        gated: checked && !groupArea.row.effectiveActive
+                        tip: "Toggle group active"
                         onToggled: root.workspace.setDeviceGroupActive(groupArea.nodeId, checked)
-
-                        indicator: Image {
-                            anchors.centerIn: parent
-                            source: groupActiveToggle.checked ? FontAwesome.icon("solid/toggle-on") : FontAwesome.icon("solid/toggle-off")
-                            sourceSize: Qt.size(9.5 * Scaling.uiScale, 9.5 * Scaling.uiScale)
-                            // dim when this node is on but an ancestor gates it off
-                            opacity: (groupActiveToggle.checked && !groupArea.row.effectiveActive) ? 0.25 : 0.6
-                        }
-
-                        InfoToolTip {
-                            textValue: "Toggle group active"
-                        }
                     }
 
-                    CheckBox {
-                        id: groupRenderToggle
-                        Layout.maximumWidth: Math.round(16 * Scaling.uiScale)
-                        Layout.minimumWidth: Math.round(16 * Scaling.uiScale)
-                        height: parent.height
+                    GateToggle {
+                        iconOn: FontAwesome.icon("solid/eye")
+                        iconOff: FontAwesome.icon("solid/eye-slash")
                         checked: groupArea.row.render === true
+                        gated: checked && !groupArea.row.effectiveRender
+                        tip: "Toggle group rendering"
                         onToggled: root.workspace.setDeviceGroupRender(groupArea.nodeId, checked)
-
-                        indicator: Image {
-                            anchors.centerIn: parent
-                            source: groupRenderToggle.checked ? FontAwesome.icon("solid/eye") : FontAwesome.icon("solid/eye-slash")
-                            sourceSize: Qt.size(9.5 * Scaling.uiScale, 9.5 * Scaling.uiScale)
-                            opacity: (groupRenderToggle.checked && !groupArea.row.effectiveRender) ? 0.25 : 0.6
-                        }
-
-                        InfoToolTip {
-                            textValue: "Toggle group rendering"
-                        }
-                    }
-
-                    // label: editable on double-click, falls back to greyed id
-                    Rectangle {
-                        id: groupLabelBox
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: "transparent"
-                        border.color: groupLabelInput.activeFocus ? ThemeColors.highlight : "transparent"
-                        border.width: 1
-
-                        property bool editing: false
-                        property string startText: ""
-
-                        function commit() {
-                            if (!editing)
-                                return;
-                            editing = false;
-                            if (groupLabelInput.text !== startText)
-                                root.workspace.setDeviceGroupLabel(groupArea.nodeId, groupLabelInput.text);
-                        }
-
-                        TextInput {
-                            id: groupLabelInput
-                            anchors.fill: parent
-                            verticalAlignment: TextEdit.AlignVCenter
-                            font: Scaling.uiFont
-                            color: ThemeColors.text
-                            selectionColor: ThemeColors.highlight
-                            selectedTextColor: ThemeColors.highlightedText
-
-                            enabled: groupLabelBox.editing
-                            selectByMouse: groupLabelBox.editing
-
-                            // reactive so it survives the Loader assigning row after construction
-                            text: (groupArea.row.label && String(groupArea.row.label).length > 0) ? String(groupArea.row.label) : groupArea.nodeId
-                            opacity: (groupArea.row.label && String(groupArea.row.label).length > 0) ? 1.0 : 0.4
-
-                            onEditingFinished: groupLabelBox.commit()
-                            onActiveFocusChanged: if (!activeFocus && groupLabelBox.editing)
-                                groupLabelBox.commit()
-                        }
                     }
                 }
             }
@@ -439,7 +518,7 @@ Item {
             property var modelData: deviceIndex >= 0 && root.workspace ? root.workspace.deviceAdapters[deviceIndex] : null
             property string nodeId: row.id !== undefined ? String(row.id) : ""
             property string nodeKind: "device"
-            property real indent: (row.depth || 0) * root.indentStep
+            property int depth: row.depth || 0
             readonly property real rowHeight: root.deviceRowHeight
 
             width: list.width
@@ -474,7 +553,7 @@ Item {
                 DragHandler {
                     id: deviceDrag
                     target: null
-                    enabled: !deviceLabelBox.editing
+                    enabled: !deviceLabel.editing
                     xAxis.enabled: false
                     yAxis.enabled: true
                     onActiveChanged: {
@@ -493,7 +572,7 @@ Item {
 
                 TapHandler {
                     id: deviceTap
-                    enabled: !deviceLabelBox.editing
+                    enabled: !deviceLabel.editing
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     onTapped: (point, button) => {
                         list.forceActiveFocus();
@@ -503,163 +582,115 @@ Item {
                     onDoubleTapped: (point, button) => {
                         if (button !== Qt.LeftButton || !dragArea.modelData)
                             return;
-                        const p = deviceLabelBox.mapFromItem(content, point.position.x, point.position.y);
-                        if (p.x >= 0 && p.x <= deviceLabelBox.width && p.y >= 0 && p.y <= deviceLabelBox.height) {
-                            deviceLabelBox.editing = true;
-                            deviceLabelBox.startText = deviceLabelInput.text;
-                            deviceLabelInput.forceActiveFocus();
-                            deviceLabelInput.selectAll();
-                        }
+                        const p = deviceLabel.mapFromItem(content, point.position.x, point.position.y);
+                        if (p.x >= 0 && p.x <= deviceLabel.width && p.y >= 0 && p.y <= deviceLabel.height)
+                            deviceLabel.beginEdit();
                     }
                 }
 
-                Rectangle {
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        top: parent.top
-                    }
-                    height: Math.max(2, Math.round(2 * Scaling.uiScale))
-                    color: ThemeColors.highlight
-                    visible: root.dragOverIndex === dragArea.rowIndex && root.dragOverZone === "before"
-                }
-                Rectangle {
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        bottom: parent.bottom
-                    }
-                    height: Math.max(2, Math.round(2 * Scaling.uiScale))
-                    color: ThemeColors.highlight
-                    visible: root.dragOverIndex === dragArea.rowIndex && root.dragOverZone === "after"
+                InsertMarkers {
+                    anchors.fill: parent
+                    showBefore: root.dragOverIndex === dragArea.rowIndex && root.dragOverZone === "before"
+                    showAfter: root.dragOverIndex === dragArea.rowIndex && root.dragOverZone === "after"
                 }
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: Math.round(8 * Scaling.uiScale) + dragArea.indent
-                    anchors.rightMargin: Math.round(8 * Scaling.uiScale)
-                    spacing: Math.round(8 * Scaling.uiScale)
+                    anchors.leftMargin: root.rowEdgeMargin
+                    anchors.rightMargin: root.rowEdgeMargin
+                    spacing: root.rowItemSpacing
 
-                    CheckBox {
-                        id: activeToggle
-                        checked: dragArea.modelData ? dragArea.modelData.active : false
-                        onToggled: if (dragArea.modelData)
-                            dragArea.modelData.active = checked
-                        Layout.maximumWidth: Math.round(16 * Scaling.uiScale)
-                        Layout.minimumWidth: Math.round(16 * Scaling.uiScale)
-                        height: parent.height
-
-                        indicator: Image {
-                            anchors.centerIn: parent
-                            source: activeToggle.checked ? FontAwesome.icon("solid/toggle-on") : FontAwesome.icon("solid/toggle-off")
-                            sourceSize: Qt.size(9.5 * Scaling.uiScale, 9.5 * Scaling.uiScale)
-                            opacity: (activeToggle.checked && !dragArea.row.effectiveActive) ? 0.25 : (activeToggle.hovered ? 0.7 : 0.5)
-                        }
-
-                        InfoToolTip {
-                            textValue: "Toggle device active"
-                        }
-                    }
-
-                    CheckBox {
-                        id: renderToggle
-                        checked: dragArea.modelData ? dragArea.modelData.render : false
-                        onToggled: if (dragArea.modelData)
-                            dragArea.modelData.render = checked
-                        Layout.maximumWidth: Math.round(16 * Scaling.uiScale)
-                        Layout.minimumWidth: Math.round(16 * Scaling.uiScale)
-                        height: parent.height
-
-                        indicator: Image {
-                            anchors.centerIn: parent
-                            source: renderToggle.checked ? FontAwesome.icon("solid/eye") : FontAwesome.icon("solid/eye-slash")
-                            sourceSize: Qt.size(9.5 * Scaling.uiScale, 9.5 * Scaling.uiScale)
-                            opacity: (renderToggle.checked && !dragArea.row.effectiveRender) ? 0.25 : (renderToggle.hovered ? 0.7 : 0.5)
-                        }
-
-                        InfoToolTip {
-                            textValue: "Toggle device rendering"
-                        }
-                    }
-
-                    Rectangle {
-                        id: statusCircle
-                        width: 7 * Scaling.uiScale
-                        height: 7 * Scaling.uiScale
-                        radius: 3.5 * Scaling.uiScale
-                        color: {
-                            const m = dragArea.modelData;
-                            if (!m || m.status === undefined)
-                                return ThemeColors.inactive;
-                            if (m.pluginNullState)
-                                return ThemeColors.error;
-                            switch (m.status) {
-                            case UiEnums.WorkspaceDeviceStatus.Loaded:
-                                return ThemeColors.neutralSuccess;
-                            case UiEnums.WorkspaceDeviceStatus.Active:
-                                return ThemeColors.success;
-                            case UiEnums.WorkspaceDeviceStatus.Missing:
-                                return ThemeColors.error;
-                            default:
-                                return ThemeColors.inactive;
-                            }
-                        }
-                    }
-
-                    // label: editable on double-click, falls back to greyed id
-                    Rectangle {
-                        id: deviceLabelBox
-                        Layout.fillWidth: true
+                    // indent rails plus the status column, the dot sits one
+                    // level in from the parent group's caret
+                    Item {
                         Layout.fillHeight: true
-                        color: "transparent"
-                        border.color: deviceLabelInput.activeFocus ? ThemeColors.highlight : "transparent"
-                        border.width: 1
+                        Layout.preferredWidth: (dragArea.depth + 1) * root.indentStep
 
-                        property bool editing: false
-                        property string startText: ""
-
-                        function commit() {
-                            if (!editing)
-                                return;
-                            editing = false;
-                            if (dragArea.modelData && deviceLabelInput.text !== startText)
-                                dragArea.modelData.label = deviceLabelInput.text;
+                        Repeater {
+                            model: dragArea.depth
+                            delegate: Rectangle {
+                                required property int index
+                                x: index * root.indentStep + Math.round((root.indentStep - root.railThickness) / 2)
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                width: root.railThickness
+                                color: root.treeRailColor
+                                opacity: 0.4
+                            }
                         }
 
-                        TextInput {
-                            id: deviceLabelInput
-                            anchors.fill: parent
-                            verticalAlignment: TextEdit.AlignVCenter
-                            font: Scaling.uiFont
-                            color: ThemeColors.text
-                            selectionColor: ThemeColors.highlight
-                            selectedTextColor: ThemeColors.highlightedText
-
-                            enabled: deviceLabelBox.editing
-                            selectByMouse: deviceLabelBox.editing
-
-                            text: {
-                                if (!dragArea.modelData)
-                                    return "";
-                                const lbl = dragArea.modelData.label;
-                                return (lbl && String(lbl).length > 0) ? String(lbl) : String(dragArea.modelData.id);
+                        Rectangle {
+                            id: statusCircle
+                            x: dragArea.depth * root.indentStep + Math.round((root.indentStep - width) / 2)
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 7 * Scaling.uiScale
+                            height: 7 * Scaling.uiScale
+                            radius: 3.5 * Scaling.uiScale
+                            color: {
+                                const m = dragArea.modelData;
+                                if (!m || m.status === undefined)
+                                    return ThemeColors.inactive;
+                                if (m.pluginNullState)
+                                    return ThemeColors.error;
+                                switch (m.status) {
+                                case UiEnums.WorkspaceDeviceStatus.Loaded:
+                                    return ThemeColors.neutralSuccess;
+                                case UiEnums.WorkspaceDeviceStatus.Active:
+                                    return ThemeColors.success;
+                                case UiEnums.WorkspaceDeviceStatus.Missing:
+                                    return ThemeColors.error;
+                                default:
+                                    return ThemeColors.inactive;
+                                }
                             }
-                            opacity: (dragArea.modelData && dragArea.modelData.label && String(dragArea.modelData.label).length > 0) ? 1.0 : 0.5
-
-                            onEditingFinished: deviceLabelBox.commit()
-                            onActiveFocusChanged: if (!activeFocus && deviceLabelBox.editing)
-                                deviceLabelBox.commit()
                         }
                     }
 
+                    EditableLabel {
+                        id: deviceLabel
+                        placeholderOpacity: 0.5
+                        value: (dragArea.modelData && dragArea.modelData.label && String(dragArea.modelData.label).length > 0) ? String(dragArea.modelData.label) : ""
+                        placeholder: dragArea.modelData ? String(dragArea.modelData.id) : ""
+                        onCommitted: text => {
+                            if (dragArea.modelData)
+                                dragArea.modelData.label = text;
+                        }
+                    }
+
+                    // device type, kept inline just left of the control column
                     Text {
                         id: deviceTypeText
+                        Layout.alignment: Qt.AlignVCenter
                         elide: Text.ElideRight
                         text: dragArea.modelData ? (dragArea.modelData.displayName() + (dragArea.modelData.pluginNullState ? " (Unloaded)" : "")) : ""
                         color: ThemeColors.text
                         opacity: dragArea.modelData && dragArea.modelData.pluginNullState ? .25 : .5
                         font: Scaling.uiFont
-                        Layout.rightMargin: Scaling.uiScale * 2
+                    }
+
+                    // trailing control column, aligned with group rows
+                    GateToggle {
+                        iconOn: FontAwesome.icon("solid/toggle-on")
+                        iconOff: FontAwesome.icon("solid/toggle-off")
+                        baseOpacity: 0.5
+                        hoverOpacity: 0.7
+                        checked: dragArea.modelData ? dragArea.modelData.active : false
+                        gated: checked && !dragArea.row.effectiveActive
+                        tip: "Toggle device active"
+                        onToggled: if (dragArea.modelData)
+                            dragArea.modelData.active = checked
+                    }
+
+                    GateToggle {
+                        iconOn: FontAwesome.icon("solid/eye")
+                        iconOff: FontAwesome.icon("solid/eye-slash")
+                        baseOpacity: 0.5
+                        hoverOpacity: 0.7
+                        checked: dragArea.modelData ? dragArea.modelData.render : false
+                        gated: checked && !dragArea.row.effectiveRender
+                        tip: "Toggle device rendering"
+                        onToggled: if (dragArea.modelData)
+                            dragArea.modelData.render = checked
                     }
                 }
             }
