@@ -21,7 +21,9 @@ public:
   explicit FringeRemovalOperator(
       Corrade::PluginManager::AbstractManager &manager,
       Corrade::Containers::StringView plugin)
-      : OperatorPlugin(manager, plugin) {}
+      : OperatorPlugin(manager, plugin) {
+        pc::logger()->debug("Fringe removal operator constructor");
+      }
 
   ~FringeRemovalOperator() override {}
 

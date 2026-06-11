@@ -216,7 +216,8 @@ FringeRemovalOperator::process(const PointCloud &input) {
     if (blur > 0) {
       const int k = blur * 2 + 1;
       cv::GaussianBlur(mask_img, mask_img, {k, k}, 0);
-      cv::threshold(mask_img, mask_img, config.blur_threshold.value(), 255,
+      cv::threshold(mask_img, mask_img,
+                    static_cast<double>(config.blur_threshold.value()), 255,
                     cv::THRESH_BINARY);
     }
   }
