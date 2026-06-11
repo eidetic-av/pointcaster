@@ -166,7 +166,7 @@ Window {
             }
 
             SnapshotControls {
-                deviceAdapters: root.workspace ? root.workspace.deviceAdapters : []
+                workspace: root.workspace
                 primaryDeviceIndex: windowState.primaryDeviceIndex
                 secondaryDeviceIndex: windowState.secondaryDeviceIndex
 
