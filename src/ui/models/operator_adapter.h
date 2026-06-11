@@ -19,6 +19,9 @@ public:
   ConfigAdapter *configAdapter() const { return _configAdapter; }
 
   void setConfigAdapter(ConfigAdapter *adapter) {
+    pc::logger()->trace("[setCfgAdapter] enter new={} old={}",
+                        fmt::ptr(static_cast<void *>(adapter)),
+                        fmt::ptr(static_cast<void *>(_configAdapter)));
     if (_configAdapter == adapter) return;
     if (_configAdapter) {
       disconnect(_configAdapter, nullptr, this, nullptr);
@@ -31,7 +34,6 @@ public:
               [this](const QString &path) {
                 if (_plugin) {
                   _plugin->on_config_field_changed(path.toStdString());
-                  // Forward to pipeline worker instances
                   if (_host) {
                     auto updated_config = _plugin->config_variant();
                     _host->update_operator_in_pipeline(updated_config,
@@ -41,6 +43,7 @@ public:
                 if (_host) _host->reprocess();
               });
     }
+    pc::logger()->trace("[setCfgAdapter] done");
     emit configAdapterChanged();
   }
 

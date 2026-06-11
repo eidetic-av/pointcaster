@@ -99,7 +99,9 @@ public:
   virtual ~DevicePlugin() = default;
 
   void init(Workspace &workspace) {
-    _workspace = &workspace;
+    OperatorHost::init(workspace);
+    pc::logger()->debug("DevicePlugin::init this={}", fmt::ptr(this));
+    // the parameterless init is what implementations override
     init();
   }
 
@@ -133,7 +135,9 @@ public:
     _config = config;
     std::visit(
         [this](auto &device_config) {
-          sync_operators(device_config.operators);
+          if constexpr (requires { device_config.operators; }) {
+            sync_operators(device_config.operators);
+          }
         },
         _config);
   }
@@ -179,13 +183,19 @@ public:
     return std::visit(
         [](auto &device_config)
             -> pipeline::ConcurrentOperatorPipelineConfiguration & {
-          return device_config.operator_pipeline.value();
+          if constexpr (requires { device_config.operator_pipeline; }) {
+            return device_config.operator_pipeline.value();
+          } else {
+            // TODO
+            // groups have no operator pipeline yet...
+            static pipeline::ConcurrentOperatorPipelineConfiguration fallback;
+            return fallback;
+          }
         },
         _config);
   }
 
 protected:
-  Workspace *_workspace;
   DeviceConfigurationVariant _config;
   std::function<void(DeviceStatus)> _status_callback;
   std::function<void()> _point_cloud_updated_callback;

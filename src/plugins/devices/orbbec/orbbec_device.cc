@@ -25,6 +25,7 @@
 #include <mutex>
 #include <numeric>
 #include <plugins/backend/backend_utils.h>
+#include <plugins/devices/device_tree.h>
 #include <plugins/devices/device_variants.h>
 #include <pointcaster/point_cloud.h>
 #include <profiling/profiler.h>
@@ -493,12 +494,21 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       auto depth_frame = frame_set->depthFrame();
       if (!colour_frame || !depth_frame) continue;
 
+      // TODO find a way to cache this world transform position or somehow
+      // otherwise remove the lock to get it
+      pc::float4x4 world;
+      {
+        std::scoped_lock lock(_workspace->config_access);
+        world = pc::devices::effective_world_transform(_workspace->config,
+                                                       device_config.id);
+      }
+
       _process_tasks_in_flight.fetch_add(1);
       pc::backend::CpuBackend::thread_pool.detach_task(
           [this, &color_intrinsics, &cuda_backend, &cpu_backend,
            colour_frame = std::move(colour_frame),
            depth_frame = std::move(depth_frame), device_config = device_config,
-           max_point_count = max_point_count]() {
+           max_point_count = max_point_count, world = world]() {
             ProfilingZone process_frame_zone("OrbbecDevice::process_frame");
 
             const auto frame_width = colour_frame->width();
@@ -533,7 +543,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                 backend->project_transform_frame_data(
                     ob_depth_data, ob_color_data, point_cloud, color_intrinsics,
                     device_config.transform.value(),
-                    device_config.color.value());
+                    device_config.color.value(), world);
               }
             }
 
@@ -586,8 +596,10 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
   constexpr auto recovery_window = 500ms;
   constexpr auto check_interval = 1s;
 
-  auto get_id = [this] {
-    return std::get<OrbbecDeviceConfiguration>(this->config_variant()).id;
+  auto get_id = [this]() -> std::string {
+    const auto &cfg = this->config_variant();
+    if (auto *p = std::get_if<OrbbecDeviceConfiguration>(&cfg)) return p->id;
+    return {};
   };
 
   while (!stop_token.stop_requested()) {

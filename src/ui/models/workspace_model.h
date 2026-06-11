@@ -6,6 +6,7 @@
 #include "operator_adapter.h"
 #include "session_adapter.h"
 #include "session_recorder_model.h"
+#include <QMatrix4x4>
 #include <QObject>
 #include <QPointer>
 #include <QUndoStack>
@@ -25,7 +26,8 @@ struct SessionConfiguration;
 
 namespace devices {
 class DevicePlugin;
-}
+class DeviceGroupConfigurationAdapter;
+} // namespace devices
 
 } // namespace pc
 
@@ -59,6 +61,13 @@ class WorkspaceModel : public QObject {
                  setSelectedDeviceIndex NOTIFY selectedDeviceIndexChanged)
   Q_PROPERTY(QVariantList deviceTreeRows READ deviceTreeRows NOTIFY
                  deviceTreeRowsChanged)
+  Q_PROPERTY(
+      QString selectedNodeId READ selectedNodeId NOTIFY selectedNodeChanged)
+  Q_PROPERTY(
+      QString selectedNodeKind READ selectedNodeKind NOTIFY selectedNodeChanged)
+
+  Q_PROPERTY(QObject *selectedDeviceGroupAdapter READ selectedDeviceGroupAdapter
+                 NOTIFY selectedDeviceGroupAdapterChanged)
 
   // Selected operator (owned by a device)
   Q_PROPERTY(OperatorAdapter *selectedOperatorAdapter READ
@@ -97,7 +106,9 @@ public:
   Q_INVOKABLE void addNewDevice(const QString &plugin_name,
                                 const QString &target_ip = "",
                                 const QString &target_id = "");
+  Q_INVOKABLE void deleteDevice(const QString &target_id);
   Q_INVOKABLE void deleteSelectedDevice();
+  Q_INVOKABLE void duplicateDeviceNode(const QString &node_id);
 
   QList<QObject *> sessionAdapters() const;
   Q_INVOKABLE QList<QObject *> sessionAdaptersCallable() const {
@@ -133,6 +144,14 @@ public:
   }
 
   QVariantList deviceTreeRows() const;
+
+  QString selectedNodeId() const { return _selectedNodeId; }
+  QString selectedNodeKind() const { return _selectedNodeKind; }
+  Q_INVOKABLE void selectNode(const QString &node_id);
+
+  QObject *selectedDeviceGroupAdapter() const;
+
+  Q_INVOKABLE QMatrix4x4 nodeAncestorWorldMatrix(const QString &node_id) const;
 
   Q_INVOKABLE void moveDeviceNode(const QString &node_id,
                                   const QString &new_parent_id,
@@ -203,6 +222,10 @@ signals:
   void addDeviceMenuEntriesChanged();
   void selectedDeviceIndexChanged();
 
+  void selectedNodeChanged();
+
+  void selectedDeviceGroupAdapterChanged();
+
   void deviceAdded();
   void deviceDeleted();
 
@@ -230,6 +253,8 @@ private:
 
   QHash<QString, QPointer<SessionAdapter>> _sessionPointCloudAdapters;
 
+  QPointer<ConfigAdapter> _selectedDeviceGroupAdapter;
+
   QPointer<OperatorAdapter> _selectedOperatorAdapter;
 
   QPointer<ConfigAdapter> _pointStreamerAdapter;
@@ -248,6 +273,9 @@ private:
   QVariantMap _foldedPropertyPaths;
 
   int _selectedDeviceIndex = 0;
+  QString _selectedNodeId;
+  QString _selectedNodeKind; // "device" | "group" | ""
+
   QUrl _saveFileUrl;
 
   // applies a new config and syncs adapters on the UI thread
@@ -274,6 +302,10 @@ private:
                                       pc::SessionConfigurationAdapter *adapter,
                                       pc::Session *session);
   void syncSessionOperatorAdapters();
+
+  void rebuildSelectedGroupAdapter();
+  void initGroupAdapter(pc::devices::DeviceGroupConfigurationAdapter *adapter);
+  void retransformGroupDescendants(const std::string &group_id);
 
   DeviceAdapter *makeDeviceAdapterForPlugin(
       pc::devices::DevicePlugin *plugin,

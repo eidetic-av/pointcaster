@@ -8,6 +8,7 @@
 #include <happly.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <plugins/backend/cpu/cpu_backend.h>
+#include <plugins/devices/device_tree.h>
 #include <pointcaster/point_cloud.h>
 #include <ranges>
 #include <workspace/workspace.h>
@@ -40,7 +41,8 @@ PlyDevice::~PlyDevice() {
 
 bool PlyDevice::load(std::string_view url) {
   std::lock_guard lock(_device_mutex);
-  pc::logger()->trace("Loading ply(s) from: {}", url);
+  pc::logger()->trace("PlyDevice::load: enter url='{}' tid={}", url,
+                      std::hash<std::thread::id>{}(std::this_thread::get_id()));
 
 #ifdef _WIN32
   static constexpr std::string file_prefix = "file:///";
@@ -52,61 +54,77 @@ bool PlyDevice::load(std::string_view url) {
       url.starts_with(file_prefix) ? url.substr(file_prefix.size()) : url);
 
   if (std::filesystem::is_directory(path_str)) {
+    pc::logger()->trace("PlyDevice::load: directory mode");
     if (!load_directory(path_str)) return false;
     _loaded_file_path = std::string(url);
+    pc::logger()->trace("PlyDevice::load: directory load done");
     return true;
   }
 
-  // ── single file mode ──
+  pc::logger()->trace(
+      "PlyDevice::load: single-file mode, resetting sequence loader");
   _sequence_loader.reset();
 
-  pc::logger()->trace("Loading ply file: {}", path_str);
+  pc::logger()->trace("PlyDevice::load: parsing '{}'", path_str);
 
   std::optional<happly::PLYData> ply_in;
-
   try {
-    // ProfilingZone load_file_zone("PlyDevice::load_file");
-    // load_file_zone.text(path_str);
     ply_in.emplace(path_str);
   } catch (const std::runtime_error &e) {
-    pc::logger()->error("Exception loading file: {}", e.what());
-    // _status = DeviceStatus::Error;
+    pc::logger()->error("PlyDevice::load: exception parsing file: {}",
+                        e.what());
     return false;
   }
+  pc::logger()->trace("PlyDevice::load: happly parsed ok");
 
   constexpr auto vertex = "vertex";
 
-  const auto x_values = ply_in->getElement(vertex).getProperty<short>("x");
-  const auto y_values = ply_in->getElement(vertex).getProperty<short>("y");
-  const auto z_values = ply_in->getElement(vertex).getProperty<short>("z");
-  const auto r_values =
-      ply_in->getElement(vertex).getProperty<unsigned char>("red");
-  const auto g_values =
-      ply_in->getElement(vertex).getProperty<unsigned char>("green");
-  const auto b_values =
-      ply_in->getElement(vertex).getProperty<unsigned char>("blue");
+  std::vector<short> x_values, y_values, z_values;
+  std::vector<unsigned char> r_values, g_values, b_values;
+  try {
+    x_values = ply_in->getElement(vertex).getProperty<short>("x");
+    y_values = ply_in->getElement(vertex).getProperty<short>("y");
+    z_values = ply_in->getElement(vertex).getProperty<short>("z");
+    r_values = ply_in->getElement(vertex).getProperty<unsigned char>("red");
+    g_values = ply_in->getElement(vertex).getProperty<unsigned char>("green");
+    b_values = ply_in->getElement(vertex).getProperty<unsigned char>("blue");
+  } catch (const std::exception &e) {
+    pc::logger()->error("PlyDevice::load: property read failed: {}", e.what());
+    return false;
+  }
+
+  pc::logger()->trace("PlyDevice::load: counts x={} y={} z={} r={} g={} b={}",
+                      x_values.size(), y_values.size(), z_values.size(),
+                      r_values.size(), g_values.size(), b_values.size());
 
   const size_t point_count = x_values.size();
+  if (y_values.size() != point_count || z_values.size() != point_count ||
+      r_values.size() != point_count || g_values.size() != point_count ||
+      b_values.size() != point_count) {
+    pc::logger()->error(
+        "PlyDevice::load: vertex property arrays differ in length, aborting");
+    return false;
+  }
 
   auto input_cloud = std::make_shared<PointCloud>();
   input_cloud->resize(point_count);
 
-  {
-    // ProfilingZone convert_zone("Convert and pack points");
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, point_count),
-        [&](const tbb::blocked_range<size_t> &range) {
-          for (size_t i = range.begin(), e = range.end(); i < e; ++i) {
-            input_cloud->positions[i] = {x_values[i], y_values[i], z_values[i]};
-            input_cloud->colors[i] = {r_values[i], g_values[i], b_values[i]};
-          }
-        });
-  }
+  tbb::parallel_for(
+      tbb::blocked_range<size_t>(0, point_count),
+      [&](const tbb::blocked_range<size_t> &range) {
+        for (size_t i = range.begin(), e = range.end(); i < e; ++i) {
+          input_cloud->positions[i] = {x_values[i], y_values[i], z_values[i]};
+          input_cloud->colors[i] = {r_values[i], g_values[i], b_values[i]};
+        }
+      });
+
+  pc::logger()->trace("PlyDevice::load: packed {} points, applying transform",
+                      point_count);
 
   _input_cloud = std::move(input_cloud);
   _loaded_file_path = std::string(url);
-  // _status = DeviceStatus::Loaded;
   apply_transform();
+  pc::logger()->trace("PlyDevice::load: done");
   return true;
 }
 
@@ -259,14 +277,23 @@ void PlyDevice::on_config_field_changed(std::string_view path) {
 
 void PlyDevice::update_config(
     const devices::DeviceConfigurationVariant &config) {
+  pc::logger()->trace("PlyDevice::update_config: enter tid={}",
+                      std::hash<std::thread::id>{}(std::this_thread::get_id()));
   std::string path_to_load;
   bool need_tick_thread = false;
   {
     std::lock_guard lock(_device_mutex);
     DevicePlugin::update_config(config);
-    if (!std::holds_alternative<PlyDeviceConfiguration>(_config)) return;
-    const auto &config = std::get<PlyDeviceConfiguration>(_config);
-    const auto &file_config = config.file.value();
+    if (!std::holds_alternative<PlyDeviceConfiguration>(_config)) {
+      pc::logger()->trace(
+          "PlyDevice::update_config: variant not Ply, returning");
+      return;
+    }
+    const auto &cfg = std::get<PlyDeviceConfiguration>(_config);
+    const auto &file_config = cfg.file.value();
+    pc::logger()->trace(
+        "PlyDevice::update_config: id='{}' active={} path='{}' loaded='{}'",
+        cfg.id, active(), file_config.path, _loaded_file_path);
     if (active() && !file_config.path.empty() &&
         file_config.path != _loaded_file_path) {
       path_to_load = file_config.path;
@@ -275,12 +302,13 @@ void PlyDevice::update_config(
   }
 
   if (!path_to_load.empty()) {
+    pc::logger()->trace("PlyDevice::update_config: loading '{}'", path_to_load);
     load(path_to_load);
+    pc::logger()->trace("PlyDevice::update_config: load returned");
   }
 
   if (need_tick_thread) {
-    // TODO replace the tick thread with a session or workspace-wide one that we
-    // can register with
+    pc::logger()->trace("PlyDevice::update_config: spawning tick thread");
     _tick_thread = std::jthread([this](std::stop_token stop) {
       using namespace std::chrono;
       auto last = steady_clock::now();
@@ -293,6 +321,7 @@ void PlyDevice::update_config(
       }
     });
   }
+  pc::logger()->trace("PlyDevice::update_config: done");
 }
 
 std::shared_ptr<PointCloud> PlyDevice::point_cloud() {
@@ -300,26 +329,44 @@ std::shared_ptr<PointCloud> PlyDevice::point_cloud() {
 }
 
 void PlyDevice::apply_transform() {
-  if (!_input_cloud) return;
+  pc::logger()->trace("PlyDevice::apply_transform: enter tid={}",
+                      std::hash<std::thread::id>{}(std::this_thread::get_id()));
+  if (!_input_cloud) {
+    pc::logger()->trace("PlyDevice::apply_transform: no input cloud, returning");
+    return;
+  }
 
   const auto config = std::get<PlyDeviceConfiguration>(_config);
   const auto point_count = _input_cloud->size();
 
-  // TODO get backend from config
   auto *backend = _cpu_backend.get();
   if (!backend) {
-    pc::logger()->error("uninitalised PlyDevice backend");
+    pc::logger()->error("PlyDevice::apply_transform: uninitialised backend");
     return;
   }
+
+  pc::logger()->trace(
+      "PlyDevice::apply_transform: id='{}' points={}, resolving world transform",
+      config.id, point_count);
+
+  pc::float4x4 world;
+  {
+    std::scoped_lock lock(_workspace->config_access);
+    world =
+        pc::devices::effective_world_transform(_workspace->config, config.id);
+  }
+  pc::logger()->trace("PlyDevice::apply_transform: world resolved, transforming");
 
   auto transformed_cloud = std::make_shared<PointCloud>();
   transformed_cloud->resize(point_count);
 
   backend->transform_point_cloud(*_input_cloud, transformed_cloud,
-                                 config.transform.value(),
-                                 config.color.value());
+                                 config.transform.value(), config.color.value(),
+                                 world);
 
+  pc::logger()->trace("PlyDevice::apply_transform: feeding operator pipeline");
   feed_operator_pipeline(transformed_cloud);
+  pc::logger()->trace("PlyDevice::apply_transform: done");
 }
 
 void PlyDevice::on_pipeline_output(std::shared_ptr<PointCloud> processed) {

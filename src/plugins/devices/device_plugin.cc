@@ -34,10 +34,12 @@ void DevicePlugin::on_config_field_changed(std::string_view path) {
   if (path.find("operator") != std::string_view::npos) {
     std::visit(
         [this](const auto &device_config) {
-          for (size_t i = 0; i < device_config.operators.size(); i++) {
-            const auto &operator_config = device_config.operators[i];
-            for (const auto &worker_chain : _pipeline->worker_chains()) {
-              worker_chain[i]->update_config(operator_config);
+          if constexpr (requires { device_config.operators; }) {
+            for (size_t i = 0; i < device_config.operators.size(); i++) {
+              const auto &operator_config = device_config.operators[i];
+              for (const auto &worker_chain : _pipeline->worker_chains()) {
+                worker_chain[i]->update_config(operator_config);
+              }
             }
           }
         },

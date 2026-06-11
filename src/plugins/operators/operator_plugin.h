@@ -78,7 +78,9 @@ public:
 
   explicit OperatorPlugin(Corrade::PluginManager::AbstractManager &manager,
                           Corrade::Containers::StringView plugin)
-      : Corrade::PluginManager::AbstractPlugin{manager, plugin} {}
+      : Corrade::PluginManager::AbstractPlugin{manager, plugin} {
+        pc::logger()->debug("Operator plugin constructor");
+      }
 
   virtual ~OperatorPlugin() = default;
 

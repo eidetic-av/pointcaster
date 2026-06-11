@@ -58,6 +58,7 @@ set(CONFIG_ADAPTER_INPUTS
     camera/look_at_camera_config.h
     networking/point_streamer_config.h
     pipeline/concurrent_operator_pipeline_config.h
+    plugins/devices/device_group_config.h
     # TODO we need some faculty to create these adapters
     # without them being expressed in the main module here...
     # i guess the UI adapters need to be generated inside the 

@@ -15,18 +15,23 @@ Item {
     required property var deviceAdapters
     property var cameraAdapter: null
 
-    property var selectedDeviceAdapter: (workspace && deviceAdapters) ? deviceAdapters.length > 0 ? root.deviceAdapters[root.workspace.selectedDeviceIndex] : null : null
-    property var selectedOperatorAdapter: workspace ? workspace.selectedOperatorAdapter ? workspace.selectedOperatorAdapter.configAdapter : null : null
+    property var selectedDeviceAdapter: (root.workspace && deviceAdapters && root.workspace.selectedNodeKind === "device" && deviceAdapters.length > 0) ? root.deviceAdapters[root.workspace.selectedDeviceIndex] : null
+    property var selectedGroupAdapter: (root.workspace && root.workspace.selectedNodeKind === "group") ? root.workspace.selectedDeviceGroupAdapter : null
+    property var selectedTransformAdapter: selectedDeviceAdapter || selectedGroupAdapter
+    property var selectedOperatorAdapter: root.workspace ? root.workspace.selectedOperatorAdapter ? root.workspace.selectedOperatorAdapter.configAdapter : null : null
 
     property var selectionPosition: selectionPositionOrDefault()
     function selectionPositionOrDefault() {
-        var pos_mm = Qt.vector3d(0, 0, 0);
         if (selectedOperatorAdapter) {
-            pos_mm = selectedOperatorAdapter.value("camera/position");
-        } else if (selectedDeviceAdapter) {
-            pos_mm = selectedDeviceAdapter.value("transform/position");
+            var pc = selectedOperatorAdapter.value("camera/position");
+            return Qt.vector3d(pc.x * 100, pc.y * 100, pc.z * 100);
         }
-        return Qt.vector3d(pos_mm.x * 100, pos_mm.y * 100, pos_mm.z * 100);
+        if (selectedTransformAdapter) {
+            var lp = selectedTransformAdapter.value("transform/position"); // metres, local
+            var worldM = selectionParentWorld.times(Qt.vector3d(lp.x, lp.y, lp.z));
+            return Qt.vector3d(worldM.x * 100, worldM.y * 100, worldM.z * 100);
+        }
+        return Qt.vector3d(0, 0, 0);
     }
 
     // Look-at position for operators that expose camera/look_at_position.
@@ -53,8 +58,8 @@ Item {
     property var selectionScale: selectionScaleOrDefault()
     function selectionScaleOrDefault() {
         var scale = Qt.vector3d(1, 1, 1);
-        if (selectedDeviceAdapter) {
-            scale = selectedDeviceAdapter.value("transform/scale");
+        if (selectedTransformAdapter) {
+            scale = selectedTransformAdapter.value("transform/scale");
         }
         return scale;
     }
@@ -62,15 +67,29 @@ Item {
     property vector3d selectionRotation: selectionRotationOrDefault()
     function selectionRotationOrDefault() {
         var euler = Qt.vector3d(0, 0, 0);
-        if (selectedDeviceAdapter) {
-            euler = selectedDeviceAdapter.value("transform/rotation");
+        if (selectedTransformAdapter) {
+            euler = selectedTransformAdapter.value("transform/rotation");
         }
         return euler;
+    }
+
+    property matrix4x4 selectionParentWorld: Qt.matrix4x4()
+
+    function updateSelectionParentWorld() {
+        if (root.workspace && selectedTransformAdapter) {
+            var id = root.workspace.selectedNodeId;
+            if (id && id.length > 0) {
+                selectionParentWorld = root.workspace.nodeAncestorWorldMatrix(id);
+                return;
+            }
+        }
+        selectionParentWorld = Qt.matrix4x4();
     }
 
     signal selectionTransformUpdate
 
     onSelectionTransformUpdate: {
+        updateSelectionParentWorld();
         selectionPosition = selectionPositionOrDefault();
         selectionLookAtPosition = selectionLookAtPositionOrDefault();
         selectionScale = selectionScaleOrDefault();
@@ -78,12 +97,27 @@ Item {
     }
 
     Connections {
-        target: workspace
+        target: root.workspace
         function onSelectedDeviceIndexChanged() {
             root.selectionTransformUpdate();
         }
         function onSelectedOperatorAdapterChanged() {
             root.selectionTransformUpdate();
+        }
+        function onSelectedNodeChanged() {
+            root.selectionTransformUpdate();
+        }
+        function onSelectedDeviceGroupAdapterChanged() {
+            root.selectionTransformUpdate();
+        }
+    }
+
+    Connections {
+        target: selectedTransformAdapter
+        function onFieldChanged(path) {
+            if (path.includes("transform")) {
+                root.selectionTransformUpdate();
+            }
         }
     }
 
@@ -394,49 +428,49 @@ Item {
             }
         }
 
-        Repeater3D {
-            model: root.deviceAdapters
+        // Repeater3D {
+        //     model: root.deviceAdapters
 
-            Node {
-                id: deviceNode
+        //     Node {
+        //         id: deviceNode
 
-                property bool isSelected: index === root.workspace.selectedDeviceIndex && !root.selectedOperatorAdapter
+        //         property bool isSelected: index === root.workspace.selectedDeviceIndex && !root.selectedOperatorAdapter
 
-                // TODO
-                // visual offset during gizmo drag (translation only for now cause that's easier than figuring out how to update rotation origins lol)
-                x: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.x - selectionPosition.x : 0
-                y: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.y - selectionPosition.y : 0
-                z: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.z - selectionPosition.z : 0
+        //         // TODO
+        //         // visual offset during gizmo drag (translation only for now cause that's easier than figuring out how to update rotation origins lol)
+        //         x: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.x - selectionPosition.x : 0
+        //         y: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.y - selectionPosition.y : 0
+        //         z: isSelected && selectionGizmo.dragging ? selectionGizmo.dragPosition.z - selectionPosition.z : 0
 
-                Model {
-                    id: model
+        //         Model {
+        //             id: model
 
-                    property string model: modelData ? modelData.id + "_model" : ""
-                    property string geo: model + "_geo"
+        //             property string model: modelData ? modelData.id + "_model" : ""
+        //             property string geo: model + "_geo"
 
-                    pickable: true
+        //             pickable: true
 
-                    geometry: PointCloudGeometry {
-                        id: geo
-                        pointCloudAdapter: modelData.pointCloudAdapter() ?? []
-                        enabled: modelData.render
-                    }
+        //             geometry: PointCloudGeometry {
+        //                 id: geo
+        //                 pointCloudAdapter: modelData.pointCloudAdapter() ?? []
+        //                 enabled: modelData.render
+        //             }
 
-                    materials: [
-                        PointCloudMaterial {
-                            uPointSize: viewController.shaderPointSize
-                        }
-                    ]
-                }
+        //             materials: [
+        //                 PointCloudMaterial {
+        //                     uPointSize: viewController.shaderPointSize
+        //                 }
+        //             ]
+        //         }
 
-                Connections {
-                    target: modelData
-                    function onPointCloudUpdated() {
-                        geo.updateGeometry();
-                    }
-                }
-            }
-        }
+        //         Connections {
+        //             target: modelData
+        //             function onPointCloudUpdated() {
+        //                 geo.updateGeometry();
+        //             }
+        //         }
+        //     }
+        // }
 
         environment: SceneEnvironment {
             clearColor: AppSettings.backgroundColor
@@ -610,14 +644,14 @@ Item {
     // (camera/position) for operators.
     SelectionGizmo {
         id: selectionGizmo
-        visible: root.selectedOperatorAdapter || root.selectedDeviceAdapter && !sessionControls.viewLocked
+        visible: (root.selectedOperatorAdapter || root.selectedTransformAdapter) && !sessionControls.viewLocked
         view3d: view
         targetNode: selectionProxy
-        // TODO the mode should be based on what kind of transformation the adapter exposes
         mode: GizmoEnums.Mode.All
-        targetAdapter: root.selectedOperatorAdapter || root.selectedDeviceAdapter
+        targetAdapter: root.selectedOperatorAdapter || root.selectedTransformAdapter
         cameraTarget: root.selectedOperatorAdapter !== null
         cameraPositionPath: "camera/position"
+        parentWorldTransform: root.selectedOperatorAdapter ? Qt.matrix4x4() : root.selectionParentWorld
         z: 99
     }
 

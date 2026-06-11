@@ -5,6 +5,7 @@
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
 #include <algorithm>
+#include <cmath>
 #include <core/logger/logger.h>
 #include <execution>
 #include <functional>
@@ -33,7 +34,8 @@ template <PointSource F>
 void transform_from(F &&get_point, size_t point_count,
                     std::shared_ptr<PointCloud> output_cloud,
                     const TransformConfiguration &transform,
-                    const ColorTransformConfiguration &color_transform) {
+                    const ColorTransformConfiguration &color_transform,
+                    const pc::float4x4 world_transform) {
 
   // TODO a few of these per-transform allocations could move to cpu_backend
   // class members and be resized in init
@@ -80,9 +82,26 @@ void transform_from(F &&get_point, size_t point_count,
 
   auto output_range = std::views::iota(size_t{0}, new_point_count);
 
+  // ancestor group placement, applied after the local transform and crop so
+  // cropping stays in the device's own space.
+  const bool has_world_transform = !(world_transform == pc::float4x4{});
+  const auto place = [&](position p) -> position {
+    if (!has_world_transform) return p;
+    const float x = float(p.x), y = float(p.y), z = float(p.z);
+    const auto &world = world_transform.values;
+    return position{
+        static_cast<int16_t>(
+            std::lround(world[0] * x + world[1] * y + world[2] * z + world[3])),
+        static_cast<int16_t>(
+            std::lround(world[4] * x + world[5] * y + world[6] * z + world[7])),
+        static_cast<int16_t>(std::lround(world[8] * x + world[9] * y +
+                                         world[10] * z + world[11])),
+    };
+  };
+
   const auto copy_to_output_buffers = [&](const auto i) {
     const auto output_index = output_indices[i];
-    output_positions[i] = output_cloud->positions[output_index];
+    output_positions[i] = place(output_cloud->positions[output_index]);
     output_colors[i] = output_cloud->colors[output_index];
   };
 
@@ -117,27 +136,15 @@ CpuBackend::~CpuBackend() {
 void CpuBackend::transform_point_cloud(
     const PointCloud &input_cloud, std::shared_ptr<PointCloud> output_cloud,
     const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform) const {
+    const ColorTransformConfiguration &color_transform,
+    const pc::float4x4 &world_transform) const {
 
   transform_from(
       [&](int i) -> std::pair<position, color> {
         return {input_cloud.positions[i], input_cloud.colors[i]};
       },
-      output_cloud->size(), output_cloud, transform, color_transform);
-}
-
-void CpuBackend::transform_point_cloud(
-    std::span<const position> input_positions,
-    std::span<const color> input_colors,
-    std::shared_ptr<PointCloud> output_cloud,
-    const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform) const {
-
-  transform_from(
-      [&](int i) -> std::pair<position, color> {
-        return {input_positions[i], input_colors[i]};
-      },
-      output_cloud->size(), output_cloud, transform, color_transform);
+      output_cloud->size(), output_cloud, transform, color_transform,
+      world_transform);
 }
 
 void CpuBackend::project_transform_frame_data(
@@ -146,7 +153,8 @@ void CpuBackend::project_transform_frame_data(
     std::shared_ptr<PointCloud> output_cloud,
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform) const {
+    const ColorTransformConfiguration &color_transform,
+    const pc::float4x4 &world_transform) const {
 
   const auto point_count = output_cloud->size();
   const auto frame_width = color_intrinsics.frame_width;
@@ -161,7 +169,7 @@ void CpuBackend::project_transform_frame_data(
   };
 
   transform_from(convert_point_data, point_count, output_cloud, transform,
-                 color_transform);
+                 color_transform, world_transform);
 }
 
 void CpuBackend::pack_render_buffer(const PointCloud &cloud,

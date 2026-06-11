@@ -14,6 +14,8 @@ KDDW.DockWidget {
     property var workspace: null
     property int currentDeviceIndex: workspace ? workspace.selectedDeviceIndex : 0
 
+    readonly property string selectedNodeKind: workspace ? workspace.selectedNodeKind : ""
+
     signal deviceSelected
 
     function init() {
@@ -165,18 +167,21 @@ KDDW.DockWidget {
 
             DeviceControlRow {
                 id: deviceControlRow
+                visible: root.selectedNodeKind === "device"
                 adapter: deviceSelectionList.selectedDevice
                 Layout.fillWidth: true
             }
 
             Timeline {
                 id: sequenceTimeline
+                visible: root.selectedNodeKind === "device"
                 adapter: deviceSelectionList.selectedDevice
                 Layout.fillWidth: true
             }
 
             ScrollView {
                 id: deviceConfigScrollView
+                visible: root.selectedNodeKind === "device"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: Math.round(140 * Scaling.uiScale)
@@ -218,6 +223,29 @@ KDDW.DockWidget {
                                 onRemoveOperatorRequested: operatorIndex => root.workspace.removeOperatorFromDevice(deviceDelegate.index, operatorIndex)
                             }
                         }
+                    }
+                }
+            }
+
+            ScrollView {
+                id: groupConfigScrollView
+                visible: root.selectedNodeKind === "group"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumHeight: Math.round(140 * Scaling.uiScale)
+                clip: true
+
+                Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
+
+                Column {
+                    width: groupConfigScrollView.availableWidth
+                    anchors.topMargin: Math.round(8 * Scaling.uiScale)
+
+                    ConfigurationEditor {
+                        configAdapter: root.workspace ? root.workspace.selectedDeviceGroupAdapter : null
+                        workspace: root.workspace
+                        flattenFields: false
+                        width: parent.width
                     }
                 }
             }

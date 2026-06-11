@@ -16,6 +16,15 @@ OperatorHost::~OperatorHost() = default;
 
 void OperatorHost::sync_operators(
     std::span<const OperatorConfigurationVariant> configs) {
+
+  if (!_workspace) {
+    pc::logger()->error("sync_operators: _workspace null, this={}",
+                        fmt::ptr(this));
+    assert(_workspace &&
+           "OperatorHost::init(workspace) never ran on this instance");
+    return;
+  }
+
   std::unordered_map<std::string, std::size_t> existing_index_by_id;
   existing_index_by_id.reserve(operators.size());
   for (std::size_t i = 0; i < operators.size(); ++i) {

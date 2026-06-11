@@ -21,7 +21,7 @@ Item {
     readonly property real railThickness: Math.max(1, Math.round(1 * Scaling.uiScale))
     readonly property real rowEdgeMargin: Math.round(8 * Scaling.uiScale)
     readonly property real rowItemSpacing: Math.round(8 * Scaling.uiScale)
-    readonly property real caretSize: Math.round(11 * Scaling.uiScale)
+    readonly property real chevronSize: Math.round(11 * Scaling.uiScale)
 
     // drag state, shared across delegates
     property int dragOverIndex: -1
@@ -235,8 +235,8 @@ Item {
         property real hoverOpacity: 0.6
 
         Layout.fillHeight: true
-        Layout.minimumWidth: Math.round(16 * Scaling.uiScale)
-        Layout.maximumWidth: Math.round(16 * Scaling.uiScale)
+        Layout.minimumWidth: Math.round(12 * Scaling.uiScale)
+        Layout.maximumWidth: Math.round(12 * Scaling.uiScale)
 
         indicator: Image {
             anchors.centerIn: parent
@@ -279,21 +279,62 @@ Item {
         }
     }
 
-    // context menu for group operations, target set before popup
+    // context menu for node operations, target set before popup
     Menu {
         id: contextMenu
+
         property string targetGroupId: ""
-        property bool onGroup: false
+        property string targetNodeId: ""
+        property string targetNodeKind: "" // "group" | "device" | ""
+
+        property bool onGroup: targetNodeKind === "group"
+        property bool onDevice: targetNodeKind === "device"
+
+        // we keep a manually updated open bool so we can filter
+        // taphandlers that might try to open an already opened menu
+        // (if multiple handlers are on top of each other)
+        property bool open: false
+        Connections {
+            target: contextMenu
+            function onOpened() {
+                contextMenu.open = true;
+            }
+            function onClosed() {
+                contextMenu.open = false;
+            }
+        }
 
         MenuItem {
-            text: contextMenu.onGroup ? "New nested group" : "New group"
-            onTriggered: root.workspace.createDeviceGroup("Group", contextMenu.targetGroupId)
+            id: duplicateItem
+            text: "Duplicate"
+            visible: contextMenu.targetNodeId.length > 0
+            height: visible ? implicitHeight : 0
+            onTriggered: root.workspace.duplicateDeviceNode(contextMenu.targetNodeId)
         }
+
         MenuItem {
-            text: "Delete group (keep devices)"
+            id: deleteDeviceItem
+            text: "Delete device"
+            visible: contextMenu.onDevice
+            height: visible ? implicitHeight : 0
+            onTriggered: root.workspace.deleteDevice(contextMenu.targetNodeId)
+        }
+
+        MenuItem {
+            id: deleteGroupKeepDevicesItem
+            text: "Delete group && keep devices"
             visible: contextMenu.onGroup
             height: visible ? implicitHeight : 0
             onTriggered: root.workspace.deleteDeviceGroup(contextMenu.targetGroupId)
+        }
+
+        MenuSeparator {
+            visible: duplicateItem.visible || deleteDeviceItem.visible || deleteGroupKeepDevicesItem.visible
+        }
+
+        MenuItem {
+            text: "New group"
+            onTriggered: root.workspace.createDeviceGroup("Group", contextMenu.targetGroupId)
         }
     }
 
@@ -344,9 +385,15 @@ Item {
                 width: list.width
                 height: groupArea.rowHeight
 
+                property bool hovered: hoverHandler.hovered
+                property bool selected: root.workspace && root.workspace.selectedNodeKind === "group" && root.workspace.selectedNodeId === groupArea.nodeId
                 readonly property bool intoTarget: root.dragOverIndex === groupArea.rowIndex && root.dragOverZone === "into"
 
-                color: intoTarget ? ThemeColors.mid : ThemeColors.dark
+                HoverHandler {
+                    id: hoverHandler
+                }
+
+                color: intoTarget ? ThemeColors.mid : (hovered ? ThemeColors.midlight : (selected ? ThemeColors.mid : ThemeColors.almostdark))
                 border.color: intoTarget ? ThemeColors.highlight : ThemeColors.almostdark
                 border.width: intoTarget ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
 
@@ -385,9 +432,14 @@ Item {
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     onTapped: (point, button) => {
                         list.forceActiveFocus();
-                        if (button === Qt.RightButton) {
+                        if (button === Qt.LeftButton) {
+                            root.workspace.selectNode(groupArea.nodeId);
+                            list.currentIndex = groupArea.rowIndex;
+                        } else if (button === Qt.RightButton) {
+                            console.log(groupArea.nodeId);
                             contextMenu.targetGroupId = groupArea.nodeId;
-                            contextMenu.onGroup = true;
+                            contextMenu.targetNodeId = groupArea.nodeId;
+                            contextMenu.targetNodeKind = "group";
                             contextMenu.popup();
                         }
                     }
@@ -398,26 +450,6 @@ Item {
                         if (p.x >= 0 && p.x <= groupLabel.width && p.y >= 0 && p.y <= groupLabel.height)
                             groupLabel.beginEdit();
                     }
-                }
-
-                // subtle accent tint marking the row as a group container
-                Rectangle {
-                    anchors.fill: parent
-                    color: ThemeColors.highlight
-                    opacity: 0.05
-                    visible: !content.intoTarget
-                }
-
-                // left accent stripe, fading with depth to read as nesting
-                Rectangle {
-                    anchors {
-                        left: parent.left
-                        top: parent.top
-                        bottom: parent.bottom
-                    }
-                    width: Math.max(2, Math.round(2 * Scaling.uiScale))
-                    color: ThemeColors.highlight
-                    opacity: Math.max(0.25, 0.7 - groupArea.depth * 0.18)
                 }
 
                 InsertMarkers {
@@ -432,9 +464,9 @@ Item {
                     anchors.rightMargin: root.rowEdgeMargin
                     spacing: root.rowItemSpacing
 
-                    // indent rails plus the caret column, explicit width so
+                    // indent rails plus the chevron column, explicit width so
                     // depth offsets the row. each rail centres on its level's
-                    // caret, the caret sits in the next column
+                    // chevron, the chevron sits in the next column
                     Item {
                         Layout.fillHeight: true
                         Layout.preferredWidth: (groupArea.depth + 1) * root.indentStep
@@ -453,13 +485,13 @@ Item {
                         }
 
                         Image {
-                            id: caret
+                            id: chevron
                             x: groupArea.depth * root.indentStep + Math.round((root.indentStep - width) / 2)
                             anchors.verticalCenter: parent.verticalCenter
-                            width: root.caretSize
-                            height: root.caretSize
+                            width: root.chevronSize
+                            height: root.chevronSize
                             fillMode: Image.PreserveAspectFit
-                            sourceSize: Qt.size(root.caretSize, root.caretSize)
+                            sourceSize: Qt.size(root.chevronSize, root.chevronSize)
                             source: groupArea.row.collapsed ? FontAwesome.icon("solid/caret-right") : FontAwesome.icon("solid/caret-down")
                             opacity: 0.6
 
@@ -484,7 +516,7 @@ Item {
                         iconOn: FontAwesome.icon("solid/toggle-on")
                         iconOff: FontAwesome.icon("solid/toggle-off")
                         checked: groupArea.row.active === true
-                        gated: checked && !groupArea.row.effectiveActive
+                        gated: !groupArea.row.effectiveActive
                         tip: "Toggle group active"
                         onToggled: root.workspace.setDeviceGroupActive(groupArea.nodeId, checked)
                     }
@@ -493,7 +525,7 @@ Item {
                         iconOn: FontAwesome.icon("solid/eye")
                         iconOff: FontAwesome.icon("solid/eye-slash")
                         checked: groupArea.row.render === true
-                        gated: checked && !groupArea.row.effectiveRender
+                        gated: !groupArea.row.effectiveRender
                         tip: "Toggle group rendering"
                         onToggled: root.workspace.setDeviceGroupRender(groupArea.nodeId, checked)
                     }
@@ -528,7 +560,7 @@ Item {
             Rectangle {
                 id: content
 
-                property bool selected: root.workspace && root.workspace.selectedDeviceIndex === dragArea.deviceIndex
+                property bool selected: root.workspace && root.workspace.selectedNodeKind === "device" && root.workspace.selectedNodeId === dragArea.nodeId
                 property bool hovered: hoverHandler.hovered
 
                 HoverHandler {
@@ -576,8 +608,14 @@ Item {
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     onTapped: (point, button) => {
                         list.forceActiveFocus();
-                        if (button === Qt.LeftButton)
+                        if (button === Qt.LeftButton) {
                             setSelectedIndex(dragArea.rowIndex, dragArea.deviceIndex);
+                        } else if (button === Qt.RightButton) {
+                            contextMenu.targetGroupId = String(dragArea.row.parentId || "");
+                            contextMenu.targetNodeId = dragArea.nodeId;
+                            contextMenu.targetNodeKind = "device";
+                            contextMenu.popup();
+                        }
                     }
                     onDoubleTapped: (point, button) => {
                         if (button !== Qt.LeftButton || !dragArea.modelData)
@@ -601,7 +639,7 @@ Item {
                     spacing: root.rowItemSpacing
 
                     // indent rails plus the status column, the dot sits one
-                    // level in from the parent group's caret
+                    // level in from the parent group's chevron
                     Item {
                         Layout.fillHeight: true
                         Layout.preferredWidth: (dragArea.depth + 1) * root.indentStep
@@ -755,13 +793,16 @@ Item {
 
             delegate: rowLoader
 
-            // right-click on empty list space creates a root-level group
             TapHandler {
                 acceptedButtons: Qt.RightButton
                 onTapped: {
-                    contextMenu.targetGroupId = "";
-                    contextMenu.onGroup = false;
-                    contextMenu.popup();
+                    // right-click on empty list space (underneath the listview items)
+                    if (!contextMenu.open) {
+                        contextMenu.targetGroupId = "";
+                        contextMenu.targetNodeId = "";
+                        contextMenu.targetNodeKind = "";
+                        contextMenu.popup();
+                    }
                 }
             }
         }
@@ -777,6 +818,7 @@ Item {
             visible: border.width > 0
         }
 
+        // currently being dragged rows are parented to this so they appear on top of everything else
         Item {
             id: dragLayer
             anchors.fill: parent

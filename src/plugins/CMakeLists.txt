@@ -1,6 +1,7 @@
 add_library(pointcaster_plugins SHARED
     plugin_loader.cc
     devices/device_plugin.cc
+    devices/device_tree.cc
 )
 add_library(pointcaster::plugins ALIAS pointcaster_plugins)
 

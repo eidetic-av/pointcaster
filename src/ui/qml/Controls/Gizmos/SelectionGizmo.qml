@@ -15,6 +15,8 @@ Item {
 
     property string cameraPositionPath: "camera/position"
 
+    property matrix4x4 parentWorldTransform: Qt.matrix4x4()
+
     property real size: 80
 
     // ── Live drag state (read by SessionView for immediate visual feedback) ──
@@ -76,7 +78,11 @@ Item {
         if (cameraTarget) {
             targetAdapter.set(root.cameraPositionPath, Qt.vector3d(dragPosition.x * 0.01, dragPosition.y * 0.01, dragPosition.z * 0.01));
         } else {
-            targetAdapter.set("transform/position", Qt.vector3d(dragPosition.x * 0.01, dragPosition.y * 0.01, dragPosition.z * 0.01));
+            // dragPosition is world scene units, convert to world metres, then strip
+            // the parent transform to get the device/group local position to store.
+            var worldM = Qt.vector3d(dragPosition.x * 0.01, dragPosition.y * 0.01, dragPosition.z * 0.01);
+            var localM = root.parentWorldTransform.inverted().times(worldM);
+            targetAdapter.set("transform/position", localM);
             targetAdapter.set("transform/rotation", dragRotation);
             targetAdapter.set("transform/scale", dragScale);
         }

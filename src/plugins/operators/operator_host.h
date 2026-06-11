@@ -26,6 +26,10 @@ public:
   // Ask the host to re-run its operator pipeline on the current input.
   virtual void reprocess() = 0;
 
+  void init(Workspace &workspace) { _workspace = &workspace; }
+
+  bool has_workspace() const noexcept { return _workspace != nullptr; }
+
   std::vector<Corrade::Containers::Pointer<OperatorPlugin>> operators{};
 
   void feed_operator_pipeline(std::shared_ptr<PointCloud> cloud);

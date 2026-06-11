@@ -22,6 +22,7 @@
 #include <functional>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <plugins/devices/device_group_config.h>
 #include <plugins/devices/device_tree.h>
 #include <plugins/devices/device_variants.h>
 #include <ranges>
@@ -32,9 +33,11 @@
 #include <string>
 #include <thread>
 #include <ui/layout_saver.h>
+#include <unordered_map>
 #include <variant>
 #include <workspace/workspace.h>
 
+#include <plugins/devices/device_group_config_adapter.gen.h>
 // TODO these absolutely need to be polymorphic,
 // no way they can be defined at this compile stage
 #include <plugins/devices/orbbec/orbbec_device_adapter.gen.h>
@@ -88,10 +91,12 @@ static int find_operator_index_by_id(
     const std::string &operator_id) {
   return std::visit(
       [&](const auto &config) -> int {
-        for (int i = 0; i < int(config.operators.size()); ++i) {
-          auto [id, pn] =
-              pc::operators::operator_info_from_variant(config.operators[i]);
-          if (id == operator_id) return i;
+        if constexpr (requires { config.operators; }) {
+          for (int i = 0; i < int(config.operators.size()); ++i) {
+            auto [id, pn] =
+                pc::operators::operator_info_from_variant(config.operators[i]);
+            if (id == operator_id) return i;
+          }
         }
         return -1;
       },
@@ -228,6 +233,41 @@ private:
   }
 };
 
+class SetDeviceGroupConfigCommand final : public QUndoCommand {
+public:
+  using ApplyFn = std::function<void(pc::WorkspaceConfiguration)>;
+
+  SetDeviceGroupConfigCommand(QString group_id,
+                              pc::devices::DeviceGroupConfiguration before,
+                              pc::devices::DeviceGroupConfiguration after,
+                              QString command_text,
+                              pc::WorkspaceConfiguration base_snapshot,
+                              ApplyFn apply_fn)
+      : QUndoCommand(std::move(command_text)), _group_id(std::move(group_id)),
+        _before(std::move(before)), _after(std::move(after)),
+        _base_snapshot(std::move(base_snapshot)),
+        _apply_fn(std::move(apply_fn)) {}
+
+  void undo() override { apply(_before); }
+  void redo() override { apply(_after); }
+
+private:
+  QString _group_id;
+  pc::devices::DeviceGroupConfiguration _before;
+  pc::devices::DeviceGroupConfiguration _after;
+  pc::WorkspaceConfiguration _base_snapshot;
+  ApplyFn _apply_fn;
+
+  void apply(const pc::devices::DeviceGroupConfiguration &value) {
+    auto new_config = _base_snapshot;
+    const int gi =
+        find_device_group_index_by_id(new_config, _group_id.toStdString());
+    if (gi < 0 || gi >= int(new_config.device_groups.size())) return;
+    new_config.device_groups[size_t(gi)] = value;
+    if (_apply_fn) _apply_fn(std::move(new_config));
+  }
+};
+
 class SetOperatorConfigCommand final : public QUndoCommand {
 public:
   using ApplyFn = std::function<void(pc::WorkspaceConfiguration)>;
@@ -254,14 +294,20 @@ private:
   ApplyFn _apply_fn;
   void apply(const pc::operators::OperatorConfigurationVariant &config_value) {
     auto new_config = _base_snapshot;
-    const int dev_idx =
+    const int device_index =
         find_device_index_by_id(new_config, _device_id.toStdString());
-    if (dev_idx < 0 || dev_idx >= int(new_config.devices.size())) return;
+    if (device_index < 0 || device_index >= int(new_config.devices.size()))
+      return;
     const int op_idx = find_operator_index_by_id(
-        new_config.devices[size_t(dev_idx)], _operator_id.toStdString());
+        new_config.devices[size_t(device_index)], _operator_id.toStdString());
     if (op_idx < 0) return;
-    std::visit([&](auto &dev) { dev.operators[size_t(op_idx)] = config_value; },
-               new_config.devices[size_t(dev_idx)]);
+    std::visit(
+        [&](auto &device_config) {
+          if constexpr (requires { device_config.operators; }) {
+            device_config.operators[size_t(op_idx)] = config_value;
+          }
+        },
+        new_config.devices[size_t(device_index)]);
     if (_apply_fn) _apply_fn(std::move(new_config));
   }
 };
@@ -501,7 +547,9 @@ QStringList WorkspaceModel::deviceVariantNames() const {
       std::variant_size_v<pc::devices::DeviceConfigurationVariant>));
   pc::devices::for_each_device_config_type(
       [&names]<typename DeviceConfigType>() {
-        names.push_back(QString::fromStdString(DeviceConfigType::PluginName));
+        if constexpr (requires { DeviceConfigType::PluginName; }) {
+          names.push_back(QString::fromStdString(DeviceConfigType::PluginName));
+        }
       });
   return names;
 }
@@ -562,11 +610,62 @@ QVariantList WorkspaceModel::addDeviceMenuEntries() const {
 }
 
 void WorkspaceModel::setSelectedDeviceIndex(int index) {
-  if (_selectedDeviceIndex == index) return;
+  const QString node_id = adapterStableId(deviceAdapterAt(index));
+  const QString node_kind =
+      node_id.isEmpty() ? QString() : QStringLiteral("device");
+
+  if (_selectedDeviceIndex == index && _selectedNodeId == node_id &&
+      _selectedNodeKind == node_kind)
+    return;
+
   _selectedDeviceIndex = index;
   _workspace.config.selectedDeviceIndex = index;
   setSelectedOperatorAdapter(nullptr);
+
+  _selectedNodeId = node_id;
+  _selectedNodeKind = node_kind;
+
   emit selectedDeviceIndexChanged();
+  emit selectedNodeChanged();
+
+  rebuildSelectedGroupAdapter();
+}
+
+void WorkspaceModel::selectNode(const QString &node_id) {
+  const std::string id = node_id.toStdString();
+  if (id.empty()) return;
+
+  // group node: leave the device index alone, switch the editor by kind
+  if (find_device_group_index_by_id(_workspace.config, id) >= 0) {
+    if (_selectedNodeKind == QStringLiteral("group") &&
+        _selectedNodeId == node_id)
+      return;
+    setSelectedOperatorAdapter(nullptr);
+    _selectedNodeId = node_id;
+    _selectedNodeKind = QStringLiteral("group");
+    rebuildSelectedGroupAdapter();
+    emit selectedNodeChanged();
+    return;
+  }
+
+  // device node: route through the existing device-selection path
+  const int device_index = find_device_index_by_id(_workspace.config, id);
+  if (device_index >= 0) setSelectedDeviceIndex(device_index);
+}
+
+QMatrix4x4
+WorkspaceModel::nodeAncestorWorldMatrix(const QString &node_id) const {
+  pc::float4x4 world;
+  {
+    std::scoped_lock lock(_workspace.config_access);
+    world = pc::devices::effective_world_transform(_workspace.config,
+                                                   node_id.toStdString());
+  }
+  std::array<float, 16> v = world.values;
+  v[3] *= 0.001f;
+  v[7] *= 0.001f;
+  v[11] *= 0.001f;
+  return QMatrix4x4(v.data());
 }
 
 void WorkspaceModel::addNewDevice(const QString &plugin_name,
@@ -589,6 +688,27 @@ void WorkspaceModel::addNewDevice(const QString &plugin_name,
   applyWorkspaceConfigAndRebuild(std::move(result_config),
                                  RebuildScope::Devices);
   emit deviceAdded();
+}
+
+void WorkspaceModel::deleteDevice(const QString &device_id) {
+  if (_deviceAdapters.isEmpty()) return;
+
+  auto new_config = _workspace.config;
+
+  const auto device_id_str = device_id.toStdString();
+  const int device_index = find_device_index_by_id(new_config, device_id_str);
+
+  if (device_index < 0 || device_index >= int(new_config.devices.size())) {
+    pc::logger()->warn("deleteSelectedDevice: device id not found '{}'",
+                       device_id_str);
+    return;
+  }
+
+  pc::logger()->trace("Deleting device id='{}' (index {})", device_id_str,
+                      device_index);
+
+  new_config.devices.erase(new_config.devices.begin() + device_index);
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
 }
 
 void WorkspaceModel::deleteSelectedDevice() {
@@ -625,9 +745,200 @@ void WorkspaceModel::deleteSelectedDevice() {
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
 }
 
+void WorkspaceModel::duplicateDeviceNode(const QString &node_id) {
+  const std::string id = node_id.toStdString();
+  if (id.empty()) return;
+
+  // TODO the implementation here should really be inside workspace's own
+  // source, not the Qt model for workspace!!
+
+  auto new_config = _workspace.config;
+  const int group_index = find_device_group_index_by_id(new_config, id);
+
+  if (group_index >= 0) {
+    // build old_id -> new_id map for the entire subtree (group + descendants)
+    std::unordered_map<std::string, std::string> id_map;
+
+    std::function<void(const std::string &)> collect_subtree_ids;
+    collect_subtree_ids = [&](const std::string &group_id) {
+      id_map[group_id] = pc::uuid::word();
+
+      for (auto &device_group : _workspace.config.device_groups) {
+        if (device_group.parent_id.value() == group_id)
+          collect_subtree_ids(device_group.id);
+      }
+      for (auto &device_config : _workspace.config.devices) {
+        std::visit(
+            [&](const auto &device_config) {
+              if constexpr (requires {
+                              device_config.id;
+                              device_config.parent_id;
+                            }) {
+                if (device_config.parent_id.value() == group_id)
+                  id_map[device_config.id] = pc::uuid::word();
+              }
+            },
+            device_config);
+      }
+    };
+
+    collect_subtree_ids(id);
+
+    // copy groups in the subtree with remapped ids
+    for (const auto &group_config : _workspace.config.device_groups) {
+      if (!id_map.count(group_config.id)) continue;
+      auto group_copy = group_config;
+      group_copy.id = id_map.at(group_config.id);
+      const std::string old_parent = group_config.parent_id.value();
+      if (id_map.count(old_parent))
+        group_copy.parent_id.set(id_map.at(old_parent));
+      new_config.device_groups.push_back(std::move(group_copy));
+    }
+
+    // copy devices in the subtree with remapped ids and fresh operator ids
+    for (auto device_config_variant : _workspace.config.devices) {
+      bool in_subtree = false;
+      std::visit(
+          [&](const auto &device_config) {
+            in_subtree = id_map.count(device_config.id) > 0;
+          },
+          device_config_variant);
+      if (!in_subtree) continue;
+      std::visit(
+          [&](auto &device_config) {
+            device_config.id = id_map.at(device_config.id);
+            const std::string old_parent = device_config.parent_id.value();
+            if (id_map.count(old_parent))
+              device_config.parent_id.set(id_map.at(old_parent));
+            if constexpr (requires { device_config.operators; }) {
+              for (auto &operator_config_variant : device_config.operators) {
+                std::visit(
+                    [](auto &operator_config) {
+                      operator_config.id = pc::uuid::word();
+                    },
+                    operator_config_variant);
+              }
+            }
+          },
+          device_config_variant);
+      new_config.devices.push_back(std::move(device_config_variant));
+    }
+  } else {
+    // single device duplicate
+    const int device_index = find_device_index_by_id(new_config, id);
+    if (device_index < 0) return;
+    auto device_copy = new_config.devices[size_t(device_index)];
+    std::visit(
+        [](auto &device_config) {
+          device_config.id = pc::uuid::word();
+          if constexpr (requires { device_config.operators; }) {
+            for (auto &operator_config_variant : device_config.operators) {
+              std::visit(
+                  [](auto &operator_config) {
+                    operator_config.id = pc::uuid::word();
+                  },
+                  operator_config_variant);
+            }
+          }
+        },
+        device_copy);
+    new_config.devices.push_back(std::move(device_copy));
+  }
+
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
+}
+
 DeviceAdapter *WorkspaceModel::deviceAdapterAt(int index) const {
   if (index < 0 || index >= _deviceAdapters.size()) return nullptr;
   return qobject_cast<DeviceAdapter *>(_deviceAdapters[index]);
+}
+
+QObject *WorkspaceModel::selectedDeviceGroupAdapter() const {
+  return _selectedDeviceGroupAdapter.data();
+}
+
+void WorkspaceModel::rebuildSelectedGroupAdapter() {
+  if (_selectedDeviceGroupAdapter) {
+    _selectedDeviceGroupAdapter->deleteLater();
+    _selectedDeviceGroupAdapter = nullptr;
+  }
+
+  if (_selectedNodeKind == QStringLiteral("group")) {
+    const int gi = find_device_group_index_by_id(_workspace.config,
+                                                 _selectedNodeId.toStdString());
+    if (gi >= 0) {
+      // groups have no plugin and no image provider, so pass nullptr for both.
+      auto *adapter = new pc::devices::DeviceGroupConfigurationAdapter(
+          _workspace.config.device_groups[size_t(gi)], nullptr, nullptr, this);
+      initGroupAdapter(adapter);
+      _selectedDeviceGroupAdapter = adapter;
+    }
+  }
+
+  emit selectedDeviceGroupAdapterChanged();
+}
+
+void WorkspaceModel::initGroupAdapter(
+    pc::devices::DeviceGroupConfigurationAdapter *adapter) {
+  if (!adapter) return;
+  QObject::connect(
+      adapter, &ConfigAdapter::editRequested, this,
+      [this, adapter](const QString &path, const QVariant &value) {
+        const QString group_id_q = adapter->id();
+        if (group_id_q.isEmpty()) return;
+
+        pc::devices::DeviceGroupConfiguration before;
+        pc::devices::DeviceGroupConfiguration after;
+        pc::WorkspaceConfiguration base_snapshot;
+        {
+          std::scoped_lock lock(_workspace.config_access);
+          base_snapshot = _workspace.config;
+          const int group_index = find_device_group_index_by_id(
+              _workspace.config, group_id_q.toStdString());
+          if (group_index < 0) return;
+          before = _workspace.config.device_groups[size_t(group_index)];
+        }
+
+        // apply mutates the live group config through the adapter's reference.
+        const bool changed = adapter->apply(path, value);
+        if (!changed) return;
+
+        {
+          std::scoped_lock lock(_workspace.config_access);
+          const int group_index = find_device_group_index_by_id(
+              _workspace.config, group_id_q.toStdString());
+          if (group_index < 0) return;
+          after = _workspace.config.device_groups[size_t(group_index)];
+        }
+
+        const std::string group_id = group_id_q.toStdString();
+        QString command_text = QStringLiteral("Edit %1").arg(path);
+        _undoStack->push(new SetDeviceGroupConfigCommand(
+            group_id_q, std::move(before), std::move(after),
+            std::move(command_text), std::move(base_snapshot),
+            [this, group_id](pc::WorkspaceConfiguration config) {
+              QMetaObject::invokeMethod(
+                  this,
+                  [this, group_id, config = std::move(config)]() mutable {
+                    applyWorkspaceConfigAndRebuild(std::move(config),
+                                                   RebuildScope::Devices);
+                    retransformGroupDescendants(group_id);
+                  },
+                  Qt::QueuedConnection);
+            }));
+      });
+}
+
+void WorkspaceModel::retransformGroupDescendants(const std::string &group_id) {
+  // orbbec re-applies the world transform every frame, so this only matters for
+  // static / sequence PLY devices that won't otherwise re-run apply_transform.
+  for (auto &device_plugin : _workspace.devices) {
+    if (!device_plugin) continue;
+    auto [device_id, _] =
+        pc::devices::device_info_from_variant(device_plugin->config_variant());
+    if (isDescendantOf(std::string(device_id), group_id))
+      device_plugin->on_config_field_changed("transform");
+  }
 }
 
 void WorkspaceModel::addOperatorToDevice(int deviceIndex,
@@ -651,8 +962,10 @@ void WorkspaceModel::addOperatorToDevice(int deviceIndex,
     if (op_name == OperatorConfigType::PluginName) {
       std::visit(
           [&](auto &device_config) {
-            device_config.operators.push_back(
-                OperatorConfigType{.id = pc::uuid::word()});
+            if constexpr (requires { device_config.operators; }) {
+              device_config.operators.push_back(
+                  OperatorConfigType{.id = pc::uuid::word()});
+            }
           },
           new_config.devices[size_t(idx)]);
       found_type = true;
@@ -671,8 +984,11 @@ void WorkspaceModel::addOperatorToDevice(int deviceIndex,
   // update_config will instantiate the new operator
   if (deviceIndex < int(_workspace.devices.size()) &&
       _workspace.devices[deviceIndex]) {
-    _workspace.devices[deviceIndex]->update_config(
-        _workspace.config.devices[size_t(idx)]);
+    auto *p = _workspace.devices[deviceIndex].get();
+    pc::logger()->debug(
+        "addOperatorToDevice: deviceIndex={} idx={} plugin={} has_workspace={}",
+        deviceIndex, idx, fmt::ptr(p), p->has_workspace());
+    p->update_config(_workspace.config.devices[size_t(idx)]);
   }
   adapter->rebuildOperatorAdapters();
   attachOperatorConfigAdapters(adapter);
@@ -689,9 +1005,11 @@ void WorkspaceModel::removeOperatorFromDevice(int deviceIndex,
   if (idx < 0 || idx >= int(new_config.devices.size())) return;
   std::visit(
       [operatorIndex](auto &device_config) {
-        auto &ops = device_config.operators;
-        if (operatorIndex >= 0 && operatorIndex < int(ops.size()))
-          ops.erase(ops.begin() + operatorIndex);
+        if constexpr (requires { device_config.operators; }) {
+          auto &ops = device_config.operators;
+          if (operatorIndex >= 0 && operatorIndex < int(ops.size()))
+            ops.erase(ops.begin() + operatorIndex);
+        }
       },
       new_config.devices[size_t(idx)]);
   // sync workspace config
@@ -717,12 +1035,14 @@ void WorkspaceModel::reorderOperatorOnDevice(int deviceIndex, int fromIndex,
   if (idx < 0 || idx >= int(new_config.devices.size())) return;
   std::visit(
       [fromIndex, toIndex](auto &device_config) {
-        auto &ops = device_config.operators;
-        if (fromIndex < 0 || fromIndex >= int(ops.size())) return;
-        if (toIndex < 0 || toIndex >= int(ops.size())) return;
-        auto item = std::move(ops[fromIndex]);
-        ops.erase(ops.begin() + fromIndex);
-        ops.insert(ops.begin() + toIndex, std::move(item));
+        if constexpr (requires { device_config.operators; }) {
+          auto &ops = device_config.operators;
+          if (fromIndex < 0 || fromIndex >= int(ops.size())) return;
+          if (toIndex < 0 || toIndex >= int(ops.size())) return;
+          auto item = std::move(ops[fromIndex]);
+          ops.erase(ops.begin() + fromIndex);
+          ops.insert(ops.begin() + toIndex, std::move(item));
+        }
       },
       new_config.devices[size_t(idx)]);
   // sync workspace config
@@ -848,16 +1168,20 @@ void WorkspaceModel::initOperatorAdapter(OperatorAdapter *opAdapter,
         {
           std::scoped_lock lock(_workspace.config_access);
           base_snapshot = _workspace.config;
-          const int dev_idx = find_device_index_by_id(_workspace.config,
-                                                      device_id.toStdString());
-          if (dev_idx < 0) return;
+          const int device_index = find_device_index_by_id(
+              _workspace.config, device_id.toStdString());
+          if (device_index < 0) return;
           const int op_idx = find_operator_index_by_id(
-              _workspace.config.devices[size_t(dev_idx)],
+              _workspace.config.devices[size_t(device_index)],
               operator_id.toStdString());
           if (op_idx < 0) return;
           std::visit(
-              [&](const auto &dev) { before = dev.operators[size_t(op_idx)]; },
-              _workspace.config.devices[size_t(dev_idx)]);
+              [&](const auto &device_config) {
+                if constexpr (requires { device_config.operators; }) {
+                  before = device_config.operators[size_t(op_idx)];
+                }
+              },
+              _workspace.config.devices[size_t(device_index)]);
         }
         const bool changed = configAdapter->apply(path, value);
         if (!changed) return;
@@ -866,19 +1190,24 @@ void WorkspaceModel::initOperatorAdapter(OperatorAdapter *opAdapter,
         // Write the new operator config back into workspace config
         {
           std::scoped_lock lock(_workspace.config_access);
-          const int dev_idx = find_device_index_by_id(_workspace.config,
-                                                      device_id.toStdString());
-          if (dev_idx < 0) {
+          const int device_index = find_device_index_by_id(
+              _workspace.config, device_id.toStdString());
+          if (device_index < 0) {
             return;
           }
           const int op_idx = find_operator_index_by_id(
-              _workspace.config.devices[size_t(dev_idx)],
+              _workspace.config.devices[size_t(device_index)],
               operator_id.toStdString());
           if (op_idx < 0) {
             return;
           }
-          std::visit([&](auto &dev) { dev.operators[size_t(op_idx)] = after; },
-                     _workspace.config.devices[size_t(dev_idx)]);
+          std::visit(
+              [&](auto &device_config) {
+                if constexpr (requires { device_config.operators; }) {
+                  device_config.operators[size_t(op_idx)] = after;
+                }
+              },
+              _workspace.config.devices[size_t(device_index)]);
         }
 
         // TODO
@@ -886,17 +1215,22 @@ void WorkspaceModel::initOperatorAdapter(OperatorAdapter *opAdapter,
         // like it should have happened automatically because of above ^ i think
         // we want workspace config to be canonical source of truth throughout
         // application somehow
-        const int dev_idx =
+        const int device_index =
             find_device_index_by_id(_workspace.config, device_id.toStdString());
-        if (dev_idx >= 0 && dev_idx < int(_workspace.devices.size()) &&
-            _workspace.devices[dev_idx]) {
+        if (device_index >= 0 &&
+            device_index < int(_workspace.devices.size()) &&
+            _workspace.devices[device_index]) {
           const int op_idx = find_operator_index_by_id(
-              _workspace.devices[dev_idx]->config_variant(),
+              _workspace.devices[device_index]->config_variant(),
               operator_id.toStdString());
           if (op_idx >= 0) {
             std::visit(
-                [&](auto &dev) { dev.operators[size_t(op_idx)] = after; },
-                _workspace.devices[dev_idx]->config_variant());
+                [&](auto &device_config) {
+                  if constexpr (requires { device_config.operators; }) {
+                    device_config.operators[size_t(op_idx)] = after;
+                  }
+                },
+                _workspace.devices[device_index]->config_variant());
           }
         }
 
@@ -1308,10 +1642,14 @@ void WorkspaceModel::initSessionAdapter(SessionConfigurationAdapter *adapter) {
 template <typename AdapterT>
 void WorkspaceModel::initDeviceAdapter(AdapterT *adapter,
                                        pc::devices::DevicePlugin *plugin) {
-  const auto &config =
-      std::get<typename AdapterT::config_type>(plugin->config_variant());
+  using ConfigT = typename AdapterT::config_type;
+  if constexpr (std::same_as<ConfigT, devices::DeviceGroupConfiguration>) {
+    return;
+  }
+  const auto &[device_id, plugin_name] =
+      devices::device_info_from_variant(plugin->config_variant());
   pc::logger()->trace("Initialising device adapter '{}' for plugin '{}'",
-                      config.id, adapter->displayName().toStdString());
+                      device_id, plugin_name);
   QObject::connect(
       adapter, &ConfigAdapter::editRequested, this,
       [this, adapter](const QString &path, const QVariant &value) {
@@ -1380,12 +1718,15 @@ DeviceAdapter *WorkspaceModel::makeDeviceAdapterForPlugin(
   std::visit(
       [this, plugin, &result](auto &device_config) {
         using ConfigType = std::decay_t<decltype(device_config)>;
-        using AdapterType =
-            pc::devices::device_adapter_for_config_t<ConfigType>;
-        auto *adapter =
-            new AdapterType(device_config, plugin, _imageProvider, this);
-        initDeviceAdapter(adapter, plugin);
-        result = adapter;
+        if constexpr (!std::same_as<ConfigType,
+                                    pc::devices::DeviceGroupConfiguration>) {
+          using AdapterType =
+              pc::devices::device_adapter_for_config_t<ConfigType>;
+          auto *adapter =
+              new AdapterType(device_config, plugin, _imageProvider, this);
+          initDeviceAdapter(adapter, plugin);
+          result = adapter;
+        }
       },
       config_variant);
   return result;
@@ -1496,8 +1837,9 @@ void WorkspaceModel::syncSessionAdapters() {
 }
 
 void WorkspaceModel::syncDeviceAdapters() {
-  pc::logger()->trace("Syncing device adapters");
-  pc::logger()->trace("Workspace device count: {}", _workspace.devices.size());
+  pc::logger()->trace("syncDeviceAdapters: begin, workspace device count={}",
+                      _workspace.devices.size());
+
   QHash<QString, DeviceAdapter *> existing_by_id;
   existing_by_id.reserve(_deviceAdapters.size());
   for (QObject *obj : _deviceAdapters) {
@@ -1506,9 +1848,12 @@ void WorkspaceModel::syncDeviceAdapters() {
     const QString id = adapterStableId(a);
     if (!id.isEmpty()) existing_by_id.insert(id, a);
   }
+  pc::logger()->trace("syncDeviceAdapters: existing adapter count={}",
+                      existing_by_id.size());
 
   QList<QObject *> new_ordered_devices;
   new_ordered_devices.reserve(_deviceAdapters.size());
+
   for (auto &device_plugin : _workspace.devices) {
     auto *plugin = device_plugin.get();
     DeviceAdapter *adapter = nullptr;
@@ -1516,38 +1861,59 @@ void WorkspaceModel::syncDeviceAdapters() {
         std::reference_wrapper<devices::DeviceConfigurationVariant>;
     std::optional<DeviceConfigVariantRef> device_config;
     if (plugin) device_config = plugin->config_variant();
+
     if (device_config.has_value()) {
       auto config = device_config.value();
       auto [device_id, plugin_name] = devices::device_info_from_variant(config);
       const QString id(device_id.data());
+      pc::logger()->trace(
+          "syncDeviceAdapters: processing device id='{}' plugin='{}'",
+          device_id, plugin_name);
+
       if (!id.isEmpty()) {
-        // try an existing adapter
         adapter = existing_by_id.take(id);
         if (adapter) {
+          pc::logger()->trace(
+              "syncDeviceAdapters: found existing adapter for id='{}'",
+              device_id);
           bool sync_success = false;
           try {
             sync_success = adapter->setConfig(config);
           } catch (...) {
-            pc::logger()->error("Exception thrown setting config for '{}' '{}'",
-                                plugin_name, device_id);
+            pc::logger()->error(
+                "syncDeviceAdapters: exception setting config for '{}' '{}'",
+                plugin_name, device_id);
           }
           if (!sync_success) {
-            pc::logger()->trace(
-                "Existing device adapter with id '{}' failed to set new "
-                "configuration. Recreating...",
-                device_id);
+            pc::logger()->trace("syncDeviceAdapters: setConfig failed for "
+                                "id='{}', recreating adapter",
+                                device_id);
             adapter->deleteLater();
             adapter = nullptr;
+          } else {
+            pc::logger()->trace("syncDeviceAdapters: setConfig ok for id='{}'",
+                                device_id);
           }
+        } else {
+          pc::logger()->trace("syncDeviceAdapters: no existing adapter for "
+                              "id='{}', will construct",
+                              device_id);
         }
       }
+
       if (!adapter) {
+        pc::logger()->trace("syncDeviceAdapters: constructing new adapter for "
+                            "id='{}' plugin='{}'",
+                            device_id, plugin_name);
         adapter = makeDeviceAdapterForPlugin(plugin, config);
+        pc::logger()->trace("syncDeviceAdapters: construction {}",
+                            adapter ? "ok" : "FAILED");
       }
+
       if (adapter) {
+        pc::logger()->trace("syncDeviceAdapters: hooking callbacks for id='{}'",
+                            device_id);
         auto adapterPtr = QPointer<DeviceAdapter>(adapter);
-        // hook up the qt signal so that when the plugin updates its
-        // pointcloud, quick3d can react to this event and update geometry
         plugin->set_point_cloud_updated_callback([adapterPtr]() {
           QMetaObject::invokeMethod(adapterPtr.data(), [adapterPtr]() {
             if (!adapterPtr) {
@@ -1555,13 +1921,10 @@ void WorkspaceModel::syncDeviceAdapters() {
               return;
             }
             adapterPtr->notifyPointCloudUpdated();
-            // also update operator projections attached to this device we
-            // might want to visualise in the UI
             adapterPtr->syncCameraFrames();
           });
         });
 
-        // TODO what is this for
         plugin->set_status_callback(
             [adapterPtr](pc::devices::DeviceStatus status) {
               if (!adapterPtr) return;
@@ -1573,44 +1936,60 @@ void WorkspaceModel::syncDeviceAdapters() {
                   },
                   Qt::QueuedConnection);
             });
-        if (adapter && operator_structure_changed(adapter, plugin)) {
+
+        if (operator_structure_changed(adapter, plugin)) {
+          pc::logger()->trace("syncDeviceAdapters: operator structure changed "
+                              "for id='{}', rebuilding",
+                              device_id);
           adapter->rebuildOperatorAdapters();
           attachOperatorConfigAdapters(adapter);
         }
       }
+    } else {
+      pc::logger()->trace(
+          "syncDeviceAdapters: plugin has no config variant, skipping");
     }
-    // if we managed to construct or get an existing valid apater,
-    // add this to our new devices list
-    if (adapter)
+
+    if (adapter) {
       new_ordered_devices.append(adapter);
-    else {
-      pc::logger()->error("no adapter");
-      // we we didn't finish this loop with a valid adapter, we need one in
-      // a null state adapter = makeDeviceAdapterForPlugin(nullptr);
+      pc::logger()->trace("syncDeviceAdapters: appended adapter, list size={}",
+                          new_ordered_devices.size());
+    } else {
+      pc::logger()->error(
+          "syncDeviceAdapters: no adapter produced for a device plugin");
     }
   }
 
+  pc::logger()->trace("syncDeviceAdapters: deleting {} stale adapters",
+                      existing_by_id.size());
   for (auto it = existing_by_id.begin(); it != existing_by_id.end(); ++it) {
-    if (it.value()) it.value()->deleteLater();
+    if (it.value()) {
+      pc::logger()->trace("syncDeviceAdapters: deleting stale adapter id='{}'",
+                          it.key().toStdString());
+      it.value()->deleteLater();
+    }
   }
-  _deviceAdapters = new_ordered_devices;
 
-  // TODO all of this seems so complex...
-  // Refresh registry subscriptions for device adapters.
+  _deviceAdapters = new_ordered_devices;
+  pc::logger()->trace("syncDeviceAdapters: device adapters rebuilt, count={}",
+                      _deviceAdapters.size());
+
   _workspace.config_registry.remove_subscriptions("device/");
+  pc::logger()->trace(
+      "syncDeviceAdapters: removed existing device/ registry subscriptions");
+
   for (QObject *obj : _deviceAdapters) {
     auto *adapter = qobject_cast<ConfigAdapter *>(obj);
     if (!adapter) continue;
     const std::string id = adapterStableId(adapter).toStdString();
     if (id.empty()) continue;
     const std::string prefix = "device/" + id + "/";
+    pc::logger()->trace(
+        "syncDeviceAdapters: registering on_change for prefix='{}'", prefix);
     auto adapterPtr = QPointer<ConfigAdapter>(adapter);
     _workspace.config_registry.on_change(
         prefix, [adapterPtr, prefix, id,
                  &workspace = _workspace](std::string_view path) {
-          // The registry setter wrote to the plugin config...
-          // Sync that change back to
-          // workspace.config so serialization and undo snapshots see it.
           {
             std::scoped_lock lock(workspace.config_access);
             for (auto &device_plugin : workspace.devices) {
@@ -1650,12 +2029,35 @@ void WorkspaceModel::syncDeviceAdapters() {
   int selectedDeviceIndex = _workspace.config.selectedDeviceIndex.value();
   if (selectedDeviceIndex >= _deviceAdapters.size() || selectedDeviceIndex < 0)
     selectedDeviceIndex = 0;
-  setSelectedDeviceIndex(selectedDeviceIndex);
+
+  const bool group_still_selected =
+      _selectedNodeKind == QStringLiteral("group") &&
+      find_device_group_index_by_id(_workspace.config,
+                                    _selectedNodeId.toStdString()) >= 0;
+
+  pc::logger()->trace(
+      "syncDeviceAdapters: selection — index={}, group_still_selected={}, "
+      "selectedNodeKind='{}', selectedNodeId='{}'",
+      selectedDeviceIndex, group_still_selected,
+      _selectedNodeKind.toStdString(), _selectedNodeId.toStdString());
+
+  if (group_still_selected) {
+    if (_selectedDeviceIndex != selectedDeviceIndex) {
+      _selectedDeviceIndex = selectedDeviceIndex;
+      _workspace.config.selectedDeviceIndex = selectedDeviceIndex;
+      emit selectedDeviceIndexChanged();
+    }
+  } else {
+    setSelectedDeviceIndex(selectedDeviceIndex);
+  }
+
   emit deviceAdaptersChanged();
   emit deviceVariantNamesChanged();
   emit addDeviceMenuEntriesChanged();
   emit deviceTreeRowsChanged();
-  pc::logger()->trace("Workspace device count: {}", _workspace.devices.size());
+
+  pc::logger()->trace("syncDeviceAdapters: done, workspace device count={}",
+                      _workspace.devices.size());
 }
 
 void WorkspaceModel::syncConsole() {
@@ -1731,7 +2133,7 @@ void WorkspaceModel::createDeviceGroup(const QString &label,
     return;
   }
 
-  pc::devices::DeviceGroup group_config{.id = pc::uuid::word()};
+  pc::devices::DeviceGroupConfiguration group_config{.id = pc::uuid::word()};
   group_config.label.set(label.toStdString());
   group_config.parent_id.set(parent);
   new_config.device_groups.push_back(std::move(group_config));
@@ -1803,73 +2205,79 @@ QVariantList WorkspaceModel::deviceTreeRows() const {
     int index;
   };
 
-  std::function<void(const std::string &, int)> walk = [&](const std::string
-                                                               &parent_id,
-                                                           int depth) {
-    std::vector<Entry> entries;
+  std::function<void(const std::string &, int)> walk =
+      [&](const std::string &parent_id, int depth) {
+        std::vector<Entry> entries;
 
-    for (int gi = 0; gi < int(_workspace.config.device_groups.size()); ++gi) {
-      const auto &group_config = _workspace.config.device_groups[size_t(gi)];
-      if (group_config.parent_id.value() == parent_id)
-        entries.push_back({true, group_config.order.value(), gi});
-    }
-    for (int i = 0; i < int(_workspace.config.devices.size()); ++i) {
-      const auto &device_variant = _workspace.config.devices[size_t(i)];
-      const std::string device_parent = std::visit(
-          [](const auto &device_config) {
-            return device_config.parent_id.value();
-          },
-          device_variant);
-      if (device_parent != parent_id) continue;
-      const int device_order = std::visit(
-          [](const auto &device_config) { return device_config.order.value(); },
-          device_variant);
-      entries.push_back({false, device_order, i});
-    }
+        for (int group_index = 0;
+             group_index < int(_workspace.config.device_groups.size());
+             group_index++) {
+          const auto &group_config =
+              _workspace.config.device_groups[size_t(group_index)];
+          if (group_config.parent_id.value() == parent_id)
+            entries.push_back({true, group_config.order.value(), group_index});
+        }
+        for (int i = 0; i < int(_workspace.config.devices.size()); ++i) {
+          const auto &device_variant = _workspace.config.devices[size_t(i)];
+          const std::string device_parent = std::visit(
+              [](const auto &device_config) {
+                return device_config.parent_id.value();
+              },
+              device_variant);
+          if (device_parent != parent_id) continue;
+          const int device_order = std::visit(
+              [](const auto &device_config) {
+                return device_config.order.value();
+              },
+              device_variant);
+          entries.push_back({false, device_order, i});
+        }
 
-    std::stable_sort(
-        entries.begin(), entries.end(),
-        [](const Entry &a, const Entry &b) { return a.order < b.order; });
+        std::stable_sort(
+            entries.begin(), entries.end(),
+            [](const Entry &a, const Entry &b) { return a.order < b.order; });
 
-    for (const auto &entry : entries) {
-      if (entry.is_group) {
-        const auto &group_config =
-            _workspace.config.device_groups[size_t(entry.index)];
-        QVariantMap group_row;
-        group_row["kind"] = "group";
-        group_row["id"] = QString::fromStdString(group_config.id);
-        group_row["parentId"] = QString::fromStdString(parent_id);
-        group_row["label"] = QString::fromStdString(group_config.label.value());
-        group_row["depth"] = depth;
-        group_row["collapsed"] = group_config.collapsed.value();
-        group_row["render"] = group_config.render.value();
-        group_row["active"] = group_config.active.value();
-        group_row["effectiveRender"] =
-            pc::devices::effective_render(_workspace.config, group_config.id);
-        group_row["effectiveActive"] =
-            pc::devices::effective_active(_workspace.config, group_config.id);
-        rows.push_back(std::move(group_row));
-        if (!group_config.collapsed.value()) walk(group_config.id, depth + 1);
-      } else {
-        const auto &device_variant =
-            _workspace.config.devices[size_t(entry.index)];
-        const std::string device_id = std::visit(
-            [](const auto &device_config) { return device_config.id; },
-            device_variant);
-        QVariantMap device_row;
-        device_row["kind"] = "device";
-        device_row["id"] = QString::fromStdString(device_id);
-        device_row["parentId"] = QString::fromStdString(parent_id);
-        device_row["deviceIndex"] = entry.index;
-        device_row["depth"] = depth;
-        device_row["effectiveRender"] =
-            pc::devices::effective_render(_workspace.config, device_id);
-        device_row["effectiveActive"] =
-            pc::devices::effective_active(_workspace.config, device_id);
-        rows.push_back(std::move(device_row));
-      }
-    }
-  };
+        for (const auto &entry : entries) {
+          if (entry.is_group) {
+            const auto &group_config =
+                _workspace.config.device_groups[size_t(entry.index)];
+            QVariantMap group_row;
+            group_row["kind"] = "group";
+            group_row["id"] = QString::fromStdString(group_config.id);
+            group_row["parentId"] = QString::fromStdString(parent_id);
+            group_row["label"] =
+                QString::fromStdString(group_config.label.value());
+            group_row["depth"] = depth;
+            group_row["collapsed"] = group_config.collapsed.value();
+            group_row["render"] = group_config.render.value();
+            group_row["active"] = group_config.active.value();
+            group_row["effectiveRender"] = pc::devices::effective_render(
+                _workspace.config, group_config.id);
+            group_row["effectiveActive"] = pc::devices::effective_active(
+                _workspace.config, group_config.id);
+            rows.push_back(std::move(group_row));
+            if (!group_config.collapsed.value())
+              walk(group_config.id, depth + 1);
+          } else {
+            const auto &device_variant =
+                _workspace.config.devices[size_t(entry.index)];
+            const std::string device_id = std::visit(
+                [](const auto &device_config) { return device_config.id; },
+                device_variant);
+            QVariantMap device_row;
+            device_row["kind"] = "device";
+            device_row["id"] = QString::fromStdString(device_id);
+            device_row["parentId"] = QString::fromStdString(parent_id);
+            device_row["deviceIndex"] = entry.index;
+            device_row["depth"] = depth;
+            device_row["effectiveRender"] =
+                pc::devices::effective_render(_workspace.config, device_id);
+            device_row["effectiveActive"] =
+                pc::devices::effective_active(_workspace.config, device_id);
+            rows.push_back(std::move(device_row));
+          }
+        }
+      };
 
   walk("", 0);
   return rows;
@@ -1887,9 +2295,11 @@ void WorkspaceModel::moveDeviceNode(const QString &node_id,
   // accessors that work uniformly across groups and the device variant
   const auto node_parent =
       [&](const std::string &nid) -> std::optional<std::string> {
-    if (const int gi = find_device_group_index_by_id(_workspace.config, nid);
-        gi >= 0)
-      return _workspace.config.device_groups[size_t(gi)].parent_id.value();
+    if (const int group_index =
+            find_device_group_index_by_id(_workspace.config, nid);
+        group_index >= 0)
+      return _workspace.config.device_groups[size_t(group_index)]
+          .parent_id.value();
     for (const auto &device_variant : _workspace.config.devices) {
       std::optional<std::string> found;
       std::visit(
@@ -1904,9 +2314,10 @@ void WorkspaceModel::moveDeviceNode(const QString &node_id,
   };
   const auto set_parent = [&](const std::string &nid,
                               const std::string &parent) {
-    if (const int gi = find_device_group_index_by_id(_workspace.config, nid);
-        gi >= 0) {
-      _workspace.config.device_groups[size_t(gi)].parent_id = parent;
+    if (const int group_index =
+            find_device_group_index_by_id(_workspace.config, nid);
+        group_index >= 0) {
+      _workspace.config.device_groups[size_t(group_index)].parent_id = parent;
       return;
     }
     for (auto &device_variant : _workspace.config.devices)
@@ -1917,9 +2328,10 @@ void WorkspaceModel::moveDeviceNode(const QString &node_id,
           device_variant);
   };
   const auto set_order = [&](const std::string &nid, int order) {
-    if (const int gi = find_device_group_index_by_id(_workspace.config, nid);
-        gi >= 0) {
-      _workspace.config.device_groups[size_t(gi)].order = order;
+    if (const int group_index =
+            find_device_group_index_by_id(_workspace.config, nid);
+        group_index >= 0) {
+      _workspace.config.device_groups[size_t(group_index)].order = order;
       return;
     }
     for (auto &device_variant : _workspace.config.devices)
