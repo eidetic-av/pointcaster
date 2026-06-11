@@ -165,35 +165,27 @@ MenuBar {
         }
 
 
-        property bool openedAlignWindow: false
-
         Action {
             id: alignmentWindowMenuToggle
             text: qsTr("&Alignment")
             checkable: true
-            checked: false
-
             onTriggered: {
                 if (!alignmentWindow)
                     return;
-
-                if (alignmentWindow.isOpen)
-                    alignmentWindow.forceClose();
+                if (alignmentWindow.visible)
+                    alignmentWindow.close();
                 else {
-                    alignmentWindow.open();
-                    if (!openedAlignWindow) {
-                        openedAlignWindow = true;
-                        // TODO there must be a way to set this inside AlignmentWindow not here
-                        alignmentWindow.resize(1640, 900);
-                    }
+                    alignmentWindow.show();
+                    alignmentWindow.raise();
+                    alignmentWindow.requestActivate();
                 }
             }
         }
-
+        
         Connections {
             target: alignmentWindow
-            function onIsOpenChanged() {
-                alignmentWindowMenuToggle.checked = alignmentWindow.isOpen;
+            function onVisibleChanged() {
+                alignmentWindowMenuToggle.checked = alignmentWindow.visible;
             }
         }
 

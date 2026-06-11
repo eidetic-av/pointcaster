@@ -5,10 +5,12 @@ import com.kdab.dockwidgets as KDDW
 
 import Pointcaster 1.0
 
-KDDW.DockWidget {
+Window {
     id: root
-    uniqueName: "alignmentWindow"
     title: "Alignment"
+
+    width: 1200
+    height: 600
 
     property var workspace: null
 

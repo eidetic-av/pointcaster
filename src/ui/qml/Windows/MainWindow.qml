@@ -145,11 +145,9 @@ ApplicationWindow {
             affinities: ["edit"]
         }
 
-        // TODO: can/should window loading be deffered?
         AlignmentWindow {
             id: alignmentWindow
             workspace: workspaceModel
-            affinities: ["tools"]
         }
 
         // id(string) -> KDDW.DockWidget
