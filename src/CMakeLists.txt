@@ -29,6 +29,7 @@ qt_add_executable(pointcaster
   networking/point_streamer.cc
   networking/osc/osc_receiver.cc
   config/config_registry.cc
+  config/transform_config.cc
   # TODO should probs be part of plugin lib? but other deps cant find it if it is atm
   plugins/operators/operator_host.cc
   ${app_icon_resource}
