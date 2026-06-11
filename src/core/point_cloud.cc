@@ -1,35 +1,56 @@
 #include <chrono>
 #include <iostream>
 #include <pointcaster/point_cloud.h>
+#include <profiling/profiling_zone.h>
 #include <zpp_bits.h>
 
 namespace pc {
 
 using namespace std::chrono;
+using namespace pc::profiling;
 
 auto PointCloud::serialize(bool compress) const -> std::vector<std::byte> {
+  ProfilingZone zone("PointCloud::serialize");
+
   const auto timestamp = static_cast<uint64_t>(
       duration_cast<milliseconds>(system_clock::now().time_since_epoch())
           .count());
   const uint64_t point_count = size();
   const auto compression_flag = static_cast<uint8_t>(compress);
-
   std::vector<std::byte> buffer;
 
   if (compress) {
-    const auto payload = this->compress();
-    buffer.reserve(PointCloudPacket::header_bytes + payload.size());
-    zpp::bits::out serializer{buffer};
-    serializer(timestamp, point_count, compression_flag, payload).or_throw();
+    std::vector<std::byte> payload;
+    {
+      ProfilingZone z("serialize::compress");
+      payload = this->compress();
+    }
+    {
+      ProfilingZone z("serialize::reserve");
+      buffer.reserve(PointCloudPacket::header_bytes + payload.size());
+    }
+    {
+      ProfilingZone z("serialize::write_payload");
+      zpp::bits::out serializer{buffer};
+      serializer(timestamp, point_count, compression_flag, payload).or_throw();
+    }
   } else {
-    buffer.reserve(PointCloudPacket::header_bytes +
-                   positions.size() * sizeof(positions[0]) +
-                   colors.size() * sizeof(colors[0]));
+    {
+      ProfilingZone z("serialize::reserve");
+      buffer.reserve(PointCloudPacket::header_bytes +
+                     positions.size() * sizeof(positions[0]) +
+                     colors.size() * sizeof(colors[0]));
+    }
     zpp::bits::out serializer{buffer};
-    serializer(timestamp, point_count, compression_flag).or_throw();
-    serializer(*this).or_throw();
+    {
+      ProfilingZone z("serialize::write_header");
+      serializer(timestamp, point_count, compression_flag).or_throw();
+    }
+    {
+      ProfilingZone z("serialize::write_body");
+      serializer(*this).or_throw();
+    }
   }
-
   return buffer;
 }
 

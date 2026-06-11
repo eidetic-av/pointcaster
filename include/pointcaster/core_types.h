@@ -6,7 +6,6 @@
 #include <limits>
 #include <utility>
 
-
 namespace pc {
 
 using int2 = std::pair<int, int>;

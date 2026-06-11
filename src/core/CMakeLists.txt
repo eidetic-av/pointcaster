@@ -5,6 +5,7 @@ include(GenerateExportHeader)
 # other shared libraries, like dynamically loaded device plugins
 add_library(pointcaster_core SHARED
     point_cloud.cc
+    core_types.cc
     codec/draco.cc
     uuid/uuid.cc
     uuid/wtf/wtf.cc
