@@ -472,7 +472,7 @@ public:
         }
 {% else %}
         if (path == QStringLiteral("{{ m.name }}"))
-            return QStringLiteral("{{ m.type }}");
+            return QStringLiteral("{{ m.inner_type }}");
 {% endif %}
 {% endfor %}
         return {};
