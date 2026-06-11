@@ -9,10 +9,20 @@
 
 namespace pc {
 
+struct SessionTimelineConfiguration {
+  rfl::DefaultVal<bool> looping = true;
+  rfl::DefaultVal<int> fps = 30;
+  rfl::DefaultVal<int> start_frame = 0;   // @minmax(0, 999999999)
+  rfl::DefaultVal<int> current_frame = 0; // @minmax(0, 999999999)
+  rfl::DefaultVal<int> end_frame = -1;    // @minmax(-1, 999999999);
+  rfl::DefaultVal<int> length = -1;       // @minmax(-1, 999999999);
+};
+
 struct SessionConfiguration {
   std::string id;
   rfl::DefaultVal<std::string> label;
   rfl::DefaultVal<CameraConfiguration> camera;
+  rfl::DefaultVal<SessionTimelineConfiguration> timeline;
   rfl::DefaultVal<pipeline::ConcurrentOperatorPipelineConfiguration>
       operator_pipeline;
   std::vector<operators::OperatorConfigurationVariant> operators;

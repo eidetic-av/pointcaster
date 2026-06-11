@@ -152,23 +152,32 @@ std::shared_ptr<PointCloud> PlySequenceLoader::load_into_slot(size_t frame,
   return cloud;
 }
 
+void PlySequenceLoader::set_loop(size_t start, size_t end) {
+  _loop_start.store(start, std::memory_order_relaxed);
+  _loop_end.store(end, std::memory_order_relaxed);
+}
+
 void PlySequenceLoader::prefetch_from(size_t current) {
   auto &pool = backend::CpuBackend::thread_pool;
   const auto gen = _generation.load(std::memory_order_relaxed);
-  const auto total = _file_paths.size();
+
+  const auto loop_start = _loop_start.load(std::memory_order_relaxed);
+  const auto loop_end = std::min(_loop_end.load(std::memory_order_relaxed),
+                                 _file_paths.size() - 1);
+  const auto loop_range = loop_end - loop_start + 1;
 
   for (size_t off = 1; off <= _config.prefetch_ahead; ++off) {
-    const auto fi = (current + off) % total;
-    const auto slot = fi % _config.buffer_capacity;
+    const auto frame_index = loop_start + (current - loop_start + off) % loop_range;
+    const auto slot = frame_index % _config.buffer_capacity;
 
     {
       std::shared_lock lock(_mutex);
-      if (_ring_index[slot] == fi && _ring[slot]) continue;
+      if (_ring_index[slot] == frame_index && _ring[slot]) continue;
     }
 
-    pool.detach_task([this, fi, slot, gen] {
+    pool.detach_task([this, frame_index, slot, gen] {
       if (_generation.load(std::memory_order_relaxed) != gen) return;
-      load_into_slot(fi, slot);
+      load_into_slot(frame_index, slot);
     });
   }
 }

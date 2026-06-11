@@ -42,6 +42,8 @@ public:
 
   size_t frame_count() const { return _file_paths.size(); }
 
+  void set_loop(size_t start, size_t end);
+
   void invalidate();
 
 private:
@@ -55,6 +57,8 @@ private:
   mutable std::shared_mutex _mutex;
 
   std::atomic<size_t> _generation{0};
+  std::atomic<size_t> _loop_start{0};
+  std::atomic<size_t> _loop_end{std::numeric_limits<size_t>::max()};
 
   std::shared_ptr<PointCloud> load_into_slot(size_t frame, size_t slot);
   void prefetch_from(size_t current);

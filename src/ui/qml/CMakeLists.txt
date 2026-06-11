@@ -56,6 +56,7 @@ qt_add_qml_module(PointcasterQml
         Windows/Sessions/CentralSessionView.qml
         Windows/Sessions/SessionControls.qml
         Windows/Sessions/SessionControlCollapser.qml
+        Windows/Sessions/SessionTimeline.qml
         Windows/Recording/RecordingWindow.qml
         Windows/Alignment/AlignmentWindow.qml
         Windows/Alignment/AlignmentView.qml

@@ -65,6 +65,7 @@ find_package(OpenCV CONFIG REQUIRED
   opencv_core
   opencv_imgproc
 )
+find_package(cppzmq CONFIG REQUIRED)
 
 target_link_libraries(pointcaster PRIVATE
   pointcaster::core
@@ -78,6 +79,7 @@ target_link_libraries(pointcaster PRIVATE
   reflectcpp::reflectcpp
   liblo::liblo
   TBB::tbb
+  cppzmq-static
   ${OpenCV_LIBS}
   ${PCL_LIBRARIES}
 )

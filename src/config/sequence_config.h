@@ -10,8 +10,8 @@ struct SequenceConfiguration {
   rfl::DefaultVal<int> start_frame = 0;      // @minmax(0, 999999999)
   rfl::DefaultVal<int> current_frame = 0;      // @minmax(0, 999999999)
   rfl::DefaultVal<int> end_frame = -1;       // @minmax(-1, 999999999)
-  rfl::DefaultVal<int> buffer_capacity = 60; // @minmax(8, 600)
-  rfl::DefaultVal<int> prefetch_ahead = 30;  // @minmax(1, 300)
+  rfl::DefaultVal<int> buffer_capacity = 60; // @minmax(1, 999999999)
+  rfl::DefaultVal<int> prefetch_ahead = 30;  // @minmax(1, 999999999)
 };
 
 } // namespace pc

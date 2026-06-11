@@ -7,7 +7,7 @@
 		"bshoshany-thread-pool",
 		"corrade",
 		"concurrentqueue",
-		"readerwriterqueue",
+		"cppzmq",
 		"draco",
 		"fmt",
 		"gizmo3d",
@@ -39,6 +39,7 @@
 				"yaml"
 			]
 		},
+		"readerwriterqueue",
 		"spdlog",
 		{
 			"name": "tracy",
@@ -49,6 +50,12 @@
 			]
 		},
 		"yaml-cpp",
-		"zpp-bits"
+		"zpp-bits",
+		{
+			"name": "zeromq",
+			"features": [
+				"draft"
+			]
+		}
 	]
 }

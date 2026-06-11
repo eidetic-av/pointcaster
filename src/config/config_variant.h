@@ -3,11 +3,12 @@
 #include "color_transform_config.h"
 #include "file_config.h"
 #include "network_config.h"
-#include "networking/point_streamer_config.h"
-#include "pipeline/concurrent_operator_pipeline_config.h"
 #include "sequence_config.h"
 #include "transform_config.h"
+
 #include <concepts>
+#include <networking/point_streamer_config.h>
+#include <pipeline/concurrent_operator_pipeline_config.h>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -25,17 +26,18 @@
 
 namespace pc {
 
-using ConfigurationVariant = std::variant<
-    TransformConfiguration, ColorTransformConfiguration, FileConfiguration,
-    FileFolderConfiguration, NetworkConfiguration, CameraConfiguration,
-    LookAtCameraConfiguration, SessionConfiguration, SequenceConfiguration,
-    pipeline::ConcurrentOperatorPipelineConfiguration,
-    networking::PointStreamerConfiguration
-    // TODO REMOVE AND ADD
-    // specialised jinja with  setConfig overload like device
-    // adapters
-    ,
-    operators::FringeRemovalConfiguration>;
+using ConfigurationVariant =
+    std::variant<TransformConfiguration, ColorTransformConfiguration,
+                 FileConfiguration, FileFolderConfiguration,
+                 NetworkConfiguration, CameraConfiguration,
+                 LookAtCameraConfiguration, SessionConfiguration,
+                 SessionTimelineConfiguration, SequenceConfiguration,
+                 pipeline::ConcurrentOperatorPipelineConfiguration,
+                 networking::PointStreamerConfiguration,
+                 // TODO REMOVE AND ADD
+                 // specialised jinja with  setConfig overload like device
+                 // adapters
+                 operators::FringeRemovalConfiguration>;
 
 // compile time utilities
 
