@@ -16,6 +16,8 @@
    ============================================================================ #}
 #pragma once
 
+// !! Generated adapter !!
+
 #include <QObject>
 #include <QVariant>
 #include <QVariantMap>
@@ -106,31 +108,57 @@ public:
     QString configType() const override { return QStringLiteral("{{ s.struct_name }}"); }
     Q_INVOKABLE QString displayName() const override { return QStringLiteral("{{ s.label }}"); }
 
-{% block set_config scoped %}
+{% block set_config_variant_wrapper scoped %}
     // ---- Core-only ----
     bool setConfig(const pc::ConfigurationVariant &config) override {
         const auto *configPtr = std::get_if<{{ s.struct_name }}>(&config);
         if (!configPtr) return false;
         return setConfig(*configPtr);
     }
+{% endblock %}
 
+{% block set_config_typed scoped %}
     bool setConfig(const {{ s.struct_name }} &config) {
-        m_config = config;
-
-        // Emit stable change notifications for all leaf members.
-{% for m in s.members %}
-        emit {{ m.name }}Changed();
-        notifyFieldChanged(QStringLiteral("{{ m.name }}"));
-{% endfor %}
+        bool anyChanged = false;
 
 {% for m in s.members %}
 {% if m.is_nested %}
-        // Push config into nested adapter and let it emit its own fieldChanged;
-        // we forward those with "{{ m.name }}/..." already.
-        m_{{ m.name }}Adapter.setConfig({{ m.config_ref }});
+        m_config.{{ m.name }} = config.{{ m.name }};
+{% elif m.is_rfl and is_simple_comparable_type(m.inner_type) %}
+        if (!(m_config.{{ m.name }}.value() == config.{{ m.name }}.value())) {
+            anyChanged = true;
+            m_config.{{ m.name }} = config.{{ m.name }};
+            emit {{ m.name }}Changed();
+            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+        }
+{% elif (not m.is_rfl) and is_simple_comparable_type(m.type) %}
+        if (!(m_config.{{ m.name }} == config.{{ m.name }})) {
+            anyChanged = true;
+            m_config.{{ m.name }} = config.{{ m.name }};
+            emit {{ m.name }}Changed();
+            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+        }
+{% else %}
+        m_config.{{ m.name }} = config.{{ m.name }};
+        anyChanged = true;
+        emit {{ m.name }}Changed();
+        notifyFieldChanged(QStringLiteral("{{ m.name }}"));
 {% endif %}
 {% endfor %}
-        return true;
+
+        // Push config into nested adapters only after the top-level config has
+        // been updated, and let nested adapters emit their own leaf changes;
+        // constructor wiring already forwards nested field changes with the
+        // appropriate "member/..." prefix.
+{% for m in s.members %}
+{% if m.is_nested %}
+        if (m_{{ m.name }}Adapter.setConfig({{ m.config_ref }})) {
+            anyChanged = true;
+            emit {{ m.name }}Changed();
+        }
+{% endif %}
+{% endfor %}
+        return anyChanged;
     }
 {% endblock %}
 
@@ -220,7 +248,7 @@ public:
     Q_INVOKABLE void set_{{ m.name }}(const QQuaternion &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant::fromValue(value)); }
 {% elif "rfl::" in m.type %}
     {% set basetype = m.type.split('<')[1].split('>')[0] %}
-    {% if basetype == "std::string" %} 
+    {% if basetype == "std::string" %}
     Q_INVOKABLE QString {{ m.name }}() const { return QString::fromStdString(m_config.{{ m.name }}.value()); }
     Q_INVOKABLE void set_{{ m.name }}(const QString &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
     {% else %}

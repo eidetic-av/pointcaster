@@ -22,28 +22,11 @@
 {% block ctor_base_init %}        : DeviceAdapter(plugin, imageProvider, parent)
 {% endblock %}
 
-{% block set_config %}
+{% block set_config_variant_wrapper %}
     bool setConfig(const pc::devices::DeviceConfigurationVariant &config) override {
         const auto *configPtr = std::get_if<{{ s.struct_name }}>(&config);
         if (!configPtr) return false;
         return setConfig(*configPtr);
-    }
-
-    bool setConfig(const {{ s.struct_name }} &config) {
-        m_config = config;
-
-{% for m in s.members %}
-        emit {{ m.name }}Changed();
-        notifyFieldChanged(QStringLiteral("{{ m.name }}"));
-{% endfor %}
-
-        bool setConfigSuccess = true;
-{% for m in s.members %}
-{% if m.is_nested %}
-        setConfigSuccess = setConfigSuccess && m_{{ m.name }}Adapter.setConfig({{ m.config_ref }});
-{% endif %}
-{% endfor %}
-        return setConfigSuccess;
     }
 {% endblock %}
 
