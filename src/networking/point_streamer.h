@@ -20,7 +20,7 @@ public:
 
 private:
   std::atomic<std::shared_ptr<const std::unordered_map<std::string, int>>>
-      _sub_counts;
+      _subscriber_counts;
   std::jthread _worker;
 };
 

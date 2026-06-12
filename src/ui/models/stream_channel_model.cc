@@ -1,5 +1,6 @@
 #include "stream_channel_model.h"
 
+#include <QTimer>
 #include <algorithm>
 #include <mutex>
 #include <networking/point_streamer.h>
@@ -11,7 +12,13 @@ namespace pc::ui {
 
 StreamChannelListModel::StreamChannelListModel(pc::Workspace *workspace,
                                                QObject *parent)
-    : QAbstractListModel(parent), _workspace(workspace) {}
+    : QAbstractListModel(parent), _workspace(workspace) {
+  // poll to keep the status of each stream realtime
+  auto *timer = new QTimer(this);
+  connect(timer, &QTimer::timeout, this,
+          &StreamChannelListModel::pollChannelStatuses);
+  timer->start(250);
+}
 
 int StreamChannelListModel::rowCount(const QModelIndex &parent) const {
   if (parent.isValid()) return 0;
@@ -67,6 +74,8 @@ void StreamChannelListModel::refresh() {
 
   beginResetModel();
   _channels = std::move(channels);
+  for (int i = 0; i < _channels.size(); ++i)
+    _channels[i].status = channelStatus(i);
   endResetModel();
 }
 
@@ -74,6 +83,7 @@ bool StreamChannelListModel::setChannelEnabled(int index, bool enabled) {
   if (index < 0 || index >= rowCount()) return false;
   if (_channels[index].enabled == enabled) return false;
   _channels[index].enabled = enabled;
+  _channels[index].status = channelStatus(index);
 
   if (_workspace) {
     const std::string address = _channels[index].address.toStdString();
@@ -112,6 +122,16 @@ StreamChannelStatus StreamChannelListModel::channelStatus(int index) const {
       _workspace->point_streamer->has_listeners(e.address.toStdString()))
     return StreamChannelStatus::Connected;
   return StreamChannelStatus::Live;
+}
+
+void StreamChannelListModel::pollChannelStatuses() {
+  for (int i = 0; i < _channels.size(); ++i) {
+    const auto status = channelStatus(i);
+    if (_channels[i].status == status) continue;
+    _channels[i].status = status;
+    const auto modelIndex = index(i);
+    emit dataChanged(modelIndex, modelIndex, {static_cast<int>(Role::Status)});
+  }
 }
 
 } // namespace pc::ui

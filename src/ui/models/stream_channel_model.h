@@ -21,6 +21,7 @@ public:
   struct ChannelEntry {
     QString address;
     bool enabled;
+    StreamChannelStatus status = StreamChannelStatus::Disabled;
   };
 
   explicit StreamChannelListModel(pc::Workspace *workspace,
@@ -36,6 +37,9 @@ public:
   Q_INVOKABLE bool setChannelEnabled(int index, bool enabled);
   Q_INVOKABLE QString channelAddress(int index) const;
   Q_INVOKABLE StreamChannelStatus channelStatus(int index) const;
+
+private slots:
+  void pollChannelStatuses();
 
 private:
   pc::Workspace *_workspace;
