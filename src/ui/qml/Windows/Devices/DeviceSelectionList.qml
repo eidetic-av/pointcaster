@@ -633,8 +633,8 @@ Item {
                             id: statusCircle
                             x: dragArea.depth * root.indentStep + Math.round((root.indentStep - width) / 2)
                             anchors.verticalCenter: parent.verticalCenter
-                            width: 7 * Scaling.uiScale
-                            height: 7 * Scaling.uiScale
+                            width: 6 * Scaling.uiScale
+                            height: 6 * Scaling.uiScale
                             radius: 3.5 * Scaling.uiScale
                             color: {
                                 const m = dragArea.modelData;
