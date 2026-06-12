@@ -44,15 +44,6 @@ KDDW.DockWidget {
                 Layout.fillWidth: true
             }
 
-            // TODO temp rendering of streaming radio options!!
-            ConfigurationEditor {
-                id: streamingConfigurationEditor
-                Layout.fillWidth: true
-                visible: !!(root.workspace && root.workspace.pointStreamerAdapter)
-                configAdapter: root.workspace ? root.workspace.pointStreamerAdapter : null
-                workspace: root.workspace
-            }
-
             // Session picker (only when there's more than one session)
             ComboBox {
                 id: sessionPicker

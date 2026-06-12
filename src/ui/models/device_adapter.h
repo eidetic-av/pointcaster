@@ -2,7 +2,7 @@
 
 #include "camera_image_provider.h"
 #include "config_adapter.h"
-#include "device_status.h"
+#include "enum_adapters.h"
 #include "operator_adapter.h"
 #include "point_cloud_adapter.h"
 
@@ -20,7 +20,7 @@
 class DeviceAdapter : public ConfigAdapter, public PointCloudAdapter {
   Q_OBJECT
 
-  Q_PROPERTY(pc::devices::ui::WorkspaceDeviceStatus status READ status NOTIFY
+  Q_PROPERTY(pc::ui::WorkspaceDeviceStatus status READ status NOTIFY
                  statusChanged)
 
   Q_PROPERTY(QList<OperatorAdapter *> operatorAdapters READ operatorAdapters
@@ -139,10 +139,10 @@ public:
   pc::devices::DevicePlugin *plugin() const { return _plugin; }
 
   // ----------------- status -----------------
-  pc::devices::ui::WorkspaceDeviceStatus status() const { return _status; }
+  pc::ui::WorkspaceDeviceStatus status() const { return _status; }
 
   void setStatusFromCore(pc::devices::DeviceStatus s) {
-    const auto q = pc::devices::ui::toQt(s);
+    const auto q = pc::ui::toQt(s);
     if (q == _status) return;
     _status = q;
     emit statusChanged();
@@ -242,8 +242,8 @@ signals:
 protected:
   pc::devices::DevicePlugin *_plugin = nullptr;
   CameraImageProvider *_imageProvider = nullptr;
-  pc::devices::ui::WorkspaceDeviceStatus _status =
-      pc::devices::ui::WorkspaceDeviceStatus::Unloaded;
+  pc::ui::WorkspaceDeviceStatus _status =
+      pc::ui::WorkspaceDeviceStatus::Unloaded;
 
   int _deviceIndex = -1;
 

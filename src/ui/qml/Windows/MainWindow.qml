@@ -145,6 +145,12 @@ ApplicationWindow {
             affinities: ["edit"]
         }
 
+        StreamingWindow {
+            id: streamingWindow
+            workspace: workspaceModel
+            affinities: ["edit"]
+        }
+
         AlignmentWindow {
             id: alignmentWindow
             workspace: workspaceModel
@@ -225,13 +231,16 @@ ApplicationWindow {
 
         Component.onCompleted: {
             addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(350, 350));
-            devicesWindow.addDockWidgetAsTab(sessionPropertiesWindow)
 
             // TODO unecessary?
             devicesWindow.addDockWidgetAsTab(recordingWindow);
             recordingWindow.close();
 
             devicesWindow.setAsCurrentTab();
+
+            addDockWidget(sessionPropertiesWindow, KDDW.KDDockWidgets.Location_OnRight, null, Qt.size(350, 350));
+            sessionPropertiesWindow.addDockWidgetAsTab(streamingWindow);
+            sessionPropertiesWindow.setAsCurrentTab();
 
             mainDockingArea.syncSessionWindows();
         }

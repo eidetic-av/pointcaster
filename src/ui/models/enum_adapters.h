@@ -3,10 +3,11 @@
 #include <QObject>
 #include <plugins/devices/device_status.h>
 
-namespace pc::devices::ui {
+namespace pc::ui {
 
 Q_NAMESPACE
 
+// status of a device as shown in the workspace device list
 enum class WorkspaceDeviceStatus {
   Unloaded = static_cast<int>(devices::DeviceStatus::Unloaded),
   Loaded = static_cast<int>(devices::DeviceStatus::Loaded),
@@ -23,6 +24,18 @@ inline pc::devices::DeviceStatus fromQt(WorkspaceDeviceStatus s) {
   return static_cast<devices::DeviceStatus>(static_cast<int>(s));
 }
 
-} // namespace pc::devices::ui
+// status of a single broadcast channel, shown as a coloured dot in
+// StreamChannelList. Disabled: channel is turned off. Live: channel is
+// enabled and broadcasting. Connected: enabled and the publisher knows it
+// has at least one listener (not yet implemented upstream).
+enum class StreamChannelStatus {
+  Disabled = 0,
+  Live = 1,
+  Connected = 2,
+};
+Q_ENUM_NS(StreamChannelStatus)
 
-Q_DECLARE_METATYPE(pc::devices::ui::WorkspaceDeviceStatus)
+} // namespace pc::ui
+
+Q_DECLARE_METATYPE(pc::ui::WorkspaceDeviceStatus)
+Q_DECLARE_METATYPE(pc::ui::StreamChannelStatus)

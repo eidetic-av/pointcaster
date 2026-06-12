@@ -7,7 +7,7 @@ corrade_add_plugin(
   OrbbecDevice.conf
   orbbec_device.cc
   orbbec_context.cc
-  ${CMAKE_SOURCE_DIR}/src/ui/models/device_status.h
+  ${CMAKE_SOURCE_DIR}/src/ui/models/enum_adapters.h
 )
 
 set_target_properties(OrbbecDevice PROPERTIES

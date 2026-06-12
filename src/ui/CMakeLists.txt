@@ -2,9 +2,11 @@ add_library(pointcaster_ui
     initialisation.cc
     layout_saver.cc
     models/workspace_model.cc
-    models/device_status.h
+    models/enum_adapters.h
     models/settings_page_registry.h
     models/settings_page_registry.cc
+    models/stream_channel_model.h
+    models/stream_channel_model.cc
     models/commands/device_config_commands.cc
     models/session_recorder_model.cc
     models/operator_adapter.cc

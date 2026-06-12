@@ -24,6 +24,7 @@ qt_add_qml_module(PointcasterQml
         Controls/DragFloat3.qml
         Controls/EnumSelector.qml
         Controls/IconButton.qml
+        Controls/ListToggleButton.qml
         Controls/InfoToolTip.qml
         Controls/OriginGizmo.qml
         Controls/OrbitViewController.qml
@@ -58,6 +59,8 @@ qt_add_qml_module(PointcasterQml
         Windows/Sessions/SessionControlCollapser.qml
         Windows/Sessions/SessionTimeline.qml
         Windows/Recording/RecordingWindow.qml
+        Windows/Streaming/StreamingWindow.qml
+        Windows/Streaming/StreamChannelList.qml
         Windows/Alignment/AlignmentWindow.qml
         Windows/Alignment/AlignmentView.qml
         Windows/Alignment/RefinementView.qml

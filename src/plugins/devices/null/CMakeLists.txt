@@ -4,7 +4,7 @@ corrade_add_static_plugin(
   ""
   NullDevice.conf
   null_device.cc
-  ${CMAKE_SOURCE_DIR}/src/ui/models/device_status.h
+  ${CMAKE_SOURCE_DIR}/src/ui/models/enum_adapters.h
 )
 
 set_target_properties(NullDevice PROPERTIES AUTOMOC OFF)

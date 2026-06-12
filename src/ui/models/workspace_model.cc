@@ -402,6 +402,8 @@ WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
   _pointStreamerAdapter = new pc::networking::PointStreamerConfigurationAdapter(
       _workspace.config.point_streamer.value(), this);
   initPointStreamerAdapter();
+
+  _streamChannelModel = new StreamChannelListModel(this);
 }
 
 void WorkspaceModel::close() {
@@ -607,6 +609,14 @@ QVariantList WorkspaceModel::addDeviceMenuEntries() const {
   }
 
   return menu_entries;
+}
+
+void WorkspaceModel::setSelectedStreamChannelIndex(int index) {
+  const int clamped =
+      std::clamp(index, -1, _streamChannelModel->rowCount() - 1);
+  if (_selectedStreamChannelIndex == clamped) return;
+  _selectedStreamChannelIndex = clamped;
+  emit selectedStreamChannelIndexChanged();
 }
 
 void WorkspaceModel::setSelectedDeviceIndex(int index) {

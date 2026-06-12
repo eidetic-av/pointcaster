@@ -2,10 +2,11 @@
 
 #include "config_adapter.h"
 #include "device_adapter.h"
-#include "device_status.h"
+#include "enum_adapters.h"
 #include "operator_adapter.h"
 #include "session_adapter.h"
 #include "session_recorder_model.h"
+#include "stream_channel_model.h"
 #include <QMatrix4x4>
 #include <QObject>
 #include <QPointer>
@@ -87,6 +88,10 @@ class WorkspaceModel : public QObject {
 
   // Streaming
   Q_PROPERTY(QObject *pointStreamerAdapter READ pointStreamerAdapter CONSTANT)
+  Q_PROPERTY(QAbstractListModel *streamChannels READ streamChannels CONSTANT)
+  Q_PROPERTY(int selectedStreamChannelIndex READ selectedStreamChannelIndex
+                 WRITE setSelectedStreamChannelIndex NOTIFY
+                     selectedStreamChannelIndexChanged)
 
   // Recording
   Q_PROPERTY(RecorderModel *recorder READ recorder NOTIFY recorderChanged)
@@ -190,6 +195,11 @@ public:
 
   QObject *pointStreamerAdapter() const { return _pointStreamerAdapter.data(); }
 
+  QAbstractListModel *streamChannels() const { return _streamChannelModel; }
+
+  int selectedStreamChannelIndex() const { return _selectedStreamChannelIndex; }
+  void setSelectedStreamChannelIndex(int index);
+
   RecorderModel *recorder() const { return _recorderModel; }
 
   Q_INVOKABLE QVariantMap foldedPropertyPaths() const {
@@ -240,6 +250,8 @@ signals:
 
   void recorderChanged();
 
+  void selectedStreamChannelIndexChanged();
+
 private:
   pc::Workspace &_workspace;
 
@@ -258,6 +270,9 @@ private:
   QPointer<OperatorAdapter> _selectedOperatorAdapter;
 
   QPointer<ConfigAdapter> _pointStreamerAdapter;
+
+  StreamChannelListModel *_streamChannelModel;
+  int _selectedStreamChannelIndex = -1;
 
   RecorderModel *_recorderModel;
 

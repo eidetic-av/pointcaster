@@ -164,6 +164,30 @@ MenuBar {
             }
         }
 
+        Action {
+            id: streamingWindowMenuToggle
+            text: qsTr("&Streaming")
+            checkable: true
+            checked: false
+
+            onTriggered: {
+                if (!streamingWindow)
+                    return;
+
+                if (streamingWindow.isOpen)
+                    streamingWindow.forceClose();
+                else
+                    streamingWindow.open();
+            }
+        }
+
+        Connections {
+            target: streamingWindow
+            function onIsOpenChanged() {
+                streamingWindowMenuToggle.checked = streamingWindow.isOpen;
+            }
+        }
+
 
         Action {
             id: alignmentWindowMenuToggle
@@ -194,6 +218,8 @@ MenuBar {
                 devicesWindowMenuToggle.checked = devicesWindow.isOpen;
             if (recordingWindow)
                 recordingWindowMenuToggle.checked = recordingWindow.isOpen;
+            if (streamingWindow)
+                streamingWindowMenuToggle.checked = streamingWindow.isOpen;
             if (alignmentWindow)
                 alignmentWindowMenuToggle.checked = alignmentWindow.isOpen;
         }

@@ -5,7 +5,7 @@ corrade_add_static_plugin(
   PlyDevice.conf
   ply_device.cc
   ply_sequence_loader.cc
-  ${CMAKE_SOURCE_DIR}/src/ui/models/device_status.h
+  ${CMAKE_SOURCE_DIR}/src/ui/models/enum_adapters.h
 )
 
 set_target_properties(PlyDevice PROPERTIES AUTOMOC OFF)

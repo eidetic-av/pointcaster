@@ -222,34 +222,6 @@ Item {
         }
     }
 
-    // icon toggle for the active and render columns. dims when the node is on
-    // but an ancestor gates it off
-    component GateToggle: CheckBox {
-        id: toggleRoot
-
-        property url iconOn
-        property url iconOff
-        property bool gated: false
-        property string tip: ""
-        property real baseOpacity: 0.6
-        property real hoverOpacity: 0.6
-
-        Layout.fillHeight: true
-        Layout.minimumWidth: Math.round(12 * Scaling.uiScale)
-        Layout.maximumWidth: Math.round(12 * Scaling.uiScale)
-
-        indicator: Image {
-            anchors.centerIn: parent
-            source: toggleRoot.checked ? toggleRoot.iconOn : toggleRoot.iconOff
-            sourceSize: Qt.size(9.5 * Scaling.uiScale, 9.5 * Scaling.uiScale)
-            opacity: toggleRoot.gated ? 0.25 : (toggleRoot.hovered ? toggleRoot.hoverOpacity : toggleRoot.baseOpacity)
-        }
-
-        InfoToolTip {
-            textValue: toggleRoot.tip
-        }
-    }
-
     // reorder drop hints at the top and bottom edges of a row
     component InsertMarkers: Item {
         id: markersRoot
@@ -512,7 +484,7 @@ Item {
                     }
 
                     // trailing control column, shared alignment with device rows
-                    GateToggle {
+                    ListToggleButton {
                         iconOn: FontAwesome.icon("solid/toggle-on")
                         iconOff: FontAwesome.icon("solid/toggle-off")
                         checked: groupArea.row.active === true
@@ -521,7 +493,7 @@ Item {
                         onToggled: root.workspace.setDeviceGroupActive(groupArea.nodeId, checked)
                     }
 
-                    GateToggle {
+                    ListToggleButton {
                         iconOn: FontAwesome.icon("solid/eye")
                         iconOff: FontAwesome.icon("solid/eye-slash")
                         checked: groupArea.row.render === true
@@ -671,11 +643,11 @@ Item {
                                 if (m.pluginNullState)
                                     return ThemeColors.error;
                                 switch (m.status) {
-                                case UiEnums.WorkspaceDeviceStatus.Loaded:
+                                case Enum.WorkspaceDeviceStatus.Loaded:
                                     return ThemeColors.neutralSuccess;
-                                case UiEnums.WorkspaceDeviceStatus.Active:
+                                case Enum.WorkspaceDeviceStatus.Active:
                                     return ThemeColors.success;
-                                case UiEnums.WorkspaceDeviceStatus.Missing:
+                                case Enum.WorkspaceDeviceStatus.Missing:
                                     return ThemeColors.error;
                                 default:
                                     return ThemeColors.inactive;
@@ -707,7 +679,7 @@ Item {
                     }
 
                     // trailing control column, aligned with group rows
-                    GateToggle {
+                    ListToggleButton {
                         iconOn: FontAwesome.icon("solid/toggle-on")
                         iconOff: FontAwesome.icon("solid/toggle-off")
                         baseOpacity: 0.5
@@ -719,7 +691,7 @@ Item {
                             dragArea.modelData.active = checked
                     }
 
-                    GateToggle {
+                    ListToggleButton {
                         iconOn: FontAwesome.icon("solid/eye")
                         iconOff: FontAwesome.icon("solid/eye-slash")
                         baseOpacity: 0.5

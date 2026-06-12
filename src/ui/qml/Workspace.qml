@@ -7,6 +7,7 @@ import Pointcaster 1.0
 QtObject {
     property int labelColumnWidth: 150
     property int deviceListHeight: 160
+    property int streamChannelListHeight: 90
 
     property int selectedSessionIndex: 0
 
