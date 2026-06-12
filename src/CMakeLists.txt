@@ -27,6 +27,7 @@ qt_add_executable(pointcaster
   recorder/session_recorder.cc
   pipeline/concurrent_operator_pipeline.cc
   networking/point_streamer.cc
+  networking/stream_channels.cc
   networking/osc/osc_receiver.cc
   config/config_registry.cc
   config/transform_config.cc

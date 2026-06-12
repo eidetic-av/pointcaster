@@ -26,4 +26,10 @@ effective_world_transform(const pc::WorkspaceConfiguration &config,
 POINTCASTER_API int group_index_by_id(const pc::WorkspaceConfiguration &config,
                                       const std::string &id);
 
+// builds a "<ancestor_label_or_id>/.../<device_label_or_id>" address for a
+// device or group, walking up the parent_id chain through device_groups
+POINTCASTER_API std::string
+device_address(const pc::WorkspaceConfiguration &config,
+               const std::string &device_id);
+
 } // namespace pc::devices

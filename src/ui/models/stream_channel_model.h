@@ -5,6 +5,10 @@
 #include <QString>
 #include <QVector>
 
+namespace pc {
+class Workspace;
+}
+
 namespace pc::ui {
 
 class StreamChannelListModel final : public QAbstractListModel {
@@ -17,23 +21,24 @@ public:
   struct ChannelEntry {
     QString address;
     bool enabled;
-    // TODO set from real XPUB listener state once that lands
-    bool hasListeners = false;
   };
 
-  explicit StreamChannelListModel(QObject *parent = nullptr);
+  explicit StreamChannelListModel(pc::Workspace *workspace,
+                                  QObject *parent = nullptr);
 
   int rowCount(const QModelIndex &parent = QModelIndex{}) const override;
   QVariant data(const QModelIndex &index, int role) const override;
   QHash<int, QByteArray> roleNames() const override;
 
-  // TODO wire this into the real per-channel
-  // enable state in workspace config
+  // rebuilds the channel list from the workspace's sessions and devices
+  void refresh();
+
   Q_INVOKABLE bool setChannelEnabled(int index, bool enabled);
   Q_INVOKABLE QString channelAddress(int index) const;
   Q_INVOKABLE StreamChannelStatus channelStatus(int index) const;
 
 private:
+  pc::Workspace *_workspace;
   QVector<ChannelEntry> _channels;
 };
 

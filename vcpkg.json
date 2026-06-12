@@ -50,12 +50,6 @@
 			]
 		},
 		"yaml-cpp",
-		"zpp-bits",
-		{
-			"name": "zeromq",
-			"features": [
-				"draft"
-			]
-		}
+		"zpp-bits"
 	]
 }

@@ -107,4 +107,57 @@ int group_index_by_id(const pc::WorkspaceConfiguration &config,
   return -1;
 }
 
+namespace {
+std::string label_or_id(const std::string &label, const std::string &id) {
+  return !label.empty() ? label : id;
+}
+} // namespace
+
+std::string device_address(const pc::WorkspaceConfiguration &config,
+                           const std::string &device_id) {
+  std::string own_label;
+  std::string parent;
+  bool found = false;
+
+  if (const int gi = group_index_by_id(config, device_id); gi >= 0) {
+    const auto &group = config.device_groups[size_t(gi)];
+    own_label = label_or_id(group.label.value(), group.id);
+    parent = group.parent_id.value();
+    found = true;
+  } else {
+    for (const auto &device_variant : config.devices) {
+      std::visit(
+          [&](const auto &device_config) {
+            if (device_config.id == device_id) {
+              own_label =
+                  label_or_id(device_config.label.value(), device_config.id);
+              parent = device_config.parent_id.value();
+              found = true;
+            }
+          },
+          device_variant);
+      if (found) break;
+    }
+  }
+
+  if (!found) return device_id;
+
+  std::vector<std::string> ancestors;
+  for (std::string p = parent; !p.empty();) {
+    const int gi = group_index_by_id(config, p);
+    if (gi < 0) break;
+    const auto &group = config.device_groups[size_t(gi)];
+    ancestors.push_back(label_or_id(group.label.value(), group.id));
+    p = group.parent_id.value();
+  }
+
+  std::string address;
+  for (auto it = ancestors.rbegin(); it != ancestors.rend(); ++it) {
+    address += *it;
+    address += '/';
+  }
+  address += own_label;
+  return address;
+}
+
 } // namespace pc::devices

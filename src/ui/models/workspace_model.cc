@@ -386,6 +386,7 @@ void WorkspaceModel::applyWorkspaceConfigAndRebuild(
     break;
   }
   }
+  _streamChannelModel->refresh();
 }
 // ----------------- WorkspaceModel -----------------
 WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
@@ -403,7 +404,8 @@ WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
       _workspace.config.point_streamer.value(), this);
   initPointStreamerAdapter();
 
-  _streamChannelModel = new StreamChannelListModel(this);
+  _streamChannelModel = new StreamChannelListModel(workspace, this);
+  _streamChannelModel->refresh();
 }
 
 void WorkspaceModel::close() {
@@ -2420,6 +2422,7 @@ void WorkspaceModel::moveDeviceNode(const QString &node_id,
     set_order(ordered[size_t(i)], i);
 
   syncDeviceAdapters();
+  _streamChannelModel->refresh();
 }
 
 } // namespace pc::ui
