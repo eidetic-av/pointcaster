@@ -153,6 +153,7 @@ Column {
                     delegate: RowLayout {
                         visible: nodeRoot.fieldsVisible
                         height: visible ? nodeRoot.fieldHeight : 0
+                        width: contentColumn.width
 
                         Text {
                             id: label
@@ -267,6 +268,7 @@ Column {
                 font: Scaling.uiFont
 
                 Layout.fillWidth: true
+                clip: true
 
                 background: Rectangle {
                     color: "transparent"
@@ -278,7 +280,8 @@ Column {
                 text: root.configAdapter ? String(root.configAdapter.value(path)) : ""
                 readOnly: root.configAdapter ? (root.configAdapter.isDisabled(path) || root.configAdapter.isFileOpener(path)) : false
 
-                color: readOnly ? ThemeColors.readOnlyText : ThemeColors.text
+                // hide the live TextInput text while not editing, the Text overlay below renders instead
+                color: focus ? (readOnly ? ThemeColors.readOnlyText : ThemeColors.text) : "transparent"
 
                 onEditingFinished: {
                     if (!root.configAdapter)
@@ -292,8 +295,20 @@ Column {
                         if (String(changedPath) !== path)
                             return;
                         valueField.text = root.configAdapter ? String(root.configAdapter.value(path)) : "";
-                        // root.configAdapter["restart"]();
                     }
+                }
+
+                // elided display when not editing the string
+                Text {
+                    anchors.fill: parent
+                    anchors.leftMargin: valueField.leftPadding
+                    anchors.rightMargin: valueField.rightPadding
+                    verticalAlignment: Text.AlignVCenter
+                    visible: !valueField.focus
+                    text: valueField.text
+                    font: valueField.font
+                    color: valueField.readOnly ? ThemeColors.readOnlyText : ThemeColors.text
+                    elide: Text.ElideLeft
                 }
 
                 InfoToolTip {
