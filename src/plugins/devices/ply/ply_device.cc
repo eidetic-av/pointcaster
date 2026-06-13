@@ -183,6 +183,13 @@ void PlyDevice::tick(float delta_time) {
                        : std::clamp(seq.end_frame.value(), start, total - 1);
   const auto range = end - start + 1;
 
+  // once a non-looping sequence has reached its end, stay paused there even
+  // if "playing" keeps getting set to true externally (e.g. held high via OSC)
+  if (!seq.looping.value() && _current_frame >= end) {
+    seq.playing.set(false);
+    return;
+  }
+
   if (_current_frame < start || _current_frame > end) _current_frame = start;
 
   auto next = _current_frame + advance;
@@ -245,15 +252,21 @@ void PlyDevice::on_config_field_changed(std::string_view path) {
 
     // scrub...
     if (path.find("current_frame") != std::string_view::npos) {
-      _current_frame = config.sequence.value().current_frame.value();
-      const auto &scrub_seq = config.sequence.value();
+      auto &sequence_config = config.sequence.value();
       const auto total = static_cast<int>(_sequence_loader->frame_count());
       const auto start =
-          std::clamp(scrub_seq.start_frame.value(), 0, total - 1);
+          std::clamp(sequence_config.start_frame.value(), 0, total - 1);
       const auto end =
-          (scrub_seq.end_frame.value() < 0)
+          (sequence_config.end_frame.value() < 0)
               ? total - 1
-              : std::clamp(scrub_seq.end_frame.value(), start, total - 1);
+              : std::clamp(sequence_config.end_frame.value(), start, total - 1);
+
+      _current_frame =
+          std::clamp(sequence_config.current_frame.value(), start, end);
+      if (_current_frame != sequence_config.current_frame.value()) {
+        sequence_config.current_frame.set(_current_frame);
+      }
+
       _sequence_loader->set_loop(static_cast<size_t>(start),
                                  static_cast<size_t>(end));
       auto frame =
@@ -332,7 +345,8 @@ void PlyDevice::apply_transform() {
   pc::logger()->trace("PlyDevice::apply_transform: enter tid={}",
                       std::hash<std::thread::id>{}(std::this_thread::get_id()));
   if (!_input_cloud) {
-    pc::logger()->trace("PlyDevice::apply_transform: no input cloud, returning");
+    pc::logger()->trace(
+        "PlyDevice::apply_transform: no input cloud, returning");
     return;
   }
 
@@ -345,9 +359,9 @@ void PlyDevice::apply_transform() {
     return;
   }
 
-  pc::logger()->trace(
-      "PlyDevice::apply_transform: id='{}' points={}, resolving world transform",
-      config.id, point_count);
+  pc::logger()->trace("PlyDevice::apply_transform: id='{}' points={}, "
+                      "resolving world transform",
+                      config.id, point_count);
 
   pc::float4x4 world;
   {
@@ -355,7 +369,8 @@ void PlyDevice::apply_transform() {
     world =
         pc::devices::effective_world_transform(_workspace->config, config.id);
   }
-  pc::logger()->trace("PlyDevice::apply_transform: world resolved, transforming");
+  pc::logger()->trace(
+      "PlyDevice::apply_transform: world resolved, transforming");
 
   auto transformed_cloud = std::make_shared<PointCloud>();
   transformed_cloud->resize(point_count);
