@@ -17,6 +17,7 @@
 #include <core/uuid/uuid.h>
 #include <metrics/prometheus_server.h>
 #include <plugins/devices/device_plugin.h>
+#include <plugins/devices/device_tree.h>
 #include <plugins/devices/device_variants.h>
 #include <plugins/plugin_loader.h>
 
@@ -106,7 +107,9 @@ void Workspace::rebuild_config_registry() {
     if (!device_plugin) continue;
     std::visit(
         [this](auto &device_config) {
-          pc::register_config(config_registry, "device/" + device_config.id,
+          const std::string address =
+              pc::devices::device_address(config, device_config.id);
+          pc::register_config(config_registry, "device/" + address,
                               device_config);
         },
         device_plugin->config_variant());

@@ -1995,7 +1995,9 @@ void WorkspaceModel::syncDeviceAdapters() {
     if (!adapter) continue;
     const std::string id = adapterStableId(adapter).toStdString();
     if (id.empty()) continue;
-    const std::string prefix = "device/" + id + "/";
+    const std::string address =
+        pc::devices::device_address(_workspace.config, id);
+    const std::string prefix = "device/" + address + "/";
     pc::logger()->trace(
         "syncDeviceAdapters: registering on_change for prefix='{}'", prefix);
     auto adapterPtr = QPointer<ConfigAdapter>(adapter);
@@ -2421,6 +2423,7 @@ void WorkspaceModel::moveDeviceNode(const QString &node_id,
   for (int i = 0; i < int(ordered.size()); ++i)
     set_order(ordered[size_t(i)], i);
 
+  _workspace.rebuild_config_registry();
   syncDeviceAdapters();
   _streamChannelModel->refresh();
 }
