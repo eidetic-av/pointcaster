@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QtQmlIntegration/qqmlintegration.h>
 
 namespace pc::ui::qml {
@@ -18,6 +19,9 @@ public:
   // check for an ip & port string in a format like '0.0.0.0:8080', '*:4000',
   // '127.0.0.1:9043' etc.
   Q_INVOKABLE bool isValidHostAddress(const QString &text) const;
+
+  // IPv4 addresses of all active, non-loopback network adapters
+  Q_INVOKABLE QStringList localIpAddresses() const;
 };
 
 } // namespace pc::ui::qml

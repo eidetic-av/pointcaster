@@ -42,6 +42,7 @@ qt_add_qml_module(PointcasterQml
         Windows/Group.qml
         Windows/ResizeHandlerHelper.qml
         Windows/TopMenuBar.qml
+        Windows/StatusBar.qml
         Windows/MainWindow.qml
         Windows/Settings/SettingsWindow.qml
         Windows/Settings/GeneralSettingsPage.qml

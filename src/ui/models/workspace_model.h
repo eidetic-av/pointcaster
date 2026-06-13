@@ -75,7 +75,8 @@ class WorkspaceModel : public QObject {
                  selectedOperatorAdapter WRITE setSelectedOperatorAdapter NOTIFY
                      selectedOperatorAdapterChanged)
 
-  Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl)
+  Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl NOTIFY
+                 saveFileUrlChanged)
 
   // Console logger window
   Q_PROPERTY(QVariantList consoleOverlayEntries READ consoleOverlayEntries
@@ -190,7 +191,11 @@ public:
                                        DeviceAdapter *deviceAdapter);
 
   QUrl saveFileUrl() const { return _saveFileUrl; }
-  void setSaveFileUrl(const QUrl &url) { _saveFileUrl = url; }
+  void setSaveFileUrl(const QUrl &url) {
+    if (_saveFileUrl == url) return;
+    _saveFileUrl = url;
+    emit saveFileUrlChanged();
+  }
 
   QVariantList consoleOverlayEntries() const;
   QVariantList consoleHistoryEntries() const;
@@ -261,6 +266,8 @@ signals:
   void consoleHistoryEntriesChanged();
 
   void foldedPropertyPathsChanged();
+
+  void saveFileUrlChanged();
 
   void uiStateChanged();
 

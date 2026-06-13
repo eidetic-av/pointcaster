@@ -98,6 +98,8 @@ ApplicationWindow {
 
     menuBar: TopMenuBar {}
 
+    footer: StatusBar {}
+
     KDDW.DockingArea {
         id: mainDockingArea
         anchors.fill: parent

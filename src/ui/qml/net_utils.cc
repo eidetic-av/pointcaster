@@ -2,6 +2,7 @@
 
 #include <QAbstractSocket>
 #include <QHostAddress>
+#include <QNetworkInterface>
 #include <QString>
 #include <qobject.h>
 
@@ -34,6 +35,21 @@ bool NetUtils::isValidHostAddress(const QString &text) const {
   if (addr.protocol() != QAbstractSocket::IPv4Protocol) return false;
 
   return true;
+}
+
+QStringList NetUtils::localIpAddresses() const {
+  QStringList addresses;
+  for (const auto &iface : QNetworkInterface::allInterfaces()) {
+    if (!(iface.flags() & QNetworkInterface::IsUp)) continue;
+    if (iface.flags() & QNetworkInterface::IsLoopBack) continue;
+    for (const auto &entry : iface.addressEntries()) {
+      const auto address = entry.ip();
+      if (address.protocol() == QAbstractSocket::IPv4Protocol) {
+        addresses << address.toString();
+      }
+    }
+  }
+  return addresses;
 }
 
 } // namespace pc::ui::qml
