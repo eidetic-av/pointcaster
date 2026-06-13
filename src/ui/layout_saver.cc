@@ -34,6 +34,12 @@ bool LayoutSaver::save_file(const QString &json_filename) {
     }
     save_data["foldedPropertyPaths"] = foldedPropertyPaths;
 
+    auto workspaceUiState = json::object();
+    for (const auto &[key, value] : _workspace_model->uiState().toStdMap()) {
+      workspaceUiState[key.toStdString()] = value.toDouble();
+    }
+    save_data["workspaceUiState"] = workspaceUiState;
+
     std::ofstream out(json_filename.toStdString());
     out << save_data.dump(4) << '\n';
   }
@@ -50,6 +56,14 @@ bool LayoutSaver::load_file(const QString &json_filename) {
 
   for (auto &[path, value] : save_data["foldedPropertyPaths"].items()) {
     _workspace_model->setFoldedProperty(path.c_str(), value);
+  }
+
+  if (save_data.contains("workspaceUiState")) {
+    QVariantMap uiState;
+    for (auto &[key, value] : save_data["workspaceUiState"].items()) {
+      uiState[QString::fromStdString(key)] = value.get<double>();
+    }
+    _workspace_model->setUiState(uiState);
   }
 
   return restoreFromFile(json_filename);

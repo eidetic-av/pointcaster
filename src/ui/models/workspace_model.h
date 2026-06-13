@@ -86,6 +86,8 @@ class WorkspaceModel : public QObject {
   Q_PROPERTY(QVariantMap foldedPropertyPaths READ foldedPropertyPaths NOTIFY
                  foldedPropertyPathsChanged)
 
+  Q_PROPERTY(QVariantMap uiState READ uiState NOTIFY uiStateChanged)
+
   // Streaming
   Q_PROPERTY(QObject *pointStreamerAdapter READ pointStreamerAdapter CONSTANT)
   Q_PROPERTY(QAbstractListModel *streamChannels READ streamChannels CONSTANT)
@@ -211,6 +213,18 @@ public:
     foldedPropertyPathsChanged();
   }
 
+  Q_INVOKABLE QVariantMap uiState() const { return _uiState; }
+
+  Q_INVOKABLE void setUiState(const QVariantMap &state) {
+    _uiState = state;
+    emit uiStateChanged();
+  }
+
+  Q_INVOKABLE void setUiStateValue(const QString &key, const QVariant &value) {
+    _uiState[key] = value;
+    emit uiStateChanged();
+  }
+
   void setImageProvider(CameraImageProvider *provider);
 
 public slots:
@@ -247,6 +261,8 @@ signals:
   void consoleHistoryEntriesChanged();
 
   void foldedPropertyPathsChanged();
+
+  void uiStateChanged();
 
   void recorderChanged();
 
@@ -286,6 +302,7 @@ private:
   QHash<QString, QList<OperatorAdapter *>> _sessionOperatorAdapters;
 
   QVariantMap _foldedPropertyPaths;
+  QVariantMap _uiState;
 
   int _selectedDeviceIndex = 0;
   QString _selectedNodeId;

@@ -15,6 +15,19 @@ QtObject {
 
     property list<SessionView> sessionViews: []
 
+    readonly property var persistentPropertyNames: [
+        "labelColumnWidth", "deviceListHeight", "streamChannelListHeight",
+        "selectedSessionIndex"
+    ]
+
+    function applyPersistentState(state) {
+        for (var key in state) {
+            if (persistentPropertyNames.indexOf(key) !== -1) {
+                this[key] = state[key];
+            }
+        }
+    }
+
     function addSessionView(sessionView) {
         for (var i = 0; i < sessionViews.length; i++) {
             if (sessionViews[i] === sessionView)

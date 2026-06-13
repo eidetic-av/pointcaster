@@ -67,6 +67,25 @@ ApplicationWindow {
         function onOpenSaveAsDialog() {
             saveAsWorkspaceDialog.open();
         }
+        function onUiStateChanged() {
+            Workspace.applyPersistentState(workspaceModel.uiState);
+        }
+    }
+
+    Connections {
+        target: Workspace
+        function onLabelColumnWidthChanged() {
+            workspaceModel.setUiStateValue("labelColumnWidth", Workspace.labelColumnWidth);
+        }
+        function onDeviceListHeightChanged() {
+            workspaceModel.setUiStateValue("deviceListHeight", Workspace.deviceListHeight);
+        }
+        function onStreamChannelListHeightChanged() {
+            workspaceModel.setUiStateValue("streamChannelListHeight", Workspace.streamChannelListHeight);
+        }
+        function onSelectedSessionIndexChanged() {
+            workspaceModel.setUiStateValue("selectedSessionIndex", Workspace.selectedSessionIndex);
+        }
     }
 
     function toggleWindow(target) {
