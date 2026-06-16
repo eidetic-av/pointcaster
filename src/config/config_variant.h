@@ -2,6 +2,7 @@
 
 #include "color_transform_config.h"
 #include "file_config.h"
+#include "group_sequence_config.h"
 #include "network_config.h"
 #include "sequence_config.h"
 #include "transform_config.h"
@@ -32,6 +33,7 @@ using ConfigurationVariant =
                  NetworkConfiguration, CameraConfiguration,
                  LookAtCameraConfiguration, SessionConfiguration,
                  SessionTimelineConfiguration, SequenceConfiguration,
+                 GroupSequenceConfiguration,
                  pipeline::ConcurrentOperatorPipelineConfiguration,
                  networking::PointStreamerConfiguration,
                  // TODO REMOVE AND ADD

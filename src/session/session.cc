@@ -165,7 +165,11 @@ void Session::scrub_devices(int session_frame) {
     bool skip = false;
     std::visit(
         [&](auto &device_config) {
-          if constexpr (requires { device_config.sequence; }) {
+          if constexpr (requires {
+                          device_config.sequence.value().end_frame;
+                          device_config.sequence.value().start_frame;
+                          device_config.sequence.value().looping;
+                        }) {
             auto &seq = device_config.sequence.value();
             // session owns the clock; stop the device self-advancing
             seq.playing.set(false);

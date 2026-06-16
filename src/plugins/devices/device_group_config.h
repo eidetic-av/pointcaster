@@ -1,6 +1,6 @@
 #pragma once
 
-#include "config/sequence_config.h"
+#include "config/group_sequence_config.h"
 #include "config/transform_config.h"
 #include <rfl/DefaultVal.hpp>
 #include <string>
@@ -15,6 +15,6 @@ struct DeviceGroupConfiguration {
   rfl::DefaultVal<std::string> parent_id;  // @hidden
   rfl::DefaultVal<int> order = 0;          // @hidden
   rfl::DefaultVal<TransformConfiguration> transform;
-  rfl::DefaultVal<SequenceConfiguration> sequence;
+  rfl::DefaultVal<GroupSequenceConfiguration> sequence;
 };
 } // namespace pc::devices

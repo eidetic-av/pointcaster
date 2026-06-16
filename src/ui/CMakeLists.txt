@@ -55,6 +55,7 @@ set(CONFIG_ADAPTER_INPUTS
     config/transform_config.h
     config/color_transform_config.h
     config/sequence_config.h
+    config/group_sequence_config.h
     session/session_config.h
     camera/camera_config.h
     camera/look_at_camera_config.h
