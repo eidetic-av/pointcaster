@@ -41,8 +41,10 @@ private:
                                unsigned long point_count);
 };
 
-PointCloud operator+(PointCloud const &lhs, PointCloud const &rhs);
-PointCloud operator+=(PointCloud &lhs, const PointCloud &rhs);
+POINTCASTER_CORE_EXPORT PointCloud operator+(PointCloud const &lhs,
+                                              PointCloud const &rhs);
+POINTCASTER_CORE_EXPORT PointCloud operator+=(PointCloud &lhs,
+                                               const PointCloud &rhs);
 
 using PointCloudRef = std::reference_wrapper<PointCloud>;
 

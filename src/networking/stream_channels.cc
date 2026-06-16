@@ -1,8 +1,8 @@
 #include "stream_channels.h"
 
 #include <plugins/devices/device_tree.h>
+#include <pointcaster/point_cloud.h>
 #include <session/session.h>
-#include <variant>
 #include <workspace/workspace.h>
 
 namespace pc::networking {
@@ -30,6 +30,34 @@ collect_stream_channel_sources(Workspace &workspace) {
     std::visit([&](const auto &cfg) { id = cfg.id; }, device->config());
     sources.push_back(
         {devices::device_address(workspace.config, id), device->point_cloud()});
+  }
+
+  for (const auto &group : workspace.config.device_groups) {
+    const auto child_ids =
+        devices::device_ids_in_group(workspace.config, group.id);
+    if (child_ids.empty()) continue;
+
+    std::shared_ptr<PointCloud> merged;
+    for (const auto &child_id : child_ids) {
+      for (auto &device : workspace.devices) {
+        if (!device) continue;
+        std::string device_id;
+        std::visit([&](const auto &cfg) { device_id = cfg.id; },
+                   device->config());
+        if (device_id != child_id) continue;
+        const auto cloud = device->point_cloud();
+        if (cloud && !cloud->empty()) {
+          if (!merged)
+            merged = std::make_shared<PointCloud>(*cloud);
+          else
+            *merged += *cloud;
+        }
+        break;
+      }
+    }
+
+    sources.push_back({devices::device_address(workspace.config, group.id),
+                       std::move(merged)});
   }
 
   return sources;

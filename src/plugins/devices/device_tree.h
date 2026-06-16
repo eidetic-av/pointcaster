@@ -32,4 +32,10 @@ POINTCASTER_API std::string
 device_address(const pc::WorkspaceConfiguration &config,
                const std::string &device_id);
 
+// returns the IDs of all non-group devices whose parent_id chain passes
+// through the given group_id (includes devices in nested child groups)
+POINTCASTER_API std::vector<std::string>
+device_ids_in_group(const pc::WorkspaceConfiguration &config,
+                    const std::string &group_id);
+
 } // namespace pc::devices

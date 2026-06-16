@@ -160,4 +160,35 @@ std::string device_address(const pc::WorkspaceConfiguration &config,
   return address;
 }
 
+std::vector<std::string>
+device_ids_in_group(const pc::WorkspaceConfiguration &config,
+                    const std::string &group_id) {
+  std::vector<std::string> result;
+  for (const auto &device_variant : config.devices) {
+    std::string device_id;
+    std::string parent_id;
+    std::visit(
+        [&](const auto &device_config) {
+          using T = std::decay_t<decltype(device_config)>;
+          if constexpr (!std::same_as<T, DeviceGroupConfiguration>) {
+            device_id = device_config.id;
+            parent_id = device_config.parent_id.value();
+          }
+        },
+        device_variant);
+    if (device_id.empty()) continue;
+    std::string current_id = parent_id;
+    while (!current_id.empty()) {
+      if (current_id == group_id) {
+        result.push_back(device_id);
+        break;
+      }
+      const int group_index = group_index_by_id(config, current_id);
+      if (group_index < 0) break;
+      current_id = config.device_groups[size_t(group_index)].parent_id.value();
+    }
+  }
+  return result;
+}
+
 } // namespace pc::devices
