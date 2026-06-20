@@ -127,44 +127,44 @@ void Workspace::rebuild_config_registry() {
   // register configs recursively for every device group and set up some
   // callbacks for specific nested config types (nested sequences)
 
-  const auto propagate_to_group_children =
-      [this](const std::string &group_id, const std::string &field_path,
-             const pc::ConfigValue &value) {
-        for (auto &device_variant : config.devices) {
-          std::visit(
-              [&](auto &device_config) {
-                if (device_config.parent_id.value() == group_id) {
-                  const std::string device_address =
-                      pc::devices::device_address(config, device_config.id);
-                  config_registry.set(
-                      "device/" + device_address + "/" + field_path, value);
-                  // For current_frame, call on_config_field_changed directly so
-                  // the frame loads before the tick can overwrite the config value
-                  if (field_path == "sequence/current_frame") {
-                    for (auto &device_plugin : devices) {
-                      if (!device_plugin) continue;
-                      const auto [did, _] =
-                          pc::devices::device_info_from_variant(
-                              device_plugin->config_variant());
-                      if (std::string(did) == device_config.id) {
-                        device_plugin->on_config_field_changed(field_path);
-                        break;
-                      }
-                    }
+  const auto propagate_to_group_children = [this](
+                                               const std::string &group_id,
+                                               const std::string &field_path,
+                                               const pc::ConfigValue &value) {
+    for (auto &device_variant : config.devices) {
+      std::visit(
+          [&](auto &device_config) {
+            if (device_config.parent_id.value() == group_id) {
+              const std::string device_address =
+                  pc::devices::device_address(config, device_config.id);
+              config_registry.set("device/" + device_address + "/" + field_path,
+                                  value);
+              // For current_frame, call on_config_field_changed directly so
+              // the frame loads before the tick can overwrite the config value
+              if (field_path == "sequence/current_frame") {
+                for (auto &device_plugin : devices) {
+                  if (!device_plugin) continue;
+                  const auto [did, _] = pc::devices::device_info_from_variant(
+                      device_plugin->config_variant());
+                  if (std::string(did) == device_config.id) {
+                    device_plugin->on_config_field_changed(field_path);
+                    break;
                   }
                 }
-              },
-              device_variant);
-        }
-        for (auto &child_group : config.device_groups) {
-          if (child_group.parent_id.value() == group_id) {
-            const std::string child_group_address =
-                pc::devices::device_address(config, child_group.id);
-            config_registry.set(
-                "device/" + child_group_address + "/" + field_path, value);
-          }
-        }
-      };
+              }
+            }
+          },
+          device_variant);
+    }
+    for (auto &child_group : config.device_groups) {
+      if (child_group.parent_id.value() == group_id) {
+        const std::string child_group_address =
+            pc::devices::device_address(config, child_group.id);
+        config_registry.set("device/" + child_group_address + "/" + field_path,
+                            value);
+      }
+    }
+  };
 
   for (auto &group_config : config.device_groups) {
     const std::string group_address =
@@ -185,6 +185,20 @@ void Workspace::rebuild_config_registry() {
                group_config.sequence.value().playing.set(
                    pc::from_config_value<bool>(value));
                propagate_to_group_children(group_config.id, "sequence/playing",
+                                           value);
+             }});
+
+    config_registry.register_field(
+        base + "looping",
+        {.get = [&group_config]() -> pc::ConfigValue {
+           return group_config.sequence.value().looping.value();
+         },
+         .set =
+             [&group_config,
+              propagate_to_group_children](pc::ConfigValue value) {
+               group_config.sequence.value().looping.set(
+                   pc::from_config_value<bool>(value));
+               propagate_to_group_children(group_config.id, "sequence/looping",
                                            value);
              }});
 
