@@ -227,6 +227,67 @@ KDDW.DockWidget {
                 }
             }
 
+            Item {
+                id: groupTimeline
+                visible: root.selectedNodeKind === "group"
+                Layout.fillWidth: true
+                implicitHeight: visible ? groupTimelineLayout.implicitHeight : 0
+
+                readonly property var seq: root.workspace && root.workspace.selectedDeviceGroupAdapter
+                                           ? root.workspace.selectedDeviceGroupAdapter.sequenceAdapter
+                                           : null
+                readonly property bool playing: seq ? seq.playing : false
+                readonly property int currentFrame: seq ? seq.current_frame : 0
+
+                ColumnLayout {
+                    id: groupTimelineLayout
+                    anchors.fill: parent
+                    spacing: Math.round(4 * Scaling.uiScale)
+
+                    RowLayout {
+                        spacing: Math.round(6 * Scaling.uiScale)
+                        Layout.fillWidth: true
+
+                        IconButton {
+                            tooltip: "Stop"
+                            iconSource: FontAwesome.icon("solid/stop")
+                            iconSize: Math.round(11 * Scaling.uiScale)
+                            onClicked: {
+                                groupTimeline.seq.set("playing", false);
+                                groupTimeline.seq.set("current_frame", 0);
+                            }
+                        }
+
+                        IconButton {
+                            tooltip: "Play"
+                            iconSource: FontAwesome.icon("solid/play")
+                            iconSize: Math.round(11 * Scaling.uiScale)
+                            enabled: !groupTimeline.playing
+                            opacity: enabled ? 1.0 : 0.4
+                            onClicked: groupTimeline.seq.set("playing", true)
+                        }
+
+                        IconButton {
+                            tooltip: "Pause"
+                            iconSource: FontAwesome.icon("solid/pause")
+                            iconSize: Math.round(11 * Scaling.uiScale)
+                            enabled: groupTimeline.playing
+                            opacity: enabled ? 1.0 : 0.4
+                            onClicked: groupTimeline.seq.set("playing", false)
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        DragInt {
+                            boundValue: groupTimeline.currentFrame
+                            minValue: 0
+                            implicitWidth: Math.round(64 * Scaling.uiScale)
+                            onCommitValue: frame => groupTimeline.seq.set("current_frame", frame)
+                        }
+                    }
+                }
+            }
+
             ScrollView {
                 id: groupConfigScrollView
                 visible: root.selectedNodeKind === "group"
