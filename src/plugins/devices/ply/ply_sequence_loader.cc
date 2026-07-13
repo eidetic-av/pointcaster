@@ -166,7 +166,14 @@ void PlySequenceLoader::prefetch_from(size_t current) {
                                  _file_paths.size() - 1);
   const auto loop_range = loop_end - loop_start + 1;
 
-  for (size_t off = 1; off <= _config.prefetch_ahead; ++off) {
+  // Clamping prefetch_ahead to buffer_capacity - 1 ensures each prefetched
+  // frame maps to a unique slot. Without this, frames at offsets N,
+  // N+buffer_capacity, N+2*buffer_capacity,... all alias the same slot and
+  // each dispatches a real mmap+copy task that loses the write race.
+  const auto effective_ahead =
+      std::min(_config.prefetch_ahead, _config.buffer_capacity - 1);
+
+  for (size_t off = 1; off <= effective_ahead; ++off) {
     const auto frame_index = loop_start + (current - loop_start + off) % loop_range;
     const auto slot = frame_index % _config.buffer_capacity;
 
