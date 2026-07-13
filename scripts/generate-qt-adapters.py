@@ -533,7 +533,7 @@ def process_cpp_header(
                 "adapter_name": adapter_name,
                 "label": format_struct_name(struct_name),
                 "members": members,
-                "any_enums": any(m.is_enum for m in members),
+                "any_enums": any(m.is_enum for m in members) or any(m.is_nested for m in members),
                 "any_float3": any((is_float3_type(m.type) or is_float3_rfl_type(m.type)) for m in members),
                 "any_quaternion": any(is_quaternion_type(m.type) for m in members),
                 "nested_adapter_includes": nested_adapter_includes,
