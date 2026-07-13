@@ -25,11 +25,13 @@ void CudaBackend::project_transform_frame_data(
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
     const ColorTransformConfiguration &color_transform,
-    const pc::float4x4 &) const {
+    const pc::float4x4 &,
+    std::span<std::byte> render_output) const {
   try {
     cuda::project_transform_frame_data(this, input_depth_frame, input_rgb_frame,
                                        output_cloud, color_intrinsics,
-                                       transform, color_transform);
+                                       transform, color_transform,
+                                       render_output);
   } catch (const std::exception &e) {
     pc::logger()->error("CUDA backend error: {}", e.what());
   } catch (...) {
@@ -37,17 +39,19 @@ void CudaBackend::project_transform_frame_data(
   }
 }
 
-void CudaBackend::transform_point_cloud(const PointCloud &,
-                                        std::shared_ptr<PointCloud>,
-                                        const TransformConfiguration &,
-                                        const ColorTransformConfiguration &,
-                                        const pc::float4x4 &) const {
-  // void CudaBackend::transform_point_cloud(
-  //     const PointCloud &input_cloud, std::shared_ptr<PointCloud>
-  //     output_cloud, const TransformConfiguration &transform, const
-  //     ColorTransformConfiguration &color_transform) const {
-  //...
-  pc::logger()->error("Unimplemented CUDA backend function");
+void CudaBackend::transform_point_cloud(
+    const PointCloud &input_cloud, std::shared_ptr<PointCloud> output_cloud,
+    const TransformConfiguration &transform,
+    const ColorTransformConfiguration &color_transform,
+    const pc::float4x4 &world_transform) const {
+  try {
+    cuda::transform_point_cloud(this, input_cloud, output_cloud, transform,
+                                color_transform, world_transform);
+  } catch (const std::exception &e) {
+    pc::logger()->error("CUDA backend error: {}", e.what());
+  } catch (...) {
+    pc::logger()->error("CUDA backend error: Unknown exception");
+  }
 }
 
 void CudaBackend::pack_render_buffer(const PointCloud &,

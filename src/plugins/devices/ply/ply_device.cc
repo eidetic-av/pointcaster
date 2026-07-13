@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <happly.h>
 #include <oneapi/tbb/parallel_for.h>
+#include <plugins/backend/backend_types.h>
 #include <plugins/backend/cpu/cpu_backend.h>
 #include <plugins/devices/device_tree.h>
 #include <pointcaster/point_cloud.h>
@@ -123,6 +124,8 @@ bool PlyDevice::load(std::string_view url) {
 
   _input_cloud = std::move(input_cloud);
   _loaded_file_path = std::string(url);
+  if (_cuda_backend)
+    _cuda_backend->init(_input_cloud->size());
   apply_transform();
   pc::logger()->trace("PlyDevice::load: done");
   return true;
@@ -153,6 +156,8 @@ bool PlyDevice::load_directory(const std::filesystem::path &dir) {
   // _status = DeviceStatus::Loaded;
 
   _input_cloud = _sequence_loader->get_frame(0);
+  if (_cuda_backend && _input_cloud)
+    _cuda_backend->init(_input_cloud->size());
   apply_transform();
   return true;
 }
@@ -353,7 +358,10 @@ void PlyDevice::apply_transform() {
   const auto config = std::get<PlyDeviceConfiguration>(_config);
   const auto point_count = _input_cloud->size();
 
-  auto *backend = _cpu_backend.get();
+  const bool use_cuda =
+      (config.transform.value().backend.value() == BackendType::CUDA &&
+       _cuda_backend);
+  auto *backend = use_cuda ? _cuda_backend.get() : _cpu_backend.get();
   if (!backend) {
     pc::logger()->error("PlyDevice::apply_transform: uninitialised backend");
     return;
@@ -385,11 +393,14 @@ void PlyDevice::apply_transform() {
 }
 
 void PlyDevice::on_pipeline_output(std::shared_ptr<PointCloud> processed) {
-  const auto config = std::get<PlyDeviceConfiguration>(_config);
-  if (rendering() && _cpu_backend) {
-    auto buf = std::make_shared<std::vector<std::byte>>(processed->size() * 16);
-    _cpu_backend->pack_render_buffer(*processed, *buf);
-    _latest_render_data.store(std::move(buf), std::memory_order_release);
+  if (rendering()) {
+    if (_cpu_backend) {
+      auto buf = std::make_shared<std::vector<std::byte>>(processed->size() * 16);
+      _cpu_backend->pack_render_buffer(*processed, *buf);
+      _latest_render_data.store(std::move(buf), std::memory_order_release);
+    }
+  } else {
+    _latest_render_data.store(nullptr, std::memory_order_release);
   }
   _current_point_cloud.store(std::move(processed), std::memory_order_release);
   notify_point_cloud_updated();

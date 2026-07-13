@@ -90,7 +90,8 @@ public:
       const CameraIntrinsics &color_intrinsics,
       const TransformConfiguration &transform,
       const ColorTransformConfiguration &color_transform,
-      const pc::float4x4 &world_transform = {}) const = 0;
+      const pc::float4x4 &world_transform = {},
+      std::span<std::byte> render_output = {}) const = 0;
 
   virtual void pack_render_buffer(const PointCloud &cloud,
                                   std::span<std::byte> output) const = 0;

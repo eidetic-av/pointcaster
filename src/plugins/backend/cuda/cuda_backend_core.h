@@ -21,4 +21,10 @@ void project_transform_frame_data(
     const ColorTransformConfiguration &color_transform,
     std::span<std::byte> render_output = {});
 
+void transform_point_cloud(const void *owner, const PointCloud &input_cloud,
+                           std::shared_ptr<PointCloud> output_cloud,
+                           const TransformConfiguration &transform,
+                           const ColorTransformConfiguration &color_transform,
+                           const pc::float4x4 &world_transform = {});
+
 } // namespace pc::backend::cuda

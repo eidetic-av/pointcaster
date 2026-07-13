@@ -529,12 +529,26 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
             // TODO backend instances should be inside the device plugin class
             // more like operators
-            backend::BackendPlugin *backend =
+            const bool using_cuda =
                 (device_config.transform.value().backend.value() ==
                      BackendType::CUDA &&
-                 cuda_backend)
-                    ? cuda_backend.get()
-                    : cpu_backend.get();
+                 cuda_backend);
+            backend::BackendPlugin *backend =
+                using_cuda ? cuda_backend.get() : cpu_backend.get();
+
+            // snapshot rendering state once so both the allocation and the
+            // store decision use a consistent value
+            const bool should_render = rendering();
+
+            // for CUDA, pre-allocate render buffer so it can be packed in the
+            // same kernel pass as projection
+            std::shared_ptr<std::vector<std::byte>> cuda_render_buffer;
+            std::span<std::byte> render_output;
+            if (using_cuda && should_render) {
+              cuda_render_buffer =
+                  std::make_shared<std::vector<std::byte>>(max_point_count * 16);
+              render_output = *cuda_render_buffer;
+            }
 
             {
               ProfilingZone backend_transform_zone(
@@ -543,18 +557,20 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                 backend->project_transform_frame_data(
                     ob_depth_data, ob_color_data, point_cloud, color_intrinsics,
                     device_config.transform.value(),
-                    device_config.color.value(), world);
+                    device_config.color.value(), world, render_output);
               }
             }
 
             feed_operator_pipeline(point_cloud);
 
-            if (rendering() && backend) {
-              // render from the latest finished/processed cloud
-              if (auto processed = _pipeline->latest_cloud()) {
+            if (should_render && backend) {
+              if (using_cuda && cuda_render_buffer) {
+                _latest_render_data.store(std::move(cuda_render_buffer),
+                                          std::memory_order_release);
+              } else if (auto processed = _pipeline->latest_cloud()) {
                 auto render_buffer = std::make_shared<std::vector<std::byte>>(
                     processed->size() * 16);
-                backend->pack_render_buffer(*processed, *render_buffer);
+                cpu_backend->pack_render_buffer(*processed, *render_buffer);
                 _latest_render_data.store(std::move(render_buffer),
                                           std::memory_order_release);
               }

@@ -154,7 +154,8 @@ void CpuBackend::project_transform_frame_data(
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
     const ColorTransformConfiguration &color_transform,
-    const pc::float4x4 &world_transform) const {
+    const pc::float4x4 &world_transform,
+    [[maybe_unused]] std::span<std::byte> render_output) const {
 
   const auto point_count = output_cloud->size();
   const auto frame_width = color_intrinsics.frame_width;
