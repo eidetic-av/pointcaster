@@ -61,7 +61,7 @@ void streaming_thread_loop(
   zmq::context_t ctx{1};
 
   zmq::socket_t pub_socket{ctx, zmq::socket_type::xpub};
-  pub_socket.set(zmq::sockopt::sndhwm, 4);
+  pub_socket.set(zmq::sockopt::sndhwm, 32);
   pub_socket.set(zmq::sockopt::linger, 0);
   pub_socket.set(zmq::sockopt::xpub_verboser, 1);
 
@@ -124,8 +124,13 @@ void streaming_thread_loop(
       auto all_sources = collect_stream_channel_sources(workspace);
       sources.reserve(all_sources.size());
       for (auto &source : all_sources) {
-        if (channel_enabled(enabled_overrides, source.address))
+        const auto it = subscriber_counts.find(source.address);
+        if (it == subscriber_counts.end()) continue;
+        const auto has_subscriber = it->second > 0;
+        if (has_subscriber &&
+            channel_enabled(enabled_overrides, source.address)) {
           sources.push_back(std::move(source));
+        }
       }
     }
 
@@ -160,37 +165,42 @@ void streaming_thread_loop(
 
       std::vector<std::shared_ptr<std::vector<std::byte>>> serialized(
           to_serialize.size());
-      tbb::parallel_for(tbb::blocked_range<size_t>(0, to_serialize.size()),
-                        [&](const tbb::blocked_range<size_t> &range) {
-                          for (size_t r = range.begin(); r < range.end(); ++r) {
-                            const auto &source = sources[to_serialize[r]];
-                            serialized[r] =
-                                std::make_shared<std::vector<std::byte>>(
-                                    source.cloud->serialize(compress));
-                          }
-                        });
+      {
+        ProfilingZone parallel_serialize_zone("parallel_serailize");
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, to_serialize.size()),
+            [&](const tbb::blocked_range<size_t> &range) {
+              for (size_t r = range.begin(); r < range.end(); ++r) {
+                const auto &source = sources[to_serialize[r]];
+                serialized[r] = std::make_shared<std::vector<std::byte>>(
+                    source.cloud->serialize(compress));
+              }
+            });
+      }
+      {
+        ProfilingZone parallel_serialize_zone("mempcy_frame");
+        for (size_t r = 0; r < to_serialize.size(); ++r) {
+          const auto &source = sources[to_serialize[r]];
+          const auto &payload = *serialized[r];
 
-      for (size_t r = 0; r < to_serialize.size(); ++r) {
-        const auto &source = sources[to_serialize[r]];
-        const auto &payload = *serialized[r];
+          auto framed = std::make_shared<std::vector<std::byte>>(
+              source.address.size() + 1 + payload.size());
+          std::memcpy(framed->data(), source.address.data(),
+                      source.address.size());
+          (*framed)[source.address.size()] = std::byte{0};
+          std::memcpy(framed->data() + source.address.size() + 1,
+                      payload.data(), payload.size());
 
-        auto framed = std::make_shared<std::vector<std::byte>>(
-            source.address.size() + 1 + payload.size());
-        std::memcpy(framed->data(), source.address.data(),
-                    source.address.size());
-        (*framed)[source.address.size()] = std::byte{0};
-        std::memcpy(framed->data() + source.address.size() + 1, payload.data(),
-                    payload.size());
-
-        last_clouds[source.address] = source.cloud;
-        last_data[source.address] = std::move(framed);
+          last_clouds[source.address] = source.cloud;
+          last_data[source.address] = std::move(framed);
+        }
       }
     }
 
-    // TODO do we actually want a re-send? make this a param in a per-channel config maybe...
-    // re-send every enabled channel's last known frame. XPUB drops sends with
-    // no subscribers, so a late-joining subscriber would otherwise never get
-    // a frame until the next change.
+    // TODO do we actually want a re-send? make this a param in a per-channel
+    // config maybe... re-send every enabled channel's last known frame. XPUB
+    // drops sends with no subscribers, so a late-joining subscriber would
+    // otherwise never get a frame until the next change.
     {
       ProfilingZone send_zone("point_stream::send");
       for (const auto &source : sources) {

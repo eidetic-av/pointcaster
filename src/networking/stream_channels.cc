@@ -28,17 +28,21 @@ collect_stream_channel_sources(Workspace &workspace) {
     if (!device) continue;
     std::string id;
     std::visit([&](const auto &cfg) { id = cfg.id; }, device->config());
+    if (!devices::effective_active(workspace.config, id)) continue;
     sources.push_back(
         {devices::device_address(workspace.config, id), device->point_cloud()});
   }
 
   for (const auto &group : workspace.config.device_groups) {
+    if (!devices::effective_active(workspace.config, group.id)) continue;
+
     const auto child_ids =
         devices::device_ids_in_group(workspace.config, group.id);
     if (child_ids.empty()) continue;
 
     std::shared_ptr<PointCloud> merged;
     for (const auto &child_id : child_ids) {
+      if (!devices::effective_active(workspace.config, child_id)) continue;
       for (auto &device : workspace.devices) {
         if (!device) continue;
         std::string device_id;
