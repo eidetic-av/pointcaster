@@ -8,6 +8,6 @@ Point-clouds are combined and can be transformed, filtered and streamed into too
 
 ![Pointcaster screenshot](https://b2.matth.cc/pointcaster-scrot.png)
 
-Pointcaster is free to use under the [GNU AGPL](https://github.com/eidetic-av/pointcaster/blob/qt/LICENSE) for individual artists, not-for-profit organisations, and for educational or hobbyist projects.
+Pointcaster is free to use under the [GNU AGPL](https://github.com/eidetic-av/pointcaster/blob/qt/LICENSE).
 
-For commercial licensing, contact [matt@pointcaster.net](mailto:matt@pointcaster.net).
+For commercial licensing, support, or custom integration, contact [matt@pointcaster.net](mailto:matt@pointcaster.net).
