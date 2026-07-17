@@ -227,7 +227,8 @@ void CpuBackend::project_frame(const PointCloud &cloud,
     int pixel_index = v * width + u;
 
     // store every point that hits this pixel
-    pixel_hits[pixel_index].push_back({point_index, cam_z});
+    pixel_hits[pixel_index].push_back(
+        {static_cast<int32_t>(point_index), cam_z});
 
     // if this point's z is nearest to the camera, it wins for rendering it
     if (cam_z < depth_buffer[pixel_index]) {
