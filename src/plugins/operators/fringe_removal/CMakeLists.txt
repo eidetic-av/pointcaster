@@ -17,10 +17,12 @@ set_target_properties(FringeRemovalOperator PROPERTIES
   AUTOMOC OFF
 )
 
-# this quiets some very noisy opencv warnings
-set_source_files_properties(fringe_removal_operator.cc PROPERTIES
-  COMPILE_OPTIONS "-Wno-old-style-cast;-Wno-zero-as-null-pointer-constant"
-)
+if (NOT WIN32)
+  # this quiets some very noisy opencv warnings
+  set_source_files_properties(fringe_removal_operator.cc PROPERTIES
+    COMPILE_OPTIONS "-Wno-old-style-cast;-Wno-zero-as-null-pointer-constant"
+  )
+endif()
 
 find_package(PCL CONFIG REQUIRED)
 find_package(OpenCV CONFIG REQUIRED
