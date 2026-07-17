@@ -20,10 +20,12 @@ add_library(pointcaster::core ALIAS pointcaster_core)
 
 find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
 target_include_directories(pointcaster_core PRIVATE ${ZPP_BITS_INCLUDE_DIRS})
-# zpp-bits' inlined templates show up as string overflow warnings
-set_source_files_properties(point_cloud.cc PROPERTIES
-  COMPILE_OPTIONS "-Wno-stringop-overflow"
-)
+if (NOT WIN32)
+  # zpp-bits' inlined templates show up as string overflow warnings in gcc
+  set_source_files_properties(point_cloud.cc PROPERTIES
+    COMPILE_OPTIONS "-Wno-stringop-overflow"
+  )
+endif()
 
 find_package(draco CONFIG REQUIRED)
 target_link_libraries(pointcaster_core PRIVATE draco::draco)
