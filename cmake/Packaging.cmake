@@ -177,8 +177,9 @@ if(WIN32)
         endforeach()
     ]])
 
-    # portable zip: a single versioned folder with pointcaster.exe at its root
+    # portable zip with pointcaster.exe at the archive root (extractors already create a folder named after the zip)
     set(CPACK_GENERATOR "ZIP")
+    set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY FALSE)
     # emit packages into the source tree, the build dir lives inside the docker volume and isn't host-visible
     set(CPACK_PACKAGE_DIRECTORY "${CMAKE_SOURCE_DIR}/dist")
 
