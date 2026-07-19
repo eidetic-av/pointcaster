@@ -14,6 +14,7 @@ add_library(pointcaster_core SHARED
     profiling/profiler.cc
     util/string_utils.cc
     util/geometry_utils.cc
+    ../config/transform_config.cc
 )
 
 add_library(pointcaster::core ALIAS pointcaster_core)
@@ -62,6 +63,12 @@ set_target_properties(pointcaster_core
 generate_export_header(pointcaster_core
     EXPORT_FILE_NAME
         ${PROJECT_BINARY_DIR}/include/pointcaster/core.h
+)
+
+install(TARGETS pointcaster_core
+  RUNTIME DESTINATION bin
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
 )
 
 target_precompile_headers(pointcaster_core PRIVATE

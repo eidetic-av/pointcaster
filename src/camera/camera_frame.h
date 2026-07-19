@@ -27,7 +27,7 @@ struct POINTCASTER_API FrameProjectionArgs {
   float4x4 camera_extrinsic;
 };
 
-struct POINTCASTER_API CameraFrameData {
+struct CameraFrameData {
   size_t width;
   size_t height;
 
@@ -46,8 +46,8 @@ struct POINTCASTER_API CameraFrameData {
   // per-pixel list of all points that projected to each pixel
   std::vector<std::vector<PixelHit>> pixel_hits;
 
-  explicit CameraFrameData(size_t default_buffer_width,
-                           size_t default_buffer_height);
+  POINTCASTER_API explicit CameraFrameData(size_t default_buffer_width,
+                                           size_t default_buffer_height);
 
   std::vector<color> &main_color_buffer() {
     return color_buffers[default_color_key];
@@ -63,14 +63,15 @@ struct POINTCASTER_API CameraFrameData {
 
   // TODO might be better as cpu backend func or free func?
   /// Flood-fill the color buffer into empty pixels...
-  void flood_fill(int fill_passes,
-                  const std::string &color_buffer_key = default_color_key,
-                  const std::string &depth_buffer_key = default_depth_key,
-                  const std::string &index_buffer_key = default_index_key);
+  POINTCASTER_API void
+  flood_fill(int fill_passes,
+             const std::string &color_buffer_key = default_color_key,
+             const std::string &depth_buffer_key = default_depth_key,
+             const std::string &index_buffer_key = default_index_key);
 
   // TODO better as a cpu backend func or free func rather than member?
   /// Convert to a PCL organized cloud for use with PCL's organized filters.
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>>
+  POINTCASTER_API std::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>>
   to_pcl_organized(float fx, float fy, float cx, float cy) const;
 };
 

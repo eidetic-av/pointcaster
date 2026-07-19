@@ -8,6 +8,7 @@ set(CMAKE_INSTALL_QMLDIR "qml")
 set(QT_QML_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml")
 
 add_subdirectory(core)
+add_subdirectory(pipeline)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(app_icon_resource "${CMAKE_SOURCE_DIR}/packaging/icon.rc")
@@ -25,14 +26,10 @@ qt_add_executable(pointcaster
   camera/look_at_camera.cc
   camera/camera_frame.cc
   recorder/session_recorder.cc
-  pipeline/concurrent_operator_pipeline.cc
   networking/point_streamer.cc
   networking/stream_channels.cc
   networking/osc/osc_receiver.cc
   config/config_registry.cc
-  config/transform_config.cc
-  # TODO should probs be part of plugin lib? but other deps cant find it if it is atm
-  plugins/operators/operator_host.cc
   ${app_icon_resource}
 )
 
@@ -70,6 +67,7 @@ find_package(cppzmq CONFIG REQUIRED)
 
 target_link_libraries(pointcaster PRIVATE
   pointcaster::core
+  pointcaster::pipeline
   pointcaster::plugins
   pointcaster::metrics
   pointcaster::registration

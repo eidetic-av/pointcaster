@@ -12,14 +12,21 @@ target_compile_definitions(pointcaster_plugins PRIVATE POINTCASTER_BUILD)
 find_package(TBB REQUIRED)
 
 target_link_libraries(pointcaster_plugins PRIVATE
-    pointcaster::core 
+    pointcaster::core
+    pointcaster::pipeline
     Corrade::PluginManager
     TBB::tbb
 )
 
-target_include_directories(pointcaster_plugins PRIVATE 
-    ${CMAKE_SOURCE_DIR}/src 
+target_include_directories(pointcaster_plugins PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/include
+)
+
+install(TARGETS pointcaster_plugins
+  RUNTIME DESTINATION bin
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
 )
 
 find_package(cpplocate CONFIG REQUIRED)

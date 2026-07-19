@@ -31,6 +31,7 @@ thrust_create_target(Thrust)
 
 target_link_libraries(OrbbecDevice PRIVATE
   pointcaster::core
+  pointcaster::pipeline
   pointcaster::metrics
   pointcaster::plugins
   Corrade::PluginManager

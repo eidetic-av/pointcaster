@@ -1,8 +1,8 @@
 #pragma once
 
 #include <plugins/backend/backend_types.h>
+#include <pointcaster/core.h>
 #include <pointcaster/core_types.h>
-#include <pointcaster_api.h>
 #include <rfl/DefaultVal.hpp>
 
 namespace pc {
@@ -23,6 +23,6 @@ struct TransformConfiguration {
   rfl::DefaultVal<BackendType> backend = BackendType::CPU;
 };
 
-POINTCASTER_API float4x4 to_float4x4(const TransformConfiguration &t);
+POINTCASTER_CORE_EXPORT float4x4 to_float4x4(const TransformConfiguration &t);
 
 } // namespace pc

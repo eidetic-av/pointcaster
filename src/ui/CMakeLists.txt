@@ -30,6 +30,7 @@ find_package(TBB REQUIRED)
 
 target_link_libraries(pointcaster_ui PRIVATE
     pointcaster::core
+    pointcaster::pipeline
     pointcaster::app_settings
     pointcaster::plugins
     PointcasterQml

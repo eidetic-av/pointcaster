@@ -34,8 +34,10 @@ find_package(OpenCV CONFIG REQUIRED
 target_link_libraries(FringeRemovalOperator PRIVATE
   pointcaster
   pointcaster::core
+  pointcaster::pipeline
   Corrade::PluginManager
   ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
 )
 
 target_include_directories(FringeRemovalOperator PRIVATE
