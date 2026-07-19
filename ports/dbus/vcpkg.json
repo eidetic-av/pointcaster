@@ -1,6 +1,6 @@
 {
 	"name": "dbus",
-	"version": "1.14.10",
-	"port-version": 1,
+	"version": "1.16.2",
+	"port-version": 5,
 	"supports": "linux"
 }

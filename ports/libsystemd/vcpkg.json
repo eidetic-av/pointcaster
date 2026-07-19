@@ -1,6 +1,6 @@
 {
 	"name": "libsystemd",
-	"version": "252.39",
+	"version": "260.2",
 	"port-version": 1,
 	"supports": "linux"
 }
