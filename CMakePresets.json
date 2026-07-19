@@ -60,6 +60,8 @@
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": "Release",
 				"VCPKG_TARGET_TRIPLET": "x64-windows-static-md-custom-release",
+				"VCPKG_INSTALLED_DIR": "C:/vcpkg-config/vcpkg_installed",
+				"VCPKG_MANIFEST_INSTALL": "OFF",
 				"CMAKE_CXX_FLAGS_INIT": "/O2 /arch:AVX2 /fp:fast",
 				"CMAKE_EXE_LINKER_FLAGS_INIT": "/LTCG",
 				"CMAKE_SHARED_LINKER_FLAGS_INIT": "/LTCG",
