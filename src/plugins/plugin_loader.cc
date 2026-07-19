@@ -96,6 +96,11 @@ load_device_plugins(pc::Workspace &workspace) {
   workspace.loaded_device_plugin_names.clear();
 
   for (StringView plugin_name : device_plugin_manager->pluginList()) {
+    // skip dependency dlls picked up as plugin candidates without metadata
+    if (device_plugin_manager->loadState(plugin_name) &
+        LoadState::WrongMetadataFile) {
+      continue;
+    }
     const auto plugin_status = device_plugin_manager->load(plugin_name);
     if (plugin_status & LoadState::Loaded) {
       workspace.loaded_device_plugin_names.push_back(plugin_name);
@@ -156,6 +161,10 @@ load_backend_plugins(Workspace &workspace) {
   workspace.loaded_backend_plugin_names.clear();
 
   for (StringView plugin_name : backend_plugin_manager->pluginList()) {
+    if (backend_plugin_manager->loadState(plugin_name) &
+        LoadState::WrongMetadataFile) {
+      continue;
+    }
     const auto plugin_status = backend_plugin_manager->load(plugin_name);
     if (plugin_status & LoadState::Loaded) {
       workspace.loaded_backend_plugin_names.push_back(plugin_name);
@@ -178,6 +187,10 @@ load_operator_plugins(Workspace &workspace) {
   workspace.loaded_operator_plugin_names.clear();
 
   for (StringView plugin_name : operator_plugin_manager->pluginList()) {
+    if (operator_plugin_manager->loadState(plugin_name) &
+        LoadState::WrongMetadataFile) {
+      continue;
+    }
     const auto plugin_status = operator_plugin_manager->load(plugin_name);
     if (plugin_status & LoadState::Loaded) {
       workspace.loaded_operator_plugin_names.push_back(plugin_name);
