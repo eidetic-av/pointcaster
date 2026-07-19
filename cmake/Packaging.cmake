@@ -6,6 +6,18 @@ qt_generate_deploy_qml_app_script(
     NO_UNSUPPORTED_PLATFORM_ERROR
     NO_TRANSLATIONS
 )
+
+# inject NO_OVERWRITE into the deploy script, otherwise windeployqt --force fails replacing qml plugin dlls it still has open
+install(CODE "
+    file(READ \"${pointcaster_deploy_script}\" _pointcaster_deploy_script_contents)
+    string(REPLACE
+        \"qt6_deploy_runtime_dependencies(\"
+        \"qt6_deploy_runtime_dependencies(\n    NO_OVERWRITE\"
+        _pointcaster_deploy_script_contents
+        \"\${_pointcaster_deploy_script_contents}\"
+    )
+    file(WRITE \"${pointcaster_deploy_script}\" \"\${_pointcaster_deploy_script_contents}\")
+")
 install(SCRIPT "${pointcaster_deploy_script}")
 
 set(CPACK_PACKAGE_NAME "pointcaster")
@@ -75,4 +87,13 @@ if(NOT WIN32)
 
     include(CPack)
 
+endif()
+
+if(WIN32)
+    # on windows we have trouble deploying tbb so just do it manually
+    # (TO_CMAKE_PATH stops TBB_DIR backslashes becoming escape sequences in cmake_install.cmake)
+    file(TO_CMAKE_PATH "$ENV{TBB_DIR}" _pointcaster_tbb_dir)
+    install(FILES "${_pointcaster_tbb_dir}/redist/intel64/vc14/tbb12.dll"
+        DESTINATION bin
+    )
 endif()
