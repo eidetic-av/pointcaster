@@ -16,6 +16,11 @@ add_custom_target(link_compile_commands ALL
         ${CMAKE_BINARY_DIR}/compile_commands.json
         ${CMAKE_SOURCE_DIR}/compile_commands.json)
 
+# flatten windows installs: exe and dlls at the install root with plugins/ and qml/ beside them
+if(WIN32)
+    set(CMAKE_INSTALL_BINDIR ".")
+endif()
+
 add_subdirectory(src)
 
 include(Packaging)

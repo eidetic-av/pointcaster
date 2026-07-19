@@ -3,7 +3,9 @@ include(GNUInstallDirs)
 qt_standard_project_setup(REQUIRES 6.11)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_INSTALL_PREFIX "/usr")
+if(NOT WIN32)
+    set(CMAKE_INSTALL_PREFIX "/usr")
+endif()
 set(CMAKE_INSTALL_QMLDIR "qml")
 set(QT_QML_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml")
 

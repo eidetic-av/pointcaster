@@ -66,9 +66,10 @@ generate_export_header(pointcaster_core
 )
 
 install(TARGETS pointcaster_core
-  RUNTIME DESTINATION bin
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
   LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
+  # import libs are link-time only, keep them out of the runtime install
+  ARCHIVE DESTINATION lib EXCLUDE_FROM_ALL
 )
 
 target_precompile_headers(pointcaster_core PRIVATE

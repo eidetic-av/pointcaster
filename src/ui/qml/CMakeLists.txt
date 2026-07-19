@@ -113,11 +113,16 @@ target_include_directories(PointcasterQml
 
 install(DIRECTORY "${QT_QML_OUTPUT_DIRECTORY}/Pointcaster"
 	DESTINATION "${CMAKE_INSTALL_QMLDIR}"
+	# build artifacts that aren't needed at runtime
+	PATTERN "*.lib" EXCLUDE
+	PATTERN "*.exp" EXCLUDE
+	PATTERN "*.qmltypes" EXCLUDE
+	PATTERN "*_qml_module_dir_map.qrc" EXCLUDE
 )
 
 install(TARGETS PointcasterQml
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" EXCLUDE_FROM_ALL
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )
 

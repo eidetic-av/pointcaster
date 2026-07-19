@@ -22,7 +22,7 @@ target_compile_definitions(pointcaster_app_settings PRIVATE APP_SETTINGS_DLL)
 target_include_directories(pointcaster_app_settings PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/include)
 
 install(TARGETS pointcaster_app_settings
-  RUNTIME DESTINATION bin
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
   LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
+  ARCHIVE DESTINATION lib EXCLUDE_FROM_ALL
 )
