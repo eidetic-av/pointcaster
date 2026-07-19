@@ -101,3 +101,21 @@ RUN git clone https://github.com/microsoft/vcpkg.git $Env:VCPKG_ROOT; \
     $Baseline = (Get-Content C:\\vcpkg-config\\vcpkg.json | ConvertFrom-Json).'builtin-baseline'; \
     git reset --hard $Baseline; \
     & .\\bootstrap-vcpkg.bat -disableMetrics
+
+ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR;CUDAToolkit_ROOT;CUDACXX;Thrust_DIR"
+
+# activate the VS dev shell and install third-party source-based
+# project dependencies as precompiled libs in this image using vcpkg
+
+RUN & \"$Env:VsDevShell\" -Arch amd64 -HostArch amd64; \
+    & \"$Env:VCPKG_ROOT\vcpkg.exe\" install \
+      --x-manifest-root=C:\vcpkg-config \
+      --overlay-triplets=C:\vcpkg-config\triplets \
+      --overlay-ports=C:\vcpkg-config\ports \
+      --triplet x64-windows-static-md-custom-release \
+      --clean-after-build
+
+WORKDIR C:\\pointcaster
+
+# entry point to the docker container is our visual studio dev shell
+ENTRYPOINT [ "powershell", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", "& $Env:VsDevShell -Arch amd64 -HostArch amd64; & " ]

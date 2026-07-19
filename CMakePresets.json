@@ -50,7 +50,7 @@
 			"name": "windows-default",
 			"inherits": "default-preset",
 			"environment": {
-				"VCPKG_KEEP_ENV_VARS": "Qt6_DIR;QT_DIR;TBB_DIR;CUDAToolkit_ROOT"
+				"VCPKG_KEEP_ENV_VARS": "Qt6_DIR;QT_DIR;TBB_DIR;CUDAToolkit_ROOT;CUDACXX;Thrust_DIR"
 			}
 		},
 		{
