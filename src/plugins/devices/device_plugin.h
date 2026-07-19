@@ -51,18 +51,31 @@ public:
   static Corrade::Containers::Array<Corrade::Containers::String>
   pluginSearchPaths() {
     std::filesystem::path exe_dir(cpplocate::getModulePath());
+#ifdef _WIN32
+    // flat windows layout: plugins/ sits beside the executable
+    auto plugin_dir = exe_dir / "plugins" / "devices";
+#else
+    // linux bin/ layout: plugins/ sits beside the executable's parent dir
     auto plugin_dir = exe_dir.parent_path() / "plugins" / "devices";
+#endif
 
     std::vector<Corrade::Containers::String> search_paths;
 
-    for (auto &recursive_file_node :
-         std::filesystem::recursive_directory_iterator(plugin_dir)) {
-      if (recursive_file_node.path().extension().string() == ".conf") {
-        // for each subdirectory that contains a file named .conf,
-        // treat it as a plugin directory and add it to our search paths...
-        search_paths.emplace_back(
-            recursive_file_node.path().parent_path().string());
+    if (std::filesystem::exists(plugin_dir)) {
+      for (auto &recursive_file_node :
+           std::filesystem::recursive_directory_iterator(plugin_dir)) {
+        if (recursive_file_node.path().extension().string() == ".conf") {
+          // for each subdirectory that contains a file named .conf,
+          // treat it as a plugin directory and add it to our search paths...
+          search_paths.emplace_back(
+              recursive_file_node.path().parent_path().string());
+        }
       }
+    }
+
+    // corrade requires at least one search path entry even when no plugins exist
+    if (search_paths.empty()) {
+      search_paths.emplace_back(plugin_dir.string());
     }
 
 #ifdef _WIN32

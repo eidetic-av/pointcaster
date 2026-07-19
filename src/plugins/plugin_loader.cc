@@ -72,9 +72,12 @@ void configure_plugin_search_path() {
 #ifdef _WIN32
   static std::once_flag configured_flag;
   std::call_once(configured_flag, [] {
+    // flat windows layout: plugins/ sits beside the executable
     const auto plugin_root_directory =
-        executable_directory_path().parent_path() / "plugins";
-    configure_search_paths(plugin_root_directory);
+        executable_directory_path() / "plugins";
+    if (std::filesystem::exists(plugin_root_directory)) {
+      configure_search_paths(plugin_root_directory);
+    }
   });
 #endif
 }
