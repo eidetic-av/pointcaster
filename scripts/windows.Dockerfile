@@ -7,66 +7,66 @@ RUN Set-ItemProperty -Path HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem
 RUN Set-ItemProperty -Path HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AppModelUnlock -Name AllowDevelopmentWithoutDevLicense -Value 1 -Type DWord
 
 # C++ and Windows SDK components
-RUN Invoke-WebRequest -Uri https://aka.ms/vs/17/release/vs_BuildTools.exe -OutFile vs_BuildTools.exe; \
+# fixed-version bootstrapper for VS 2022 17.14.36
+# and matching toolset & sdk versions also pinned
+ARG VsBuildToolsVersion="17.14.36"
+ARG VsBuildToolsUrl="https://download.visualstudio.microsoft.com/download/pr/12aa1305-dd17-4f26-8429-d072cda64c80/5ae95bb02bb3442441a8d891e5bb1d2975445e2e3ee16ada5bc7bd17227f1dd7/vs_BuildTools.exe"
+ARG VsBuildToolsSha256="5AE95BB02BB3442441A8D891E5BB1D2975445E2E3EE16ADA5BC7BD17227F1DD7"
+RUN Invoke-WebRequest -Uri $Env:VsBuildToolsUrl -OutFile vs_BuildTools.exe; \
+    $ActualHash = (Get-FileHash vs_BuildTools.exe -Algorithm SHA256).Hash; \
+    if ($ActualHash -ne $Env:VsBuildToolsSha256) { throw \"vs_BuildTools.exe checksum mismatch: expected $Env:VsBuildToolsSha256 but got $ActualHash\" }; \
     Start-Process -FilePath .\\vs_BuildTools.exe -Wait -ArgumentList \
-      '--quiet --norestart \
+      '--quiet --norestart --nocache \
       --add Microsoft.VisualStudio.Component.VC.CoreBuildTools \
       --add Microsoft.VisualStudio.Component.VC.Redist.14.Latest \
-      --add Microsoft.VisualStudio.Component.Windows10SDK \
       --add Microsoft.VisualStudio.ComponentGroup.NativeDesktop.Core \
       --add Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64 \
-      --add Microsoft.VisualStudio.Component.VC.CMake.Project \
       --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
-      --add Microsoft.VisualStudio.Component.Vcpkg \
       --add Microsoft.VisualStudio.Component.Windows11SDK.26100 \
-      --add Microsoft.VisualStudio.Component.VC.ATL \
-      --add Microsoft.VisualStudio.Component.VC.ATLMFC'; \
+      --add Microsoft.VisualStudio.Component.VC.14.44.17.14.ATL \
+      --add Microsoft.VisualStudio.Component.VC.14.44.17.14.MFC'; \
     Remove-Item -Force vs_BuildTools.exe
 
 ENV VsDevShell="C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\Launch-VsDevShell.ps1"
 
-# install chocolatey for some package management
+# install chocolatey for package management
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;\
 	iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 
 # Git
-RUN Invoke-WebRequest -Uri "https://github.com/git-for-windows/git/releases/download/v2.53.0.windows.2/MinGit-2.53.0.2-64-bit.zip" -OutFile 'Git.zip'; \
-    Expand-Archive -Path 'Git.zip' -DestinationPath 'C:\\Git'; \
-    Remove-Item Git.zip -Force; \
-    $env:PATH = 'C:\\Git\\cmd;C:\\Git\\bin;C:\\Git\\usr\\bin;{0}' -f $env:PATH; \
-    	[Environment]::SetEnvironmentVariable('PATH', $env:PATH, [EnvironmentVariableTarget]::Machine);
+ARG GitVersion=2.55.0.3
+RUN choco install -y git --version $Env:GitVersion
 
 # python+pip, the aqt installer and Qt 6 libs
-ARG PythonVersion=3.14.3
-RUN Invoke-WebRequest -Uri https://www.python.org/ftp/python/$Env:PythonVersion/python-$Env:PythonVersion-amd64.exe -OutFile python_installer.exe; \
-    Start-Process -FilePath .\\python_installer.exe -Wait -ArgumentList \
-      '/quiet InstallAllUsers=1 PrependPath=1 Include_test=0'; \
-    Remove-Item -Force python_installer.exe
+ARG PythonVersion=3.14.6
+RUN choco install -y python --version $Env:PythonVersion --installargs 'InstallAllUsers=1 PrependPath=1 Include_test=0'
 
 ARG QtInstallDirectory="C:\\Qt"
-ARG QtVersion=6.11.0
-ENV Qt6_DIR="C:\\Qt\\6.11.0\\msvc2022_64\\lib\\cmake\\Qt6"
-ENV QT_DIR="C:\\Qt\\6.11.0\\msvc2022_64\\lib\\cmake\\Qt6"
+ARG QtVersion=6.11.1
+ENV Qt6_DIR="C:\\Qt\\6.11.1\\msvc2022_64\\lib\\cmake\\Qt6"
+ENV QT_DIR="C:\\Qt\\6.11.1\\msvc2022_64\\lib\\cmake\\Qt6"
 
 # ARG AqtInstallVersion=3.3
 # RUN pip install "aqtinstall==$Env:AqtInstallVersion"
-# temporary workaround for 6.11.0
-RUN pip install git+https://github.com/miurahr/aqtinstall.git@refs/pull/1000/head
+# temporary workaround to properly install 6.11 until new aqt release with fix
+RUN pip install --no-cache-dir git+https://github.com/miurahr/aqtinstall.git@f383b3c7d9658e881bd8ce8810057393bd934ee1
 RUN aqt install-qt \
       --outputdir "$Env:QtInstallDirectory" \
       windows desktop "$Env:QtVersion" win64_msvc2022_64 \
       -m qtshadertools qtquick3d qttasktree
 
 # oneTBB
-ARG TbbVersion=2022.3.0
+ARG TbbVersion=2023.1.0
 ARG TbbInstallDir="C:\\TBB"
-ENV TBB_DIR="C:\\TBB\\oneapi-tbb-2022.3.0"
+ARG TbbSha256="CF6EE0C600FCB5C3A9B65E3E6E4781669D06F1BB1E37970D145FCDE08EED8DA9"
+ENV TBB_DIR="C:\\TBB\\oneapi-tbb-2023.1.0"
 RUN mkdir "$Env:TbbInstallDir"; \
-      Invoke-WebRequest "https://github.com/uxlfoundation/oneTBB/releases/download/v$Env:TbbVersion/oneapi-tbb-$Env:TbbVersion-win.zip" \
-            -OutFile "$Env:TbbInstallDir\\oneapi-tbb-$Env:TbbVersion-win.zip"; \
-      Expand-Archive -Path "$Env:TbbInstallDir\\oneapi-tbb-$Env:TbbVersion-win.zip" \
-            -DestinationPath "$Env:TbbInstallDir"; \
-      rm "$Env:TbbInstallDir\\oneapi-tbb-$Env:TbbVersion-win.zip"
+      $TbbZip = \"$Env:TbbInstallDir\oneapi-tbb-$Env:TbbVersion-win.zip\"; \
+      Invoke-WebRequest \"https://github.com/uxlfoundation/oneTBB/releases/download/v$Env:TbbVersion/oneapi-tbb-$Env:TbbVersion-win.zip\" -OutFile $TbbZip; \
+      $ActualHash = (Get-FileHash $TbbZip -Algorithm SHA256).Hash; \
+      if ($ActualHash -ne $Env:TbbSha256) { throw \"oneTBB checksum mismatch: expected $Env:TbbSha256 but got $ActualHash\" }; \
+      Expand-Archive -Path $TbbZip -DestinationPath \"$Env:TbbInstallDir\"; \
+      rm $TbbZip
 
 # jinja is used for reflection / templated code generation scripts
 ARG Jinja2Version=3.1.6
@@ -75,31 +75,29 @@ RUN pip install "jinja2==$Env:Jinja2Version"
 # NVIDIA CUDA development packages
 ARG CudaVersion=12.9.1.576
 RUN choco install -y cuda --version $Env:CudaVersion
+
 ENV CUDAToolkit_ROOT="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9"
+ENV CUDACXX="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9\\bin\\nvcc.exe"
+ENV Thrust_DIR="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9\\lib\\cmake\\thrust"
 
-# powershell core and 7zip are both required for vcpkg
-ARG PowershellCoreVersion=7.5.3
-RUN choco install -y powershell-core --install-arguments='"DISABLE_TELEMETRY=1"' \
-      --version $Env:PowershellCoreVersion 
+# Build tools from choco
 
-ARG 7ZipVersion=25.1.0
-RUN choco install -y 7zip --version $Env:7zipVersion
+ARG CMakeVersion=4.4.0
+RUN choco install -y cmake --version $Env:CMakeVersion --installargs 'ADD_CMAKE_TO_PATH=System'
 
-# Build vcpkg source-based project dependencies
+ARG NinjaVersion=1.13.2
+RUN choco install -y ninja --version $Env:NinjaVersion
+
+# Build source-based project dependencies with vcpkg
 COPY vcpkg.json C:\\vcpkg-config\\
 COPY triplets C:\\vcpkg-config\\triplets
 COPY ports C:\\vcpkg-config\\ports
 
-ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR;CUDAToolkit_ROOT;OpenCV_DIR"
-
-RUN & "$Env:VsDevShell" -Arch amd64 -HostArch amd64; \
-    vcpkg install \
-      --x-manifest-root=C:\vcpkg-config \
-      --overlay-triplets=C:\vcpkg-config\triplets \
-      --overlay-ports=C:\vcpkg-config\ports \
-      --triplet x64-windows-static-md-custom-release
-
-# entry point to the docker container is our visual studio dev shell
-# so env with build tools is properly configured
-
-ENTRYPOINT [ "powershell", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", "& $Env:VsDevShell -Arch amd64 -HostArch amd64;& " ]
+# bootstrap our own vcpkg checkout pinned to the manifest's builtin-baseline commit
+# - this ensures vcpkg tooling is at a known version
+ENV VCPKG_ROOT="C:\\vcpkg"
+RUN git clone https://github.com/microsoft/vcpkg.git $Env:VCPKG_ROOT; \
+    cd $Env:VCPKG_ROOT; \
+    $Baseline = (Get-Content C:\\vcpkg-config\\vcpkg.json | ConvertFrom-Json).'builtin-baseline'; \
+    git reset --hard $Baseline; \
+    & .\\bootstrap-vcpkg.bat -disableMetrics
