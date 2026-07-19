@@ -1,4 +1,5 @@
 build
+dist
 .Trash-1000
 compile_commands.json
 .qtcreator

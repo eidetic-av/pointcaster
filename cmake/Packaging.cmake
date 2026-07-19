@@ -35,7 +35,7 @@ set(CPACK_PACKAGE_VENDOR "Matt Hughes")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Pointcaster")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 
-if(NOT WIN32)
+if(NOT WIN32) # Linux
 
     # non-Qt runtime deps
     install(CODE [[
@@ -172,4 +172,12 @@ if(WIN32)
             endif()
         endforeach()
     ]])
+
+    # portable zip: a single versioned folder with pointcaster.exe at its root
+    set(CPACK_GENERATOR "ZIP")
+    set(CPACK_PACKAGE_FILE_NAME "pointcaster-${PROJECT_VERSION}-win64")
+    # emit packages into the source tree, the build dir lives inside the docker volume and isn't host-visible
+    set(CPACK_PACKAGE_DIRECTORY "${CMAKE_SOURCE_DIR}/dist")
+
+    include(CPack)
 endif()
