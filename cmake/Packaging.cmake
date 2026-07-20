@@ -20,7 +20,8 @@ qt_generate_deploy_qml_app_script(
     ${_pointcaster_deploy_tool_options}
 )
 
-# inject NO_OVERWRITE into the deploy script, otherwise windeployqt --force fails replacing qml plugin dlls it still has open
+# inject NO_OVERWRITE into the deploy script,
+# otherwise windeployqt --force fails replacing qml plugin dlls it still has open
 install(CODE "
     file(READ \"${pointcaster_deploy_script}\" _pointcaster_deploy_script_contents)
     string(REPLACE
@@ -31,7 +32,8 @@ install(CODE "
     )
     file(WRITE \"${pointcaster_deploy_script}\" \"\${_pointcaster_deploy_script_contents}\")
 ")
-# qt's deploy support hardcodes its bin dir to "bin", override at install time to match our flat windows layout
+# qt's deploy support hardcodes its bin dir to "bin",
+# override at install time to match our flat windows layout
 if(WIN32)
     install(CODE [[set(QT_DEPLOY_BIN_DIR ".")]])
 endif()
