@@ -39,7 +39,7 @@ RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
     rm -rf /var/lib/apt/lists/*
 
 # download and install cmake
-ARG CMAKE_VERSION=4.2.3
+ARG CMAKE_VERSION=4.4.0
 RUN set -eux; \
     BASE_URL="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}"; \
     curl -fsSLO "${BASE_URL}/cmake-${CMAKE_VERSION}-SHA-256.txt"; \
@@ -71,7 +71,7 @@ RUN --mount=type=cache,id=root-cache-pip,target=/root/.cache/pip \
     python3 -m pip install --no-input aqtinstall --break-system-packages
 
 # install onetbb parallel lib and its deps
-ARG TBB_VERSION=2022.3
+ARG TBB_VERSION=2023.1
 ENV TBB_DIR=/opt/intel/oneapi/tbb/${TBB_VERSION}
 
 RUN --mount=type=cache,id=var-cache-apt,target=/var/cache/apt \
@@ -136,7 +136,7 @@ USER dev
 WORKDIR /pointcaster
 
 # install qt6 libs
-ARG QT_VERSION=6.11.0
+ARG QT_VERSION=6.11.1
 ENV QT_INSTALL_DIR=/opt/qt
 ENV Qt6_DIR=${QT_INSTALL_DIR}/${QT_VERSION}
 
