@@ -51,26 +51,63 @@ set(CPACK_PACKAGE_DIRECTORY "${CMAKE_SOURCE_DIR}/dist")
 
 if(NOT WIN32) # Linux
 
-    # non-Qt runtime deps
+    # non-Qt runtime deps: bundle everything except glibc, the gcc runtime and the
+    # driver/host-integration libs appimages must take from the host system
+    # https://github.com/AppImageCommunity/pkg2appimage/blob/master/excludelist
     install(CODE [[
-		file(GET_RUNTIME_DEPENDENCIES
-			EXECUTABLES $<TARGET_FILE:pointcaster>
-			RESOLVED_DEPENDENCIES_VAR resolved_deps
-			POST_EXCLUDE_REGEXES
-			"^/lib/x86_64-linux-gnu/libc\\.so\\."
-			"^/lib/x86_64-linux-gnu/libm\\.so\\."
-			"^/lib/x86_64-linux-gnu/libdl\\.so\\."
-			"^/lib/x86_64-linux-gnu/libpthread\\.so\\."
-			"^/lib/x86_64-linux-gnu/librt\\.so\\."
-			"^/lib/x86_64-linux-gnu/libgcc_s\\.so\\."
-			"^/lib/x86_64-linux-gnu/libresolv\\.so\\."
-			"^/lib64/ld-linux-x86-64\\.so\\."
-		)
+        file(GET_RUNTIME_DEPENDENCIES
+            EXECUTABLES $<TARGET_FILE:pointcaster>
+            RESOLVED_DEPENDENCIES_VAR resolved_deps
+            POST_EXCLUDE_REGEXES
+            "/ld-linux-x86-64\\.so\\."
+            "/libc\\.so\\."
+            "/libm\\.so\\."
+            "/libmvec\\.so\\."
+            "/libdl\\.so\\."
+            "/libpthread\\.so\\."
+            "/librt\\.so\\."
+            "/libresolv\\.so\\."
+            "/libgcc_s\\.so\\."
+            "/libstdc\\+\\+\\.so\\."
+            "/libGL\\.so\\."
+            "/libEGL\\.so\\."
+            "/libGLX\\.so\\."
+            "/libGLdispatch\\.so\\."
+            "/libOpenGL\\.so\\."
+            "/libX11\\.so\\."
+            "/libxcb\\.so\\."
+            "/libfontconfig\\.so\\."
+            "/libfreetype\\.so\\."
+            "/libexpat\\.so\\."
+            "/libz\\.so\\."
+            "/libcom_err\\.so\\."
+            "/libgpg-error\\.so\\."
+        )
 
-		foreach(dep ${resolved_deps})
-			file(COPY "${dep}" DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
-		endforeach()
-		]])
+        # follow symlink chains so the real libs land in the package instead of dangling links
+        foreach(dep ${resolved_deps})
+            file(COPY "${dep}" DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" FOLLOW_SYMLINK_CHAIN)
+        endforeach()
+    ]])
+
+    # our gcc runtime is newer than most host distros provide, so bundle it aside:
+    # pointcaster.sh only prefers it over the host copy when actually newer (checkrt pattern)
+    foreach(_gcc_runtime_lib libstdc++.so.6 libgcc_s.so.1)
+        execute_process(
+            COMMAND "${CMAKE_CXX_COMPILER}" -print-file-name=${_gcc_runtime_lib}
+            OUTPUT_VARIABLE _gcc_runtime_lib_path
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            COMMAND_ERROR_IS_FATAL ANY
+        )
+        file(REAL_PATH "${_gcc_runtime_lib_path}" _gcc_runtime_lib_path)
+        if(NOT EXISTS "${_gcc_runtime_lib_path}")
+            message(FATAL_ERROR "${_gcc_runtime_lib} not found via ${CMAKE_CXX_COMPILER}")
+        endif()
+        install(FILES "${_gcc_runtime_lib_path}"
+            DESTINATION "optional/gcc"
+            RENAME "${_gcc_runtime_lib}"
+        )
+    endforeach()
 
     # and also some other platform libs it seems:
 
