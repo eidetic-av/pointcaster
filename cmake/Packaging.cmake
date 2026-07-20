@@ -138,6 +138,23 @@ if(NOT WIN32) # Linux
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps"
     )
 
+    # remove dev-only plugins and unused qml styles
+    install(CODE [[
+        set(_prefix "${CMAKE_INSTALL_PREFIX}")
+
+        # qml debugger/profiler plugins are dev-only
+        file(REMOVE_RECURSE "${_prefix}/plugins/qmltooling")
+
+        # remove unused qt quick styles
+        foreach(_style FluentWinUI3 Imagine Material Universal)
+            file(REMOVE_RECURSE "${_prefix}/qml/QtQuick/Controls/${_style}")
+            file(GLOB _style_libs "${_prefix}/lib/libQt6QuickControls2${_style}*.so*")
+            if(_style_libs)
+                file(REMOVE ${_style_libs})
+            endif()
+        endforeach()
+    ]])
+
     set(CPACK_GENERATOR "AppImage")
 
     set(CPACK_APPIMAGE_DESKTOP_FILE "pointcaster.desktop")
@@ -178,7 +195,6 @@ if(WIN32)
     )
 
     # post-deploy trim of dev-only artifacts and duplicated plugin dlls
-    # note: qtquick controls styles must all ship, qml imports Fusion and the platform default style differs per machine
     install(CODE [[
         set(_prefix "${CMAKE_INSTALL_PREFIX}")
 
