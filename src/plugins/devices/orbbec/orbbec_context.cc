@@ -3,13 +3,32 @@
 #include <chrono>
 #include <concurrentqueue/moodycamel/concurrentqueue.h>
 #include <core/logger/logger.h>
+#include <cpplocate/cpplocate.h>
+#include <filesystem>
 #include <libobsensor/ObSensor.hpp>
 #include <mutex>
 #include <thread>
 
 namespace {
 moodycamel::ConcurrentQueue<std::function<void()>> on_ready_callbacks{};
+
+// the SDK loads a bunch of other libs from an adjacent 'extensions' directory
+// (and the sdk location is different on windows and linux)
+void configure_extensions_directory() {
+  namespace fs = std::filesystem;
+  const fs::path exe_dir(cpplocate::getModulePath());
+#ifdef _WIN32
+  // flat windows layout: plugins/ sits beside the executable
+  const fs::path extensions_dir =
+      exe_dir / "plugins" / "devices" / "orbbec" / "extensions";
+#else
+  // linux bin/ layout: plugins/ sits beside the executable's parent dir
+  const fs::path extensions_dir =
+      exe_dir.parent_path() / "plugins" / "devices" / "orbbec" / "extensions";
+#endif
+  ob::Context::setExtensionsDirectory(extensions_dir.string().c_str());
 }
+} // namespace
 
 namespace pc::devices {
 
@@ -35,6 +54,7 @@ void ObContext::init_async() {
     std::shared_ptr<ob::Context> local;
 
     try {
+      configure_extensions_directory();
       local = std::make_shared<ob::Context>();
       std::lock_guard api_access(self->device_api_access);
       local->enableNetDeviceEnumeration(true);

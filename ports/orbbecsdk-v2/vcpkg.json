@@ -1,7 +1,6 @@
 {
-    "name": "orbbecsdk",
-    "version": "2.7.6",
-    "port-version": 1,
+    "name": "orbbecsdk-v2",
+    "version": "2.9.3",
     "description": "Orbbec SDK v2 Open-Source",
     "homepage": "https://github.com/orbbec/OrbbecSDK_v2",
     "license": "MIT",
@@ -14,7 +13,7 @@
 	    "name": "vcpkg-cmake-config",
 	    "host": true
 	},
-    "spdlog",
-    "fmt"
+	"spdlog",
+	"fmt"
     ]
 }

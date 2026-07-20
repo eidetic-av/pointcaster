@@ -1,5 +1,5 @@
 diff --git a/3rdparty/rosbag/src/rosbag_storage/include/rosbag/bag.h b/3rdparty/rosbag/src/rosbag_storage/include/rosbag/bag.h
-index bcb11aa6..2cc2518d 100644
+index bcb11aa..2cc2518 100644
 --- a/3rdparty/rosbag/src/rosbag_storage/include/rosbag/bag.h
 +++ b/3rdparty/rosbag/src/rosbag_storage/include/rosbag/bag.h
 @@ -371,7 +371,7 @@ template <class T> std::shared_ptr<T> Bag::instantiateBuffer(IndexEntry const &i
