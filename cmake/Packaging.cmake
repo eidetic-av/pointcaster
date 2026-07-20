@@ -263,9 +263,9 @@ else()
 endif()
 
 add_custom_target(deploy
-    COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --target package
     COMMAND "${Python_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/deploy.py"
         "${_pointcaster_deploy_bucket}" pointcaster "${_pointcaster_package_file}"
     USES_TERMINAL
     VERBATIM
 )
+add_dependencies(deploy package)
