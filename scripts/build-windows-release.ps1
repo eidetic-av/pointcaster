@@ -1,2 +1,2 @@
 cmake --preset windows-release
-cmake --build build/windows-release --target install
+cmake --build build/windows-release --target package
