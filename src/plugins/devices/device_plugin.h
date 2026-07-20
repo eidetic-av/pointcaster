@@ -126,8 +126,8 @@ public:
   };
   virtual void refresh_discovery() {};
 
-  POINTCASTER_API bool active();
-  POINTCASTER_API bool rendering();
+  bool active();
+  bool rendering();
 
   virtual void add_discovery_change_callback(std::function<void()>){};
   virtual bool has_discovery_change_callback() const { return false; };
@@ -155,7 +155,7 @@ public:
         _config);
   }
 
-  POINTCASTER_API virtual void
+  virtual void
   on_config_field_changed([[maybe_unused]] std::string_view path = "");
 
   virtual bool plugin_null_state() const { return false; }
