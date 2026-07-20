@@ -204,5 +204,6 @@ RUN --mount=type=cache,id=vcpkg-downloads-cache,target=${VCPKG_DOWNLOADS},uid=${
       --downloads-root=${VCPKG_DOWNLOADS} \
       --overlay-triplets=/opt/vcpkg-config/triplets \
       --overlay-ports=/opt/vcpkg-config/ports \
-      --triplet x64-linux-custom-release; \
+      --triplet x64-linux-custom-release \
+      --clean-after-build; \
     rm -rf /opt/vcpkg-config/vcpkg_installed
