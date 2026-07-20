@@ -21,6 +21,7 @@ set_target_properties(OrbbecDevice PROPERTIES
 
 find_package(OrbbecSDK CONFIG REQUIRED)
 find_package(TBB REQUIRED)
+find_package(cpplocate CONFIG REQUIRED)
 
 # TODO
 # don't link to this. dynamically link to cuda plugin
@@ -35,7 +36,8 @@ target_link_libraries(OrbbecDevice PRIVATE
   pointcaster::metrics
   pointcaster::plugins
   Corrade::PluginManager
-  ${OrbbecSDK_LIBS}
+  ob::OrbbecSDK
+  cpplocate::cpplocate
 )
 
 find_path(READERWRITERQUEUE_INCLUDE_DIR "readerwriterqueue/readerwriterqueue.h")
@@ -60,15 +62,18 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(ORBBEC_INSTALLED_LIB_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
   file(GLOB ORBBEC_RUNTIME_DEPENDENCIES "${ORBBEC_INSTALLED_LIB_DIR}/*OrbbecSDK*")
 else()
-  # TODO there's probs an easier way to do this but whatever, it works and is explicit
-  file(GLOB ORBBEC_RUNTIME_DEPENDENCIES
-    "${ORBBEC_INSTALLED_LIB_DIR}/libOrbbecSDK*"
-    "${ORBBEC_INSTALLED_LIB_DIR}/liblive555*"
-    "${ORBBEC_INSTALLED_LIB_DIR}/libob_usb*"
-    "${ORBBEC_INSTALLED_LIB_DIR}/libdepthengine*"
-  )
+  file(GLOB ORBBEC_RUNTIME_DEPENDENCIES "${ORBBEC_INSTALLED_LIB_DIR}/libOrbbecSDK*")
 endif()
 install(FILES ${ORBBEC_RUNTIME_DEPENDENCIES} DESTINATION ${ORBBEC_PLUGIN_DIR})
+
+# the SDK lib expects its 'extensions' from a sibling directory at runtime
+set(ORBBEC_EXTENSIONS_SOURCE_DIR "${ORBBEC_INSTALLED_LIB_DIR}/extensions")
+add_custom_command(TARGET OrbbecDevice POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+  "${ORBBEC_EXTENSIONS_SOURCE_DIR}"
+  "${ORBBEC_PLUGIN_DIR}/extensions"
+)
+install(DIRECTORY "${ORBBEC_EXTENSIONS_SOURCE_DIR}" DESTINATION ${ORBBEC_PLUGIN_DIR})
 
 set(CORRADE_PLUGINS ${CORRADE_PLUGINS} OrbbecDevice PARENT_SCOPE)
 

@@ -23,7 +23,7 @@
 				"tbb"
 			]
 		},
-		"orbbecsdk",
+		"orbbecsdk-v2",
 		{
 			"name": "pcl",
 			"default-features": false,
