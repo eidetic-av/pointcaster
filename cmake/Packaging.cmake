@@ -1,16 +1,23 @@
 include(GNUInstallDirs)
 
-# trim windeployqt output: no software gl, no d3d12 shader compilers, no qml debug plugins, no vc_redist (crt dlls installed manually below)
+# windeployqt-only flags; linux uses qt's generic deploy tool which ignores
+# DEPLOY_TOOL_OPTIONS (qmltooling is removed post-install there instead)
+if(WIN32)
+    set(_pointcaster_deploy_tool_options
+        DEPLOY_TOOL_OPTIONS
+            --no-opengl-sw
+            --no-system-dxc-compiler
+            --skip-plugin-types qmltooling
+    )
+endif()
+
 qt_generate_deploy_qml_app_script(
     TARGET pointcaster
     OUTPUT_SCRIPT pointcaster_deploy_script
     NO_UNSUPPORTED_PLATFORM_ERROR
     NO_TRANSLATIONS
     NO_COMPILER_RUNTIME
-    DEPLOY_TOOL_OPTIONS
-        --no-opengl-sw
-        --no-system-dxc-compiler
-        --skip-plugin-types qmltooling
+    ${_pointcaster_deploy_tool_options}
 )
 
 # inject NO_OVERWRITE into the deploy script, otherwise windeployqt --force fails replacing qml plugin dlls it still has open
