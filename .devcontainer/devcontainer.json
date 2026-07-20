@@ -12,12 +12,17 @@
   "updateRemoteUserUID": false,
   "workspaceFolder": "/pointcaster",
   "workspaceMount": "source=${localWorkspaceFolder},target=/pointcaster,type=bind",
+  "runArgs": [
+    "--env-file",
+    "${localWorkspaceFolder}/.env"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-vscode.cmake-tools",
         "llvm-vs-code-extensions.vscode-clangd",
-        "delgan.qml-format"
+        "delgan.qml-format",
+        "ms-python.python"
       ]
     },
     "qt-creator": {

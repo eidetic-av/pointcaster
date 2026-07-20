@@ -12,3 +12,4 @@ CMakeCache.txt
 cmake.check_cache
 CMakeConfigureLog.yaml
 ~*
+.env
