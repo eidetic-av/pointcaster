@@ -38,6 +38,7 @@ set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 # name packages after the configure preset (the build dir is named after it), e.g. pointcaster-0.2.1-windows-release
 get_filename_component(_configure_preset "${CMAKE_BINARY_DIR}" NAME)
 set(CPACK_PACKAGE_FILE_NAME "pointcaster-${PROJECT_VERSION}-${_configure_preset}")
+set(CPACK_PACKAGE_DIRECTORY "${CMAKE_SOURCE_DIR}/dist")
 
 if(NOT WIN32) # Linux
 
@@ -180,8 +181,6 @@ if(WIN32)
     # portable zip with pointcaster.exe at the archive root (extractors already create a folder named after the zip)
     set(CPACK_GENERATOR "ZIP")
     set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY FALSE)
-    # emit packages into the source tree, the build dir lives inside the docker volume and isn't host-visible
-    set(CPACK_PACKAGE_DIRECTORY "${CMAKE_SOURCE_DIR}/dist")
 
     include(CPack)
 endif()
