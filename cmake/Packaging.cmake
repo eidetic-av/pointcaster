@@ -35,7 +35,7 @@ set(CPACK_PACKAGE_VENDOR "Matt Hughes")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Pointcaster")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 
-# name packages after the configure preset (the build dir is named after it), e.g. pointcaster-0.2-windows-release
+# name packages after the configure preset (the build dir is named after it), e.g. pointcaster-0.2.1-windows-release
 get_filename_component(_configure_preset "${CMAKE_BINARY_DIR}" NAME)
 set(CPACK_PACKAGE_FILE_NAME "pointcaster-${PROJECT_VERSION}-${_configure_preset}")
 
