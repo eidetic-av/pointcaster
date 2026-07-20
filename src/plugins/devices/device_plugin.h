@@ -39,7 +39,7 @@ struct DiscoveredDevice {
   std::string id;
 };
 
-class POINTCASTER_API DevicePlugin
+class POINTCASTER_CLASS_API DevicePlugin
     : public Corrade::PluginManager::AbstractPlugin,
       public pc::operators::OperatorHost {
 public:
