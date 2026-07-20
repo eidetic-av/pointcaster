@@ -44,10 +44,14 @@ set(CPACK_PACKAGE_VENDOR "Matt Hughes")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Pointcaster")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 
-# name packages after the configure preset (the build dir is named after it), e.g. pointcaster-0.2.1-windows-release
+# name packages after the configure preset, e.g. pointcaster-0.2.1-windows-release
 get_filename_component(_configure_preset "${CMAKE_BINARY_DIR}" NAME)
 set(CPACK_PACKAGE_FILE_NAME "pointcaster-${PROJECT_VERSION}-${_configure_preset}")
 set(CPACK_PACKAGE_DIRECTORY "${CMAKE_SOURCE_DIR}/dist")
+
+# captured here because include(CPack) overwrites CPACK_PACKAGE_FILE_NAME
+# with the source-package name while generating CPackSourceConfig.cmake
+set(_pointcaster_package_basename "${CPACK_PACKAGE_DIRECTORY}/${CPACK_PACKAGE_FILE_NAME}")
 
 if(NOT WIN32) # Linux
 
@@ -246,3 +250,22 @@ if(WIN32)
 
     include(CPack)
 endif()
+
+# `deploy` builds the dist/ package then uploads it and a sha256 checksum to
+# b2://<bucket>/<branch>/pointcaster/<package-file-name>
+# other modules (pointreceiver, touchdesigner, ...) can later add their own
+# deploy targets reusing scripts/deploy.py with a different module name
+set(_pointcaster_deploy_bucket "pointcaster-builds")
+if(WIN32)
+    set(_pointcaster_package_file "${_pointcaster_package_basename}.zip")
+else()
+    set(_pointcaster_package_file "${_pointcaster_package_basename}.AppImage")
+endif()
+
+add_custom_target(deploy
+    COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --target package
+    COMMAND "${Python_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/deploy.py"
+        "${_pointcaster_deploy_bucket}" pointcaster "${_pointcaster_package_file}"
+    USES_TERMINAL
+    VERBATIM
+)
