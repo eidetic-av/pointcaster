@@ -15,20 +15,24 @@ namespace pc::networking::osc {
 
 class OscReceiver {
 public:
+  enum class State { Stopped, Running, Failed };
+
   explicit OscReceiver(Workspace& workspace);
   ~OscReceiver();
 
-  // TODO atm called when config changes
-  // but config changes so much causes this to reconfigure a lot
   void reconfigure();
+
+  State state() const { return _state; }
 
 private:
   Workspace& _workspace;
   std::unique_ptr<lo::ServerThread> _server;
+  State _state = State::Stopped;
+  int _active_port = 0;
 
   OscReceiverConfiguration& config();
 
-  void start();
+  void start(int port);
   void stop();
   void dispatch(const char* address, const char* types, void** argv);
 };
