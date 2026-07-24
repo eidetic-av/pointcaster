@@ -14,15 +14,8 @@ void start_profiler() {
   pc::logger()->info("Started Tracy profiling session");
 }
 
-void stop_profiler() {
-  pc::logger()->trace("Stopping Tracy profiling session");
-  tracy::ShutdownProfiler();
-  pc::logger()->info("Stopped Tracy profiling session");
-}
-
 #else
 void start_profiler() {}
-void stop_profiler() {}
 #endif
 
 } // namespace pc::profiling

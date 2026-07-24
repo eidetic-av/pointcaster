@@ -35,16 +35,10 @@ int main(int argc, char *argv[]) {
                    app_settings,
                    [&] { pc::set_log_level(app_settings->spdlogLogLevel()); });
 
+  // tracy profiling is enabled or disabled for the entire application run
   if (app_settings->enableTracyProfiling()) {
     pc::profiling::start_profiler();
   }
-  QObject::connect(app_settings, &pc::AppSettings::enableTracyProfilingChanged,
-                   app_settings, [&] {
-                     if (app_settings->enableTracyProfiling())
-                       pc::profiling::start_profiler();
-                     else
-                       pc::profiling::stop_profiler();
-                   });
 
   pc::logger()->trace("Starting QGuiApplication...");
   QGuiApplication app(argc, argv);

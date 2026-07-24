@@ -134,7 +134,7 @@ Item {
 
                     CheckBox {
                         id: enableTracyCheckbox
-                        text: "Enable profiling endpoint"
+                        text: "Enable profiling endpoint (requires restart)"
                         font: Scaling.uiFont
                         checked: !!AppSettings.enableTracyProfiling
                         onToggled: AppSettings.enableTracyProfiling = checked
