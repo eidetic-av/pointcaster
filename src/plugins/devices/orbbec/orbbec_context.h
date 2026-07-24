@@ -1,18 +1,21 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <unordered_set>
+#include <utility>
 #include <vector>
-
 
 namespace ob {
 class Context;
-}
+class Device;
+} // namespace ob
 
 namespace pc::devices {
 
@@ -25,10 +28,26 @@ enum class ObContextState : std::uint8_t {
 
 struct ObDeviceInfo {
   std::string ip;
-  std::string id;
+  std::string subnet_mask;
+  std::string gateway;
+
+  std::string id; // ob sdk uid
   std::string serial_num;
-  std::string name;
+  std::string name;            // product name as reported by ob sdk
+  std::string connection_type; // Ethernet, USB, USB3.2 etc...
+  int vendor_id{};
+  int product_id{};
+
+  bool is_network() const { return connection_type == "Ethernet"; }
 };
+
+enum class ObDeviceModel : std::uint8_t { Unknown, FemtoMega, PulsarSL450 };
+
+constexpr std::array<std::pair<ObDeviceModel, std::string_view>, 2> model_names{
+    {{ObDeviceModel::FemtoMega, "Femto Mega"},
+     {ObDeviceModel::PulsarSL450, "Pulsar SL450"}}};
+
+ObDeviceModel device_model(const ObDeviceInfo &device_info);
 
 class ObContext {
 public:
@@ -68,6 +87,8 @@ private:
   std::atomic<ObContextState> state{ObContextState::Uninitialised};
   std::atomic<std::shared_ptr<ob::Context>> ctx{};
   std::atomic_size_t users{0};
+
+  std::uint64_t device_changed_callback_id{0};
 
   std::mutex discovery_callbacks_access;
   std::vector<std::function<void()>> discovery_callbacks;

@@ -84,8 +84,12 @@ std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
 
   out.reserve(ctx.discovered_devices.size());
   for (const auto &d : ctx.discovered_devices) {
-    out.push_back(DiscoveredDevice{
-        .label = std::format("{} ({})", d.name, d.ip), .ip = d.ip, .id = d.id});
+    // network devices are identified by ip, usb devices by connection type
+    const auto &location = d.is_network() ? d.ip : d.connection_type;
+    out.push_back(
+        DiscoveredDevice{.label = std::format("{} ({})", d.name, location),
+                         .ip = d.ip,
+                         .id = d.id});
   }
 
   return out;
@@ -177,9 +181,9 @@ void OrbbecDevice::start_sync() {
 
   // try to find existing device in the list by device UID
   if (auto ob_device_list = ob_ctx->queryDeviceList()) {
-    const size_t device_count = ob_device_list->deviceCount();
-    for (size_t i = 0; i < device_count; ++i) {
-      auto id = ob_device_list->uid(i);
+    const uint32_t device_count = ob_device_list->getCount();
+    for (uint32_t i = 0; i < device_count; ++i) {
+      auto id = ob_device_list->getUid(i);
       if (!config.id.empty() && id) {
         if (std::strcmp(id, config.id.c_str()) == 0) {
           try {
