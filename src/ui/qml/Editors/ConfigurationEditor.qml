@@ -98,6 +98,7 @@ Column {
                         anchors.fill: parent
                         enabled: !nodeRoot.flattened
                         hoverEnabled: enabled
+                        onPressed: headerMouseArea.forceActiveFocus()
                         onClicked: nodeRoot.expanded = !nodeRoot.expanded
                     }
 
@@ -209,7 +210,10 @@ Column {
                                 hoverEnabled: true
                                 property bool dragging: false
 
-                                onPressed: dragging = true
+                                onPressed: {
+                                    dragging = true;
+                                    dividerMouseArea.forceActiveFocus();
+                                }
                                 onReleased: dragging = false
                                 onCanceled: dragging = false
 
@@ -272,7 +276,7 @@ Column {
 
                 background: Rectangle {
                     color: "transparent"
-                    border.color: valueField.focus ? ThemeColors.highlight : "transparent"
+                    border.color: valueField.activeFocus ? ThemeColors.highlight : "transparent"
                     border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
                     radius: 0
                 }
@@ -281,12 +285,28 @@ Column {
                 readOnly: root.configAdapter ? (root.configAdapter.isDisabled(path) || root.configAdapter.isFileOpener(path)) : false
 
                 // hide the live TextInput text while not editing, the Text overlay below renders instead
-                color: focus ? (readOnly ? ThemeColors.readOnlyText : ThemeColors.text) : "transparent"
+                color: activeFocus ? (readOnly ? ThemeColors.readOnlyText : ThemeColors.text) : "transparent"
+
+                // select everything on focus-in so typing replaces the contents by default
+                onActiveFocusChanged: {
+                    if (activeFocus)
+                        Qt.callLater(function () {
+                            valueField.selectAll();
+                        });
+                }
 
                 onEditingFinished: {
                     if (!root.configAdapter)
                         return;
                     root.configAdapter.set(path, text);
+                }
+
+                // Enter commits and ends the edit,
+                // Escape reverts to the stored value and ends the edit
+                onAccepted: valueField.focus = false
+                Keys.onEscapePressed: {
+                    text = root.configAdapter ? String(root.configAdapter.value(path)) : "";
+                    focus = false;
                 }
 
                 Connections {
@@ -304,7 +324,7 @@ Column {
                     anchors.leftMargin: valueField.leftPadding
                     anchors.rightMargin: valueField.rightPadding
                     verticalAlignment: Text.AlignVCenter
-                    visible: !valueField.focus
+                    visible: !valueField.activeFocus
                     text: valueField.text
                     font: valueField.font
                     color: valueField.readOnly ? ThemeColors.readOnlyText : ThemeColors.text

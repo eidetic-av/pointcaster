@@ -35,6 +35,16 @@ Rectangle {
             floatingWindowCpp.geometryUpdated();
     }
 
+    // clicks that no control accepts land here and clear keyboard focus
+    MouseArea {
+        id: unfocusCatcher
+        anchors.fill: parent
+        onPressed: mouse => {
+            unfocusCatcher.forceActiveFocus();
+            mouse.accepted = false;
+        }
+    }
+
     Loader {
         id: titleBar
         readonly property QtObject titleBarCpp: root.titleBarCpp

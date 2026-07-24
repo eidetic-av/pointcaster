@@ -89,8 +89,24 @@ SpinBox {
             commitValue(value);
     }
 
+    // pull typed editor text into value
+    function commitFromText() {
+        var v;
+        try {
+            v = Number(valueFromText(spinTextInput.text, locale));
+        } catch (e) {
+            return; // unparseable text, keep current value
+        }
+        if (!Number.isFinite(v))
+            return;
+        v = clampToRange(v);
+        if (v !== value)
+            value = v;
+    }
+
     onActiveFocusChanged: {
         if (!activeFocus) {
+            commitFromText();
             boundValue = value;
             commitValue(value);
         }
@@ -132,6 +148,17 @@ SpinBox {
                 });
         }
 
+        // Enter commits and ends the edit,
+        // Escape restores the displayed value and ends the edit
+        Keys.onReturnPressed: root.focus = false
+        Keys.onEnterPressed: root.focus = false
+        Keys.onEscapePressed: {
+            text = Qt.binding(function () {
+                return root.textFromValue(root.value, root.locale);
+            });
+            root.focus = false;
+        }
+
         DragInput {
             id: dragBehaviour
             anchors.fill: parent
@@ -140,7 +167,7 @@ SpinBox {
             font: root.font
 
             targetTextInput: spinTextInput
-            focusTarget: root
+            focusTarget: spinTextInput
 
             inputEnabled: root.enabled
             editable: root.editable

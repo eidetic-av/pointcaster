@@ -100,6 +100,16 @@ ApplicationWindow {
 
     footer: StatusBar {}
 
+    // clicks that no control accepts land here and clear keyboard focus
+    MouseArea {
+        id: unfocusCatcher
+        anchors.fill: parent
+        onPressed: mouse => {
+            unfocusCatcher.forceActiveFocus();
+            mouse.accepted = false;
+        }
+    }
+
     KDDW.DockingArea {
         id: mainDockingArea
         anchors.fill: parent
