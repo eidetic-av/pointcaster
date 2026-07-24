@@ -1,5 +1,7 @@
 #include "profiling_zone.h"
 
+#include "profiler.h"
+
 #ifdef TRACY_ENABLE
 // - we need to wrap tracy so that theres a single instance in a shared
 // library that all modules of code have access to
@@ -18,7 +20,8 @@ struct InternalZone {
   TracyCZoneCtx ctx;
 };
 
-ProfilingZone::ProfilingZone(std::string_view name) {
+ProfilingZone::ProfilingZone(std::string_view name) : zone_data(nullptr) {
+  if (!profiler_running()) return;
   // Allocate our internal zone object.
   auto *iz = new InternalZone;
   // Allocate a source location using the name.
