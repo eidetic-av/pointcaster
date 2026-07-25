@@ -108,6 +108,8 @@ Dialog {
         SettingsPageRegistry.addPage("general", "General", "qrc:/qt/qml/Pointcaster/Windows/Settings/GeneralSettingsPage.qml");
         SettingsPageRegistry.addPage("metrics", "Metrics", "qrc:/qt/qml/Pointcaster/Windows/Settings/MetricsSettingsPage.qml");
 
+        workspaceModel.registerPluginSettingsPages();
+
         sidebar.currentIndex = 0;
         const initialUrl = SettingsPageRegistry.pageUrlAt(0);
         stack.replace(initialUrl);

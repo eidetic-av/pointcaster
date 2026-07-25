@@ -42,6 +42,8 @@ public:
   void add_discovery_change_callback(std::function<void()> cb) override;
   bool has_discovery_change_callback() const override;
 
+  std::vector<PluginSettingsPage> settings_pages() const override;
+
   DeviceStatus status() const override;
 
   std::shared_ptr<PointCloud> point_cloud() override;

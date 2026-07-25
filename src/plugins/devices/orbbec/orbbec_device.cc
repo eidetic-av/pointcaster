@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstring>
 #include <execution>
+#include <filesystem>
 #include <format>
 #include <libobsensor/ObSensor.hpp>
 #include <libobsensor/h/ObTypes.h>
@@ -110,6 +111,15 @@ void OrbbecDevice::add_discovery_change_callback(std::function<void()> cb) {
 
 bool OrbbecDevice::has_discovery_change_callback() const {
   return does_have_discovery_change_callback.load();
+}
+
+std::vector<PluginSettingsPage> OrbbecDevice::settings_pages() const {
+  // the qml ships one level above the sdk-version variant directory
+  const auto qml_file_path =
+      plugin_directory().parent_path() / "OrbbecSettingsPage.qml";
+  return {{.key = "orbbec",
+           .title = "Orbbec",
+           .qml_file_path = qml_file_path.string()}};
 }
 
 DeviceStatus OrbbecDevice::status() const {

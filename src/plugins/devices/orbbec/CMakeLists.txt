@@ -143,6 +143,16 @@ install(DIRECTORY "${ORBBEC_V2_EXTENSIONS_SOURCE_DIR}"
   DESTINATION "${ORBBEC_PLUGIN_DIR}/sdk-v2"
 )
 
+# the plugin's preferences qml ships beside its binaries
+add_custom_command(TARGET OrbbecDevice POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+  "${CMAKE_CURRENT_SOURCE_DIR}/OrbbecSettingsPage.qml"
+  "${ORBBEC_PLUGIN_DIR}/OrbbecSettingsPage.qml"
+)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/OrbbecSettingsPage.qml"
+  DESTINATION ${ORBBEC_PLUGIN_DIR}
+)
+
 # --- sdk v1 variant
 
 add_orbbec_plugin_variant(OrbbecDeviceSdk1 ob::OrbbecSDKv1 1)

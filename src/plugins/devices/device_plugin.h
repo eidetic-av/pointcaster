@@ -25,6 +25,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <typeinfo>
 #include <variant>
 
 namespace pc {
@@ -37,6 +38,12 @@ struct DiscoveredDevice {
   std::string label;
   std::string ip;
   std::string id;
+};
+
+struct PluginSettingsPage {
+  std::string key;
+  std::string title;
+  std::string qml_file_path;
 };
 
 class POINTCASTER_CLASS_API DevicePlugin
@@ -101,6 +108,17 @@ public:
     return {};
   };
   virtual void refresh_discovery() {};
+
+  virtual std::vector<PluginSettingsPage> settings_pages() const { return {}; }
+
+  // directory holding this plugin's own binary; the derived type's rtti lives
+  // in whichever binary defines it, so locating that locates the plugin
+  std::filesystem::path plugin_directory() const {
+    auto *plugin_type_info =
+        const_cast<void *>(static_cast<const void *>(&typeid(*this)));
+    return std::filesystem::path(cpplocate::getLibraryPath(plugin_type_info))
+        .parent_path();
+  }
 
   POINTCASTER_API bool active();
   POINTCASTER_API bool rendering();

@@ -5,6 +5,7 @@
 #include "layout_saver.h"
 #include "models/device_adapter.h"
 #include "models/session_recorder_model.h"
+#include "models/settings_page_registry.h"
 #include "plugins/devices/ply/ply_device_config.h"
 #include <QHash>
 #include <QMetaObject>
@@ -410,6 +411,19 @@ WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
 
 void WorkspaceModel::close() {
   QCoreApplication::quit();
+}
+
+void WorkspaceModel::registerPluginSettingsPages() {
+  for (const auto &[plugin_name, plugin] : _workspace.discovery_plugins) {
+    if (!plugin) continue;
+    for (const auto &page : plugin->settings_pages()) {
+      pc::logger()->trace("Registering settings page '{}' from plugin '{}'",
+                          page.key, plugin_name);
+      SettingsPageRegistry::instance()->addPage(
+          QString::fromStdString(page.key), QString::fromStdString(page.title),
+          QUrl::fromLocalFile(QString::fromStdString(page.qml_file_path)));
+    }
+  }
 }
 
 void WorkspaceModel::loadFromFile(const QUrl &file) {

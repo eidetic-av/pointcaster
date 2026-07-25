@@ -108,6 +108,8 @@ public:
 
   Q_INVOKABLE void newWorkspace();
 
+  Q_INVOKABLE void registerPluginSettingsPages();
+
   QUndoStack *undoStack() const { return _undoStack; }
 
   Q_INVOKABLE void triggerDeviceDiscovery();
