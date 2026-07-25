@@ -1,0 +1,4 @@
+orbbecsdk-v1 provides CMake targets:
+
+    find_package(OrbbecSDKv1 CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE ob::OrbbecSDKv1)

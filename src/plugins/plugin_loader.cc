@@ -9,7 +9,10 @@
 #include <Corrade/Containers/StringView.h>
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/Manager.h>
+#include <app_settings/app_settings.h>
 #include <core/logger/logger.h>
+#include <cpplocate/cpplocate.h>
+#include <filesystem>
 #include <mutex>
 #include <print>
 #include <string>
@@ -17,7 +20,6 @@
 #include <vector>
 
 #ifdef _WIN32
-#include <filesystem>
 #include <windows.h>
 #endif
 
@@ -55,12 +57,20 @@ void configure_search_paths(
   SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS |
                            LOAD_LIBRARY_SEARCH_USER_DIRS);
   AddDllDirectory(plugin_root_directory.wstring().c_str());
-  for (const auto &directory_entry :
-       std::filesystem::recursive_directory_iterator(plugin_root_directory)) {
-    if (!directory_entry.is_directory()) {
+  for (auto directory_entry =
+           std::filesystem::recursive_directory_iterator(plugin_root_directory);
+       directory_entry != std::filesystem::recursive_directory_iterator();
+       ++directory_entry) {
+    if (!directory_entry->is_directory()) {
       continue;
     }
-    const auto directory_path = directory_entry.path();
+    if (directory_entry->path().filename() == "orbbec") {
+      // dont recursively add orbbec dependencies
+      // (they are handled elsewhere)
+      directory_entry.disable_recursion_pending();
+      continue;
+    }
+    const auto directory_path = directory_entry->path();
     const auto wide_path = directory_path.wstring();
     AddDllDirectory(wide_path.c_str());
   }
@@ -73,13 +83,79 @@ void configure_plugin_search_path() {
   static std::once_flag configured_flag;
   std::call_once(configured_flag, [] {
     // flat windows layout: plugins/ sits beside the executable
-    const auto plugin_root_directory =
-        executable_directory_path() / "plugins";
+    const auto plugin_root_directory = executable_directory_path() / "plugins";
     if (std::filesystem::exists(plugin_root_directory)) {
       configure_search_paths(plugin_root_directory);
     }
   });
 #endif
+}
+
+// devices plugin root, relative to the executable (differs per platform)
+std::filesystem::path device_plugins_root() {
+  const std::filesystem::path exe_dir(cpplocate::getModulePath());
+#ifdef _WIN32
+  // flat windows layout: plugins/ sits beside the executable
+  return exe_dir / "plugins" / "devices";
+#else
+  // linux bin/ layout: plugins/ sits beside the executable's parent dir
+  return exe_dir.parent_path() / "plugins" / "devices";
+#endif
+}
+
+// the orbbec plugin ships one binary per orbbec sdk version (v1 and v2)...
+// load the variant matching the application preferences
+void load_orbbec_plugin_variant(
+    Manager<devices::DevicePlugin> &device_plugin_manager) {
+  namespace fs = std::filesystem;
+
+#ifdef _WIN32
+  constexpr std::string_view plugin_binary_name = "OrbbecDevice.dll";
+#else
+  constexpr std::string_view plugin_binary_name = "OrbbecDevice.so";
+#endif
+
+  const fs::path orbbec_dir = device_plugins_root() / "orbbec";
+  const fs::path sdk_v1_plugin = orbbec_dir / "sdk-v1" / plugin_binary_name;
+  const fs::path sdk_v2_plugin = orbbec_dir / "sdk-v2" / plugin_binary_name;
+
+  const bool prefer_v1 = pc::AppSettings::instance()
+                             ->value("plugins/orbbec/sdkVersion", 2)
+                             .toInt() == 1;
+
+  // with only two variants, the other one is always the fallback
+  bool using_v1 = prefer_v1;
+  if (!fs::exists(using_v1 ? sdk_v1_plugin : sdk_v2_plugin)) {
+    using_v1 = !using_v1;
+  }
+  const fs::path &plugin_path = using_v1 ? sdk_v1_plugin : sdk_v2_plugin;
+
+  if (!fs::exists(plugin_path)) {
+    pc::logger()->trace("No orbbec plugin variants found in {}",
+                        orbbec_dir.string());
+    return;
+  }
+  if (using_v1 != prefer_v1) {
+    pc::logger()->warn("OrbbecDevice sdk v{} variant not found in {}, using "
+                       "sdk v{} instead",
+                       prefer_v1 ? 1 : 2, orbbec_dir.string(), using_v1 ? 1 : 2);
+  }
+
+#ifdef _WIN32
+  // make the chosen sdk dlls resolvable
+  AddDllDirectory(plugin_path.parent_path().wstring().c_str());
+#endif
+
+  // corrade expects utf-8 paths with forward slashes
+  const auto load_state =
+      device_plugin_manager.load(plugin_path.generic_string());
+  if (load_state & LoadState::Loaded) {
+    pc::logger()->info("OrbbecDevice plugin is using Orbbec SDK v{}",
+                       using_v1 ? 1 : 2);
+  } else {
+    pc::logger()->error("Failed to load OrbbecDevice plugin from {}",
+                        plugin_path.string());
+  }
 }
 
 } // namespace
@@ -92,6 +168,10 @@ load_device_plugins(pc::Workspace &workspace) {
 
   auto device_plugin_manager =
       std::make_unique<Manager<devices::DevicePlugin>>();
+
+  // the orbbec plugin is loaded explicitly from the directory
+  // matching the preferred orbbec sdk version
+  load_orbbec_plugin_variant(*device_plugin_manager);
 
   workspace.loaded_device_plugin_names.clear();
 

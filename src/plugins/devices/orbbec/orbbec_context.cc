@@ -9,25 +9,27 @@
 #include <mutex>
 #include <thread>
 
+// each OrbbecDevice variant is compiled against exactly one orbbec sdk major
+// version; the build defines which one so divergent sdk calls can switch on it
+#ifndef POINTCASTER_ORBBEC_SDK_VERSION
+#error "POINTCASTER_ORBBEC_SDK_VERSION must be defined (1 or 2) by the build"
+#endif
+
 namespace {
 moodycamel::ConcurrentQueue<std::function<void()>> on_ready_callbacks{};
 
-// the SDK loads a bunch of other libs from an adjacent 'extensions' directory
-// (and the sdk location is different on windows and linux)
+#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
+// sdk v2 loads a bunch of other libs from an 'extensions' directory packaged
+// beside this plugin variant's binary (sdk v1 has no extensions concept, it
+// dlopens its helper libs from beside libOrbbecSDK itself)
 void configure_extensions_directory() {
   namespace fs = std::filesystem;
-  const fs::path exe_dir(cpplocate::getModulePath());
-#ifdef _WIN32
-  // flat windows layout: plugins/ sits beside the executable
-  const fs::path extensions_dir =
-      exe_dir / "plugins" / "devices" / "orbbec" / "extensions";
-#else
-  // linux bin/ layout: plugins/ sits beside the executable's parent dir
-  const fs::path extensions_dir =
-      exe_dir.parent_path() / "plugins" / "devices" / "orbbec" / "extensions";
-#endif
+  const fs::path plugin_path(cpplocate::getLibraryPath(
+      reinterpret_cast<void *>(&configure_extensions_directory)));
+  const fs::path extensions_dir = plugin_path.parent_path() / "extensions";
   ob::Context::setExtensionsDirectory(extensions_dir.string().c_str());
 }
+#endif
 } // namespace
 
 namespace pc::devices {
@@ -54,21 +56,29 @@ void ObContext::init_async() {
     std::shared_ptr<ob::Context> local;
 
     try {
+#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
       configure_extensions_directory();
+#endif
       local = std::make_shared<ob::Context>();
       std::lock_guard api_access(self->device_api_access);
       local->enableNetDeviceEnumeration(true);
       local->enableDeviceClockSync(3600000);
-      self->device_changed_callback_id = local->registerDeviceChangedCallback(
-          [self](std::shared_ptr<ob::DeviceList>,
-                 std::shared_ptr<ob::DeviceList>) {
-            pc::logger()->info("Orbbec device change detected ");
-            self->discover_devices_async();
-          });
+      auto on_device_changed = [self](std::shared_ptr<ob::DeviceList>,
+                                      std::shared_ptr<ob::DeviceList>) {
+        pc::logger()->info("Orbbec device change detected ");
+        self->discover_devices_async();
+      };
+#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
+      self->device_changed_callback_id =
+          local->registerDeviceChangedCallback(std::move(on_device_changed));
+#else
+      // sdk v1 has a single settable callback instead of register/unregister
+      local->setDeviceChangedCallback(std::move(on_device_changed));
+#endif
     } catch (const ob::Error &e) {
       pc::logger()->error(
           "Failed to initialise Orbbec context (ob::Error in {}): {}",
-          e.getFunction(), e.what());
+          e.getName(), e.getMessage());
       self->state.store(ObContextState::Failed, std::memory_order_release);
       return;
     } catch (const std::exception &e) {
@@ -193,7 +203,11 @@ void ObContext::discover_devices() {
     std::lock_guard api_lock(device_api_access);
 
     auto device_list = ob_ctx->queryDeviceList();
+#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
     const auto count = device_list ? device_list->getCount() : 0;
+#else
+    const auto count = device_list ? device_list->deviceCount() : 0;
+#endif
 
     pc::logger()->trace("Orbbec queryDeviceList found {} devices", count);
 
@@ -201,6 +215,7 @@ void ObContext::discover_devices() {
 
     for (uint32_t i = 0; i < count; ++i) {
       try {
+#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
         ObDeviceInfo info{.id = device_list->getUid(i),
                           .serial_num = device_list->getSerialNumber(i),
                           .name = device_list->getName(i),
@@ -212,16 +227,28 @@ void ObContext::discover_devices() {
           info.subnet_mask = device_list->getSubnetMask(i);
           info.gateway = device_list->getGateway(i);
         }
+#else
+        // v1 has no subnet mask / gateway accessors
+        ObDeviceInfo info{.id = device_list->uid(i),
+                          .serial_num = device_list->serialNumber(i),
+                          .name = device_list->name(i),
+                          .connection_type = device_list->connectionType(i),
+                          .vendor_id = device_list->vid(i),
+                          .product_id = device_list->pid(i)};
+        if (info.is_network()) {
+          info.ip = device_list->ipAddress(i);
+        }
+#endif
         found_devices.push_back(std::move(info));
       } catch (const ob::Error &e) {
         pc::logger()->error(
             "Failed to read info for Orbbec device at index {} ({}): {}", i,
-            e.getFunction(), e.what());
+            e.getName(), e.getMessage());
       }
     }
   } catch (const ob::Error &e) {
     pc::logger()->error("Failed to discover Orbbec devices ({}): {}",
-                        e.getFunction(), e.what());
+                        e.getName(), e.getMessage());
   } catch (const std::exception &e) {
     pc::logger()->error(
         "Unknown std::exception during Orbbec device discovery: {}", e.what());
@@ -299,10 +326,16 @@ void ObContext::shutdown() {
     if (local) {
       try {
         std::lock_guard api_access(device_api_access);
+#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
         if (device_changed_callback_id != 0) {
           local->unregisterDeviceChangedCallback(device_changed_callback_id);
           device_changed_callback_id = 0;
         }
+#else
+        // v1 can't unregister callbacks, just overwrite
+        local->setDeviceChangedCallback([](std::shared_ptr<ob::DeviceList>,
+                                           std::shared_ptr<ob::DeviceList>) {});
+#endif
         local->enableNetDeviceEnumeration(false);
       } catch (...) {
       }

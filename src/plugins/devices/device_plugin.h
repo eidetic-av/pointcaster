@@ -59,42 +59,18 @@ public:
     auto plugin_dir = exe_dir.parent_path() / "plugins" / "devices";
 #endif
 
-    std::vector<Corrade::Containers::String> search_paths;
-
-    if (std::filesystem::exists(plugin_dir)) {
-      for (auto &recursive_file_node :
-           std::filesystem::recursive_directory_iterator(plugin_dir)) {
-        if (recursive_file_node.path().extension().string() == ".conf") {
-          // for each subdirectory that contains a file named .conf,
-          // treat it as a plugin directory and add it to our search paths...
-          search_paths.emplace_back(
-              recursive_file_node.path().parent_path().string());
-        }
-      }
-    }
-
-    // corrade requires at least one search path entry even when no plugins exist
-    if (search_paths.empty()) {
-      search_paths.emplace_back(plugin_dir.string());
-    }
+    std::string plugin_path = plugin_dir.string();
 
 #ifdef _WIN32
     // convert C:\style\path into posix /style/path used by corrade
-    for (auto &path_entry : search_paths) {
-      std::string result(path_entry.data());
-      result.erase(0, 2);
-      std::replace(result.begin(), result.end(), '\\', '/');
-      path_entry = result;
-    }
+    plugin_path.erase(0, 2);
+    std::replace(plugin_path.begin(), plugin_path.end(), '\\', '/');
 #endif
 
     // return results in a corrade array (required instead of vector)
     static Corrade::Containers::Array<Corrade::Containers::String> results;
     arrayClear(results);
-    arrayReserve(results, search_paths.size());
-    for (auto &path_string : search_paths) {
-      arrayAppend(results, path_string);
-    }
+    arrayAppend(results, Corrade::Containers::String{plugin_path.c_str()});
 
     return {Corrade::InPlaceInit, results};
   }

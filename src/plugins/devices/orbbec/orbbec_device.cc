@@ -39,6 +39,10 @@
 
 #include <plugins/backend/cpu/cpu_backend.h>
 
+#ifndef POINTCASTER_ORBBEC_SDK_VERSION
+#error "POINTCASTER_ORBBEC_SDK_VERSION must be defined (1 or 2) by the build"
+#endif
+
 using namespace std::chrono;
 using namespace std::chrono_literals;
 
@@ -181,9 +185,17 @@ void OrbbecDevice::start_sync() {
 
   // try to find existing device in the list by device UID
   if (auto ob_device_list = ob_ctx->queryDeviceList()) {
+#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
     const uint32_t device_count = ob_device_list->getCount();
+#else
+    const uint32_t device_count = ob_device_list->deviceCount();
+#endif
     for (uint32_t i = 0; i < device_count; ++i) {
+#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
       auto id = ob_device_list->getUid(i);
+#else
+      auto id = ob_device_list->uid(i);
+#endif
       if (!config.id.empty() && id) {
         if (std::strcmp(id, config.id.c_str()) == 0) {
           try {
@@ -549,8 +561,8 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
             std::shared_ptr<std::vector<std::byte>> cuda_render_buffer;
             std::span<std::byte> render_output;
             if (using_cuda && should_render) {
-              cuda_render_buffer =
-                  std::make_shared<std::vector<std::byte>>(max_point_count * 16);
+              cuda_render_buffer = std::make_shared<std::vector<std::byte>>(
+                  max_point_count * 16);
               render_output = *cuda_render_buffer;
             }
 
@@ -593,6 +605,11 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
+  } catch (const ob::Error &e) {
+    // sdk v1's ob::Error is not a std::exception, catch it explicitly...
+    pc::logger()->error("Exception in Orbbec processing thread ({}): {}",
+                        e.getName(), e.getMessage());
+    set_error_state(true);
   } catch (const std::exception &e) {
     pc::logger()->error("Exception in Orbbec processing thread: {}", e.what());
     set_error_state(true);

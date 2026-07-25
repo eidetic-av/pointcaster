@@ -14,6 +14,7 @@ find_package(TBB REQUIRED)
 target_link_libraries(pointcaster_plugins PRIVATE
     pointcaster::core
     pointcaster::pipeline
+    pointcaster::app_settings
     Corrade::PluginManager
     TBB::tbb
 )

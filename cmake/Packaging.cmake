@@ -222,9 +222,9 @@ if(WIN32)
         # vcpkg applocal duplicates dlls beside each plugin, copies that also ship beside the exe are never loaded
         file(GLOB_RECURSE _plugin_dlls ${_corrade_plugin_globs})
         foreach(_plugin_dll ${_plugin_dlls})
-            # the orbbec SDK's extensions/ tree has its
-            # own required layout that it resolves at runtime
-            if(_plugin_dll MATCHES "/extensions/")
+            # the orbbec plugin manages its own directory layout for loading
+            # its own dependencies, so leave everything under it in place
+            if(_plugin_dll MATCHES "/orbbec/")
                 continue()
             endif()
             get_filename_component(_dll_name "${_plugin_dll}" NAME)
@@ -236,7 +236,8 @@ if(WIN32)
         # tuck dependency dlls without .conf metadata into deps/ so corrade's plugin scan doesn't warn about them (they stay on the dll search path)
         file(GLOB_RECURSE _plugin_dlls ${_corrade_plugin_globs})
         foreach(_plugin_dll ${_plugin_dlls})
-            if(_plugin_dll MATCHES "/deps/" OR _plugin_dll MATCHES "/extensions/")
+            # /orbbec/ is left intact
+            if(_plugin_dll MATCHES "/deps/" OR _plugin_dll MATCHES "/orbbec/")
                 continue()
             endif()
             get_filename_component(_dll_dir "${_plugin_dll}" DIRECTORY)

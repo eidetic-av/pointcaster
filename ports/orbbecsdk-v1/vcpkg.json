@@ -1,0 +1,7 @@
+{
+    "name": "orbbecsdk-v1",
+    "version": "1.10.35",
+    "description": "Orbbec SDK v1 prebuilt binaries, installed under orbbecsdk-v1/ subdirectories so it can coexist with orbbecsdk-v2",
+    "homepage": "https://github.com/orbbec/OrbbecSDK",
+    "license": "MIT"
+}
