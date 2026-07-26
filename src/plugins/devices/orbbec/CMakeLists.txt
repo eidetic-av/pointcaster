@@ -110,13 +110,21 @@ endfunction()
 # copies the given runtime files beside the variant's plugin binary
 function(add_orbbec_variant_runtime_files target sdk_major)
   set(variant_dir "${ORBBEC_PLUGIN_DIR}/sdk-v${sdk_major}")
+
+  set(runtime_files "")
   foreach(runtime_file IN LISTS ARGN)
+    if(NOT IS_DIRECTORY "${runtime_file}")
+      list(APPEND runtime_files "${runtime_file}")
+    endif()
+  endforeach()
+
+  foreach(runtime_file IN LISTS runtime_files)
     add_custom_command(TARGET ${target} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
       "${runtime_file}" "${variant_dir}"
     )
   endforeach()
-  install(FILES ${ARGN} DESTINATION ${variant_dir})
+  install(FILES ${runtime_files} DESTINATION ${variant_dir})
 endfunction()
 
 # --- sdk v2 variant
