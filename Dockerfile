@@ -211,5 +211,4 @@ RUN --mount=type=cache,id=vcpkg-downloads-cache,target=${VCPKG_DOWNLOADS},uid=${
 LABEL org.opencontainers.image.title="pointcaster-dev" \
     org.opencontainers.image.description="Pointcaster dev environment with build tools and pre-built project deps" \
     org.opencontainers.image.vendor="matth" \
-    org.opencontainers.image.source="https://github.com/matth-av/pointcaster" \
-    org.opencontainers.image.licenses="AGPL-3.0-or-later"
+    org.opencontainers.image.source="https://github.com/matth-av/pointcaster"
