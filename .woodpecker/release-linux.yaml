@@ -1,0 +1,48 @@
+# Linux release build, triggered by pushing a version tag:
+#
+#   git tag v0.2.2 && git push origin v0.2.2
+#
+
+when:
+  - event: tag
+
+labels:
+  platform: linux/amd64
+
+variables:
+  - &dev_image cr.pointcaster.net/pointcaster-dev:2026-07-26-linux
+
+steps:
+  - name: prepare
+    image: *dev_image
+    backend_options:
+      docker:
+        user: "0:0"
+    commands:
+      - chown -R 1000:1000 "$CI_WORKSPACE"
+      - |
+        tag="$${CI_COMMIT_TAG#v}"
+        version=$(sed -n 's/^project(pointcaster VERSION \([^ )]*\).*/\1/p' CMakeLists.txt)
+        if [ -z "$version" ]; then
+          echo "could not read the project version out of CMakeLists.txt" >&2
+          exit 1
+        fi
+        if [ "$tag" != "$version" ]; then
+          echo "tag $CI_COMMIT_TAG does not match CMakeLists.txt version $version" >&2
+          echo "bump project(pointcaster VERSION ...) and re-tag" >&2
+          exit 1
+        fi
+        echo "releasing pointcaster $version"
+
+  - name: build-and-deploy
+    image: *dev_image
+    environment:
+      HOME: /home/dev
+      DEPLOY_BRANCH: qt
+      B2_APPLICATION_KEY_ID:
+        from_secret: b2_application_key_id
+      B2_APPLICATION_KEY:
+        from_secret: b2_application_key
+    commands:
+      - cmake --preset linux-release
+      - cmake --build build/linux-release --target deploy
