@@ -5,7 +5,7 @@ usage: deploy.py <bucket_name> <module> <package_file>
 
 Writes a sha256 checksum file next to the package, then uploads both to
 <branch>/<module>/<package-file-name>[.sha256] in the bucket, where <branch>
-is the current git branch of this repo.
+is the current git branch of this repo, or DEPLOY_BRANCH if that is set.
 
 Credentials are read from the B2_APPLICATION_KEY_ID and B2_APPLICATION_KEY
 environment variables.
@@ -79,10 +79,13 @@ def main():
     if not key_id or not key:
         sys.exit("B2_APPLICATION_KEY_ID and B2_APPLICATION_KEY must be set")
 
-    branch = subprocess.run(
-        ["git", "-C", REPO_ROOT, "rev-parse", "--abbrev-ref", "HEAD"],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip()
+    # DEPLOY_BRANCH lets CI name the build prefix explicitly
+    branch = os.environ.get("DEPLOY_BRANCH")
+    if not branch:
+        branch = subprocess.run(
+            ["git", "-C", REPO_ROOT, "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
     remote_prefix = f"{branch}/{module}"
     package_name = os.path.basename(package_file)
 
