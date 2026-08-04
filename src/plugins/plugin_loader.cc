@@ -121,7 +121,7 @@ void load_orbbec_plugin_variant(
   const fs::path sdk_v2_plugin = orbbec_dir / "sdk-v2" / plugin_binary_name;
 
   const bool prefer_v1 = pc::AppSettings::instance()
-                             ->value("plugins/orbbec/sdkVersion", 2)
+                             ->value("devices/orbbec/sdkVersion", 2)
                              .toInt() == 1;
 
   // with only two variants, the other one is always the fallback

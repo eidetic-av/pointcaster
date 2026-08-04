@@ -9,7 +9,7 @@ SettingsPage {
 
     title: "Orbbec"
 
-    readonly property string sdkVersionKey: "plugins/orbbec/sdkVersion"
+    readonly property string sdkVersionKey: "devices/orbbec/sdkVersion"
 
     SettingsSection {
         SettingsRow {
