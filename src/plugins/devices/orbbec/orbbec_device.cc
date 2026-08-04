@@ -38,8 +38,8 @@
 #include <variant>
 #include <workspace/workspace.h>
 
-#include <pointcaster/task_pool.h>
 #include <plugins/backend/cpu/cpu_backend.h>
+#include <pointcaster/task_pool.h>
 
 #ifndef POINTCASTER_ORBBEC_SDK_VERSION
 #error "POINTCASTER_ORBBEC_SDK_VERSION must be defined (1 or 2) by the build"
@@ -530,13 +530,16 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                                                        device_config.id);
       }
 
-      _process_tasks_in_flight.fetch_add(1);
+      // drop this frame rather than queue it when processing is behind...
+      if (!try_begin_frame_task()) continue;
+
       pc::task_pool().detach_task(
           [this, &color_intrinsics, &cuda_backend, &cpu_backend,
            colour_frame = std::move(colour_frame),
            depth_frame = std::move(depth_frame), device_config = device_config,
            max_point_count = max_point_count, world = world]() {
             ProfilingZone process_frame_zone("OrbbecDevice::process_frame");
+            FrameTaskSlot frame_task_slot(*this);
 
             const auto frame_width = colour_frame->width();
             const auto frame_height = colour_frame->height();
@@ -605,9 +608,6 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
             notify_point_cloud_updated();
             set_updated_time(steady_clock::now());
-
-            _process_tasks_in_flight.fetch_sub(1);
-            _process_tasks_in_flight.notify_all();
           });
     }
 

@@ -180,6 +180,58 @@ public:
 
   DeviceConfigurationVariant &config_variant() { return _config; }
 
+  static constexpr size_t max_frame_tasks_in_flight = 2;
+
+  // claims a processing slot, or returns false when the device is already at
+  // capacity and this frame should be dropped
+  bool try_begin_frame_task() {
+    auto in_flight = _process_tasks_in_flight.load(std::memory_order_relaxed);
+    while (in_flight < max_frame_tasks_in_flight) {
+      // on failure the exchange refreshes in_flight, so the loop re-checks
+      // capacity against the value another thread just left behind
+      if (_process_tasks_in_flight.compare_exchange_weak(
+              in_flight, in_flight + 1, std::memory_order_acq_rel,
+              std::memory_order_relaxed)) {
+        return true;
+      }
+    }
+    _dropped_frames.fetch_add(1, std::memory_order_relaxed);
+    return false;
+  }
+
+  // releases a slot claimed by try_begin_frame_task
+  void end_frame_task() {
+    _frames_processed.fetch_add(1, std::memory_order_relaxed);
+    _process_tasks_in_flight.fetch_sub(1, std::memory_order_acq_rel);
+    _process_tasks_in_flight.notify_all();
+  }
+
+  class FrameTaskSlot {
+  public:
+    explicit FrameTaskSlot(DevicePlugin &device) : _device(device) {}
+    ~FrameTaskSlot() { _device.end_frame_task(); }
+
+    FrameTaskSlot(const FrameTaskSlot &) = delete;
+    FrameTaskSlot &operator=(const FrameTaskSlot &) = delete;
+    FrameTaskSlot(FrameTaskSlot &&) = delete;
+    FrameTaskSlot &operator=(FrameTaskSlot &&) = delete;
+
+  private:
+    DevicePlugin &_device;
+  };
+
+  size_t frame_tasks_in_flight() const {
+    return _process_tasks_in_flight.load(std::memory_order_relaxed);
+  }
+
+  size_t dropped_frames() const {
+    return _dropped_frames.load(std::memory_order_relaxed);
+  }
+
+  size_t frames_processed() const {
+    return _frames_processed.load(std::memory_order_relaxed);
+  }
+
   std::vector<camera::CameraFrame> latest_camera_frames() const {
     if (_pipeline) return _pipeline->latest_camera_frames();
     return {};
@@ -209,6 +261,8 @@ protected:
   bool _is_discovery_instance = false;
 
   std::atomic<size_t> _process_tasks_in_flight{0};
+  std::atomic<size_t> _dropped_frames{0};
+  std::atomic<size_t> _frames_processed{0};
 
   std::atomic<std::shared_ptr<std::vector<std::byte>>> _latest_render_data;
 
