@@ -38,6 +38,7 @@
 #include <variant>
 #include <workspace/workspace.h>
 
+#include <pointcaster/task_pool.h>
 #include <plugins/backend/cpu/cpu_backend.h>
 
 #ifndef POINTCASTER_ORBBEC_SDK_VERSION
@@ -530,7 +531,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
       }
 
       _process_tasks_in_flight.fetch_add(1);
-      pc::backend::CpuBackend::thread_pool.detach_task(
+      pc::task_pool().detach_task(
           [this, &color_intrinsics, &cuda_backend, &cpu_backend,
            colour_frame = std::move(colour_frame),
            depth_frame = std::move(depth_frame), device_config = device_config,

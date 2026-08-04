@@ -4,6 +4,7 @@
 #include <core/logger/logger.h>
 #include <core/profiling/profiler.h>
 #include <optional>
+#include <pointcaster/task_pool.h>
 #include <print>
 #include <tracy/Tracy.hpp>
 #include <ui/initialisation.h>
@@ -34,6 +35,17 @@ int main(int argc, char *argv[]) {
   QObject::connect(app_settings, &pc::AppSettings::logLevelChanged,
                    app_settings,
                    [&] { pc::set_log_level(app_settings->spdlogLogLevel()); });
+
+  const auto apply_worker_thread_prefs = [&] {
+    pc::set_task_pool_size(
+        static_cast<std::size_t>(app_settings->workerThreads()));
+  };
+  apply_worker_thread_prefs();
+  QObject::connect(app_settings, &pc::AppSettings::workerThreadsChanged,
+                   app_settings, apply_worker_thread_prefs);
+
+  pc::logger()->trace("Task thread pool using {} threads",
+                      pc::task_pool().get_thread_count());
 
   // tracy profiling is enabled or disabled for the entire application run
   if (app_settings->enableTracyProfiling()) {

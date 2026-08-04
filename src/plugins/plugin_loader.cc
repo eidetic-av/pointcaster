@@ -1,5 +1,6 @@
 #include "plugin_loader.h"
 #include "backend/cpu/cpu_backend.h"
+#include <pointcaster/task_pool.h>
 #include "backend/cuda/cuda_backend.h"
 #include "devices/device_plugin.h"
 #include "devices/null/null_device.h"

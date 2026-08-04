@@ -1,12 +1,13 @@
 #include "session_recorder.h"
 #include "workspace/workspace.h"
+#include <BS_thread_pool.hpp>
+#include <app_settings/app_settings.h>
 #include <atomic>
 #include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <format>
 #include <fstream>
-#include <plugins/backend/cpu/cpu_backend.h>
 #include <plugins/devices/device_plugin.h>
 #include <profiling/profiling_zone.h>
 #include <ranges>
@@ -18,12 +19,32 @@ namespace pc::recorder {
 
 using namespace pc::profiling;
 
+namespace {
+
+size_t configured_writer_threads() {
+  return static_cast<size_t>(AppSettings::instance()->fileWriterThreads());
+}
+
+BS::thread_pool<> &writer_pool() {
+  static BS::thread_pool<> pool{configured_writer_threads()};
+  return pool;
+}
+} // namespace
+
 SessionRecorder::SessionRecorder(Workspace &workspace)
     : _workspace(workspace) {
 
       };
 
 void SessionRecorder::start_recording() {
+
+  const auto writer_thread_count = configured_writer_threads();
+  if (writer_pool().get_thread_count() != writer_thread_count) {
+    writer_pool().reset(writer_thread_count);
+  }
+  pc::logger()->trace("SessionRecorder writer pool using {} threads",
+                      writer_thread_count);
+
   _current_frame.store(0, std::memory_order_relaxed);
   _queue_depth.store(0, std::memory_order_relaxed);
   _dropped_frames.store(0, std::memory_order_relaxed);
@@ -151,15 +172,14 @@ void SessionRecorder::file_writer_thread_work(std::stop_token stop_token) {
 
       if (_parallelise_writes) {
         _writes_in_flight.fetch_add(1);
-        backend::CpuBackend::thread_pool.detach_task(
-            [this, path = std::move(file_path),
-             cloud = std::move(device_frame.data)] {
-              if (_output_file_type == OutputFileType::PLY) {
-                write_ply(path, cloud);
-              }
-              _writes_in_flight.fetch_sub(1);
-              _writes_in_flight.notify_all();
-            });
+        writer_pool().detach_task([this, path = std::move(file_path),
+                                   cloud = std::move(device_frame.data)] {
+          if (_output_file_type == OutputFileType::PLY) {
+            write_ply(path, cloud);
+          }
+          _writes_in_flight.fetch_sub(1);
+          _writes_in_flight.notify_all();
+        });
       } else {
         if (_output_file_type == OutputFileType::PLY) {
           write_ply(file_path, device_frame.data);

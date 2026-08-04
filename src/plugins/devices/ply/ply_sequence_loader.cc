@@ -9,6 +9,7 @@
 #include <cstring>
 #include <oneapi/tbb/parallel_for.h>
 #include <plugins/backend/cpu/cpu_backend.h>
+#include <pointcaster/task_pool.h>
 
 namespace pc::devices::ply {
 
@@ -158,7 +159,6 @@ void PlySequenceLoader::set_loop(size_t start, size_t end) {
 }
 
 void PlySequenceLoader::prefetch_from(size_t current) {
-  auto &pool = backend::CpuBackend::thread_pool;
   const auto gen = _generation.load(std::memory_order_relaxed);
 
   const auto loop_start = _loop_start.load(std::memory_order_relaxed);
@@ -174,7 +174,8 @@ void PlySequenceLoader::prefetch_from(size_t current) {
       std::min(_config.prefetch_ahead, _config.buffer_capacity - 1);
 
   for (size_t off = 1; off <= effective_ahead; ++off) {
-    const auto frame_index = loop_start + (current - loop_start + off) % loop_range;
+    const auto frame_index =
+        loop_start + (current - loop_start + off) % loop_range;
     const auto slot = frame_index % _config.buffer_capacity;
 
     {
@@ -182,7 +183,7 @@ void PlySequenceLoader::prefetch_from(size_t current) {
       if (_ring_index[slot] == frame_index && _ring[slot]) continue;
     }
 
-    pool.detach_task([this, frame_index, slot, gen] {
+    pc::task_pool().detach_task([this, frame_index, slot, gen] {
       if (_generation.load(std::memory_order_relaxed) != gen) return;
       load_into_slot(frame_index, slot);
     });

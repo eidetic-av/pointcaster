@@ -1,14 +1,11 @@
 #pragma once
 
 #include "../backend_plugin.h"
-#include <BS_thread_pool.hpp>
 
 namespace pc::backend {
 
 class CpuBackend : public BackendPlugin {
 public:
-  inline static BS::thread_pool thread_pool{};
-
   explicit CpuBackend(Corrade::PluginManager::AbstractManager &manager,
                       Corrade::Containers::StringView plugin);
 
