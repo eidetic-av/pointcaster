@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <metrics/metrics.h>
 #include <plugins/devices/device_plugin.h>
 #include <profiling/profiling_zone.h>
 #include <ranges>
@@ -214,6 +215,8 @@ void SessionRecorder::write_ply(const std::string &file_path,
 
   ProfilingZone write_ply_zone("SessionRecorder::write_ply");
 
+  const auto write_started = std::chrono::steady_clock::now();
+
   std::ofstream output_file(file_path, std::ios::binary);
   if (!output_file) {
     pc::logger()->error("failed to open {}", file_path);
@@ -245,6 +248,11 @@ void SessionRecorder::write_ply(const std::string &file_path,
 
   output_file.write(reinterpret_cast<const char *>(data_buffer.data()),
                     data_buffer.size());
+
+  const std::chrono::duration<double, std::milli> write_duration =
+      std::chrono::steady_clock::now() - write_started;
+  pc::metrics::observe_duration("pointcaster_recorder_write_duration_ms",
+                                write_duration.count());
 }
 
 } // namespace pc::recorder

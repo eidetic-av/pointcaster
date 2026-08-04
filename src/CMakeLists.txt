@@ -23,6 +23,7 @@ qt_add_executable(pointcaster
   #WIN32
   pointcaster.cc
   workspace/workspace.cc
+  workspace/workspace_metrics.cc
   session/session.cc
   workspace/workspace_config.cc
   camera/look_at_camera.cc

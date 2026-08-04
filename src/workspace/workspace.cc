@@ -80,6 +80,9 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   // wherever it's needed... at least just so it can be torn down and restarted
   // at will
   metrics::PrometheusServer::initialise();
+
+  _metrics_thread = std::jthread(
+      [this](std::stop_token stop_token) { metrics_thread_work(stop_token); });
 }
 
 void Workspace::apply_new_config(const WorkspaceConfiguration &new_config,

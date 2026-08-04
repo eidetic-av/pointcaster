@@ -21,7 +21,9 @@
 #include <plugins/devices/device_plugin.h>
 #include <plugins/devices/device_variants.h>
 #include <plugins/operators/operator_plugin.h>
+#include <stop_token>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -74,6 +76,10 @@ public:
   void sync_sessions();
 
   void rebuild_config_registry();
+
+private:
+  void metrics_thread_work(std::stop_token stop_token);
+  std::jthread _metrics_thread;
 };
 
 } // namespace pc

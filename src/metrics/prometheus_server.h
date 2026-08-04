@@ -9,13 +9,13 @@
 #include <vector>
 
 #if defined(_WIN32)
-  #if defined(METRICS_DLL)
-    #define METRICS_API __declspec(dllexport)
-  #else
-    #define METRICS_API __declspec(dllimport)
-  #endif
+#if defined(METRICS_DLL)
+#define METRICS_API __declspec(dllexport)
 #else
-  #define METRICS_API
+#define METRICS_API __declspec(dllimport)
+#endif
+#else
+#define METRICS_API
 #endif
 
 namespace prometheus {
@@ -32,27 +32,56 @@ public:
   static std::shared_ptr<prometheus::Registry> registry();
 
   using LabelPairView = std::pair<std::string_view, std::string_view>;
+
+  enum class MetricKind { Gauge, Counter, Histogram };
+
+  // a value that moves in both directions
   template <typename T>
   static void set_gauge(std::string_view metric_name, T &&value,
                         std::initializer_list<LabelPairView> labels = {}) {
-    GaugeUpdate update{.metric_name = std::string(metric_name),
-                       .value = static_cast<double>(value),
-                       .labels{}};
-    for (const auto &[k, v] : labels) {
-      update.labels.emplace_back(std::string(k), std::string(v));
-    }
+    enqueue(MetricKind::Gauge, metric_name, static_cast<double>(value), labels);
+  }
 
-    _gauge_update_queue.enqueue(std::move(update));
+  // a monotonic ascending value
+  template <typename T>
+  static void set_counter(std::string_view metric_name, T &&total,
+                          std::initializer_list<LabelPairView> labels = {}) {
+    enqueue(MetricKind::Counter, metric_name, static_cast<double>(total),
+            labels);
+  }
+
+  // a duration in milliseconds
+  template <typename T>
+  static void
+  observe_duration(std::string_view metric_name, T &&milliseconds,
+                   std::initializer_list<LabelPairView> labels = {}) {
+    enqueue(MetricKind::Histogram, metric_name,
+            static_cast<double>(milliseconds), labels);
   }
 
 private:
-  struct GaugeUpdate {
+  struct MetricUpdate {
+    MetricKind kind = MetricKind::Gauge;
     std::string metric_name;
     double value = 0.0;
     std::vector<std::pair<std::string, std::string>> labels; // key,value
   };
 
-  static moodycamel::BlockingConcurrentQueue<GaugeUpdate> _gauge_update_queue;
+  static void enqueue(MetricKind kind, std::string_view metric_name,
+                      double value,
+                      std::initializer_list<LabelPairView> labels) {
+    MetricUpdate update{.kind = kind,
+                        .metric_name = std::string(metric_name),
+                        .value = value,
+                        .labels{}};
+    for (const auto &[k, v] : labels) {
+      update.labels.emplace_back(std::string(k), std::string(v));
+    }
+
+    _update_queue.enqueue(std::move(update));
+  }
+
+  static moodycamel::BlockingConcurrentQueue<MetricUpdate> _update_queue;
 };
 
 } // namespace pc::metrics
