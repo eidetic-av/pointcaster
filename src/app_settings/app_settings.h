@@ -52,6 +52,13 @@ class APP_SETTINGS_API AppSettings final : public QObject {
   Q_PROPERTY(bool enableTracyProfiling READ enableTracyProfiling WRITE
                  setEnableTracyProfiling NOTIFY enableTracyProfilingChanged)
 
+  Q_PROPERTY(int workerThreads READ workerThreads WRITE setWorkerThreads NOTIFY
+                 workerThreadsChanged)
+  Q_PROPERTY(int defaultWorkerThreads READ defaultWorkerThreads CONSTANT)
+  Q_PROPERTY(int fileWriterThreads READ fileWriterThreads WRITE
+                 setFileWriterThreads NOTIFY fileWriterThreadsChanged)
+  Q_PROPERTY(int defaultFileWriterThreads READ defaultFileWriterThreads CONSTANT)
+
 public:
   static AppSettings *instance();
 
@@ -111,6 +118,20 @@ public:
   bool enableTracyProfiling() const;
   void setEnableTracyProfiling(bool value);
 
+  // -- Performance
+
+  // threads for device processing and sequence loading, defaulting to every
+  // hardware thread the machine reports
+  int workerThreads() const;
+  void setWorkerThreads(int value);
+  int defaultWorkerThreads() const;
+
+  // threads for blocking recording writes, sized for the storage device rather
+  // than the cpu so the default stays small
+  int fileWriterThreads() const;
+  void setFileWriterThreads(int value);
+  int defaultFileWriterThreads() const;
+
   // -- for plugins that lookup values from a map
 
   Q_INVOKABLE QVariant value(const QString &key,
@@ -135,6 +156,9 @@ signals:
   void prometheusAddressChanged();
 
   void enableTracyProfilingChanged();
+
+  void workerThreadsChanged();
+  void fileWriterThreadsChanged();
 
   void valueChanged(const QString &key);
 
@@ -166,6 +190,9 @@ private:
   QString m_prometheusAddress;
 
   bool m_enableTracyProfiling = false;
+
+  int m_workerThreads = 1;
+  int m_fileWriterThreads = 1;
 };
 
 } // namespace pc

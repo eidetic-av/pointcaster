@@ -5,7 +5,9 @@
 #include <QThread>
 #include <QtGlobal>
 #include <QtQml/qqml.h>
+#include <algorithm>
 #include <qcoreapplication.h>
+#include <thread>
 
 namespace pc {
 
@@ -34,23 +36,29 @@ AppSettings::AppSettings(QObject *parent)
   const auto logLevelText =
       m_settings.value("logLevel", QStringLiteral("info")).toString();
   m_logLevel = logLevelFromString(logLevelText);
+  m_logToFile = m_settings.value("logToFile", true).toBool();
 
-  m_uiScale = m_settings.value("ui/scale", 1.0).toDouble();
-  m_gridSizeMetres = m_settings.value("ui/gridSize", 10).toInt();
+  m_uiScale = m_settings.value("uiScale", 1.0).toDouble();
+  m_gridSizeMetres = m_settings.value("gridSize", 10).toInt();
   m_backgroundColor =
-      m_settings.value("ui/backgroundColor", QStringLiteral("#00010A"))
+      m_settings.value("viewport/backgroundColor", QStringLiteral("#00010A"))
           .toString();
-  m_pointSizeMin = m_settings.value("rendering/pointSizeMin", 1.0).toDouble();
-  m_pointSizeMax = m_settings.value("rendering/pointSizeMax", 5.0).toDouble();
+  m_pointSizeMin = m_settings.value("viewport/pointSizeMin", 1.0).toDouble();
+  m_pointSizeMax = m_settings.value("viewport/pointSizeMax", 5.0).toDouble();
 
   m_enablePrometheusMetrics =
-      m_settings.value("metrics/enabled", true).toBool();
+      m_settings.value("prometheusEnabled", true).toBool();
   m_prometheusAddress =
-      m_settings
-          .value("metrics/prometheusAddress", QStringLiteral("0.0.0.0:8080"))
+      m_settings.value("prometheusAddress", QStringLiteral("0.0.0.0:8080"))
           .toString();
 
-  m_enableTracyProfiling = m_settings.value("profiling/enabled", true).toBool();
+  m_enableTracyProfiling = m_settings.value("tracyEnabled", true).toBool();
+
+  m_workerThreads = std::max(
+      1, m_settings.value("workerThreads", defaultWorkerThreads()).toInt());
+  m_fileWriterThreads = std::max(
+      1, m_settings.value("fileWriterThreads", defaultFileWriterThreads())
+             .toInt());
 }
 
 AppSettings::LogLevel AppSettings::logLevel() const {
@@ -147,7 +155,7 @@ void AppSettings::setUiScale(double value) {
   }
 
   m_uiScale = v;
-  write("ui/scale", m_uiScale);
+  write("uiScale", m_uiScale);
   emit uiScaleChanged();
 }
 
@@ -166,8 +174,56 @@ void AppSettings::setGridSizeMetres(int value) {
   }
 
   m_gridSizeMetres = value;
-  write("ui/gridSize", m_gridSizeMetres);
+  write("gridSize", m_gridSizeMetres);
   emit gridSizeMetresChanged();
+}
+
+int AppSettings::defaultWorkerThreads() const {
+  const auto hardware_threads = std::thread::hardware_concurrency();
+  return hardware_threads > 0 ? static_cast<int>(hardware_threads) : 1;
+}
+
+int AppSettings::defaultFileWriterThreads() const {
+  return 2;
+}
+
+int AppSettings::workerThreads() const {
+  return m_workerThreads;
+}
+
+void AppSettings::setWorkerThreads(int value) {
+  if (value < 1) value = 1;
+  if (value == m_workerThreads) return;
+
+  if (!onObjectThread(this)) {
+    QMetaObject::invokeMethod(
+        this, [this, v = value] { setWorkerThreads(v); }, Qt::QueuedConnection);
+    return;
+  }
+
+  m_workerThreads = value;
+  write("workerThreads", m_workerThreads);
+  emit workerThreadsChanged();
+}
+
+int AppSettings::fileWriterThreads() const {
+  return m_fileWriterThreads;
+}
+
+void AppSettings::setFileWriterThreads(int value) {
+  if (value < 1) value = 1;
+  if (value == m_fileWriterThreads) return;
+
+  if (!onObjectThread(this)) {
+    QMetaObject::invokeMethod(
+        this, [this, v = value] { setFileWriterThreads(v); },
+        Qt::QueuedConnection);
+    return;
+  }
+
+  m_fileWriterThreads = value;
+  write("fileWriterThreads", m_fileWriterThreads);
+  emit fileWriterThreadsChanged();
 }
 
 void AppSettings::setBackgroundColor(const QString &value) {
@@ -181,7 +237,7 @@ void AppSettings::setBackgroundColor(const QString &value) {
   }
 
   m_backgroundColor = value;
-  write("ui/backgroundColor", m_backgroundColor);
+  write("viewport/backgroundColor", m_backgroundColor);
   emit backgroundColorChanged();
 }
 
@@ -202,7 +258,7 @@ void AppSettings::setPointSizeMin(double value) {
     return;
   }
   m_pointSizeMin = v;
-  write("rendering/pointSizeMin", m_pointSizeMin);
+  write("viewport/pointSizeMin", m_pointSizeMin);
   emit pointSizeMinChanged();
 }
 
@@ -219,7 +275,7 @@ void AppSettings::setPointSizeMax(double value) {
     return;
   }
   m_pointSizeMax = v;
-  write("rendering/pointSizeMax", m_pointSizeMax);
+  write("viewport/pointSizeMax", m_pointSizeMax);
   emit pointSizeMaxChanged();
 }
 
@@ -276,7 +332,7 @@ void AppSettings::setEnablePrometheusMetrics(bool value) {
   }
 
   m_enablePrometheusMetrics = value;
-  write("metrics/enabled", m_enablePrometheusMetrics);
+  write("prometheusEnabled", m_enablePrometheusMetrics);
   emit enablePrometheusMetricsChanged();
 }
 
@@ -295,7 +351,7 @@ void AppSettings::setPrometheusAddress(const QString &value) {
   }
 
   m_prometheusAddress = value;
-  write("metrics/prometheusAddress", m_prometheusAddress);
+  write("prometheusAddress", m_prometheusAddress);
   emit prometheusAddressChanged();
 }
 
@@ -314,7 +370,7 @@ void AppSettings::setEnableTracyProfiling(bool value) {
   }
 
   m_enableTracyProfiling = value;
-  write("profiling/enabled", m_enableTracyProfiling);
+  write("tracyEnabled", m_enableTracyProfiling);
   emit enableTracyProfilingChanged();
 }
 
