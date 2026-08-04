@@ -19,12 +19,27 @@ Dialog {
     implicitWidth: Math.round(720 * Scaling.uiScale)
     implicitHeight: Math.round(480 * Scaling.uiScale)
 
+    padding: 0
+
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    footer: Item {
+    background: Rectangle {
+        color: ThemeColors.window
+    }
+
+    footer: Rectangle {
         id: footerContent
-        implicitHeight: footerLayout.implicitHeight
-        width: parent.width
+
+        implicitHeight: footerLayout.implicitHeight + Math.round(16 * Scaling.uiScale)
+        color: ThemeColors.dark
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 1
+            color: ThemeColors.middark
+        }
 
         RowLayout {
             id: footerLayout
@@ -40,78 +55,141 @@ Dialog {
         }
     }
 
-    contentItem: Row {
+    contentItem: Item {
         id: windowContent
-        width: root.width
-        height: root.height - footerContent.height
-        spacing: 0
 
-        ListView {
-            id: sidebar
-            width: Math.round(180 * Scaling.uiScale)
-            height: windowContent.height
-            clip: true
+        RowLayout {
+            anchors.fill: parent
+            spacing: 0
 
-            model: SettingsPageRegistry
-            currentIndex: Math.max(0, SettingsPageRegistry.indexOfKey(SettingsPageRegistry.defaultKey))
+            Rectangle {
+                id: sidebarPane
 
-            delegate: ItemDelegate {
-                width: ListView.view.width
-                text: model.title
-                font: Scaling.uiFont
-                highlighted: ListView.isCurrentItem
-                padding: Math.round(8 * Scaling.uiScale)
-                onClicked: root.setPageIndex(index)
+                Layout.preferredWidth: Math.round(172 * Scaling.uiScale)
+                Layout.fillHeight: true
+                color: ThemeColors.dark
+
+                ListView {
+                    id: sidebar
+
+                    anchors.fill: parent
+                    topMargin: Math.round(6 * Scaling.uiScale)
+                    bottomMargin: Math.round(6 * Scaling.uiScale)
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    keyNavigationEnabled: false
+
+                    model: SettingsPageRegistry
+
+                    delegate: Item {
+                        id: entry
+
+                        required property int index
+                        required property string title
+                        required property bool isSection
+
+                        readonly property bool current: ListView.isCurrentItem
+                        readonly property real rowHeight: Math.round(24 * Scaling.uiScale)
+
+                        width: ListView.view.width
+
+                        height: isSection ? rowHeight + Math.round(12 * Scaling.uiScale) : rowHeight
+
+                        Label {
+                            visible: entry.isSection
+
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.leftMargin: Math.round(11 * Scaling.uiScale)
+                            anchors.rightMargin: Math.round(8 * Scaling.uiScale)
+                            height: entry.rowHeight
+
+                            text: entry.title
+                            font: Scaling.uiFont
+                            color: ThemeColors.withAlpha(ThemeColors.text, 0.5)
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+
+                        ItemDelegate {
+                            id: pageEntry
+
+                            anchors.fill: parent
+                            visible: !entry.isSection
+                            padding: 0
+                            leftPadding: Math.round(11 * Scaling.uiScale)
+                            rightPadding: Math.round(8 * Scaling.uiScale)
+
+                            onClicked: root.setPageIndex(entry.index)
+
+                            background: Rectangle {
+                                color: {
+                                    if (entry.current)
+                                        return ThemeColors.withAlpha(ThemeColors.highlight, 0.16);
+                                    if (pageEntry.hovered)
+                                        return ThemeColors.withAlpha(ThemeColors.mid, 0.45);
+                                    return "transparent";
+                                }
+
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    width: Math.max(1, Math.round(1.5 * Scaling.uiScale))
+                                    visible: entry.current
+                                    color: ThemeColors.highlight
+                                }
+                            }
+
+                            contentItem: Label {
+                                text: entry.title
+                                font: Scaling.uiFont
+                                color: entry.current ? ThemeColors.text : ThemeColors.withAlpha(ThemeColors.text, 0.72)
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.preferredWidth: Math.max(1, Math.round(1 * Scaling.uiScale))
+                Layout.fillHeight: true
+                color: ThemeColors.middark
+            }
+
+            StackView {
+                id: stack
+
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                replaceEnter: Transition {}
+                replaceExit: Transition {}
             }
         }
 
-        Rectangle {
-            width: Math.max(1, Math.round(1 * Scaling.uiScale))
-            height: root.height - footerContent.height
-            color: Qt.darker(palette.window, 1.15)
-        }
-
-        StackView {
-            id: stack
-            width: windowContent.width - sidebar.width
-            height: root.height - footerContent.height
-            clip: true
-            replaceEnter: Transition {}
-            replaceExit: Transition {}
-        }
     }
 
     function setPageIndex(newIndex) {
-        if (newIndex < 0 || newIndex >= SettingsPageRegistry.count)
+        const url = SettingsPageRegistry.pageUrlAt(newIndex);
+        if (!url || url.toString().length === 0)
             return;
 
         sidebar.currentIndex = newIndex;
-
-        const url = SettingsPageRegistry.pageUrlAt(newIndex);
-        if (url && url.toString().length > 0)
-            stack.replace(url);
-    }
-
-    function setActivePage(key) {
-        const idx = SettingsPageRegistry.indexOfKey(key);
-        if (idx < 0)
-            return;
-        setPageIndex(idx);
-    }
-
-    function openPage(key) {
-        setActivePage(key);
-        open();
+        stack.replace(url);
     }
 
     Component.onCompleted: {
         SettingsPageRegistry.addPage("general", "General", "qrc:/qt/qml/Pointcaster/Windows/Settings/GeneralSettingsPage.qml");
-        SettingsPageRegistry.addPage("metrics", "Metrics", "qrc:/qt/qml/Pointcaster/Windows/Settings/MetricsSettingsPage.qml");
+        SettingsPageRegistry.addPage("interface", "Interface", "qrc:/qt/qml/Pointcaster/Windows/Settings/InterfaceSettingsPage.qml");
+        SettingsPageRegistry.addPage("performance", "Performance", "qrc:/qt/qml/Pointcaster/Windows/Settings/PerformanceSettingsPage.qml");
+        SettingsPageRegistry.addPage("diagnostics", "Diagnostics", "qrc:/qt/qml/Pointcaster/Windows/Settings/DiagnosticsSettingsPage.qml");
 
         workspaceModel.registerPluginSettingsPages();
 
-        sidebar.currentIndex = 0;
-        const initialUrl = SettingsPageRegistry.pageUrlAt(0);
-        stack.replace(initialUrl);
+        setPageIndex(0);
     }
 }

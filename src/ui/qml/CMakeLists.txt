@@ -45,8 +45,13 @@ qt_add_qml_module(PointcasterQml
         Windows/StatusBar.qml
         Windows/MainWindow.qml
         Windows/Settings/SettingsWindow.qml
+        Windows/Settings/SettingsPage.qml
+        Windows/Settings/SettingsSection.qml
+        Windows/Settings/SettingsRow.qml
         Windows/Settings/GeneralSettingsPage.qml
-        Windows/Settings/MetricsSettingsPage.qml
+        Windows/Settings/InterfaceSettingsPage.qml
+        Windows/Settings/PerformanceSettingsPage.qml
+        Windows/Settings/DiagnosticsSettingsPage.qml
         Windows/Devices/DeviceSelectionList.qml
         Windows/Devices/DevicesToolBar.qml
         Windows/Devices/DevicesWindow.qml

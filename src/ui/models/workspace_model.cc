@@ -419,6 +419,7 @@ void WorkspaceModel::registerPluginSettingsPages() {
     for (const auto &page : plugin->settings_pages()) {
       pc::logger()->trace("Registering settings page '{}' from plugin '{}'",
                           page.key, plugin_name);
+      SettingsPageRegistry::instance()->addSection("Devices");
       SettingsPageRegistry::instance()->addPage(
           QString::fromStdString(page.key), QString::fromStdString(page.title),
           QUrl::fromLocalFile(QString::fromStdString(page.qml_file_path)));
