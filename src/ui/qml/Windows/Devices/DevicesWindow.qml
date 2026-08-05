@@ -15,8 +15,9 @@ KDDW.DockWidget {
     property int currentDeviceIndex: workspace ? workspace.selectedDeviceIndex : 0
 
     readonly property string selectedNodeKind: workspace ? workspace.selectedNodeKind : ""
+    readonly property bool hasSelection: selectedNodeKind === "device" || selectedNodeKind === "group"
 
-    signal deviceSelected
+    signal nodeSelected
 
     function init() {
         if (workspace) {
@@ -98,7 +99,7 @@ KDDW.DockWidget {
 
                     onActivated: function (index) {
                         root.currentDeviceIndex = index;
-                        root.deviceSelected();
+                        root.nodeSelected();
                     }
                 }
 
@@ -309,6 +310,13 @@ KDDW.DockWidget {
                         width: parent.width
                     }
                 }
+            }
+
+            Item {
+                id: emptySelectionSpacer
+                visible: !root.hasSelection
+                Layout.fillWidth: true
+                Layout.fillHeight: true
             }
         }
     }

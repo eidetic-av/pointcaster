@@ -155,7 +155,7 @@ ApplicationWindow {
             workspace: workspaceModel
             affinities: ["edit"]
 
-            onDeviceSelected: {
+            onNodeSelected: {
                 // update session view UIs when a new device is selected
                 Workspace.sessionViews.forEach(sessionView => {
                     sessionView.selectionTransformUpdate();
