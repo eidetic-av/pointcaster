@@ -15,3 +15,4 @@ CMakeConfigureLog.yaml
 .env
 .idea/
 clion-*
+.gdb_history
