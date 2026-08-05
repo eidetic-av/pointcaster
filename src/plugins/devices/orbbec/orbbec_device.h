@@ -110,6 +110,15 @@ private:
 
   void pipeline_thread_work(std::stop_token stop_token,
                             std::shared_ptr<ob::Device> ob_device);
+
+  void rgbd_pipeline_thread_work(
+      std::stop_token stop_token, std::shared_ptr<ob::Device> ob_device,
+      OrbbecDeviceConfiguration::RgbdSensorConfiguration sensor_config);
+
+  void lidar_pipeline_thread_work(
+      std::stop_token stop_token, std::shared_ptr<ob::Device> ob_device,
+      OrbbecDeviceConfiguration::LidarSensorConfiguration sensor_config);
+
   void timeout_thread_work(std::stop_token stop_token);
 };
 

@@ -6,12 +6,16 @@
 #include <QString>
 #include <QStringList>
 #include <QVariant>
+#include <QVariantList>
 
 // pure virtual members in this abstract class are replaced by functions in
 // each generated adapter implementation
 
 class ConfigAdapter : public QObject {
   Q_OBJECT
+
+  Q_PROPERTY(
+      QVariantList childPathGroups READ childPathGroups NOTIFY structureChanged)
 
 public:
   explicit ConfigAdapter(QObject *parent = nullptr) : QObject(parent) {}
@@ -29,6 +33,14 @@ public:
   // [["transform/position", "transform/rotation"],
   //  ["camera/id", "camera/locked"]]
   Q_INVOKABLE virtual QList<QStringList> childPaths() const = 0;
+
+  QVariantList childPathGroups() const {
+    QVariantList groups;
+    for (const auto &group : childPaths()) {
+      groups.append(QVariant::fromValue(group));
+    }
+    return groups;
+  }
 
   Q_INVOKABLE virtual QString
   parentConfigurationName(const QString &path) const = 0;
@@ -113,4 +125,6 @@ public:
 signals:
   void editRequested(const QString &path, const QVariant &value);
   void fieldChanged(const QString &path);
+
+  void structureChanged();
 };

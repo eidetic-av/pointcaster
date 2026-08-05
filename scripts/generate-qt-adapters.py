@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+"""
+Generates Qt/QML adapter headers from configuration headers
+"""
 import os
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -17,24 +20,76 @@ class EnumEntry:
     value: int
 
 
+# an 'alternative' is one path of a variant
+@dataclass
+class Alternative:
+    name: str        
+    cpp_type: str    
+    label: str       
+    tag: str         
+    index: int
+    variant_path: str = "" 
+    variant_ref: str = ""  
+    leaves: list["Member"] = field(default_factory=list)
+
+
 @dataclass
 class Member:
-    type: str
-    name: str
-    comment: str
-    default_value: Any
-    min_max: str
-    optional: bool
-    disabled: bool
-    hidden: bool
-    is_enum: bool
-    enum_qualified_type: str
-    enum_entries: list[EnumEntry]
-    is_rfl: bool = False
-    is_nested: bool = False
-    inner_type: str = ""
+    name: str            
+    path: str            
+    kind: str            
+    cpp_type: str        
+    qt_type: str         
+    ref: str             
+    is_rfl: bool         
+    comment: str = ""
+    default_value: Any = None
+    enum_default: int | None = None
+    enum_qualified_type: str = ""
+    enum_entries: list[EnumEntry] = field(default_factory=list)
+    min_max: tuple[str, str] | None = None
+    optional: bool = False
+    disabled: bool = False
+    hidden: bool = False
+    comparable: bool = False
+    # nested config members embed an adapter of this type
     adapter_type: str = ""
-    config_ref: str = ""
+    # variant members
+    alternatives: list[Alternative] = field(default_factory=list)
+    variant_default_index: int = 0
+    # set on leaves that live inside a variant alternative
+    alternative: Alternative | None = None
+
+    @property
+    def read(self) -> str:
+        """C++ expression yielding the member's value."""
+        return f"{self.ref}.value()" if self.is_rfl else self.ref
+
+    @property
+    def is_own(self) -> bool:
+        """True for direct members, which get a Q_PROPERTY and accessors."""
+        return self.alternative is None
+
+
+@dataclass
+class Group:
+    label: str
+    paths: list[str]
+
+
+@dataclass
+class ParsedStruct:
+    name: str
+    qualified_name: str
+    members: list[Member]
+    needs_qvector3d: bool = False
+    needs_qquaternion: bool = False
+
+
+@dataclass
+class StructEnum:
+    entries: list[EnumEntry]
+    owner: str  # qualified name of the struct the enum is declared in
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,16 +100,31 @@ class GeneratorArgs:
     input_headers: list[str]
 
 
+KINDS = (
+    "nested", "variant", "enum", "string", "bool", "int", "float", "float3",
+    "quaternion", "opaque",
+)
+
+
 # ----------------------------
 # regexes necessary for multiple funcs are compiled once up here
 # ----------------------------
 
+STRUCT_NAME_SUFFIXES = (
+    "Configuration|Workspace|Entry|Session|SessionLayout|BindingTarget"
+    "|putRoute|putMapping|putChangeDetection|ABB"
+)
+
 STRUCTS_RE = re.compile(
-    r"struct (\w+(?:Configuration|Workspace|Entry|Session|SessionLayout|BindingTarget|putRoute|putMapping|putChangeDetection|ABB)) {([\s\S]*?^\};)",
+    rf"struct (\w+(?:{STRUCT_NAME_SUFFIXES})) {{([\s\S]*?^\}};)",
     re.MULTILINE,
 )
 
-TYPE_PATTERN = r"([\w:]+(?:\:\:)?[\w:]+(?:<[\w\s:,]+>)?)"
+ADAPTED_STRUCT_NAME_RE = re.compile(rf"^\w+(?:{STRUCT_NAME_SUFFIXES})$")
+
+# template arguments may themselves be templates (rfl::Variant<A, B>), so the
+# argument list only stops at a character that can't appear inside one
+TYPE_PATTERN = r"([\w:]+(?:\:\:)?[\w:]+(?:<[^;{}=]*>)?)"
 NAME_PATTERN = r"(\w+)"
 INITIAL_VALUE_PATTERN = r"(?:\s*=\s*([^;]+)|\s*\{([^}]*)\})?"
 COMMENT_PATTERN = r"(?:\s*//\s*(.*))?"
@@ -73,6 +143,9 @@ VERBATIM_RE = re.compile(
     re.MULTILINE,
 )
 
+# for matching `using X = Y;'
+USING_ALIAS_RE = re.compile(r"[ \t]*using\s+(\w+)\s*=\s*([^;]+);[ \t]*\n?")
+
 NAMESPACE_RE = re.compile(r"namespace\s+([A-Za-z_][\w:]*)\s*{")
 
 ENUM_DECL_RE = re.compile(
@@ -80,26 +153,20 @@ ENUM_DECL_RE = re.compile(
     re.MULTILINE,
 )
 
-ENUM_DEFAULT_RE = re.compile(r"(?:[\w:]+::)*(\w+)(?:::)?(\w+)")
+INNER_STRUCT_RE = re.compile(r"^[ \t]+struct\s+(\w+)\s*\{", re.MULTILINE)
+
 INTLIKE_RE = re.compile(r"(u?)int(8|16|32|64)_t")
 OPTIONAL_T_RE = re.compile(r"std::optional<\s*([^>]+)\s*>")
+VARIANT_RE = re.compile(r"^(?:std|rfl)::[Vv]ariant<(.*)>$")
+
+RFL_WRAPPER_RE = re.compile(r"^rfl::\w+<\s*(.+)\s*>$")
+
+TITLE_SPLIT_RE = re.compile(r"([-\s({\[<]+)")
 
 
 # ----------------------------
-# Helper funcs
+# Naming helpers
 # ----------------------------
-
-def is_float3_type(type_name: str) -> bool:
-    t = type_name.strip()
-    return t in ("pc::float3", "float3")
-
-def is_float3_rfl_type(type_name: str) -> bool:
-    t = type_name.strip()
-    return "rfl::" in t and ("float3" in t or "pc::float3" in t)
-
-def is_quaternion_type(type_name: str) -> bool:
-    t = type_name.strip()
-    return t in ("pc::quaternion", "quaternion")
 
 def format_struct_name(name: str) -> str:
     name = name.replace("Configuration", "")
@@ -111,6 +178,144 @@ def format_struct_name(name: str) -> str:
         result.append(char)
     return "".join(result)
 
+
+def snake_case(name: str) -> str:
+    name = name.replace("Configuration", "")
+    out: list[str] = []
+    for i, char in enumerate(name):
+        if i > 0 and char.isupper() and (name[i - 1].islower() or name[i - 1].isdigit()):
+            out.append("_")
+        out.append(char.lower())
+    return "".join(out)
+
+
+def title_case(text: str) -> str:
+    """Matches jinja's `title` filter, which the path labels used to go through."""
+    return "".join(
+        part[:1].upper() + part[1:].lower()
+        for part in TITLE_SPLIT_RE.split(text)
+        if part
+    )
+
+
+def _bare_type_name(type_name: str) -> str:
+    t = type_name.strip().split("<", 1)[0].strip()
+    return t.rsplit("::", 1)[-1] if "::" in t else t
+
+
+# ----------------------------
+# Type classification
+# ----------------------------
+
+def is_float3_type(type_name: str) -> bool:
+    return type_name.strip() in ("pc::float3", "float3")
+
+
+def is_quaternion_type(type_name: str) -> bool:
+    return type_name.strip() in ("pc::quaternion", "quaternion")
+
+
+def is_simple_comparable_type(type_name: str) -> bool:
+    t = type_name.strip()
+
+    if t in ("bool", "int", "unsigned", "float", "double", "std::string", "QString"):
+        return True
+
+    if is_float3_type(t) or is_quaternion_type(t):
+        return True
+
+    if INTLIKE_RE.fullmatch(t):
+        return True
+
+    m = OPTIONAL_T_RE.fullmatch(t)
+    if m:
+        return is_simple_comparable_type(m.group(1).strip())
+
+    return False
+
+
+def _rfl_inner_type(type_name: str) -> str | None:
+    m = RFL_WRAPPER_RE.match(type_name.strip())
+    return m.group(1).strip() if m else None
+
+
+def _effective_type(type_name: str) -> str:
+    """The underlying type, unwrapping a single rfl wrapper if present."""
+    inner = _rfl_inner_type(type_name)
+    return inner if inner is not None else type_name.strip()
+
+
+def _resolve_aliases(type_name: str, aliases: dict[str, str]) -> str:
+    """Expands `using` aliases declared in the enclosing struct."""
+    resolved = type_name.strip()
+    for _ in range(8):
+        replaced = aliases.get(resolved)
+        if replaced is None or replaced == resolved:
+            return resolved
+        resolved = replaced
+    return resolved
+
+
+def _split_template_args(args: str) -> list[str]:
+    parts: list[str] = []
+    depth = 0
+    current: list[str] = []
+    for char in args:
+        if char == "<":
+            depth += 1
+        elif char == ">":
+            depth -= 1
+        if char == "," and depth == 0:
+            parts.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    tail = "".join(current).strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _variant_alternative_names(type_name: str) -> list[str] | None:
+    m = VARIANT_RE.match(type_name.strip())
+    return _split_template_args(m.group(1)) if m else None
+
+
+def _is_nested_config_type(type_name: str) -> bool:
+    t = _effective_type(type_name)
+    if not t.endswith("Configuration"):
+        return False
+    if is_float3_type(t) or is_quaternion_type(t) or is_simple_comparable_type(t):
+        return False
+    return True
+
+
+def classify(cpp_type: str, is_enum: bool, is_variant: bool) -> tuple[str, str]:
+    """Returns (kind, qt_type) for a member's rfl-unwrapped type."""
+    if is_variant:
+        return "variant", "int"
+    if is_enum:
+        return "enum", "int"
+    if _is_nested_config_type(cpp_type):
+        return "nested", ""
+    if is_float3_type(cpp_type):
+        return "float3", "QVector3D"
+    if is_quaternion_type(cpp_type):
+        return "quaternion", "QQuaternion"
+    if cpp_type in ("std::string", "QString"):
+        return "string", "QString"
+    if cpp_type == "bool":
+        return "bool", "bool"
+    if cpp_type in ("int", "unsigned") or INTLIKE_RE.fullmatch(cpp_type):
+        return "int", cpp_type
+    if cpp_type in ("float", "double"):
+        return "float", cpp_type
+    return "opaque", ""
+
+
+# ----------------------------
+# Value parsing
+# ----------------------------
 
 def _try_parse_int(token: str) -> int | None:
     t = token.strip()
@@ -168,11 +373,10 @@ def _parse_enum_entries(enum_body: str) -> list[EnumEntry]:
 
         if "=" in entry:
             name_part, value_part = entry.split("=", 1)
-            enum_name = name_part.strip()
             explicit_value = _try_parse_int(value_part)
             if explicit_value is None:
                 continue
-            items.append(EnumEntry(name=enum_name, value=explicit_value))
+            items.append(EnumEntry(name=name_part.strip(), value=explicit_value))
             next_value = explicit_value + 1
         else:
             items.append(EnumEntry(name=entry, value=next_value))
@@ -181,299 +385,377 @@ def _parse_enum_entries(enum_body: str) -> list[EnumEntry]:
     return items
 
 
-def _extract_nested_enums(struct_body: str) -> tuple[dict[str, list[EnumEntry]], str]:
-    enum_map: dict[str, list[EnumEntry]] = {}
+def _enum_default_to_int(default_value: Any, entries: list[EnumEntry]) -> int | None:
+    if isinstance(default_value, int) and not isinstance(default_value, bool):
+        return default_value
+
+    text = str(default_value or "").strip()
+    if text:
+        # `DepthMode::Narrow`, `Config::DepthMode::Narrow` and a bare `Narrow`
+        # all identify the enumerator by its trailing name
+        enumerator = text.rsplit("::", 1)[-1].strip()
+        for entry in entries:
+            if entry.name == enumerator:
+                return entry.value
+
+    return entries[0].value if entries else None
+
+
+def _parse_min_max(comment: str) -> tuple[str, str] | None:
+    match = MINMAX_RE.search(comment)
+    if not match:
+        return None
+    parts = [p.strip() for p in match.group(1).split(",")]
+    minimum = parts[0] if parts and parts[0] else "0"
+    maximum = parts[1] if len(parts) >= 2 and parts[1] else minimum
+    return minimum, maximum
+
+
+# ----------------------------
+# Struct body extraction
+# ----------------------------
+
+def _extract_nested_enums(struct_body: str, owner: str) -> tuple[dict[str, StructEnum], str]:
+    enum_map: dict[str, StructEnum] = {}
 
     def _strip_and_collect(match: re.Match) -> str:
-        enum_name = match.group(1)
-        enum_body = match.group(2)
-        enum_map[enum_name] = _parse_enum_entries(enum_body)
+        enum_map[match.group(1)] = StructEnum(
+            entries=_parse_enum_entries(match.group(2)), owner=owner
+        )
         return ""
 
-    stripped_body = ENUM_DECL_RE.sub(_strip_and_collect, struct_body)
-    return enum_map, stripped_body
+    return enum_map, ENUM_DECL_RE.sub(_strip_and_collect, struct_body)
 
 
-def _enum_default_to_int(
-    default_value: Any, enum_simple_name: str, enum_entries: list[EnumEntry]
-) -> int | None:
-    if default_value is None:
-        return None
-    if isinstance(default_value, int):
-        return default_value
-    s = str(default_value).strip()
-    if not s:
-        return None
+def _extract_using_aliases(struct_body: str) -> tuple[dict[str, str], str]:
+    aliases: dict[str, str] = {}
 
-    m = ENUM_DEFAULT_RE.fullmatch(s)
-    if m:
-        enum_name_candidate = m.group(1)
-        enumerator_candidate = m.group(2)
-        if enum_name_candidate == enum_simple_name:
-            for e in enum_entries:
-                if e.name == enumerator_candidate:
-                    return e.value
+    def _strip_and_collect(match: re.Match) -> str:
+        aliases[match.group(1)] = " ".join(match.group(2).split())
+        return ""
 
-    for e in enum_entries:
-        if e.name == s:
-            return e.value
-
-    return None
+    return aliases, USING_ALIAS_RE.sub(_strip_and_collect, struct_body)
 
 
-def _is_simple_comparable_type(type_name: str) -> bool:
-    t = type_name.strip()
+def _extract_inner_structs(struct_body: str) -> tuple[list[tuple[str, str]], str]:
+    inner: list[tuple[str, str]] = []
+    out: list[str] = []
+    cursor = 0
 
-    if t in ("bool", "int", "unsigned", "float", "double", "std::string", "QString"):
-        return True
+    while True:
+        match = INNER_STRUCT_RE.search(struct_body, cursor)
+        if not match:
+            break
 
-    if is_float3_type(t):
-        return True
+        # walk from the opening brace to its match
+        depth = 0
+        end = None
+        for i in range(match.end() - 1, len(struct_body)):
+            char = struct_body[i]
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        if end is None:
+            break
 
-    if is_quaternion_type(t):
-        return True
+        inner.append((match.group(1), struct_body[match.end():end]))
+        out.append(struct_body[cursor:match.start()])
 
-    if INTLIKE_RE.fullmatch(t):
-        return True
+        # swallow the trailing '};' and its newline
+        after = end + 1
+        while after < len(struct_body) and struct_body[after] in ";\r\n\t ":
+            if struct_body[after] == "\n":
+                after += 1
+                break
+            after += 1
+        cursor = after
 
-    m = OPTIONAL_T_RE.fullmatch(t)
-    if m:
-        inner = m.group(1).strip()
-        return _is_simple_comparable_type(inner)
-
-    return False
-
-
-def default_value_case_cpp(member: Member) -> str:
-    v = member.default_value
-
-    if v is None:
-        return "return QVariant();"
-
-    if member.is_enum:
-        enum_default = _enum_default_to_int(v, member.type, member.enum_entries)
-        if enum_default is None and member.enum_entries:
-            enum_default = member.enum_entries[0].value
-        if enum_default is None:
-            return "return QVariant();"
-        return f"return QVariant({enum_default});"
-
-    if is_float3_type(member.type):
-        return "return QVariant::fromValue(QVector3D(0.0f, 0.0f, 0.0f));"
-
-    if is_quaternion_type(member.type):
-        return "return QVariant::fromValue(QQuaternion(1, 0, 0, 0));"
-
-    if isinstance(v, bool):
-        return f"return QVariant({'true' if v else 'false'});"
-
-    if isinstance(v, int):
-        return f"return QVariant({v});"
-
-    if isinstance(v, float):
-        return f"return QVariant({v});"
-
-    s = str(v).replace("\\", "\\\\").replace('"', '\\"')
-    return f'return QVariant(QStringLiteral("{s}"));'
-
-
-def minmax_case_cpp(member: Member) -> str:
-    if member.min_max:
-        parts = [p.strip() for p in member.min_max.split(",")]
-        min_value = parts[0] if len(parts) >= 1 and parts[0] else "0"
-        max_value = parts[1] if len(parts) >= 2 and parts[1] else min_value
-        return f"return QVariantList{{ QVariant({min_value}), QVariant({max_value}) }};"
-    return "return {};"
-
-def _bare_type_name(type_name: str) -> str:
-    t = type_name.strip().split("<", 1)[0].strip()
-    return t.rsplit("::", 1)[-1] if "::" in t else t
-
-# Assumes all rfl wrappers are of the form `rfl::WrapperType<SingleInnerArgument>`.
-RFL_WRAPPER_RE = re.compile(r"^rfl::\w+<\s*(.+)\s*>$")
-
-def _rfl_inner_type(type_name: str) -> str | None:
-    m = RFL_WRAPPER_RE.match(type_name.strip())
-    return m.group(1).strip() if m else None
-
-def _effective_type(type_name: str) -> str:
-    """The underlying type, unwrapping a single rfl wrapper if present."""
-    inner = _rfl_inner_type(type_name)
-    return inner if inner is not None else type_name.strip()
-
-def _is_nested_config_type(type_name: str) -> bool:
-    """
-    True if the (rfl-unwrapped) type is a Configuration struct that gets its
-    own generated adapter, i.e. not a scalar/string/bool/float3/quaternion/simple.
-    """
-    t = _effective_type(type_name)
-    if not t.endswith("Configuration"):
-        return False
-    if t in ("std::string", "QString", "bool"):
-        return False
-    if is_float3_type(t) or is_quaternion_type(t) or _is_simple_comparable_type(t):
-        return False
-    return True
-
-# ----------------------------
-# Path helpers
-# ----------------------------
-
-def _rel_header_path(file_path: str, src_root: str) -> str:
-    input_abs = os.path.abspath(file_path)
-    src_root_abs = os.path.abspath(src_root)
-    rel = os.path.relpath(input_abs, src_root_abs).replace("\\", "/")
-    if rel.startswith("src/"):
-        rel = rel[len("src/") :]
-    return rel
-
-
-def _generated_adapter_include_for_header_rel(rel_header: str) -> str:
-    """
-    Given 'camera/camera_config.h' -> 'camera/camera_config_adapter.gen.h'
-    Given 'plugins/devices/orbbec/orbbec_device_config.h' -> 'plugins/devices/orbbec/orbbec_device_adapter.gen.h'
-    """
-    rel_dir = os.path.dirname(rel_header)
-    base = os.path.basename(rel_header)
-    base_no_ext = re.sub(r"\.h$", "", base)
-
-    is_device_header = os.path.basename(rel_header).endswith("_device_config.h")
-    stem = base_no_ext
-    if is_device_header and base_no_ext.endswith("_device_config"):
-        stem = base_no_ext[: -len("_config")]
-
-    return os.path.join(rel_dir, f"{stem}_adapter.gen.h").replace("\\", "/")
-
-
-def _scan_structs_in_header(input_text: str) -> list[str]:
-    return [struct_name for struct_name, _ in STRUCTS_RE.findall(input_text)]
+    out.append(struct_body[cursor:])
+    return inner, "".join(out)
 
 
 # ----------------------------
-# Flattened path computation
+# Member parsing
 # ----------------------------
 
-def _is_nested_config_member(member: Member) -> bool:
-    """Nested config decision, computed at parse time (rfl-aware)."""
-    return member.is_nested
+@dataclass
+class ParseContext:
+    body: str = ""
+    enums: dict[str, StructEnum] = field(default_factory=dict)
+    aliases: dict[str, str] = field(default_factory=dict)
+    # inner struct name -> (qualified name, its own context)
+    inner: dict[str, tuple[str, "ParseContext"]] = field(default_factory=dict)
 
 
-def compute_flattened_paths(
+def build_context(
+    struct_body: str, qualified_name: str, inherited: ParseContext | None = None
+) -> ParseContext:
+    """
+    Strips the declarations that aren't members out of a struct body and
+    records what they mean, inheriting whatever the enclosing struct declared.
+    """
+    context = ParseContext(
+        enums=dict(inherited.enums) if inherited else {},
+        aliases=dict(inherited.aliases) if inherited else {},
+    )
+
+    own_aliases, body = _extract_using_aliases(struct_body)
+    context.aliases.update(own_aliases)
+
+    own_enums, body = _extract_nested_enums(body, qualified_name)
+    context.enums.update(own_enums)
+
+    inner_declarations, body = _extract_inner_structs(body)
+    for inner_name, inner_body in inner_declarations:
+        if not ADAPTED_STRUCT_NAME_RE.match(inner_name):
+            continue
+        inner_qualified = f"{qualified_name}::{inner_name}"
+        context.inner[inner_name] = (
+            inner_qualified,
+            build_context(inner_body, inner_qualified, context),
+        )
+
+    context.body = VERBATIM_RE.sub("", body)
+    return context
+
+
+def _parse_members(
     struct_name: str,
-    struct_members: list[Member],
-    struct_members_map: dict[str, list[Member]],
-) -> list[str]:
-    """
-    Returns leaf paths like:
-      ["id", "label", "camera/locked", "camera/show_grid"]
-    for the given struct.
-    """
-
-    def _recurse(current_struct_name: str, prefix: str, visiting: set[str]) -> list[str]:
-        if current_struct_name in visiting:
-            # break cycles (shouldn't happen in configs, but keep it safe)
-            return []
-        visiting.add(current_struct_name)
-
-        members = struct_members_map.get(current_struct_name, [])
-        out: list[str] = []
-
-        for member in members:
-            member_path = f"{prefix}{member.name}" if prefix else member.name
-            nested_struct = _bare_type_name(member.inner_type)
-            if _is_nested_config_member(member) and (nested_struct in struct_members_map):
-                nested_prefix = f"{member_path}/"
-                out.extend(_recurse(nested_struct, nested_prefix, visiting))
-            else:
-                out.append(member_path)
-
-        visiting.remove(current_struct_name)
-        return out
-
-    # Ensure we use the exact members passed for the top-level struct even if the map differs.
-    # (But usually they match.)
-    struct_members_map = dict(struct_members_map)
-    struct_members_map[struct_name] = struct_members
-
-    return _recurse(struct_name, prefix="", visiting=set())
-
-
-# ----------------------------
-# Parsing helpers
-# ----------------------------
-
-def _parse_members_for_struct(struct_name: str, struct_body: str) -> tuple[list[Member], bool]:
-    nested_enums, stripped_struct_body = _extract_nested_enums(struct_body)
-    members_body = VERBATIM_RE.sub("", stripped_struct_body)
-
+    members_body: str,
+    context: ParseContext,
+    path_prefix: str = "",
+    ref_prefix: str = "m_config.",
+    alternative: Alternative | None = None,
+) -> tuple[list[Member], bool, bool]:
     needs_qvector3d = False
     needs_qquaternion = False
     members: list[Member] = []
 
     for raw_type, raw_name, init_eq, init_brace, raw_comment in MEMBER_RE.findall(members_body):
         raw_name = raw_name.strip()
-        raw_type = raw_type.strip()
+        raw_type = " ".join(raw_type.split())
 
-        if is_float3_type(raw_type) or ("rfl::" in raw_type and "float3" in raw_type):
-            needs_qvector3d = True
-
-        if is_quaternion_type(raw_type):
-            needs_qquaternion = True
-
-        init_value_raw = (init_eq or "").strip() or (init_brace or "").strip() or ""
-        init_value_raw = init_value_raw.replace("{", "").replace("}", "").strip()
-        init_value = _parse_default_value(init_value_raw)
+        init_raw = ((init_eq or "").strip() or (init_brace or "").strip() or "")
+        default_value = _parse_default_value(
+            init_raw.replace("{", "").replace("}", "").strip()
+        )
 
         comment = raw_comment.strip() if raw_comment else ""
-        minmax_match = MINMAX_RE.search(comment)
 
-        # handle nested enums
-        enum_type = raw_type
-        if "rfl::" in enum_type:
-            enum_type = re.findall(r"<(.*?)>", enum_type)[0].strip()
-        if f"{struct_name}::" in enum_type:
-            enum_type = enum_type.replace(f"{struct_name}::", "").strip()
-        is_enum = enum_type in nested_enums
-        enum_entries = nested_enums.get(enum_type, [])
-        enum_qualified_type = f"{struct_name}::{enum_type}" if is_enum else ""
+        is_rfl = _rfl_inner_type(raw_type) is not None
+        cpp_type = _resolve_aliases(_effective_type(raw_type), context.aliases)
 
-        # handle specific enums
-        if "rfl::" in enum_type:
-            enum_type = re.findall(r"<(.*?)>", enum_type)[0].strip()
-        if "BackendType" in enum_type:
-            is_enum = True
+        # enums declared by this struct or one enclosing it
+        enum_name = cpp_type.replace(f"{struct_name}::", "").strip()
+        struct_enum = context.enums.get(enum_name)
+        enum_entries = struct_enum.entries if struct_enum else []
+        enum_qualified_type = f"{struct_enum.owner}::{enum_name}" if struct_enum else ""
+        if "BackendType" in enum_name and not struct_enum:
             enum_entries = [EnumEntry("CPU", 0), EnumEntry("CUDA", 1)]
             enum_qualified_type = "BackendType"
 
-        # rfl-aware nested/scalar classification
-        inner_type = _effective_type(raw_type)
-        is_rfl = _rfl_inner_type(raw_type) is not None
-        is_nested = (not is_enum) and _is_nested_config_type(raw_type)
-        config_ref = f"m_config.{raw_name}.value()" if is_rfl else f"m_config.{raw_name}"
-        adapter_type = f"{inner_type}Adapter" if is_nested else ""
+        alternative_names = _variant_alternative_names(cpp_type) or []
+        kind, qt_type = classify(cpp_type, bool(enum_entries), bool(alternative_names))
 
-        members.append(
-            Member(
-                type=raw_type,
-                name=raw_name,
-                default_value=init_value,
-                min_max=minmax_match.group(1) if minmax_match else "",
-                optional=bool(OPTIONAL_RE.search(comment)),
-                disabled=bool(DISABLED_RE.search(comment)),
-                hidden=bool(HIDDEN_RE.search(comment)),
-                comment=comment,
-                is_enum=is_enum,
-                enum_qualified_type=enum_qualified_type,
-                enum_entries=enum_entries,
-                is_rfl=is_rfl,
-                is_nested=is_nested,
-                inner_type=inner_type,
-                adapter_type=adapter_type,
-                config_ref=config_ref,
-            )
+        if kind == "float3":
+            needs_qvector3d = True
+        if kind == "quaternion":
+            needs_qquaternion = True
+
+        ref = f"{ref_prefix}{raw_name}"
+        member = Member(
+            name=raw_name,
+            path=f"{path_prefix}{raw_name}",
+            kind=kind,
+            cpp_type=cpp_type,
+            qt_type=qt_type,
+            ref=ref,
+            is_rfl=is_rfl,
+            comment=comment,
+            default_value=default_value,
+            enum_default=_enum_default_to_int(default_value, enum_entries)
+            if enum_entries else None,
+            enum_qualified_type=enum_qualified_type,
+            enum_entries=enum_entries,
+            min_max=_parse_min_max(comment),
+            optional=bool(OPTIONAL_RE.search(comment)),
+            disabled=bool(DISABLED_RE.search(comment)),
+            hidden=bool(HIDDEN_RE.search(comment)),
+            comparable=is_simple_comparable_type(cpp_type),
+            adapter_type=f"{cpp_type}Adapter" if kind == "nested" else "",
+            alternative=alternative,
         )
+        members.append(member)
+
+        if kind != "variant":
+            continue
+
+        # expand the variant: every alternative's fields get their own paths,
+        # read through a pointer to that alternative
+        variant_ref = member.read
+        for index, alternative_name in enumerate(alternative_names):
+            simple = _bare_type_name(alternative_name)
+            qualified, inner_context = context.inner.get(
+                simple, (alternative_name, ParseContext())
+            )
+            alt = Alternative(
+                name=simple,
+                cpp_type=qualified,
+                label=format_struct_name(simple),
+                tag=snake_case(simple),
+                index=index,
+                variant_path=member.path,
+                variant_ref=variant_ref,
+            )
+            alt.leaves, alt_v3, alt_quat = _parse_members(
+                simple,
+                inner_context.body,
+                inner_context,
+                path_prefix=f"{member.path}/{alt.tag}/",
+                ref_prefix="alt->",
+                alternative=alt,
+            )
+            needs_qvector3d = needs_qvector3d or alt_v3
+            needs_qquaternion = needs_qquaternion or alt_quat
+            member.alternatives.append(alt)
+            members.extend(alt.leaves)
+
+        for alt in member.alternatives:
+            if alt.name == str(default_value).strip():
+                member.variant_default_index = alt.index
+                break
 
     return members, needs_qvector3d, needs_qquaternion
+
+
+def parse_struct(
+    struct_name: str,
+    struct_body: str,
+    enclosing_qualified_name: str = "",
+    inherited: ParseContext | None = None,
+) -> ParsedStruct:
+    """
+    Parses a struct into its members...
+    """
+    qualified_name = (
+        f"{enclosing_qualified_name}::{struct_name}"
+        if enclosing_qualified_name
+        else struct_name
+    )
+
+    context = build_context(struct_body, qualified_name, inherited)
+
+    members, needs_qvector3d, needs_qquaternion = _parse_members(
+        struct_name, context.body, context
+    )
+
+    return ParsedStruct(
+        name=struct_name,
+        qualified_name=qualified_name,
+        members=members,
+        needs_qvector3d=needs_qvector3d,
+        needs_qquaternion=needs_qquaternion,
+    )
+
+
+def parse_header(input_text: str) -> list[ParsedStruct]:
+    return [
+        parse_struct(struct_name, struct_body)
+        for struct_name, struct_body in STRUCTS_RE.findall(input_text)
+    ]
+
+
+# ----------------------------
+# Path layout
+# ----------------------------
+
+def flatten_paths(
+    members: list[Member], struct_members_map: dict[str, list[Member]]
+) -> list[str]:
+    def _expand(member: Member, prefix: str, visiting: set[str]) -> list[str]:
+        path = f"{prefix}{member.name}"
+        nested_struct = _bare_type_name(member.cpp_type)
+        if member.kind != "nested" or nested_struct in visiting:
+            return [path]
+        if nested_struct not in struct_members_map:
+            return [path]
+
+        visiting.add(nested_struct)
+        out: list[str] = []
+        for nested_member in struct_members_map[nested_struct]:
+            out.extend(_expand(nested_member, f"{path}/", visiting))
+        visiting.remove(nested_struct)
+        return out
+
+    paths: list[str] = []
+    for member in members:
+        if member.alternative is not None:
+            # alternative leaves already carry their full path
+            paths.append(member.path)
+        else:
+            paths.extend(_expand(member, "", set()))
+    return paths
+
+
+def build_groups(
+    struct_label: str,
+    members: list[Member],
+    paths: list[str],
+) -> tuple[list[Group], dict[str, str]]:
+    top_level = [p for p in paths if "/" not in p]
+    groups: list[Group] = [Group(label=f"{struct_label} Properties", paths=top_level)]
+    parent_names = {path: f"{struct_label} Properties" for path in top_level}
+
+    for member in members:
+        if member.kind == "nested":
+            prefix = f"{member.name}/"
+            nested_paths = [p for p in paths if p.startswith(prefix)]
+            groups.append(Group(label=title_case(member.name), paths=nested_paths))
+            # a configuration nested inside another one names itself after the
+            # segment it sits under, however deep that is
+            parent_names.update(
+                {p: title_case(p.split("/")[-2]) for p in nested_paths}
+            )
+        elif member.kind == "variant":
+            for alt in member.alternatives:
+                prefix = f"{member.path}/{alt.tag}/"
+                alt_paths = [p for p in paths if p.startswith(prefix)]
+                groups.append(Group(label=alt.label, paths=alt_paths))
+                parent_names.update({p: alt.label for p in alt_paths})
+
+    return groups, parent_names
+
+
+# ----------------------------
+# Path helpers
+# ----------------------------
+
+def _rel_header_path(file_path: str, src_root: str) -> str:
+    rel = os.path.relpath(
+        os.path.abspath(file_path), os.path.abspath(src_root)
+    ).replace("\\", "/")
+    return rel[len("src/"):] if rel.startswith("src/") else rel
+
+
+def _adapter_stem(rel_header: str) -> str:
+    """
+    'camera/camera_config.h' -> 'camera_config'
+    'plugins/devices/orbbec/orbbec_device_config.h' -> 'orbbec_device'
+    """
+    base_no_ext = re.sub(r"\.h$", "", os.path.basename(rel_header))
+    if base_no_ext.endswith("_device_config"):
+        return base_no_ext[: -len("_config")]
+    return base_no_ext
+
+
+def _generated_adapter_include_for_header_rel(rel_header: str) -> str:
+    return os.path.join(
+        os.path.dirname(rel_header), f"{_adapter_stem(rel_header)}_adapter.gen.h"
+    ).replace("\\", "/")
 
 
 # ----------------------------
@@ -488,7 +770,7 @@ def process_cpp_header(
     struct_to_adapter_include: dict[str, str],
     struct_members_map: dict[str, list[Member]],
 ) -> str:
-    structs = STRUCTS_RE.findall(input_text)
+    parsed_structs = parse_header(input_text)
 
     ns_match = NAMESPACE_RE.search(input_text)
     namespace_name = ns_match.group(1) if ns_match else ""
@@ -498,57 +780,51 @@ def process_cpp_header(
     needs_qquaternion = False
     rendered_structs: list[dict[str, Any]] = []
 
-    for struct_name, struct_body in structs:
-        members, struct_needs_qvector3d, struct_needs_qquaternion = _parse_members_for_struct(struct_name, struct_body)
+    for parsed in parsed_structs:
+        members = parsed.members
+        needs_qvector3d = needs_qvector3d or parsed.needs_qvector3d
+        needs_qquaternion = needs_qquaternion or parsed.needs_qquaternion
 
-        if struct_needs_qvector3d:
-            needs_qvector3d = True
+        adapter_class_base = parsed.name
+        if is_device_namespace and parsed.name.endswith("DeviceConfiguration"):
+            adapter_class_base = parsed.name[: -len("Configuration")]
 
-        if struct_needs_qquaternion:
-            needs_qquaternion = True
-
-        # Adapter class name
-        adapter_class_base = struct_name
-        if is_device_namespace and struct_name.endswith("DeviceConfiguration"):
-            adapter_class_base = struct_name[: -len("Configuration")]
-        adapter_name = f"{adapter_class_base}Adapter"
-
-        # Nested adapter includes:
-        # - For core config adapters: include nested config adapter headers (same as before).
-        # - For device adapters: nested device structures don't exist, but nested regular config structures can.
         nested_adapter_includes: list[str] = []
         for m in members:
-            if not _is_nested_config_member(m):
+            if m.kind != "nested":
                 continue
+            include = struct_to_adapter_include.get(_bare_type_name(m.cpp_type))
+            if include and include not in nested_adapter_includes:
+                nested_adapter_includes.append(include)
 
-            inc = struct_to_adapter_include.get(_bare_type_name(m.inner_type))
-            if inc and inc not in nested_adapter_includes:
-                nested_adapter_includes.append(inc)
-
-        flattened_paths = compute_flattened_paths(struct_name, members, struct_members_map)
+        label = format_struct_name(parsed.name)
+        paths = flatten_paths(members, struct_members_map)
+        groups, parent_names = build_groups(label, members, paths)
 
         rendered_structs.append(
             {
-                "struct_name": struct_name,
-                "adapter_name": adapter_name,
-                "label": format_struct_name(struct_name),
+                "struct_name": parsed.qualified_name,
+                "adapter_name": f"{adapter_class_base}Adapter",
+                "label": label,
                 "members": members,
-                "any_enums": any(m.is_enum for m in members) or any(m.is_nested for m in members),
-                "any_float3": any((is_float3_type(m.type) or is_float3_rfl_type(m.type)) for m in members),
-                "any_quaternion": any(is_quaternion_type(m.type) for m in members),
+                "variants": [m for m in members if m.kind == "variant"],
+                "any_enums": any(m.kind in ("enum", "variant", "nested") for m in members),
+                "any_float3": any(m.kind == "float3" for m in members),
+                "any_quaternion": any(m.kind == "quaternion" for m in members),
                 "nested_adapter_includes": nested_adapter_includes,
-                "flattened_paths": flattened_paths,
+                "paths": paths,
+                "groups": groups,
+                "parent_names": parent_names,
             }
         )
 
-    rel = _rel_header_path(file_path, src_root)
-    header_include_path = rel
+    template_name = (
+        "device_adapter_impl.h.j2" if is_device_namespace
+        else "config_adapter_impl.h.j2"
+    )
 
-    template_name = "device_adapter_impl.h.j2" if is_device_namespace else "config_adapter_impl.h.j2"
-    template = env.get_template(template_name)
-
-    return template.render(
-        header_include_path=header_include_path,
+    return env.get_template(template_name).render(
+        header_include_path=_rel_header_path(file_path, src_root),
         namespace_name=namespace_name,
         needs_qvector3d=needs_qvector3d,
         needs_qquaternion=needs_qquaternion,
@@ -608,19 +884,9 @@ def main() -> int:
         lstrip_blocks=True,
     )
 
-    env.globals["is_float3_type"] = is_float3_type
-    env.globals["is_quaternion_type"] = is_quaternion_type
-    env.globals["is_simple_comparable_type"] = _is_simple_comparable_type
-    env.globals["default_value_case_cpp"] = default_value_case_cpp
-    env.globals["minmax_case_cpp"] = minmax_case_cpp
-
     # ---------- Pass 1: scan headers, cache text, build maps ----------
     header_cache: dict[str, str] = {}
-
-    # Map: struct name -> generated adapter include path
     struct_to_adapter_include: dict[str, str] = {}
-
-    # Map: struct name -> parsed members (used for flattened path recursion)
     struct_members_map: dict[str, list[Member]] = {}
 
     for file_name in sorted(args.input_headers):
@@ -628,23 +894,17 @@ def main() -> int:
             file_content = input_file.read()
         header_cache[file_name] = file_content
 
-        rel_header = _rel_header_path(file_name, args.src_root)
-        adapter_include = _generated_adapter_include_for_header_rel(rel_header)
-
-        for struct_name, struct_body in STRUCTS_RE.findall(file_content):
-            # struct->include mapping
-            struct_to_adapter_include.setdefault(struct_name, adapter_include)
-
-            # struct->members mapping (for recursion)
-            members, _, __ = _parse_members_for_struct(struct_name, struct_body)
-            struct_members_map.setdefault(struct_name, members)
+        adapter_include = _generated_adapter_include_for_header_rel(
+            _rel_header_path(file_name, args.src_root)
+        )
+        for parsed in parse_header(file_content):
+            struct_to_adapter_include.setdefault(parsed.name, adapter_include)
+            struct_members_map.setdefault(parsed.name, parsed.members)
 
     # ---------- Pass 2: render + write ----------
     for file_name in sorted(args.input_headers):
-        file_content = header_cache[file_name]
-
         generated_content = process_cpp_header(
-            file_content,
+            header_cache[file_name],
             file_name,
             env,
             args.src_root,
@@ -653,16 +913,9 @@ def main() -> int:
         )
 
         rel = _rel_header_path(file_name, args.src_root)
-        rel_dir = os.path.dirname(rel)
-        base = os.path.basename(rel)
-        base_no_ext = re.sub(r"\.h$", "", base)
-
-        is_device_header = os.path.basename(rel).endswith("_device_config.h")
-        stem = base_no_ext
-        if is_device_header and base_no_ext.endswith("_device_config"):
-            stem = base_no_ext[: -len("_config")]
-
-        generated_file_name = os.path.join(args.out_dir, rel_dir, f"{stem}_adapter.gen.h")
+        generated_file_name = os.path.join(
+            args.out_dir, os.path.dirname(rel), f"{_adapter_stem(rel)}_adapter.gen.h"
+        )
         os.makedirs(os.path.dirname(generated_file_name), exist_ok=True)
 
         with open(generated_file_name, "w", encoding="utf-8") as output_file:

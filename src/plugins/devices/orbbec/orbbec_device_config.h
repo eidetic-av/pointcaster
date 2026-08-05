@@ -7,6 +7,7 @@
 #include <plugins/operators/operator_variants.h>
 #include <pointcaster/point_cloud.h>
 #include <rfl/Literal.hpp>
+#include <rfl/Variant.hpp>
 #include <string>
 
 namespace pc::devices {
@@ -14,25 +15,23 @@ namespace pc::devices {
 class OrbbecDevice;
 
 struct OrbbecDeviceConfiguration {
-  std::string id;                         // @hidden
-  rfl::DefaultVal<std::string> label;     // @hidden
-  rfl::DefaultVal<bool> active = true;    // @hidden
-  rfl::DefaultVal<bool> render = true;    // @hidden;
+  std::string id;                     // @hidden
+  std::string ob_uid;                 // @disabled
+  rfl::DefaultVal<std::string> label; // @hidden
+
   rfl::DefaultVal<std::string> parent_id; // @hidden
   rfl::DefaultVal<int> order = 0;         // @hidden
 
-  std::string ob_uid; // @disabled
+  rfl::DefaultVal<bool> active = true; // @hidden
+  rfl::DefaultVal<bool> render = true; // @hidden;
+
+  rfl::Skip<int> fps; // @disabled
+
+  // enumerations shared among sensor configuration types
 
   enum class DepthMode { Narrow, Wide };
-  rfl::DefaultVal<DepthMode> depth_mode = DepthMode::Narrow;
-
   enum class AcquisitionMode { XYZRGB, XYZ };
-  rfl::DefaultVal<AcquisitionMode> acquisition_mode = AcquisitionMode::XYZRGB;
-
   enum class PointConversionMode { D2C, C2D };
-  rfl::DefaultVal<PointConversionMode> conversion_mode =
-      PointConversionMode::D2C;
-
   enum class ColorResolution {
     HD_1280x720,
     QuadVGA_1280x960,
@@ -40,22 +39,45 @@ struct OrbbecDeviceConfiguration {
     QHD_2560x1440,
     UHD_3840x2160
   };
-  rfl::DefaultVal<ColorResolution> color_resolution =
-      ColorResolution::HD_1280x720;
-
   enum class DepthResolution {
     NFOV_320x288,
     WFOV_512x512,
     NFOV_640x576,
     WFOV_1024x1024
   };
-  rfl::DefaultVal<DepthResolution> depth_resolution =
-      DepthResolution::NFOV_640x576;
-
-  rfl::Skip<int> fps; // @disabled
-
   enum class SyncMode { Standalone, Software };
-  rfl::DefaultVal<SyncMode> sync_mode = SyncMode::Standalone;
+
+  // the different sensor types that the orbbec driver supports have different
+  // configuration shapes and defaults
+
+  struct RgbdSensorConfiguration {
+    rfl::DefaultVal<DepthMode> depth_mode = DepthMode::Narrow;
+    rfl::DefaultVal<AcquisitionMode> acquisition_mode = AcquisitionMode::XYZRGB;
+    rfl::DefaultVal<PointConversionMode> conversion_mode =
+        PointConversionMode::D2C;
+    rfl::DefaultVal<ColorResolution> color_resolution =
+        ColorResolution::HD_1280x720;
+    rfl::DefaultVal<DepthResolution> depth_resolution =
+        DepthResolution::NFOV_640x576;
+    rfl::DefaultVal<SyncMode> sync_mode = SyncMode::Standalone;
+  };
+
+  struct LidarSensorConfiguration {
+    rfl::DefaultVal<bool> test_bool = false;
+    rfl::DefaultVal<int> test_int = 11;
+  };
+
+  // rfl::Variant rather than std::variant: std::variant's converting
+  // constructor asks each alternative "could you be built from this?" by
+  // aggregate-initialising it, which hard-errors on an alternative whose first
+  // member is an rfl::DefaultVal. rfl::Variant constrains the same constructor
+  // on exact type identity, so it answers cleanly.
+  using SensorConfigurationVariant =
+      rfl::Variant<RgbdSensorConfiguration, LidarSensorConfiguration>;
+
+  rfl::DefaultVal<SensorConfigurationVariant> sensor = {
+      RgbdSensorConfiguration{}};
+
 
   rfl::DefaultVal<NetworkConfiguration> network;
   rfl::DefaultVal<TransformConfiguration> transform;

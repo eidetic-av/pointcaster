@@ -23,7 +23,7 @@ Column {
     spacing: groupSpacing
 
     Repeater {
-        model: configAdapter ? configAdapter.childPaths() : []
+        model: configAdapter ? configAdapter.childPathGroups : []
         delegate: configurationNode
     }
 
@@ -49,6 +49,8 @@ Column {
 
             width: root.width
             implicitHeight: contentColumn.implicitHeight
+
+            visible: fieldRepeater.count > 0
 
             color: flattened ? "transparent" : ThemeColors.dark
             border.width: (!flattened && expanded) ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0

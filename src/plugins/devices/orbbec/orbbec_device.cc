@@ -260,11 +260,6 @@ void OrbbecDevice::start_sync() {
   pc::logger()->trace("Successfully created device at {}:{}", ip,
                       net_device_port);
 
-  const auto [colour_width, colour_height] =
-      orbbec::resolution(config.color_resolution.value());
-  const auto [depth_width, depth_height] =
-      orbbec::resolution(config.depth_resolution.value());
-
   _pipeline_thread =
       std::jthread([this, ob_device = std::move(ob_device)](auto stop_token) {
         pipeline_thread_work(stop_token, ob_device);
@@ -325,6 +320,33 @@ void OrbbecDevice::set_updated_time(
 
 void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                                         std::shared_ptr<ob::Device> ob_device) {
+  // the sensor configuration held by the device decides which set of api
+  // calls drive the pipeline, so each sensor type get their own worker branch
+  auto &device_config = std::get<OrbbecDeviceConfiguration>(_config);
+
+  device_config.sensor.value().visit([&](const auto &sensor_config) {
+    using SensorConfiguration = std::decay_t<decltype(sensor_config)>;
+
+    if constexpr (std::same_as<
+                      SensorConfiguration,
+                      OrbbecDeviceConfiguration::RgbdSensorConfiguration>) {
+      rgbd_pipeline_thread_work(std::move(stop_token), std::move(ob_device),
+                                sensor_config);
+    } else if constexpr (std::same_as<SensorConfiguration,
+                                      OrbbecDeviceConfiguration::
+                                          LidarSensorConfiguration>) {
+      lidar_pipeline_thread_work(std::move(stop_token), std::move(ob_device),
+                                 sensor_config);
+    } else {
+      static_assert(!sizeof(SensorConfiguration *),
+                    "Unhandled Orbbec sensor configuration type");
+    }
+  });
+}
+
+void OrbbecDevice::rgbd_pipeline_thread_work(
+    std::stop_token stop_token, std::shared_ptr<ob::Device> ob_device,
+    OrbbecDeviceConfiguration::RgbdSensorConfiguration sensor_config) {
   try {
     pc::logger()->trace("creating new ob::Pipeline");
 
@@ -341,9 +363,9 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     auto &device_config = std::get<OrbbecDeviceConfiguration>(_config);
 
     const auto [colour_width, colour_height] =
-        orbbec::resolution(device_config.color_resolution.value());
+        orbbec::resolution(sensor_config.color_resolution.value());
     const auto [depth_width, depth_height] =
-        orbbec::resolution(device_config.depth_resolution.value());
+        orbbec::resolution(sensor_config.depth_resolution.value());
 
     auto colour_profile_list = pipeline.getStreamProfileList(OB_SENSOR_COLOR);
     // TODO enable without colour too
@@ -365,7 +387,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
     std::shared_ptr<ob::VideoStreamProfile> depth_profile;
 
-    if (device_config.conversion_mode.value() ==
+    if (sensor_config.conversion_mode.value() ==
         OrbbecDeviceConfiguration::PointConversionMode::D2C) {
 
       // try hardware D2C first
@@ -404,7 +426,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
         throw std::format_error("Device does not support D2C conversion mode");
       }
 
-    } else if (device_config.conversion_mode.value() ==
+    } else if (sensor_config.conversion_mode.value() ==
                OrbbecDeviceConfiguration::PointConversionMode::C2D) {
       // need to do stuff here
     }
@@ -423,13 +445,13 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     pipeline.enableFrameSync();
 
     // this is frame sync between devices
-    if (device_config.sync_mode.value() ==
+    if (sensor_config.sync_mode.value() ==
         OrbbecDeviceConfiguration::SyncMode::Software) {
       OBMultiDeviceSyncConfig ob_sync_config{
           .syncMode = OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING};
       ob_device->setMultiDeviceSyncConfig(ob_sync_config);
       orbbec_context().add_to_software_sync_list(ob_device);
-    } else if (device_config.sync_mode.value() ==
+    } else if (sensor_config.sync_mode.value() ==
                OrbbecDeviceConfiguration::SyncMode::Standalone) {
       OBMultiDeviceSyncConfig ob_sync_config{
           .syncMode = OB_MULTI_DEVICE_SYNC_MODE_STANDALONE};
@@ -453,7 +475,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     backend::CameraIntrinsics color_intrinsics;
     size_t max_point_count{};
 
-    if (device_config.conversion_mode.value() ==
+    if (sensor_config.conversion_mode.value() ==
         OrbbecDeviceConfiguration::PointConversionMode::D2C) {
       // we need the colour intrinsic to transform the depth point to
       // colour space
@@ -466,7 +488,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 
       max_point_count = colour_width * colour_height;
 
-    } else if (device_config.conversion_mode.value() ==
+    } else if (sensor_config.conversion_mode.value() ==
                OrbbecDeviceConfiguration::PointConversionMode::C2D) {
     }
 
@@ -636,6 +658,20 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
   }
 }
 
+void OrbbecDevice::lidar_pipeline_thread_work(
+    std::stop_token, std::shared_ptr<ob::Device>,
+    OrbbecDeviceConfiguration::LidarSensorConfiguration) {
+#if POINTCASTER_ORBBEC_SDK_VERSION < 2
+  pc::logger()->error("Lidar sensors are not compatible with Orbbec SDK v1. "
+                      "Change the SDK version in Preferences > Orbbec",
+                      POINTCASTER_ORBBEC_SDK_VERSION);
+#else
+  // TODO drive the lidar sensor stream
+  pc::logger()->warn("Orbbec lidar sensor support is not implemented yet");
+#endif
+  set_error_state(true);
+}
+
 std::shared_ptr<PointCloud> OrbbecDevice::point_cloud() {
   if (_pipeline) {
     auto latest = _pipeline->latest_cloud();
@@ -689,7 +725,7 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
   }
 }
 
-void OrbbecDevice::on_config_field_changed(std::string_view) {
+void OrbbecDevice::on_config_field_changed(std::string_view path) {
   auto &config = std::get<OrbbecDeviceConfiguration>(_config);
   auto &network_config = config.network.value();
 
@@ -699,6 +735,9 @@ void OrbbecDevice::on_config_field_changed(std::string_view) {
            network_config.subnet_mask.value(),
            network_config.gateway_address.value());
   }
+
+  // a different sensor type needs a different pipeline
+  if (path == "sensor") restart();
 }
 
 void OrbbecDevice::update_config(const DeviceConfigurationVariant &config) {

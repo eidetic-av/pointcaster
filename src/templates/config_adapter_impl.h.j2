@@ -9,11 +9,112 @@
      aliases               - extra public type aliases (device only)
      ctor_params           - constructor parameter list
      ctor_base_init        - base-class mem-initialiser
-     set_config            - the setConfig overloads
+     set_config_*          - the setConfig overloads
      trait_specializations - trailing template emitted after the class loop
 
    Blocks that reference the per-struct loop variable `s` are declared `scoped`.
    ============================================================================ #}
+{# ---- reading a member into a QVariant ---- #}
+{% macro value_case(m) %}
+        if (path == QStringLiteral("{{ m.path }}")) {
+{% if m.alternative %}
+            const auto *alt = rfl::get_if<{{ m.alternative.cpp_type }}>(&{{ m.alternative.variant_ref }});
+            if (!alt) return {};
+{% endif %}
+{% if m.kind == "string" and m.cpp_type == "std::string" %}
+            return QVariant(QString::fromStdString({{ m.read }}));
+{% elif m.kind == "string" %}
+            return QVariant({{ m.read }});
+{% elif m.kind == "enum" %}
+            return QVariant(static_cast<int>({{ m.read }}));
+{% elif m.kind == "variant" %}
+            return QVariant(static_cast<int>({{ m.read }}.index()));
+{% elif m.kind == "float3" %}
+            const auto &v = {{ m.read }};
+            return QVariant::fromValue(QVector3D(v.x, v.y, v.z));
+{% elif m.kind == "quaternion" %}
+            const auto &v = {{ m.read }};
+            return QVariant::fromValue(QQuaternion(v.scalar, v.x, v.y, v.z));
+{% else %}
+            return QVariant::fromValue({{ m.read }});
+{% endif %}
+        }
+{%- endmacro %}
+{# ---- converting an incoming QVariant and writing it back ---- #}
+{% macro apply_case(m) %}
+        if (path == QStringLiteral("{{ m.path }}")) {
+{% if m.alternative %}
+            auto *alt = rfl::get_if<{{ m.alternative.cpp_type }}>(&{{ m.alternative.variant_ref }});
+            if (!alt) return false;
+{% endif %}
+{% if m.kind == "string" and m.cpp_type == "std::string" %}
+            const std::string newValue = value.toString().toStdString();
+{% elif m.kind == "string" %}
+            const QString newValue = value.toString();
+{% elif m.kind == "bool" %}
+            const bool newValue = value.toBool();
+{% elif m.kind == "int" and m.cpp_type == "int" %}
+            const int newValue = value.toInt();
+{% elif m.kind == "int" %}
+            const {{ m.cpp_type }} newValue = static_cast<{{ m.cpp_type }}>(value.toInt());
+{% elif m.kind == "float" and m.cpp_type == "float" %}
+            const float newValue = value.toFloat();
+{% elif m.kind == "float" %}
+            const {{ m.cpp_type }} newValue = value.toDouble();
+{% elif m.kind == "enum" %}
+            const auto newValue = static_cast<{{ m.enum_qualified_type }}>(value.toInt());
+{% elif m.kind == "float3" %}
+            const QVector3D v = toQVector3DLoose(value);
+            const {{ m.cpp_type }} newValue{ v.x(), v.y(), v.z() };
+{% elif m.kind == "quaternion" %}
+            const QQuaternion v = toQQuaternionLoose(value);
+            const {{ m.cpp_type }} newValue{ v.scalar(), v.x(), v.y(), v.z() };
+{% else %}
+            const auto newValue = qvariant_cast<{{ m.cpp_type }}>(value);
+{% endif %}
+{% if m.comparable %}
+            if ({{ m.read }} == newValue)
+                return false;
+{% endif %}
+{% if m.is_rfl %}
+            {{ m.ref }}.set(newValue);
+{% else %}
+            {{ m.ref }} = newValue;
+{% endif %}
+{% if m.is_own %}
+            emit {{ m.name }}Changed();
+{% endif %}
+            notifyFieldChanged(QStringLiteral("{{ m.path }}"));
+            return true;
+        }
+{%- endmacro %}
+{# ---- forwarding a path below a nested configuration to its adapter ---- #}
+{% macro forward_case(m, method, extra) %}
+        if (path.startsWith(QStringLiteral("{{ m.path }}/"))) {
+            const QString sub = path.mid(int(QStringLiteral("{{ m.path }}/").size()));
+            return m_{{ m.name }}Adapter.{{ method }}(sub{{ extra }});
+        }
+{%- endmacro %}
+{# ---- a member's default, as a QVariant ---- #}
+{% macro default_variant(m) %}
+{% if m.kind == "variant" %}
+QVariant({{ m.variant_default_index }})
+{%- elif m.kind == "enum" %}
+QVariant({{ m.enum_default if m.enum_default is not none else 0 }})
+{%- elif m.kind == "float3" %}
+QVariant::fromValue(QVector3D(0.0f, 0.0f, 0.0f))
+{%- elif m.kind == "quaternion" %}
+QVariant::fromValue(QQuaternion(1, 0, 0, 0))
+{%- elif m.default_value is none %}
+QVariant()
+{%- elif m.default_value is boolean %}
+QVariant({{ "true" if m.default_value else "false" }})
+{%- elif m.default_value is number %}
+QVariant({{ m.default_value }})
+{%- else %}
+QVariant(QStringLiteral("{{ m.default_value }}"))
+{%- endif %}
+{% endmacro %}
 #pragma once
 
 // !! Generated adapter !!
@@ -31,6 +132,7 @@
 {% if needs_qquaternion -%}
 #include <QQuaternion>
 {% endif -%}
+#include <rfl/Variant.hpp>
 #include <variant>
 
 #include <ui/models/config_adapter.h>
@@ -57,23 +159,11 @@ class {{ s.adapter_name }} : public {% block base_class %}ConfigAdapter{% endblo
     Q_OBJECT
 
 {# ---- Per-field Q_PROPERTY generation ---- #}
-{% for m in s.members %}
-{% if m.is_nested %}
+{% for m in s.members if m.is_own %}
+{% if m.kind == "nested" %}
     Q_PROPERTY(QObject* {{ m.name }}Adapter READ {{ m.name }}Adapter CONSTANT)
-{% elif m.is_enum %}
-    Q_PROPERTY(int {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
-{% elif is_float3_type(m.type) %}
-    Q_PROPERTY(QVector3D {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
-{% elif is_quaternion_type(m.type) %}
-    Q_PROPERTY(QQuaternion {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
-{% elif "std::string" in m.type or "QString" in m.type %}
-    Q_PROPERTY(QString {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
-{% elif "rfl::" in m.type %}
-    {% set basetype = m.type.split('<')[1].split('>')[0] %}
-    {% if basetype == "std::string" %} {% set basetype = "QString" %} {% endif %}
-    Q_PROPERTY({{ basetype }} {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
-{% elif is_simple_comparable_type(m.type) %}
-    Q_PROPERTY({{ m.type }} {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
+{% elif m.qt_type %}
+    Q_PROPERTY({{ m.qt_type }} {{ m.name }} READ {{ m.name }} WRITE set_{{ m.name }} NOTIFY {{ m.name }}Changed)
 {% endif %}
 {% endfor %}
 
@@ -82,14 +172,11 @@ public:
     explicit {{ s.adapter_name }}({% block ctor_params scoped %}{{ s.struct_name }} &config, QObject *parent = nullptr{% endblock %})
 {% block ctor_base_init scoped %}        : ConfigAdapter(parent)
 {% endblock %}        , m_config(config)
-{% for m in s.members %}
-{% if m.is_nested %}
-        , m_{{ m.name }}Adapter({{ m.config_ref }}, this)
-{% endif %}
+{% for m in s.members if m.kind == "nested" %}
+        , m_{{ m.name }}Adapter({{ m.read }}, this)
 {% endfor %}
     {
-{% for m in s.members %}
-{% if m.is_nested %}
+{% for m in s.members if m.kind == "nested" %}
         // Forward nested edit requests as stable prefixed paths: "{{ m.name }}/..."
         QObject::connect(&m_{{ m.name }}Adapter, &ConfigAdapter::editRequested, this,
             [this](const QString &subPath, const QVariant &value) {
@@ -101,7 +188,10 @@ public:
             [this](const QString &subPath) {
                 notifyFieldChanged(QStringLiteral("{{ m.name }}/") + subPath);
             });
-{% endif %}
+
+        // A nested variant switch changes which of our paths are visible.
+        QObject::connect(&m_{{ m.name }}Adapter, &ConfigAdapter::structureChanged, this,
+            [this]() { emit structureChanged(); });
 {% endfor %}
     }
 
@@ -121,42 +211,76 @@ public:
     bool setConfig(const {{ s.struct_name }} &config) {
         bool anyChanged = false;
 
-{% for m in s.members %}
-{% if m.is_nested %}
+{% for m in s.members if m.is_own %}
+{% if m.kind == "nested" %}
         m_config.{{ m.name }} = config.{{ m.name }};
-{% elif m.is_rfl and is_simple_comparable_type(m.inner_type) %}
-        if (!(m_config.{{ m.name }}.value() == config.{{ m.name }}.value())) {
+{% elif m.kind == "variant" %}
+        // a different alternative replaces the whole value; the same
+        // alternative is diffed field by field below
+        if ({{ m.read }}.index() != config.{{ m.name }}{% if m.is_rfl %}.value(){% endif %}.index()) {
+            {{ m.ref }} = config.{{ m.name }};
             anyChanged = true;
-            m_config.{{ m.name }} = config.{{ m.name }};
             emit {{ m.name }}Changed();
-            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+            emit structureChanged();
+            notifyFieldChanged(QStringLiteral("{{ m.path }}"));
         }
-{% elif (not m.is_rfl) and is_simple_comparable_type(m.type) %}
-        if (!(m_config.{{ m.name }} == config.{{ m.name }})) {
+{% elif m.comparable %}
+        if (!({{ m.read }} == config.{{ m.name }}{% if m.is_rfl %}.value(){% endif %})) {
             anyChanged = true;
-            m_config.{{ m.name }} = config.{{ m.name }};
+            {{ m.ref }} = config.{{ m.name }};
             emit {{ m.name }}Changed();
-            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+            notifyFieldChanged(QStringLiteral("{{ m.path }}"));
         }
 {% else %}
-        m_config.{{ m.name }} = config.{{ m.name }};
+        {{ m.ref }} = config.{{ m.name }};
         anyChanged = true;
         emit {{ m.name }}Changed();
-        notifyFieldChanged(QStringLiteral("{{ m.name }}"));
+        notifyFieldChanged(QStringLiteral("{{ m.path }}"));
 {% endif %}
+{% endfor %}
+{% for v in s.variants %}
+{% for alt in v.alternatives if alt.leaves %}
+
+        if (auto *alt = rfl::get_if<{{ alt.cpp_type }}>(&{{ alt.variant_ref }})) {
+            const auto *incoming = rfl::get_if<{{ alt.cpp_type }}>(
+                &config.{{ v.name }}{% if v.is_rfl %}.value(){% endif %});
+            if (incoming) {
+{% for m in alt.leaves %}
+{% set source = "incoming->" + m.name + (".value()" if m.is_rfl else "") %}
+{% if m.comparable %}
+                if (!({{ m.read }} == {{ source }})) {
+                    anyChanged = true;
+{% if m.is_rfl %}
+                    {{ m.ref }}.set({{ source }});
+{% else %}
+                    {{ m.ref }} = {{ source }};
+{% endif %}
+                    notifyFieldChanged(QStringLiteral("{{ m.path }}"));
+                }
+{% else %}
+{% if m.is_rfl %}
+                {{ m.ref }}.set({{ source }});
+{% else %}
+                {{ m.ref }} = {{ source }};
+{% endif %}
+                anyChanged = true;
+                notifyFieldChanged(QStringLiteral("{{ m.path }}"));
+{% endif %}
+{% endfor %}
+            }
+        }
+{% endfor %}
 {% endfor %}
 
         // Push config into nested adapters only after the top-level config has
         // been updated, and let nested adapters emit their own leaf changes;
         // constructor wiring already forwards nested field changes with the
         // appropriate "member/..." prefix.
-{% for m in s.members %}
-{% if m.is_nested %}
-        if (m_{{ m.name }}Adapter.setConfig({{ m.config_ref }})) {
+{% for m in s.members if m.kind == "nested" %}
+        if (m_{{ m.name }}Adapter.setConfig({{ m.read }})) {
             anyChanged = true;
             emit {{ m.name }}Changed();
         }
-{% endif %}
 {% endfor %}
         return anyChanged;
     }
@@ -165,7 +289,7 @@ public:
     // ---- Enumerate stable paths ----
     Q_INVOKABLE QStringList fieldPaths() const override {
         static const QStringList kPaths = {
-{% for p in s.flattened_paths %}
+{% for p in s.paths %}
             QStringLiteral("{{ p }}"){{ "," if not loop.last else "" }}
 {% endfor %}
         };
@@ -175,23 +299,12 @@ public:
 
     Q_INVOKABLE QList<QStringList> childPaths() const override {
         static const QList<QStringList> paths {
+{% for group in s.groups %}
             {
-{% for path in s.flattened_paths %}
-{% if "/" not in path %}
+{% for path in group.paths %}
                 QStringLiteral("{{ path }}"){{ "," if not loop.last else "" }}
-{% endif %}
 {% endfor %}
             },
-{% for m in s.members %}
-{% if m.is_nested %}
-            {
-{% for path in s.flattened_paths %}
-{% if path.startswith(m.name + "/") %}
-                QStringLiteral("{{ path }}"){{ "," if not loop.last else "" }}
-{% endif %}
-{% endfor %}
-            },
-{% endif %}
 {% endfor %}
         };
         return paths;
@@ -199,148 +312,58 @@ public:
 
     Q_INVOKABLE QString parentConfigurationName(const QString &path) const override {
         static const QMap<QString, QString> parentConfigurationNames {
-{% for path in s.flattened_paths %}
-{% set path_nodes = path.split("/") %}
-{% set parent_idx = [path_nodes|length - 2, 0]|max %}
-{% set parent_name = path_nodes[parent_idx] %}
-{% if parent_name == path %}
-{% set parent_name = s.label + " Properties" %}
-{% else %}
-{% set parent_name = parent_name|title %}
-{% endif %}
-            { QStringLiteral("{{ path }}"), QStringLiteral("{{ parent_name }}") }{{ "," if not loop.last else "" }}
+{% for path, name in s.parent_names.items() %}
+            { QStringLiteral("{{ path }}"), QStringLiteral("{{ name }}") }{{ "," if not loop.last else "" }}
 {% endfor %}
         };
         return parentConfigurationNames.value(path);
     }
 
 {# ---- Per-field strongly-typed accessors ---- #}
-{% for m in s.members %}
-{% if m.is_nested %}
+{% for m in s.members if m.is_own %}
+{% if m.kind == "nested" %}
     Q_INVOKABLE QObject* {{ m.name }}Adapter() { return &m_{{ m.name }}Adapter; }
-{% elif m.type == "std::string" %}
-    Q_INVOKABLE QString {{ m.name }}() const { return QString::fromStdString(m_config.{{ m.name }}); }
-    Q_INVOKABLE void set_{{ m.name }}(const QString &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
-{% elif m.type == "QString" %}
-    Q_INVOKABLE QString {{ m.name }}() const { return m_config.{{ m.name }}; }
-    Q_INVOKABLE void set_{{ m.name }}(const QString &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
-{% elif m.type == "bool" %}
-    Q_INVOKABLE bool {{ m.name }}() const { return m_config.{{ m.name }}; }
-    Q_INVOKABLE void set_{{ m.name }}(bool value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
-{% elif m.is_enum %}
-    {% if "rfl::" in m.type %}
-    Q_INVOKABLE int {{ m.name }}() const { return static_cast<int>(m_config.{{ m.name }}.value()); }
-    {% else %}
-    Q_INVOKABLE int {{ m.name }}() const { return static_cast<int>(m_config.{{ m.name }}); }
-    {% endif %}
-    Q_INVOKABLE void set_{{ m.name }}(int value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
-{% elif is_float3_type(m.type) %}
+{% elif m.kind == "variant" %}
+    Q_INVOKABLE int {{ m.name }}() const { return static_cast<int>({{ m.read }}.index()); }
+    Q_INVOKABLE void set_{{ m.name }}(int value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant(value)); }
+{% elif m.kind == "enum" %}
+    Q_INVOKABLE int {{ m.name }}() const { return static_cast<int>({{ m.read }}); }
+    Q_INVOKABLE void set_{{ m.name }}(int value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant(value)); }
+{% elif m.kind == "string" %}
+{% if m.cpp_type == "std::string" %}
+    Q_INVOKABLE QString {{ m.name }}() const { return QString::fromStdString({{ m.read }}); }
+{% else %}
+    Q_INVOKABLE QString {{ m.name }}() const { return {{ m.read }}; }
+{% endif %}
+    Q_INVOKABLE void set_{{ m.name }}(const QString &value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant(value)); }
+{% elif m.kind == "float3" %}
     Q_INVOKABLE QVector3D {{ m.name }}() const {
-        const auto &v = m_config.{{ m.name }};
+        const auto &v = {{ m.read }};
         return QVector3D(v.x, v.y, v.z);
     }
-    Q_INVOKABLE void set_{{ m.name }}(const QVector3D &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant::fromValue(value)); }
-{% elif is_quaternion_type(m.type) %}
+    Q_INVOKABLE void set_{{ m.name }}(const QVector3D &value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(value)); }
+    Q_INVOKABLE void set_{{ m.name }}(float x, float y, float z) {
+        emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(QVector3D(x, y, z)));
+    }
+{% elif m.kind == "quaternion" %}
     Q_INVOKABLE QQuaternion {{ m.name }}() const {
-        const auto &v = m_config.{{ m.name }};
+        const auto &v = {{ m.read }};
         return QQuaternion(v.scalar, v.x, v.y, v.z);
     }
-    Q_INVOKABLE void set_{{ m.name }}(const QQuaternion &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant::fromValue(value)); }
-{% elif "rfl::" in m.type %}
-    {% set basetype = m.type.split('<')[1].split('>')[0] %}
-    {% if basetype == "std::string" %}
-    Q_INVOKABLE QString {{ m.name }}() const { return QString::fromStdString(m_config.{{ m.name }}.value()); }
-    Q_INVOKABLE void set_{{ m.name }}(const QString &value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant(value)); }
-    {% else %}
-    Q_INVOKABLE {{ basetype }} {{ m.name }}() const { return m_config.{{ m.name }}.value(); }
-    Q_INVOKABLE void set_{{ m.name }}({{ basetype }} value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant::fromValue(value)); }
-    {% endif %}
-{% elif is_simple_comparable_type(m.type) %}
-    Q_INVOKABLE {{ m.type }} {{ m.name }}() const { return m_config.{{ m.name }}; }
-    Q_INVOKABLE void set_{{ m.name }}({{ m.type }} value) { emit editRequested(QStringLiteral("{{ m.name }}"), QVariant::fromValue(value)); }
+    Q_INVOKABLE void set_{{ m.name }}(const QQuaternion &value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(value)); }
+    Q_INVOKABLE void set_{{ m.name }}(float scalar, float x, float y, float z) {
+        emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(QQuaternion(scalar, x, y, z)));
+    }
+{% elif m.qt_type %}
+    Q_INVOKABLE {{ m.qt_type }} {{ m.name }}() const { return {{ m.read }}; }
+    Q_INVOKABLE void set_{{ m.name }}({{ m.qt_type }} value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(value)); }
 {% endif %}
 {% endfor %}
 
 signals:
-{% for m in s.members %}
+{% for m in s.members if m.is_own %}
     void {{ m.name }}Changed();
 {% endfor %}
-
-public:
-{% if s.any_float3 %}
-{% for m in s.members %}
-{% if is_float3_type(m.type) %}
-    Q_INVOKABLE void set_{{ m.name }}(float x, float y, float z) {
-        emit editRequested(QStringLiteral("{{ m.name }}"),
-                           QVariant::fromValue(QVector3D(x, y, z)));
-    }
-{% endif %}
-{% endfor %}
-{% endif %}
-
-{% if s.any_quaternion %}
-{% for m in s.members %}
-{% if is_quaternion_type(m.type) %}
-    Q_INVOKABLE void set_{{ m.name }}(float scalar, float x, float y, float z) {
-        emit editRequested(QStringLiteral("{{ m.name }}"),
-                           QVariant::fromValue(QQuaternion(scalar, x, y, z)));
-    }
-{% endif %}
-{% endfor %}
-{% endif %}
-
-    // ---- Path-based reads ----
-    Q_INVOKABLE QVariant value(const QString &path) const override {
-{% for m in s.members %}
-{% if m.is_nested %}
-        if (path == QStringLiteral("{{ m.name }}"))
-            return QVariant(); // whole-struct-by-value not exposed
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.value(sub);
-        }
-{% else %}
-{% if m.type == "std::string" %}
-        if (path == QStringLiteral("{{ m.name }}"))
-            return QVariant(QString::fromStdString(m_config.{{ m.name }}));
-{% elif m.is_enum %}
-        if (path == QStringLiteral("{{ m.name }}"))
-    {% if "rfl::" in m.type %}
-            return QVariant(static_cast<int>(m_config.{{ m.name }}.value()));
-    {% else %}
-            return QVariant(static_cast<int>(m_config.{{ m.name }}));
-    {% endif %}
-{% elif is_float3_type(m.type) %}
-        if (path == QStringLiteral("{{ m.name }}")) {
-            const auto &v = m_config.{{ m.name }};
-            return QVariant::fromValue(QVector3D(v.x, v.y, v.z));
-        }
-{% elif is_quaternion_type(m.type) %}
-        if (path == QStringLiteral("{{ m.name }}")) {
-            const auto &v = m_config.{{ m.name }};
-            return QVariant::fromValue(QQuaternion(v.scalar, v.x, v.y, v.z));
-        }
-{% elif "rfl::" in m.type %}
-    {% if "std::string" in m.type %}
-        if (path == QStringLiteral("{{ m.name }}"))
-            return QVariant(QString::fromStdString(m_config.{{ m.name }}.value()));
-    {% elif "float3" in m.type %}
-        if (path == QStringLiteral("{{ m.name }}")) {
-            const auto &v = m_config.{{ m.name }}.value();
-            return QVariant::fromValue(QVector3D(v.x, v.y, v.z));
-        }
-    {% else %}
-        if (path == QStringLiteral("{{ m.name }}"))
-            return QVariant::fromValue(m_config.{{ m.name }}.value());
-    {% endif %}
-{% else %}
-        if (path == QStringLiteral("{{ m.name }}"))
-            return QVariant::fromValue(m_config.{{ m.name }});
-{% endif %}
-{% endif %}
-{% endfor %}
-        return {};
-    }
 
 {% if s.any_float3 %}
 private:
@@ -361,11 +384,8 @@ private:
         }
         return QVector3D();
     }
-public:
 {% endif %}
-
 {% if s.any_quaternion %}
-private:
     static QQuaternion toQQuaternionLoose(const QVariant &value) {
         if (value.canConvert<QQuaternion>())
             return value.value<QQuaternion>();
@@ -384,107 +404,48 @@ private:
         }
         return QQuaternion();
     }
-public:
 {% endif %}
+
+public:
+    // ---- Path-based reads ----
+    Q_INVOKABLE QVariant value(const QString &path) const override {
+{% for m in s.members %}
+{% if m.kind == "nested" %}
+        if (path == QStringLiteral("{{ m.path }}"))
+            return QVariant(); // whole-struct-by-value not exposed
+{{ forward_case(m, "value", "") }}
+{% else %}
+{{ value_case(m) }}
+{% endif %}
+{% endfor %}
+        return {};
+    }
 
     // ---- Path-based apply (mutates config) ----
     Q_INVOKABLE bool apply(const QString &path, const QVariant &value) override {
 {% for m in s.members %}
-{% if m.is_nested %}
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.apply(sub, value);
+{% if m.kind == "nested" %}
+{{ forward_case(m, "apply", ", value") }}
+{% elif m.kind == "variant" %}
+        // switching alternative replaces the held value with a
+        // default-constructed one of the requested type
+        if (path == QStringLiteral("{{ m.path }}")) {
+            auto &variant = {{ m.read }};
+            const int newIndex = value.toInt();
+            if (newIndex == variant.index()) return false;
+            switch (newIndex) {
+{% for alt in m.alternatives %}
+            case {{ alt.index }}: variant = {{ alt.cpp_type }}{}; break;
+{% endfor %}
+            default: return false;
+            }
+            emit {{ m.name }}Changed();
+            emit structureChanged();
+            notifyFieldChanged(QStringLiteral("{{ m.path }}"));
+            return true;
         }
 {% else %}
-        if (path == QStringLiteral("{{ m.name }}")) {
-{% if m.type == "std::string" %}
-            const std::string newValue = value.toString().toStdString();
-            if (m_config.{{ m.name }} == newValue)
-                return false;
-            m_config.{{ m.name }} = newValue;
-            emit {{ m.name }}Changed();
-            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
-            return true;
-{% elif m.type == "QString" %}
-            const QString newValue = value.toString();
-            if (m_config.{{ m.name }} == newValue)
-                return false;
-            m_config.{{ m.name }} = newValue;
-            emit {{ m.name }}Changed();
-            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
-            return true;
-{% elif m.type == "bool" %}
-            const bool newValue = value.toBool();
-            if (m_config.{{ m.name }} == newValue)
-                return false;
-            m_config.{{ m.name }} = newValue;
-            emit {{ m.name }}Changed();
-            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
-            return true;
-{% elif m.is_enum %}
-            const int newValueInt = value.toInt();
-            const auto newValue = static_cast<{{ m.enum_qualified_type }}>(newValueInt);
-            {% if "rfl::" in m.type %}
-            if (m_config.{{ m.name }}.value() == newValue)
-                return false;
-            m_config.{{ m.name }}.set(newValue);
-            {% else %}
-            if (m_config.{{ m.name }} == newValue)
-                return false;
-            m_config.{{ m.name }} = newValue;
-            {% endif %}
-            emit {{ m.name }}Changed();
-            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
-            return true;
-{% elif "rfl::" in m.type %}
-    {% if "std::string" in m.type %}
-            const std::string newValue = value.toString().toStdString();
-    {% elif "bool" in m.type %}
-            const bool newValue = value.toBool();
-    {% elif "int" in m.type %}
-            const int newValue = value.toInt();
-    {% elif "float3" in m.type %}
-            const QVector3D v = toQVector3DLoose(value);
-            float3 newValue{ v.x(), v.y(), v.z() };
-    {% elif "float" in m.type %}
-            const float newValue = value.toFloat();
-    {% endif %}
-            if (m_config.{{ m.name }}.value() == newValue)
-                return false;
-            m_config.{{ m.name }}.set(newValue);
-            emit {{ m.name }}Changed();
-            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
-            return true;
-{% elif is_float3_type(m.type) %}
-            const QVector3D v = toQVector3DLoose(value);
-            {{ m.type }} newValue{ v.x(), v.y(), v.z() };
-            if (m_config.{{ m.name }} == newValue)
-                return false;
-            m_config.{{ m.name }} = newValue;
-            emit {{ m.name }}Changed();
-            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
-            return true;
-{% elif is_quaternion_type(m.type) %}
-            const QQuaternion v = toQQuaternionLoose(value);
-            {{ m.type }} newValue{ v.scalar(), v.x(), v.y(), v.z() };
-            if (m_config.{{ m.name }} == newValue)
-                return false;
-            m_config.{{ m.name }} = newValue;
-            emit {{ m.name }}Changed();
-            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
-            return true;
-{% else %}
-            const auto newValue = qvariant_cast<{{ m.type }}>(value);
-{% if is_simple_comparable_type(m.type) %}
-            if (m_config.{{ m.name }} == newValue)
-                return false;
-{% endif %}
-            m_config.{{ m.name }} = newValue;
-            emit {{ m.name }}Changed();
-            notifyFieldChanged(QStringLiteral("{{ m.name }}"));
-            return true;
-{% endif %}
-        }
+{{ apply_case(m) }}
 {% endif %}
 {% endfor %}
         return false;
@@ -493,14 +454,11 @@ public:
     // ---- Metadata by path ----
     Q_INVOKABLE QString typeName(const QString &path) const override {
 {% for m in s.members %}
-{% if m.is_nested %}
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.typeName(sub);
-        }
+{% if m.kind == "nested" %}
+{{ forward_case(m, "typeName", "") }}
 {% else %}
-        if (path == QStringLiteral("{{ m.name }}"))
-            return QStringLiteral("{{ m.inner_type }}");
+        if (path == QStringLiteral("{{ m.path }}"))
+            return QStringLiteral("{{ m.cpp_type }}");
 {% endif %}
 {% endfor %}
         return {};
@@ -508,13 +466,10 @@ public:
 
     Q_INVOKABLE QVariant defaultValue(const QString &path) const override {
 {% for m in s.members %}
-{% if m.is_nested %}
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.defaultValue(sub);
-        }
+{% if m.kind == "nested" %}
+{{ forward_case(m, "defaultValue", "") }}
 {% else %}
-        if (path == QStringLiteral("{{ m.name }}")) { {{ default_value_case_cpp(m) }} }
+        if (path == QStringLiteral("{{ m.path }}")) return {{ default_variant(m) }};
 {% endif %}
 {% endfor %}
         return {};
@@ -522,13 +477,11 @@ public:
 
     Q_INVOKABLE QVariant minMax(const QString &path) const override {
 {% for m in s.members %}
-{% if m.is_nested %}
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.minMax(sub);
-        }
-{% else %}
-        if (path == QStringLiteral("{{ m.name }}")) { {{ minmax_case_cpp(m) }} }
+{% if m.kind == "nested" %}
+{{ forward_case(m, "minMax", "") }}
+{% elif m.min_max %}
+        if (path == QStringLiteral("{{ m.path }}"))
+            return QVariantList{ QVariant({{ m.min_max[0] }}), QVariant({{ m.min_max[1] }}) };
 {% endif %}
 {% endfor %}
         return {};
@@ -536,13 +489,10 @@ public:
 
     Q_INVOKABLE bool isOptional(const QString &path) const override {
 {% for m in s.members %}
-{% if m.is_nested %}
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.isOptional(sub);
-        }
-{% else %}
-        if (path == QStringLiteral("{{ m.name }}")) return {{ "true" if m.optional else "false" }};
+{% if m.kind == "nested" %}
+{{ forward_case(m, "isOptional", "") }}
+{% elif m.optional %}
+        if (path == QStringLiteral("{{ m.path }}")) return true;
 {% endif %}
 {% endfor %}
         return false;
@@ -550,27 +500,28 @@ public:
 
     Q_INVOKABLE bool isDisabled(const QString &path) const override {
 {% for m in s.members %}
-{% if m.is_nested %}
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.isDisabled(sub);
-        }
-{% else %}
-        if (path == QStringLiteral("{{ m.name }}")) return {{ "true" if m.disabled else "false" }};
+{% if m.kind == "nested" %}
+{{ forward_case(m, "isDisabled", "") }}
+{% elif m.disabled %}
+        if (path == QStringLiteral("{{ m.path }}")) return true;
 {% endif %}
 {% endfor %}
         return false;
     }
 
     Q_INVOKABLE bool isHidden(const QString &path) const override {
+{% for v in s.variants %}
+{% for alt in v.alternatives if alt.leaves %}
+        // "{{ alt.label }}" fields are only live while the variant holds one
+        if (path.startsWith(QStringLiteral("{{ alt.variant_path }}/{{ alt.tag }}/")))
+            return {{ v.read }}.index() != {{ alt.index }};
+{% endfor %}
+{% endfor %}
 {% for m in s.members %}
-{% if m.is_nested %}
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.isHidden(sub);
-        }
-{% else %}
-        if (path == QStringLiteral("{{ m.name }}")) return {{ "true" if m.hidden else "false" }};
+{% if m.kind == "nested" %}
+{{ forward_case(m, "isHidden", "") }}
+{% elif m.hidden %}
+        if (path == QStringLiteral("{{ m.path }}")) return true;
 {% endif %}
 {% endfor %}
         return false;
@@ -578,15 +529,10 @@ public:
 
     Q_INVOKABLE bool isFileOpener(const QString &path) const override {
 {% for m in s.members %}
-{% if m.is_nested %}
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.isFileOpener(sub);
-        }
-{% else %}
-{% if '@file_opener' is in m.comment %}
-        if (path == QStringLiteral("{{ m.name }}")) return true;
-{% endif %}
+{% if m.kind == "nested" %}
+{{ forward_case(m, "isFileOpener", "") }}
+{% elif '@file_opener' is in m.comment %}
+        if (path == QStringLiteral("{{ m.path }}")) return true;
 {% endif %}
 {% endfor %}
         return false;
@@ -594,15 +540,10 @@ public:
 
     Q_INVOKABLE bool isFolderOpener(const QString &path) const override {
 {% for m in s.members %}
-{% if m.is_nested %}
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.isFolderOpener(sub);
-        }
-{% else %}
-{% if '@folder_opener' is in m.comment %}
-        if (path == QStringLiteral("{{ m.name }}")) return true;
-{% endif %}
+{% if m.kind == "nested" %}
+{{ forward_case(m, "isFolderOpener", "") }}
+{% elif '@folder_opener' is in m.comment %}
+        if (path == QStringLiteral("{{ m.path }}")) return true;
 {% endif %}
 {% endfor %}
         return false;
@@ -611,7 +552,7 @@ public:
     Q_INVOKABLE bool isButton(const QString &path) const override {
 {% for m in s.members %}
 {% if '@button' is in m.comment %}
-        if (path == QStringLiteral("{{ m.name }}")) return true;
+        if (path == QStringLiteral("{{ m.path }}")) return true;
 {% endif %}
 {% endfor %}
         return false;
@@ -620,16 +561,10 @@ public:
 {% if s.any_enums %}
     Q_INVOKABLE bool isEnum(const QString &path) const override {
 {% for m in s.members %}
-{% if m.is_enum %}
-        if (path == QStringLiteral("{{ m.name }}")) return true;
-{% endif %}
-{% endfor %}
-{% for m in s.members %}
-{% if m.is_nested %}
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.isEnum(sub);
-        }
+{% if m.kind in ("enum", "variant") %}
+        if (path == QStringLiteral("{{ m.path }}")) return true;
+{% elif m.kind == "nested" %}
+{{ forward_case(m, "isEnum", "") }}
 {% endif %}
 {% endfor %}
         return false;
@@ -637,22 +572,24 @@ public:
 
     Q_INVOKABLE QVariant enumOptions(const QString &path) const override {
 {% for m in s.members %}
-{% if m.is_enum %}
-        if (path == QStringLiteral("{{ m.name }}")) {
+{% if m.kind == "enum" %}
+        if (path == QStringLiteral("{{ m.path }}")) {
             return QVariantList{
 {% for e in m.enum_entries %}
                 QVariantMap{ {"text", QStringLiteral("{{ e.name }}")}, {"value", {{ e.value }} } }{{ "," if not loop.last else "" }}
 {% endfor %}
             };
         }
-{% endif %}
+{% elif m.kind == "variant" %}
+        if (path == QStringLiteral("{{ m.path }}")) {
+            return QVariantList{
+{% for alt in m.alternatives %}
+                QVariantMap{ {"text", QStringLiteral("{{ alt.label }}")}, {"value", {{ alt.index }} } }{{ "," if not loop.last else "" }}
 {% endfor %}
-{% for m in s.members %}
-{% if m.is_nested %}
-        if (path.startsWith(QStringLiteral("{{ m.name }}/"))) {
-            const QString sub = path.mid(int(QStringLiteral("{{ m.name }}/").size()));
-            return m_{{ m.name }}Adapter.enumOptions(sub);
+            };
         }
+{% elif m.kind == "nested" %}
+{{ forward_case(m, "enumOptions", "") }}
 {% endif %}
 {% endfor %}
         return {};
@@ -662,10 +599,8 @@ public:
 private:
     {{ s.struct_name }} &m_config;
 
-{% for m in s.members %}
-{% if m.is_nested %}
+{% for m in s.members if m.kind == "nested" %}
     {{ m.adapter_type }} m_{{ m.name }}Adapter;
-{% endif %}
 {% endfor %}
 };
 
