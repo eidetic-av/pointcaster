@@ -39,7 +39,7 @@ QtObject {
     property color success: green
     property color error: red
     property color neutralSuccess: blue 
-    property color inactive : palette.mid
+    property color inactive : palette.middark
 
     // Aliases for access
     property color accent: palette.accent

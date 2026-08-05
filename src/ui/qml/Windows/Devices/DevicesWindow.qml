@@ -183,9 +183,13 @@ KDDW.DockWidget {
             ScrollView {
                 id: deviceConfigScrollView
                 visible: root.selectedNodeKind === "device"
+
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: Math.round(140 * Scaling.uiScale)
+
+                // TODO, figure out how to show it when needed but always outside the view
+                ScrollBar.vertical.policy: ScrollBar.AlwaysOn
                 clip: true
 
                 Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds

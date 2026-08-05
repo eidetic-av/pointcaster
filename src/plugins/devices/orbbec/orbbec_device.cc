@@ -124,10 +124,10 @@ std::vector<PluginSettingsPage> OrbbecDevice::settings_pages() const {
 }
 
 DeviceStatus OrbbecDevice::status() const {
+  if (_in_error_state) return DeviceStatus::Missing;
   if (_loading_pipeline) return DeviceStatus::Loading;
   auto ctx = orbbec_context().get_if_ready();
   if (!ctx) return DeviceStatus::Unloaded;
-  if (_in_error_state) return DeviceStatus::Missing;
   if (!_running_pipeline) {
     return DeviceStatus::Loaded;
   }
@@ -179,14 +179,17 @@ void OrbbecDevice::start_sync() {
   if (!ob_ctx) {
     pc::logger()->trace(
         "Orbbec context not ready in time, aborting start_sync()");
-    set_loading(false);
     set_error_state(true);
+    set_loading(false);
     return;
   }
 
   // if this plugin instance is only for context initialisation and device
   // discovery, dont bother trying to attach to a device
-  if (is_discovery_instance()) return;
+  if (is_discovery_instance()) {
+    set_loading(false);
+    return;
+  }
 
   const auto config =
       std::get<OrbbecDeviceConfiguration>(this->config_variant());
@@ -236,11 +239,13 @@ void OrbbecDevice::start_sync() {
                           network_config.ip_address.value(), net_device_port,
                           e.getMessage());
       set_error_state(true);
+      set_loading(false);
       return;
     } catch (...) {
       pc::logger()->error("Unknown error creating Orbbec NetDevice at {}:{}",
                           network_config.ip_address.value(), net_device_port);
       set_error_state(true);
+      set_loading(false);
       return;
     }
   }
@@ -248,6 +253,7 @@ void OrbbecDevice::start_sync() {
   if (!ob_device) {
     pc::logger()->warn("Unable to find Orbbec at {}:{}", ip, net_device_port);
     set_error_state(true);
+    set_loading(false);
     return;
   }
 

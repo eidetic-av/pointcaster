@@ -639,7 +639,7 @@ Item {
                             color: {
                                 const m = dragArea.modelData;
                                 if (!m || m.status === undefined)
-                                    return ThemeColors.inactive;
+                                    return ThemeColors.middark;
                                 if (m.pluginNullState)
                                     return ThemeColors.error;
                                 switch (m.status) {
@@ -650,7 +650,7 @@ Item {
                                 case Enum.WorkspaceDeviceStatus.Missing:
                                     return ThemeColors.error;
                                 default:
-                                    return ThemeColors.inactive;
+                                    return ThemeColors.middark;
                                 }
                             }
                         }
