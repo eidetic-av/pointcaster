@@ -13,8 +13,8 @@ namespace pc::devices::orbbec::util {
 //
 // TODO remove validations
 
-#define EPS 1e-4
-#define FMAX 1e4
+constexpr float EPS = 1e-4f;
+constexpr float FMAX = 1e4f;
 
 #ifdef __CUDACC__
 __host__ __device__
@@ -30,7 +30,7 @@ static bool judgeTransformValid(OBD2CTransform cameraRotParam) {
                cameraRotParam.rot[1] * cameraRotParam.rot[7] +
                cameraRotParam.rot[2] * cameraRotParam.rot[8];
 
-  if (fabsf(r1r2) < EPS && fabs(r1r3) < EPS) {
+  if (fabsf(r1r2) < EPS && fabsf(r1r3) < EPS) {
     return true;
   }
   return false;
