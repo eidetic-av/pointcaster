@@ -93,11 +93,11 @@ static bool transformation3dTo3d(const OBPoint3f sourcePoint3f,
 #ifdef __CUDACC__
 __host__ __device__
 #endif
-bool transformation2dTo3d(const OBCameraIntrinsic sourceIntrinsic,
-                          const OBPoint2f sourcePoint2f,
-                          const float sourceDepthPixelValue,
-                          OBD2CTransform transSourceToTarget,
-                          OBPoint3f *targetPoint3f) {
+inline bool transformation2dTo3d(const OBCameraIntrinsic sourceIntrinsic,
+                                 const OBPoint2f sourcePoint2f,
+                                 const float sourceDepthPixelValue,
+                                 OBD2CTransform transSourceToTarget,
+                                 OBPoint3f *targetPoint3f) {
   // step 1: parameter validity judgment
   if (!judgeIntrinsicValid(sourceIntrinsic)) {
     return false;

@@ -31,7 +31,7 @@ __host__ __device__
 #ifdef __CUDACC__
 __host__ __device__
 #endif
-auto round_pos(float v) {
+    inline auto round_pos(float v) {
 #ifdef __CUDACC__
   return llrintf(v);
 #else
