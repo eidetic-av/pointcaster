@@ -447,14 +447,14 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
     // this is frame sync between devices
     if (sensor_config.sync_mode.value() ==
         OrbbecDeviceConfiguration::SyncMode::Software) {
-      OBMultiDeviceSyncConfig ob_sync_config{
-          .syncMode = OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING};
+      OBMultiDeviceSyncConfig ob_sync_config{};
+      ob_sync_config.syncMode = OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING;
       ob_device->setMultiDeviceSyncConfig(ob_sync_config);
       orbbec_context().add_to_software_sync_list(ob_device);
     } else if (sensor_config.sync_mode.value() ==
                OrbbecDeviceConfiguration::SyncMode::Standalone) {
-      OBMultiDeviceSyncConfig ob_sync_config{
-          .syncMode = OB_MULTI_DEVICE_SYNC_MODE_STANDALONE};
+      OBMultiDeviceSyncConfig ob_sync_config{};
+      ob_sync_config.syncMode = OB_MULTI_DEVICE_SYNC_MODE_STANDALONE;
       ob_device->setMultiDeviceSyncConfig(ob_sync_config);
       orbbec_context().erase_from_software_sync_list(ob_device);
     }
