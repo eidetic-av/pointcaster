@@ -35,7 +35,8 @@ constexpr void for_each_device_config_type(Callback cb) {
 }
 
 constexpr auto device_id_from_variant(const DeviceConfigurationVariant &v) {
-  return std::visit([](const auto &cfg) { return std::string(cfg.id); }, v);
+  return std::visit([](const auto &cfg) { return std::string_view(cfg.id); },
+                    v);
 }
 
 constexpr auto device_info_from_variant(const DeviceConfigurationVariant &v) {

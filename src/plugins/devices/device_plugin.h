@@ -16,6 +16,7 @@
 #include <functional>
 #include <logger/logger.h>
 #include <memory>
+#include <metrics/metrics.h>
 #include <pipeline/concurrent_operator_pipeline.h>
 #include <plugins/operators/operator_host.h>
 #include <plugins/operators/operator_plugin.h>
@@ -196,7 +197,12 @@ public:
         return true;
       }
     }
-    _dropped_frames.fetch_add(1, std::memory_order_relaxed);
+    const auto dropped_frames_previous =
+        _dropped_frames.fetch_add(1, std::memory_order_relaxed);
+
+    pc::metrics::set_gauge("pointcaster_device_frames_dropped",
+                           dropped_frames_previous + 1,
+                           {{"device_id", device_id_from_variant(_config)}});
     return false;
   }
 
