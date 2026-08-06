@@ -63,7 +63,7 @@ float4x4 rotation_matrix(const float3 &euler_degrees) {
   mat_z.values[4] = sz;
   mat_z.values[5] = cz;
 
-  return multiply(mat_z, multiply(mat_y, mat_x));
+  return multiply(mat_y, multiply(mat_x, mat_z));
 }
 
 decomposed_transform decompose_transform(const pc::float4x4 &matrix) {
