@@ -206,6 +206,7 @@ if(WIN32)
         # link-time and tooling artifacts nothing reads at runtime
         file(GLOB_RECURSE _dev_artifacts
             "${_prefix}/plugins/*.lib"
+            "${_prefix}/plugins/*.pdb"
             "${_prefix}/plugins/*.exp"
             "${_prefix}/qml/*.qmltypes"
         )
