@@ -61,6 +61,7 @@ if(NOT WIN32) # Linux
     install(CODE [[
         file(GET_RUNTIME_DEPENDENCIES
             EXECUTABLES $<TARGET_FILE:pointcaster>
+            MODULES $<TARGET_FILE:Qt6::QXcbIntegrationPlugin>
             RESOLVED_DEPENDENCIES_VAR resolved_deps
             POST_EXCLUDE_REGEXES
             "/ld-linux-x86-64\\.so\\."
@@ -95,7 +96,7 @@ if(NOT WIN32) # Linux
     ]])
 
     # our gcc runtime is newer than most host distros provide, so bundle it aside:
-    # pointcaster.sh only prefers it over the host copy when actually newer (checkrt pattern)
+    # pointcaster.sh only prefers it over the host copy when actually newer
     foreach(_gcc_runtime_lib libstdc++.so.6 libgcc_s.so.1)
         execute_process(
             COMMAND "${CMAKE_CXX_COMPILER}" -print-file-name=${_gcc_runtime_lib}
@@ -116,11 +117,6 @@ if(NOT WIN32) # Linux
     # and also some other platform libs it seems:
 
     # TODO: super hacky absolute paths for deps
-    install(
-        FILES "/usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0.0.0"
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-        RENAME "libxcb-cursor.so.0"
-    )
 
     # TODO this isn't copying on pop-os build???
     install(
@@ -148,6 +144,11 @@ if(NOT WIN32) # Linux
 
         # qml debugger/profiler plugins are dev-only
         file(REMOVE_RECURSE "${_prefix}/plugins/qmltooling")
+
+        # TODO seems required?
+        # maybe pointcaster freaks out because we should be loading
+        # the host's own gtk ? idk
+        file(REMOVE "${_prefix}/plugins/platformthemes/libqgtk3.so")
 
         # remove unused qt quick styles
         foreach(_style FluentWinUI3 Imagine Material Universal)
