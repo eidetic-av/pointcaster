@@ -16,3 +16,4 @@ CMakeConfigureLog.yaml
 .idea/
 clion-*
 .gdb_history
+.vscode/
