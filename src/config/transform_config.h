@@ -18,7 +18,7 @@ struct TransformConfiguration {
   rfl::DefaultVal<float3> min_bound = float3(-10, -10, -10); // @minmax(-10, 10)
   rfl::DefaultVal<float3> max_bound = float3(10, 10, 10);    // @minmax(-10, 10)
 
-  rfl::DefaultVal<int> sample = 1; // @minmax(1, 16)
+  rfl::DefaultVal<int> sample = 1; // @minmax(1, 64)
 
   rfl::DefaultVal<BackendType> backend = BackendType::CPU;
 };

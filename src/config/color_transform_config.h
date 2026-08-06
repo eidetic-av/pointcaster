@@ -6,7 +6,7 @@
 namespace pc {
 
 struct ColorTransformConfiguration {
-  rfl::DefaultVal<float> gain = 1; // @minmax(0, 5)
+  rfl::DefaultVal<float> gain = 1; // @minmax(0, 15)
 };
 
 } // namespace pc
