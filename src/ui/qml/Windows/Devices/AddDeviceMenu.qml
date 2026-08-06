@@ -50,7 +50,7 @@ Menu {
                 if (plugin) {
                     workspace.addNewDevice(modelData.plugin_name);
                 } else if (discovered) {
-                    workspace.addNewDevice(modelData.plugin_name, modelData.ip, modelData.id);
+                    workspace.addNewDevice(modelData.plugin_name, modelData.ip, modelData.id, modelData.type_label);
                 }
             }
         }

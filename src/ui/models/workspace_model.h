@@ -115,7 +115,8 @@ public:
   Q_INVOKABLE void triggerDeviceDiscovery();
   Q_INVOKABLE void addNewDevice(const QString &plugin_name,
                                 const QString &target_ip = "",
-                                const QString &target_id = "");
+                                const QString &target_id = "",
+                                const QString &target_type_label = "");
   Q_INVOKABLE void deleteDevice(const QString &target_id);
   Q_INVOKABLE void deleteSelectedDevice();
   Q_INVOKABLE void duplicateDeviceNode(const QString &node_id);

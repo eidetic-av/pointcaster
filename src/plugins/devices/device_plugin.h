@@ -38,6 +38,7 @@ struct DiscoveredDevice {
   std::string label;
   std::string ip;
   std::string id;
+  std::string type_label;
 };
 
 struct PluginSettingsPage {

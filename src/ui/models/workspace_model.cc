@@ -620,6 +620,8 @@ QVariantList WorkspaceModel::addDeviceMenuEntries() const {
       discovered_device_entry["ip"] = QString::fromStdString(device.ip);
       discovered_device_entry["id"] = QString::fromStdString(device.id);
       discovered_device_entry["label"] = QString::fromStdString(device.label);
+      discovered_device_entry["type_label"] =
+          QString::fromStdString(device.type_label);
 
       menu_entries.push_back(std::move(discovered_device_entry));
     }
@@ -697,13 +699,27 @@ WorkspaceModel::nodeAncestorWorldMatrix(const QString &node_id) const {
 
 void WorkspaceModel::addNewDevice(const QString &plugin_name,
                                   const QString &target_ip,
-                                  const QString &target_id) {
+                                  const QString &target_id,
+                                  const QString &target_type_label) {
   // take a copy of current configuration to manipulate
   auto result_config = _workspace.config;
   // TODO this needs to be polymorphic runtime access
   if (plugin_name == OrbbecDeviceConfiguration::PluginName) {
+
+    OrbbecDeviceConfiguration::SensorConfigurationVariant sensor_config;
+    if (QString::compare(target_type_label, "rgbd") == 0) {
+      sensor_config = OrbbecDeviceConfiguration::RgbdSensorConfiguration{};
+    } else if (QString::compare(target_type_label, "lidar") == 0) {
+      sensor_config = OrbbecDeviceConfiguration::LidarSensorConfiguration{};
+    } else {
+      pc::logger()->error("Invalid Orbbec device type.");
+      return;
+    }
+
     OrbbecDeviceConfiguration orbbec_config{
-        .id = target_id.isEmpty() ? pc::uuid::word() : target_id.toStdString()};
+        .id = target_id.isEmpty() ? pc::uuid::word() : target_id.toStdString(),
+        .sensor = std::move(sensor_config)};
+
     if (!target_ip.isEmpty()) {
       orbbec_config.network.set({.ip_address = target_ip.toStdString()});
     }

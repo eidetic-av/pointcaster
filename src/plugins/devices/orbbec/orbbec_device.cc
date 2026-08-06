@@ -5,9 +5,11 @@
 
 #include <Corrade/Containers/Pointer.h>
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <core/logger/logger.h>
 #include <core/profiling/profiling_zone.h>
 #include <cstdint>
@@ -19,11 +21,13 @@
 #include <libobsensor/h/ObTypes.h>
 #include <libobsensor/hpp/Context.hpp>
 #include <libobsensor/hpp/Error.hpp>
+#include <libobsensor/hpp/Frame.hpp>
 #include <libobsensor/hpp/Pipeline.hpp>
 #include <libobsensor/hpp/Utils.hpp>
 #include <memory>
 #include <metrics/metrics.h>
 #include <mutex>
+#include <numbers>
 #include <numeric>
 #include <plugins/backend/backend_utils.h>
 #include <plugins/devices/device_tree.h>
@@ -40,6 +44,7 @@
 
 #include <plugins/backend/cpu/cpu_backend.h>
 #include <pointcaster/task_pool.h>
+#include <rfl/Variant.hpp>
 
 #ifndef POINTCASTER_ORBBEC_SDK_VERSION
 #error "POINTCASTER_ORBBEC_SDK_VERSION must be defined (1 or 2) by the build"
@@ -88,14 +93,19 @@ std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
   auto &ctx = orbbec_context();
   std::lock_guard lock(ctx.discovered_devices_access);
 
+  const static std::map<std::string, std::string> product_type_label = {
+      {"Orbbec Femto Mega", "rgbd"}, {"Orbbec LiDAR SL450", "lidar"}};
+
   out.reserve(ctx.discovered_devices.size());
   for (const auto &d : ctx.discovered_devices) {
     // network devices are identified by ip, usb devices by connection type
     const auto &location = d.is_network() ? d.ip : d.connection_type;
+    pc::logger()->debug("name: {}, product id: {}", d.name, d.product_id);
     out.push_back(
         DiscoveredDevice{.label = std::format("{} ({})", d.name, location),
                          .ip = d.ip,
-                         .id = d.id});
+                         .id = d.id,
+                         .type_label = product_type_label.at(d.name)});
   }
 
   return out;
@@ -225,7 +235,12 @@ void OrbbecDevice::start_sync() {
     }
   }
 
-  constexpr uint16_t net_device_port = 8090; // Femto Mega default
+  const bool is_lidar = rfl::holds_alternative<
+      OrbbecDeviceConfiguration::LidarSensorConfiguration>(
+      config.sensor.value().variant());
+
+  const uint16_t net_device_port = is_lidar ? 2228 : 8090;
+
   const auto &network_config = config.network.value();
   const auto &ip = network_config.ip_address.value();
 
@@ -322,7 +337,7 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                                         std::shared_ptr<ob::Device> ob_device) {
   // the sensor configuration held by the device decides which set of api
   // calls drive the pipeline, so each sensor type get their own worker branch
-  auto &device_config = std::get<OrbbecDeviceConfiguration>(_config);
+  const auto &device_config = std::get<OrbbecDeviceConfiguration>(_config);
 
   device_config.sensor.value().visit([&](const auto &sensor_config) {
     using SensorConfiguration = std::decay_t<decltype(sensor_config)>;
@@ -330,13 +345,11 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
     if constexpr (std::same_as<
                       SensorConfiguration,
                       OrbbecDeviceConfiguration::RgbdSensorConfiguration>) {
-      rgbd_pipeline_thread_work(std::move(stop_token), std::move(ob_device),
-                                sensor_config);
+      rgbd_pipeline_thread_work(std::move(stop_token), std::move(ob_device));
     } else if constexpr (std::same_as<SensorConfiguration,
                                       OrbbecDeviceConfiguration::
                                           LidarSensorConfiguration>) {
-      lidar_pipeline_thread_work(std::move(stop_token), std::move(ob_device),
-                                 sensor_config);
+      lidar_pipeline_thread_work(std::move(stop_token), std::move(ob_device));
     } else {
       static_assert(!sizeof(SensorConfiguration *),
                     "Unhandled Orbbec sensor configuration type");
@@ -345,10 +358,9 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
 }
 
 void OrbbecDevice::rgbd_pipeline_thread_work(
-    std::stop_token stop_token, std::shared_ptr<ob::Device> ob_device,
-    OrbbecDeviceConfiguration::RgbdSensorConfiguration sensor_config) {
+    std::stop_token stop_token, std::shared_ptr<ob::Device> ob_device) {
   try {
-    pc::logger()->trace("creating new ob::Pipeline");
+    pc::logger()->trace("creating new orbbec rgbd pipeline");
 
     // we get exclusive access to the orbbec device api during initialisation of
     // this thread, but unlock before starting the working loop. this ensures
@@ -361,6 +373,9 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
     auto ob_config = std::make_shared<ob::Config>();
 
     auto &device_config = std::get<OrbbecDeviceConfiguration>(_config);
+    auto &sensor_config =
+        rfl::get<OrbbecDeviceConfiguration::RgbdSensorConfiguration>(
+            device_config.sensor.get().variant());
 
     const auto [colour_width, colour_height] =
         orbbec::resolution(sensor_config.color_resolution.value());
@@ -438,8 +453,9 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
     pc::logger()->trace("enabling stream at: {} fps", fps);
 
     ob_config->enableStream(depth_profile);
-    ob_config->setFrameAggregateOutputMode(
-        OB_FRAME_AGGREGATE_OUTPUT_FULL_FRAME_REQUIRE);
+    // ob_config->setFrameAggregateOutputMode(
+    //     OBFrameAggregateOutputMode::
+    //         OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);
 
     // this is frame sync between the devices own depth and colour cameras
     pipeline.enableFrameSync();
@@ -492,6 +508,8 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
                OrbbecDeviceConfiguration::PointConversionMode::C2D) {
     }
 
+    ob_device_api_access.unlock();
+
     // create instances to the available backend plugins to transform our
     // point-cloud with
 
@@ -522,8 +540,6 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
       }
     }
 
-    ob_device_api_access.unlock();
-
     pc::logger()->trace("Starting process loop for OrbbecDevice {}",
                         device_config.id);
 
@@ -545,10 +561,6 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
         set_loading(false);
       }
 
-      auto colour_frame = frame_set->colorFrame();
-      auto depth_frame = frame_set->depthFrame();
-      if (!colour_frame || !depth_frame) continue;
-
       // TODO find a way to cache this world transform position or somehow
       // otherwise remove the lock to get it
       pc::float4x4 world;
@@ -559,13 +571,21 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
       }
 
       // drop this frame rather than queue it when processing is behind...
-      if (!try_begin_frame_task()) continue;
+      if (!try_begin_frame_task()) {
+        continue;
+      }
+
+      // TODO evaluate if the hand off to an arbitrary pool is actually wise
+      // like this. I think im increasing latency? idk
 
       pc::task_pool().detach_task(
           [this, &color_intrinsics, &cuda_backend, &cpu_backend,
-           colour_frame = std::move(colour_frame),
-           depth_frame = std::move(depth_frame), device_config = device_config,
+           frame_set = std::move(frame_set), device_config = device_config,
            max_point_count = max_point_count, world = world]() {
+            auto colour_frame = frame_set->colorFrame();
+            auto depth_frame = frame_set->depthFrame();
+            if (!colour_frame || !depth_frame) return;
+
             ProfilingZone process_frame_zone("OrbbecDevice::process_frame");
             FrameTaskSlot frame_task_slot(*this);
 
@@ -659,15 +679,280 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
 }
 
 void OrbbecDevice::lidar_pipeline_thread_work(
-    std::stop_token, std::shared_ptr<ob::Device>,
-    OrbbecDeviceConfiguration::LidarSensorConfiguration) {
+    std::stop_token stop_token, std::shared_ptr<ob::Device> ob_device) {
 #if POINTCASTER_ORBBEC_SDK_VERSION < 2
   pc::logger()->error("Lidar sensors are not compatible with Orbbec SDK v1. "
                       "Change the SDK version in Preferences > Orbbec",
                       POINTCASTER_ORBBEC_SDK_VERSION);
 #else
-  // TODO drive the lidar sensor stream
-  pc::logger()->warn("Orbbec lidar sensor support is not implemented yet");
+  try {
+
+    // TODO drive the lidar sensor stream
+
+    // 1. initialise and start pipeline
+
+    // we get exclusive access to the orbbec device api during initialisation of
+    // this thread, but unlock before starting the working loop. this ensures
+    // that devices are loaded serially because the sdk is not thread safe
+    std::unique_lock<std::mutex> ob_device_api_access(
+        orbbec_context().device_api_access);
+
+    ob::Pipeline pipeline{ob_device};
+
+    auto ob_config = std::make_shared<ob::Config>();
+
+    auto &device_config = std::get<OrbbecDeviceConfiguration>(_config);
+    auto &sensor_config =
+        rfl::get<OrbbecDeviceConfiguration::LidarSensorConfiguration>(
+            device_config.sensor.get().variant());
+
+    std::shared_ptr<ob::Sensor> lidar_sensor = nullptr;
+
+    const auto sensor_list = ob_device->getSensorList();
+    for (size_t i = 0; i < sensor_list->getCount(); i++) {
+      const auto sensor_type = sensor_list->getSensorType(i);
+      const auto sensor_type_str =
+          ob::TypeHelper::convertOBSensorTypeToString(sensor_type);
+      if (sensor_type_str == "LiDAR") {
+        lidar_sensor = sensor_list->getSensor(i);
+        break;
+      }
+    }
+
+    static const std::map<OBLiDARScanRate, uint32_t> available_scan_rates = {
+        {OB_LIDAR_SCAN_15HZ, 15},
+        {OB_LIDAR_SCAN_20HZ, 20},
+        {OB_LIDAR_SCAN_25HZ, 25},
+        {OB_LIDAR_SCAN_30HZ, 30},
+        {OB_LIDAR_SCAN_40HZ, 40}};
+
+    std::shared_ptr<ob::StreamProfile> target_profile = nullptr;
+
+    auto stream_profiles = lidar_sensor->getStreamProfileList();
+    for (size_t i = 0; i < stream_profiles->getCount(); i++) {
+      const auto profile =
+          stream_profiles->getProfile(i)->as<ob::LiDARStreamProfile>();
+      auto it = available_scan_rates.find(profile->getScanRate());
+      if (it != available_scan_rates.end()) {
+        if (it->second == sensor_config.scan_rate.value()) {
+          target_profile = profile;
+          pc::logger()->trace("Initialising sensor with scan rate of {} hz",
+                              sensor_config.scan_rate.value());
+          break;
+        }
+      }
+    }
+
+    ob_config->enableStream(target_profile);
+    ob_config->setFrameAggregateOutputMode(
+        OB_FRAME_AGGREGATE_OUTPUT_FULL_FRAME_REQUIRE);
+
+    try {
+      pc::logger()->trace("attempting to start pipeline");
+      pipeline.start(ob_config);
+    } catch (const ob::Error &e) {
+      pc::logger()->error("Failed to start Orbbec pipeline: {}",
+                          e.getMessage());
+      set_error_state(true);
+      return;
+    }
+
+    //
+    // // Get property
+    // ob_device->getStructuredData(OB_RAW_DATA_LIDAR_IP_ADDRESS, data,
+    // &dataSize);
+    // // Set property
+    // ob_device->setIntProperty(OB_PROP_LIDAR_TAIL_FILTER_LEVEL_INT, 0);
+    //
+
+    // 2. while loop reading lidar frames as they arrive
+
+    ob_device_api_access.unlock();
+
+    // create instances to the available backend plugins to transform our
+    // point-cloud with. a single scan frame tops out at 3600 points (the
+    // slowest scan rate gives 200 points across 18 data blocks), so this
+    // allocates far less than the rgbd path
+    constexpr size_t max_point_count = 3600;
+
+    using Corrade::Containers::Pointer;
+    using Corrade::PluginManager::LoadState;
+
+    Pointer<backend::BackendPlugin> cpu_backend;
+    Pointer<backend::BackendPlugin> cuda_backend;
+
+    auto &backend_manager = _workspace->backend_plugin_manager;
+
+    for (const auto &plugin : backend_manager->pluginList()) {
+      if (backend_manager->loadState(plugin) & LoadState::NotLoaded) continue;
+      if (plugin == "CpuBackend") {
+        cpu_backend = backend_manager->instantiate(plugin);
+        cpu_backend->init(max_point_count);
+        pc::logger()->trace("OrbbecDevice created CPU backend");
+        continue;
+      }
+      if (plugin == "CudaBackend") {
+        cuda_backend = backend_manager->instantiate(plugin);
+        cuda_backend->init(max_point_count);
+        pc::logger()->trace("OrbbecDevice created CUDA backend");
+        continue;
+      }
+    }
+
+    // scan samples are polar: an angle in degrees and a distance in mm.
+    // distances already match our position units, but int16 positions can't
+    // hold anything past ~32.7m, and a zero distance is the sensor reporting
+    // no return at that angle
+    constexpr float minimum_scan_distance = 1.0f;
+    constexpr float maximum_scan_distance = 32767.0f;
+    constexpr float degrees_to_radians = std::numbers::pi_v<float> / 180.0f;
+    // OBLiDARScanPoint documents intensity as 0~2000
+    constexpr uint16_t maximum_scan_intensity = 2000;
+
+    // logged on first resolve and whenever it changes, so group placement is
+    // visible without a per-frame log
+    std::optional<pc::float4x4> last_world;
+
+    while (!stop_token.stop_requested()) {
+      std::shared_ptr<ob::FrameSet> frame_set;
+      try {
+        frame_set = pipeline.waitForFrames(100);
+      } catch (const ob::Error &e) {
+        pc::logger()->error("waitForFrames error: {}", e.getMessage());
+        continue;
+      }
+      if (!frame_set) continue;
+
+      ProfilingZone new_frame_zone("OrbbecDevice::new_frame");
+      new_frame_zone.text(device_config.id);
+
+      if (_loading_pipeline.load(std::memory_order_relaxed)) {
+        set_loading(false);
+      }
+
+      // TODO find a way to cache this world transform position or somehow
+      // otherwise remove the lock to get it
+      pc::float4x4 world;
+      {
+        std::scoped_lock lock(_workspace->config_access);
+        world = pc::devices::effective_world_transform(_workspace->config,
+                                                       device_config.id);
+        if (last_world != world) {
+          last_world = world;
+          pc::logger()->debug(
+              "orbbec '{}' ancestor transform -> address='{}' offset=({}, {}, "
+              "{})mm {}",
+              device_config.id,
+              pc::devices::device_address(_workspace->config, device_config.id),
+              world.values[3], world.values[7], world.values[11],
+              world == pc::float4x4{} ? "(identity, not applied)" : "");
+        }
+      }
+
+      // drop this frame rather than queue it when processing is behind...
+      if (!try_begin_frame_task()) {
+        continue;
+      }
+
+      const auto &process_frame_task = [this, frame_set = std::move(frame_set),
+                                        device_config, world = std::move(world),
+                                        &cpu_backend, &cuda_backend] {
+        // frame_task_slot occupies a frame processing thread for its
+        // lifetime... it's what tells try_begin_frame_task() to fail if too
+        // many exist per device
+        // TODO how many? where does the concurrent frame processing count come
+        // from?
+
+        ProfilingZone process_frame_zone("OrbbecDevice::process_lidar_frame");
+        FrameTaskSlot frame_task_slot(*this);
+
+        auto frame = frame_set->getFrame(OB_FRAME_LIDAR_POINTS);
+        auto lidar_frame = frame->as<ob::LiDARPointsFrame>();
+
+        std::span scan_samples{
+            reinterpret_cast<const OBLiDARScanPoint *>(lidar_frame->getData()),
+            lidar_frame->getDataSize() / sizeof(OBLiDARScanPoint)};
+
+        auto scan_cloud = std::make_shared<PointCloud>();
+        scan_cloud->reserve(scan_samples.size());
+
+        // TODO this could be implemented by backends and move onto the
+        // transform and operators
+
+        for (const auto &sample : scan_samples) {
+          const auto distance = sample.distance;
+          if (!std::isfinite(distance) || distance < minimum_scan_distance ||
+              distance > maximum_scan_distance)
+            continue;
+
+          // convert the angular data into our 3d point cloud space
+          const auto angle = sample.angle * degrees_to_radians;
+          const auto x = distance * std::sin(angle);
+          const auto z = -distance * std::cos(angle);
+
+          scan_cloud->positions.push_back(
+              {.x = static_cast<int16_t>(std::lround(x)),
+               .y = 0,
+               .z = static_cast<int16_t>(std::lround(z))});
+
+          // a lidar return carries no colour, so intensity drives greyscale
+          const uint16_t scan_intensity =
+              sample.intensity < maximum_scan_intensity
+                  ? sample.intensity
+                  : maximum_scan_intensity;
+          const auto intensity = static_cast<unsigned char>(
+              scan_intensity * 255 / maximum_scan_intensity);
+          scan_cloud->colors.push_back({intensity, intensity, intensity, 255});
+        }
+
+        if (scan_cloud->empty()) return;
+
+        const bool using_cuda =
+            (device_config.transform.value().backend.value() ==
+                 BackendType::CUDA &&
+             cuda_backend);
+        backend::BackendPlugin *backend =
+            using_cuda ? cuda_backend.get() : cpu_backend.get();
+        if (!backend) return;
+
+        auto point_cloud = std::make_shared<PointCloud>();
+        point_cloud->resize(scan_cloud->size());
+
+        {
+          ProfilingZone backend_transform_zone(
+              "OrbbecDevice::backend_transform");
+          backend->transform_point_cloud(*scan_cloud, point_cloud,
+                                         device_config.transform.value(),
+                                         device_config.color.value(), world);
+        }
+
+        feed_operator_pipeline(point_cloud);
+
+        if (rendering() && cpu_backend) {
+          if (auto processed = _pipeline->latest_cloud()) {
+            auto render_buffer = std::make_shared<std::vector<std::byte>>(
+                processed->size() * 16);
+            cpu_backend->pack_render_buffer(*processed, *render_buffer);
+            _latest_render_data.store(std::move(render_buffer),
+                                      std::memory_order_release);
+          }
+        }
+
+        notify_point_cloud_updated();
+        set_updated_time(steady_clock::now());
+      };
+
+      // TODO detach onto task pool?
+      process_frame_task();
+    }
+
+  } catch (const std::exception &e) {
+    pc::logger()->error("Exception in Orbbec processing thread: {}", e.what());
+    set_error_state(true);
+  } catch (...) {
+    pc::logger()->error("Unknown exception in Orbbec processing thread");
+    set_error_state(true);
+  }
 #endif
   set_error_state(true);
 }
