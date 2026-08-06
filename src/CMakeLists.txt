@@ -20,7 +20,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 
 qt_add_executable(pointcaster
-  #WIN32
+  WIN32
   pointcaster.cc
   workspace/workspace.cc
   workspace/workspace_metrics.cc
