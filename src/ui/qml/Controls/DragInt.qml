@@ -75,10 +75,14 @@ SpinBox {
     function resetToDefault() {
         if (!hasValidDefault())
             return;
+
         var v = clampToRange(Number(defaultValue));
-        if (v === value)
+        if (v === value && v === boundValue)
             return;
+
         value = v;
+        boundValue = v;
+        commitValue(v);
     }
 
     Component.onCompleted: syncDisplayedValue()

@@ -102,9 +102,9 @@ QVariant({{ m.variant_default_index }})
 {%- elif m.kind == "enum" %}
 QVariant({{ m.enum_default if m.enum_default is not none else 0 }})
 {%- elif m.kind == "float3" %}
-QVariant::fromValue(QVector3D(0.0f, 0.0f, 0.0f))
+QVariant::fromValue(QVector3D({{ (m.default_components or [0.0, 0.0, 0.0]) | join('f, ') }}f))
 {%- elif m.kind == "quaternion" %}
-QVariant::fromValue(QQuaternion(1, 0, 0, 0))
+QVariant::fromValue(QQuaternion({{ (m.default_components or [1.0, 0.0, 0.0, 0.0]) | join('f, ') }}f))
 {%- elif m.default_value is none %}
 QVariant()
 {%- elif m.default_value is boolean %}

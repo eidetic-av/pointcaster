@@ -97,10 +97,15 @@ DoubleSpinBox {
     }
 
     function resetToDefault() {
+        if (!hasDefault) return;
+
         var v = clampToRange(effectiveDefault);
-        if (v === value)
+        if (v === value && v === boundValue)
             return;
+
         value = v;
+        boundValue = v;
+        commitValue(v);
     }
 
     onValueModified: {

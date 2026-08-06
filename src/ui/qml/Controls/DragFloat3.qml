@@ -36,6 +36,15 @@ Row {
         return Number(v3.z) || 0;
     }
 
+    function _axisDefault(axisIndex) {
+        const d = root.defaultValue;
+        if (d === undefined || d === null)
+            return undefined;
+        if (typeof d === "object")
+            return (d.x === undefined) ? undefined : root._axisValue(d, axisIndex);
+        return d; // a scalar default applies to every axis
+    }
+
     function _withAxis(v3, axisIndex, newComponentValue) {
         const x = (axisIndex === 0) ? newComponentValue : (Number(v3.x) || 0);
         const y = (axisIndex === 1) ? newComponentValue : (Number(v3.y) || 0);
@@ -82,6 +91,7 @@ Row {
                 width: contentRow.eachWidth > 0 ? contentRow.eachWidth : implicitWidth
 
                 readonly property int axisIndex: modelData.index
+                readonly property var axisDefault: root._axisDefault(axisIndex)
 
                 function syncFromRoot() {
                     dragFloat.boundValue = root._axisValue(root.boundValue, axisIndex);
@@ -158,7 +168,7 @@ Row {
 
                     minValue: root.minValue
                     maxValue: root.maxValue
-                    defaultValue: root.defaultValue
+                    defaultValue: axisRow.axisDefault
 
                     boundValue: 0.0
 

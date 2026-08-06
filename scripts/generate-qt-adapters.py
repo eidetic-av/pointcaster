@@ -44,6 +44,8 @@ class Member:
     is_rfl: bool         
     comment: str = ""
     default_value: Any = None
+    # float3/quaternion initialisers, broken out into their components
+    default_components: list[float] | None = None
     enum_default: int | None = None
     enum_qualified_type: str = ""
     enum_entries: list[EnumEntry] = field(default_factory=list)
@@ -343,8 +345,17 @@ def classify(cpp_type: str, is_enum: bool, is_variant: bool) -> tuple[str, str]:
 # Value parsing
 # ----------------------------
 
+NUMERIC_SUFFIX_RE = re.compile(r"^([-+]?[0-9][0-9.eE+-]*?)([uUlLfF]+)$")
+
+
+def _strip_numeric_suffix(token: str) -> str:
+    """`60.0f`, `1024u` and `1ull` name the same numbers without their suffix."""
+    match = NUMERIC_SUFFIX_RE.match(token.strip())
+    return match.group(1) if match else token.strip()
+
+
 def _try_parse_int(token: str) -> int | None:
-    t = token.strip()
+    t = _strip_numeric_suffix(token)
     if not t:
         return None
     try:
@@ -368,7 +379,7 @@ def _parse_default_value(raw: str) -> Any:
         return parsed_int
 
     try:
-        parsed_float = float(s)
+        parsed_float = float(_strip_numeric_suffix(s))
     except ValueError:
         parsed_float = None
 
@@ -381,6 +392,42 @@ def _parse_default_value(raw: str) -> Any:
         return s[1:-1]
 
     return s
+
+
+def _parse_number_literal(token: str) -> float | None:
+    try:
+        return float(_strip_numeric_suffix(token))
+    except ValueError:
+        return None
+
+
+AGGREGATE_INIT_RE = re.compile(r"^[\w:]*\s*[({](.*)[)}]$", re.DOTALL)
+
+
+def _parse_vector_components(raw: str, count: int) -> list[float] | None:
+    """
+    Breaks an aggregate initialiser into its components.
+    """
+    if not raw:
+        return None
+
+    inner = raw.strip()
+    match = AGGREGATE_INIT_RE.match(inner)
+    if match:
+        inner = match.group(1)
+
+    tokens = [token.strip() for token in inner.split(",") if token.strip()]
+    if not tokens or len(tokens) > count:
+        return None
+
+    components: list[float] = []
+    for token in tokens:
+        parsed = _parse_number_literal(token)
+        if parsed is None:
+            return None
+        components.append(parsed)
+
+    return components + [0.0] * (count - len(components))
 
 
 def _parse_enum_entries(enum_body: str) -> list[EnumEntry]:
@@ -611,10 +658,13 @@ def _parse_members(
         alternative_names = _variant_alternative_names(cpp_type) or []
         kind, qt_type = classify(cpp_type, bool(enum_entries), bool(alternative_names))
 
+        default_components: list[float] | None = None
         if kind == "float3":
             needs_qvector3d = True
+            default_components = _parse_vector_components(init_raw, 3)
         if kind == "quaternion":
             needs_qquaternion = True
+            default_components = _parse_vector_components(init_raw, 4)
 
         ref = f"{ref_prefix}{raw_name}"
         member = Member(
@@ -627,6 +677,7 @@ def _parse_members(
             is_rfl=is_rfl,
             comment=comment,
             default_value=default_value,
+            default_components=default_components,
             enum_default=_enum_default_to_int(default_value, enum_entries)
             if enum_entries else None,
             enum_qualified_type=enum_qualified_type,
