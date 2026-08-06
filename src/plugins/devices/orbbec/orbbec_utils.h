@@ -48,7 +48,7 @@ static bool judgeIntrinsicValid(OBCameraIntrinsic param) {
       (param.cy < 1.0f)) {
     return false;
   }
-  if ((param.fx > FMAX) || (param.fy > FMAX) | (param.cx > FMAX) ||
+  if ((param.fx > FMAX) || (param.fy > FMAX) || (param.cx > FMAX) ||
       (param.cy > FMAX)) {
     return false;
   }
