@@ -150,7 +150,10 @@ Column {
                     id: fieldRepeater
 
                     model: modelData.filter(function (path) {
-                        return !root.configAdapter.isHidden(path);
+                        const hidden = root.configAdapter.isHidden(path);
+                        // for now just hide variant type selection
+                        const variant = root.configAdapter.isVariant(path);
+                        return !hidden && !variant;
                     })
 
                     delegate: RowLayout {

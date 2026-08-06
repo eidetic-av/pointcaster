@@ -910,6 +910,7 @@ def process_cpp_header(
                 "label": label,
                 "members": members,
                 "variants": [m for m in members if m.kind == "variant"],
+                "any_variants": any(m.kind in ("variant") for m in members),
                 "any_enums": any(
                     m.kind in ("enum", "variant", "nested") or m.options
                     for m in members

@@ -597,6 +597,19 @@ public:
     }
 {% endif %}
 
+{% if s.any_variants %}
+    Q_INVOKABLE bool isVariant(const QString &path) const override {
+{% for m in s.members %}
+{% if m.kind in ("variant") %}
+        if (path == QStringLiteral("{{ m.path }}")) return true;
+{% elif m.kind == "nested" %}
+{{ forward_case(m, "isVariant", "") }}
+{% endif %}
+{% endfor %}
+        return false;
+    }
+{% endif %}
+
 private:
     {{ s.struct_name }} &m_config;
 

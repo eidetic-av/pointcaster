@@ -96,6 +96,11 @@ public:
     return false;
   }
 
+  Q_INVOKABLE virtual bool isVariant(const QString &path) const {
+    Q_UNUSED(path);
+    return false;
+  }
+
   Q_INVOKABLE virtual QVariant enumOptions(const QString &path) const {
     Q_UNUSED(path);
     return {};
