@@ -8,6 +8,7 @@ set(qml_singletons
     Theme/FontAwesome.qml
     Theme/Scaling.qml
     Utils/StringUtils.qml
+    Utils/TransformUtils.qml
 )
 foreach(qml_singleton_file IN LISTS qml_singletons)
     set_source_files_properties( ${qml_singleton_file} 

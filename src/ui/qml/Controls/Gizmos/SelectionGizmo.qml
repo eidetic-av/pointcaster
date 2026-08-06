@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick3D
 
+import Pointcaster 1.0
+
 import Gizmo3D
 
 Item {
@@ -17,21 +19,26 @@ Item {
 
     property matrix4x4 parentWorldTransform: Qt.matrix4x4()
 
+    readonly property quaternion parentRotation: TransformUtils.rotationFromMatrix(parentWorldTransform)
+
     property real size: 80
+
+    readonly property bool gizmoActive: gizmo.isActive
 
     // ── Live drag state (read by SessionView for immediate visual feedback) ──
     property bool dragging: false
     property vector3d dragPosition: Qt.vector3d(0, 0, 0)
-    property vector3d dragRotation: Qt.vector3d(0, 0, 0)
-    property vector3d dragScale: Qt.vector3d(1, 1, 1)
+    property quaternion dragOrientation: Qt.quaternion(1, 0, 0, 0)
 
     // ── Private drag-start snapshots ──
     property vector3d _startPos: Qt.vector3d(0, 0, 0)
-    property vector3d _startEuler: Qt.vector3d(0, 0, 0)
-    property vector3d _startScale: Qt.vector3d(1, 1, 1)
+    property quaternion _startOrientation: Qt.quaternion(1, 0, 0, 0)
+    property bool _rotated: false
 
     anchors.fill: parent
 
+    // Translate and rotate only — transform/scale is edited numerically in the
+    // configuration editor, never through the gizmo.
     GlobalGizmo {
         id: gizmo
         view3d: root.view3d
@@ -53,18 +60,15 @@ Item {
         dragPosition = targetNode.position;
 
         if (cameraTarget) {
-            // Camera/operator targets only carry a position; take orientation
-            // and scale from the node rather than reading absent transform/* paths.
-            dragRotation = targetNode.eulerRotation;
-            dragScale = targetNode.scale;
+            dragOrientation = targetNode.rotation;
         } else {
-            dragRotation = targetAdapter ? _vec3(targetAdapter.value("transform/rotation"), targetNode.eulerRotation) : targetNode.eulerRotation;
-            dragScale = targetAdapter ? _vec3(targetAdapter.value("transform/scale"), targetNode.scale) : targetNode.scale;
+            var localEuler = targetAdapter ? _vec3(targetAdapter.value("transform/rotation"), Qt.vector3d(0, 0, 0)) : Qt.vector3d(0, 0, 0);
+            dragOrientation = root.parentRotation.times(TransformUtils.quaternionFromEuler(localEuler));
         }
 
         _startPos = dragPosition;
-        _startEuler = dragRotation;
-        _startScale = dragScale;
+        _startOrientation = dragOrientation;
+        _rotated = false;
     }
 
     function commitTransform() {
@@ -78,13 +82,13 @@ Item {
         if (cameraTarget) {
             targetAdapter.set(root.cameraPositionPath, Qt.vector3d(dragPosition.x * 0.01, dragPosition.y * 0.01, dragPosition.z * 0.01));
         } else {
-            // dragPosition is world scene units, convert to world metres, then strip
-            // the parent transform to get the device/group local position to store.
             var worldM = Qt.vector3d(dragPosition.x * 0.01, dragPosition.y * 0.01, dragPosition.z * 0.01);
             var localM = root.parentWorldTransform.inverted().times(worldM);
             targetAdapter.set("transform/position", localM);
-            targetAdapter.set("transform/rotation", dragRotation);
-            targetAdapter.set("transform/scale", dragScale);
+            if (_rotated) {
+                var localQ = root.parentRotation.conjugated().times(dragOrientation);
+                targetAdapter.set("transform/rotation", TransformUtils.eulerFromQuaternion(localQ));
+            }
         }
 
         dragging = false;
@@ -149,13 +153,10 @@ Item {
         }
 
         function onRotationDelta(axis, transformMode, angleDegrees, snapActive) {
-            var e = root._startEuler;
-            if (axis === GizmoEnums.Axis.X)
-                root.dragRotation = Qt.vector3d(e.x + angleDegrees, e.y, e.z);
-            else if (axis === GizmoEnums.Axis.Y)
-                root.dragRotation = Qt.vector3d(e.x, e.y + angleDegrees, e.z);
-            else
-                root.dragRotation = Qt.vector3d(e.x, e.y, e.z + angleDegrees);
+            var dir = axis === GizmoEnums.Axis.X ? Qt.vector3d(1, 0, 0) : axis === GizmoEnums.Axis.Y ? Qt.vector3d(0, 1, 0) : Qt.vector3d(0, 0, 1);
+            var delta = TransformUtils.quaternionFromAxisAngle(dir, angleDegrees);
+            root.dragOrientation = delta.times(root._startOrientation);
+            root._rotated = true;
         }
 
         function onRotationEnded(axis) {
@@ -163,42 +164,10 @@ Item {
         }
     }
 
-    // ── Scale ──
+    // ── Fallback: if a gizmo doesn't emit its *Ended signal ──
 
-    Connections {
-        target: gizmo
-        ignoreUnknownSignals: true
-
-        function onScaleStarted(axis) {
-            root.snapshotCurrent();
-            root.dragging = true;
-        }
-
-        function onScaleDelta(axis, transformMode, scaleFactor, snapActive) {
-            var s = root._startScale;
-            if (axis === GizmoEnums.Axis.Uniform)
-                root.dragScale = Qt.vector3d(s.x * scaleFactor, s.y * scaleFactor, s.z * scaleFactor);
-            else if (axis === GizmoEnums.Axis.X)
-                root.dragScale = Qt.vector3d(s.x * scaleFactor, s.y, s.z);
-            else if (axis === GizmoEnums.Axis.Y)
-                root.dragScale = Qt.vector3d(s.x, s.y * scaleFactor, s.z);
-            else
-                root.dragScale = Qt.vector3d(s.x, s.y, s.z * scaleFactor);
-        }
-
-        function onScaleEnded(axis) {
-            root.commitTransform();
-        }
-    }
-
-    // ── Fallback: if gizmo doesn't emit *Ended signals ──
-
-    Connections {
-        target: gizmo
-        ignoreUnknownSignals: true
-        function onActiveChanged() {
-            if (!gizmo.active && root.dragging)
-                root.commitTransform();
-        }
+    onGizmoActiveChanged: {
+        if (!gizmoActive && dragging)
+            commitTransform();
     }
 }

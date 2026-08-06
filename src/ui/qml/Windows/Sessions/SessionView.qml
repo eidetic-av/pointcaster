@@ -45,9 +45,7 @@ Item {
         return Qt.vector3d(v.x * 100, v.y * 100, v.z * 100);
     }
 
-    // True when the selected operator exposes camera/look_at_position.
-    // Operator types either have this path or don't; only needs to update on
-    // operator selection change, which the selectedOperatorAdapter binding covers.
+    // True when the selected operator exposes camera/look_at_position
     readonly property bool _selectionHasLookAt: {
         if (!selectedOperatorAdapter)
             return false;
@@ -55,22 +53,13 @@ Item {
         return v !== undefined && v !== null && v.x !== undefined;
     }
 
-    property var selectionScale: selectionScaleOrDefault()
-    function selectionScaleOrDefault() {
-        var scale = Qt.vector3d(1, 1, 1);
-        if (selectedTransformAdapter) {
-            scale = selectedTransformAdapter.value("transform/scale");
-        }
-        return scale;
-    }
-
-    property vector3d selectionRotation: selectionRotationOrDefault()
+    property quaternion selectionRotation: selectionRotationOrDefault()
     function selectionRotationOrDefault() {
-        var euler = Qt.vector3d(0, 0, 0);
-        if (selectedTransformAdapter) {
-            euler = selectedTransformAdapter.value("transform/rotation");
-        }
-        return euler;
+        if (!selectedTransformAdapter)
+            return Qt.quaternion(1, 0, 0, 0);
+        var euler = selectedTransformAdapter.value("transform/rotation");
+        var parentQ = TransformUtils.rotationFromMatrix(selectionParentWorld);
+        return parentQ.times(TransformUtils.quaternionFromEuler(euler));
     }
 
     property matrix4x4 selectionParentWorld: Qt.matrix4x4()
@@ -92,7 +81,6 @@ Item {
         updateSelectionParentWorld();
         selectionPosition = selectionPositionOrDefault();
         selectionLookAtPosition = selectionLookAtPositionOrDefault();
-        selectionScale = selectionScaleOrDefault();
         selectionRotation = selectionRotationOrDefault();
     }
 
@@ -324,8 +312,7 @@ Item {
             x: selectionGizmo.dragging ? selectionGizmo.dragPosition.x : selectionPosition.x
             y: selectionGizmo.dragging ? selectionGizmo.dragPosition.y : selectionPosition.y
             z: selectionGizmo.dragging ? selectionGizmo.dragPosition.z : selectionPosition.z
-            scale: selectionGizmo.dragging ? selectionGizmo.dragScale : selectionScale
-            eulerRotation: selectionGizmo.dragging ? selectionGizmo.dragRotation : selectionRotation
+            rotation: selectionGizmo.dragging ? selectionGizmo.dragOrientation : selectionRotation
         }
 
         // Look-at proxy — used by lookAtGizmo when the operator exposes
@@ -647,7 +634,7 @@ Item {
         visible: (root.selectedOperatorAdapter || root.selectedTransformAdapter) && !sessionControls.viewLocked
         view3d: view
         targetNode: selectionProxy
-        mode: GizmoEnums.Mode.All
+        mode: GizmoEnums.Mode.Both
         targetAdapter: root.selectedOperatorAdapter || root.selectedTransformAdapter
         cameraTarget: root.selectedOperatorAdapter !== null
         cameraPositionPath: "camera/position"
