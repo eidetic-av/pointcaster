@@ -28,7 +28,7 @@
 {% elif m.kind == "enum" %}
             return QVariant(static_cast<int>({{ m.read }}));
 {% elif m.kind == "variant" %}
-            return QVariant(static_cast<int>({{ m.read }}.index()));
+            return QVariant(static_cast<int>({{ m.read }}{{ m.variant_access }}.index()));
 {% elif m.kind == "float3" %}
             const auto &v = {{ m.read }};
             return QVariant::fromValue(QVector3D(v.x, v.y, v.z));
@@ -217,7 +217,7 @@ public:
 {% elif m.kind == "variant" %}
         // a different alternative replaces the whole value; the same
         // alternative is diffed field by field below
-        if ({{ m.read }}.index() != config.{{ m.name }}{% if m.is_rfl %}.value(){% endif %}.index()) {
+        if ({{ m.read }}{{ m.variant_access }}.index() != config.{{ m.name }}{% if m.is_rfl %}.value(){% endif %}{{ m.variant_access }}.index()) {
             {{ m.ref }} = config.{{ m.name }};
             anyChanged = true;
             emit {{ m.name }}Changed();
@@ -243,7 +243,7 @@ public:
 
         if (auto *alt = rfl::get_if<{{ alt.cpp_type }}>(&{{ alt.variant_ref }})) {
             const auto *incoming = rfl::get_if<{{ alt.cpp_type }}>(
-                &config.{{ v.name }}{% if v.is_rfl %}.value(){% endif %});
+                &config.{{ v.name }}{% if v.is_rfl %}.value(){% endif %}{{ v.variant_access }});
             if (incoming) {
 {% for m in alt.leaves %}
 {% set source = "incoming->" + m.name + (".value()" if m.is_rfl else "") %}
@@ -324,7 +324,7 @@ public:
 {% if m.kind == "nested" %}
     Q_INVOKABLE QObject* {{ m.name }}Adapter() { return &m_{{ m.name }}Adapter; }
 {% elif m.kind == "variant" %}
-    Q_INVOKABLE int {{ m.name }}() const { return static_cast<int>({{ m.read }}.index()); }
+    Q_INVOKABLE int {{ m.name }}() const { return static_cast<int>({{ m.read }}{{ m.variant_access }}.index()); }
     Q_INVOKABLE void set_{{ m.name }}(int value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant(value)); }
 {% elif m.kind == "enum" %}
     Q_INVOKABLE int {{ m.name }}() const { return static_cast<int>({{ m.read }}); }
@@ -430,7 +430,7 @@ public:
         // switching alternative replaces the held value with a
         // default-constructed one of the requested type
         if (path == QStringLiteral("{{ m.path }}")) {
-            auto &variant = {{ m.read }};
+            auto &variant = {{ m.read }}{{ m.variant_access }};
             const int newIndex = value.toInt();
             if (newIndex == variant.index()) return false;
             switch (newIndex) {
@@ -458,7 +458,8 @@ public:
 {{ forward_case(m, "typeName", "") }}
 {% else %}
         if (path == QStringLiteral("{{ m.path }}"))
-            return QStringLiteral("{{ m.cpp_type }}");
+{# a tagged union's discriminator is quoted, so it needs escaping in here #}
+            return QStringLiteral("{{ m.cpp_type | replace('"', '\\"') }}");
 {% endif %}
 {% endfor %}
         return {};
@@ -514,7 +515,7 @@ public:
 {% for alt in v.alternatives if alt.leaves %}
         // "{{ alt.label }}" fields are only live while the variant holds one
         if (path.startsWith(QStringLiteral("{{ alt.variant_path }}/{{ alt.tag }}/")))
-            return {{ v.read }}.index() != {{ alt.index }};
+            return {{ v.read }}{{ v.variant_access }}.index() != {{ alt.index }};
 {% endfor %}
 {% endfor %}
 {% for m in s.members %}
@@ -561,7 +562,7 @@ public:
 {% if s.any_enums %}
     Q_INVOKABLE bool isEnum(const QString &path) const override {
 {% for m in s.members %}
-{% if m.kind in ("enum", "variant") %}
+{% if m.kind == "variant" or m.choices %}
         if (path == QStringLiteral("{{ m.path }}")) return true;
 {% elif m.kind == "nested" %}
 {{ forward_case(m, "isEnum", "") }}
@@ -572,10 +573,10 @@ public:
 
     Q_INVOKABLE QVariant enumOptions(const QString &path) const override {
 {% for m in s.members %}
-{% if m.kind == "enum" %}
+{% if m.choices %}
         if (path == QStringLiteral("{{ m.path }}")) {
             return QVariantList{
-{% for e in m.enum_entries %}
+{% for e in m.choices %}
                 QVariantMap{ {"text", QStringLiteral("{{ e.name }}")}, {"value", {{ e.value }} } }{{ "," if not loop.last else "" }}
 {% endfor %}
             };

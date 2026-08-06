@@ -7,6 +7,7 @@
 #include <plugins/operators/operator_variants.h>
 #include <pointcaster/point_cloud.h>
 #include <rfl/Literal.hpp>
+#include <rfl/TaggedUnion.hpp>
 #include <rfl/Variant.hpp>
 #include <string>
 
@@ -23,7 +24,7 @@ struct OrbbecDeviceConfiguration {
   rfl::DefaultVal<int> order = 0;         // @hidden
 
   rfl::DefaultVal<bool> active = true; // @hidden
-  rfl::DefaultVal<bool> render = true; // @hidden;
+  rfl::DefaultVal<bool> render = true; // @hidden
 
   rfl::Skip<int> fps; // @disabled
 
@@ -60,24 +61,22 @@ struct OrbbecDeviceConfiguration {
     rfl::DefaultVal<DepthResolution> depth_resolution =
         DepthResolution::NFOV_640x576;
     rfl::DefaultVal<SyncMode> sync_mode = SyncMode::Standalone;
+
+    using Tag = rfl::Literal<"rgbd">;
   };
 
   struct LidarSensorConfiguration {
-    rfl::DefaultVal<bool> test_bool = false;
-    rfl::DefaultVal<int> test_int = 11;
+    rfl::DefaultVal<uint32_t> scan_rate = 30; // @options(15, 20, 25, 30, 40) @suffix(Hz)
+
+    using Tag = rfl::Literal<"lidar">;
   };
 
-  // rfl::Variant rather than std::variant: std::variant's converting
-  // constructor asks each alternative "could you be built from this?" by
-  // aggregate-initialising it, which hard-errors on an alternative whose first
-  // member is an rfl::DefaultVal. rfl::Variant constrains the same constructor
-  // on exact type identity, so it answers cleanly.
   using SensorConfigurationVariant =
-      rfl::Variant<RgbdSensorConfiguration, LidarSensorConfiguration>;
+      rfl::TaggedUnion<"type", RgbdSensorConfiguration,
+                       LidarSensorConfiguration>;
 
   rfl::DefaultVal<SensorConfigurationVariant> sensor = {
       RgbdSensorConfiguration{}};
-
 
   rfl::DefaultVal<NetworkConfiguration> network;
   rfl::DefaultVal<TransformConfiguration> transform;

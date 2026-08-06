@@ -47,6 +47,8 @@ class Member:
     enum_default: int | None = None
     enum_qualified_type: str = ""
     enum_entries: list[EnumEntry] = field(default_factory=list)
+    # a numeric member offers a fixed set of values through @options
+    options: list[EnumEntry] = field(default_factory=list)
     min_max: tuple[str, str] | None = None
     optional: bool = False
     disabled: bool = False
@@ -69,6 +71,16 @@ class Member:
     def is_own(self) -> bool:
         """True for direct members, which get a Q_PROPERTY and accessors."""
         return self.alternative is None
+
+    @property
+    def variant_access(self) -> str:
+        """Suffix that turns a variant member into an rfl::Variant expression."""
+        return ".variant()" if TAGGED_UNION_RE.match(self.cpp_type) else ""
+
+    @property
+    def choices(self) -> list[EnumEntry]:
+        """The values a dropdown offers: an enum's own, or a numeric @options."""
+        return self.enum_entries or self.options
 
 
 @dataclass
@@ -135,6 +147,8 @@ MEMBER_RE = re.compile(
 )
 
 MINMAX_RE = re.compile(r"@minmax\(([^)]+)\)")
+OPTIONS_RE = re.compile(r"@options\(([^)]+)\)")
+SUFFIX_RE = re.compile(r"@suffix\(([^)]+)\)")
 OPTIONAL_RE = re.compile(r"@optional")
 DISABLED_RE = re.compile(r"@disabled")
 HIDDEN_RE = re.compile(r"@hidden")
@@ -145,6 +159,9 @@ VERBATIM_RE = re.compile(
 
 # for matching `using X = Y;'
 USING_ALIAS_RE = re.compile(r"[ \t]*using\s+(\w+)\s*=\s*([^;]+);[ \t]*\n?")
+
+# for matching 'using Tag = rfl::Literal<"tag_str", ...>;'
+TAG_LITERAL_RE = re.compile(r'using\s+Tag\s*=\s*rfl::Literal<\s*"([^"]*)"')
 
 NAMESPACE_RE = re.compile(r"namespace\s+([A-Za-z_][\w:]*)\s*{")
 
@@ -158,6 +175,9 @@ INNER_STRUCT_RE = re.compile(r"^[ \t]+struct\s+(\w+)\s*\{", re.MULTILINE)
 INTLIKE_RE = re.compile(r"(u?)int(8|16|32|64)_t")
 OPTIONAL_T_RE = re.compile(r"std::optional<\s*([^>]+)\s*>")
 VARIANT_RE = re.compile(r"^(?:std|rfl)::[Vv]ariant<(.*)>$")
+# a tagged union's first template argument is its discriminator, followed
+# by the alternatives
+TAGGED_UNION_RE = re.compile(r"^rfl::TaggedUnion<(.*)>$")
 
 RFL_WRAPPER_RE = re.compile(r"^rfl::\w+<\s*(.+)\s*>$")
 
@@ -277,8 +297,14 @@ def _split_template_args(args: str) -> list[str]:
 
 
 def _variant_alternative_names(type_name: str) -> list[str] | None:
-    m = VARIANT_RE.match(type_name.strip())
-    return _split_template_args(m.group(1)) if m else None
+    t = type_name.strip()
+    m = VARIANT_RE.match(t)
+    if m:
+        return _split_template_args(m.group(1))
+    m = TAGGED_UNION_RE.match(t)
+    if m:
+        return _split_template_args(m.group(1))[1:]
+    return None
 
 
 def _is_nested_config_type(type_name: str) -> bool:
@@ -401,6 +427,23 @@ def _enum_default_to_int(default_value: Any, entries: list[EnumEntry]) -> int | 
     return entries[0].value if entries else None
 
 
+def _parse_options(comment: str) -> list[EnumEntry]:
+    """`@options(15, 20, 30) @suffix(Hz)` puts a numeric member in a dropdown."""
+    match = OPTIONS_RE.search(comment)
+    if not match:
+        return []
+
+    suffix = SUFFIX_RE.search(comment)
+    unit = f" {suffix.group(1).strip()}" if suffix else ""
+
+    entries: list[EnumEntry] = []
+    for token in match.group(1).split(","):
+        value = _try_parse_int(token)
+        if value is not None:
+            entries.append(EnumEntry(name=f"{value}{unit}", value=value))
+    return entries
+
+
 def _parse_min_max(comment: str) -> tuple[str, str] | None:
     match = MINMAX_RE.search(comment)
     if not match:
@@ -487,6 +530,8 @@ class ParseContext:
     body: str = ""
     enums: dict[str, StructEnum] = field(default_factory=dict)
     aliases: dict[str, str] = field(default_factory=dict)
+    # the struct's own Tag literal, if it declares one
+    tag: str = ""
     # inner struct name -> (qualified name, its own context)
     inner: dict[str, tuple[str, "ParseContext"]] = field(default_factory=dict)
 
@@ -509,15 +554,20 @@ def build_context(
     own_enums, body = _extract_nested_enums(body, qualified_name)
     context.enums.update(own_enums)
 
+    inner_tags = {
+        inner_name: match.group(1)
+        for inner_name, raw_body in _extract_inner_structs(struct_body)[0]
+        if (match := TAG_LITERAL_RE.search(raw_body))
+    }
+
     inner_declarations, body = _extract_inner_structs(body)
     for inner_name, inner_body in inner_declarations:
         if not ADAPTED_STRUCT_NAME_RE.match(inner_name):
             continue
         inner_qualified = f"{qualified_name}::{inner_name}"
-        context.inner[inner_name] = (
-            inner_qualified,
-            build_context(inner_body, inner_qualified, context),
-        )
+        inner_context = build_context(inner_body, inner_qualified, context)
+        inner_context.tag = inner_tags.get(inner_name, "")
+        context.inner[inner_name] = (inner_qualified, inner_context)
 
     context.body = VERBATIM_RE.sub("", body)
     return context
@@ -581,6 +631,7 @@ def _parse_members(
             if enum_entries else None,
             enum_qualified_type=enum_qualified_type,
             enum_entries=enum_entries,
+            options=_parse_options(comment),
             min_max=_parse_min_max(comment),
             optional=bool(OPTIONAL_RE.search(comment)),
             disabled=bool(DISABLED_RE.search(comment)),
@@ -596,7 +647,7 @@ def _parse_members(
 
         # expand the variant: every alternative's fields get their own paths,
         # read through a pointer to that alternative
-        variant_ref = member.read
+        variant_ref = f"{member.read}{member.variant_access}"
         for index, alternative_name in enumerate(alternative_names):
             simple = _bare_type_name(alternative_name)
             qualified, inner_context = context.inner.get(
@@ -606,7 +657,7 @@ def _parse_members(
                 name=simple,
                 cpp_type=qualified,
                 label=format_struct_name(simple),
-                tag=snake_case(simple),
+                tag=inner_context.tag or snake_case(simple),
                 index=index,
                 variant_path=member.path,
                 variant_ref=variant_ref,
@@ -808,7 +859,10 @@ def process_cpp_header(
                 "label": label,
                 "members": members,
                 "variants": [m for m in members if m.kind == "variant"],
-                "any_enums": any(m.kind in ("enum", "variant", "nested") for m in members),
+                "any_enums": any(
+                    m.kind in ("enum", "variant", "nested") or m.options
+                    for m in members
+                ),
                 "any_float3": any(m.kind == "float3" for m in members),
                 "any_quaternion": any(m.kind == "quaternion" for m in members),
                 "nested_adapter_includes": nested_adapter_includes,
