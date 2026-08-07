@@ -22,7 +22,6 @@ struct TransformFilterParameters {
   float position_x, position_y, position_z;
   float rotation_matrix[9];
   float scale_x, scale_y, scale_z;
-  float input_translation_x, input_translation_y, input_translation_z;
   float min_x, min_y, min_z;
   float max_x, max_y, max_z;
   int sample;
@@ -38,7 +37,6 @@ struct TransformFilterParameters {
     const auto &position = transform_config.position.value();
     const auto &rotation = transform_config.rotation.value();
     const auto &scale = transform_config.scale.value();
-    const auto &input_translation = transform_config.input_translation.value();
     const auto &min_bound = transform_config.min_bound.value();
     const auto &max_bound = transform_config.max_bound.value();
 
@@ -60,9 +58,6 @@ struct TransformFilterParameters {
             .scale_x = scale.x,
             .scale_y = scale.y,
             .scale_z = scale.z,
-            .input_translation_x = input_translation.x * 1000.f,
-            .input_translation_y = input_translation.y * 1000.f,
-            .input_translation_z = input_translation.z * 1000.f,
             .min_x = min_bound.x * 1000.f,
             .min_y = min_bound.y * 1000.f,
             .min_z = min_bound.z * 1000.f,
@@ -76,9 +71,7 @@ struct TransformFilterParameters {
 
 PC_DEVICE_FUNC inline position
 transform(position pos, const TransformFilterParameters &param) {
-  float x = pos.x + param.input_translation_x;
-  float y = pos.y + param.input_translation_y;
-  float z = pos.z + param.input_translation_z;
+  auto [x, y, z, _p] = pos;
 
   x *= param.scale_x;
   y *= param.scale_y;
