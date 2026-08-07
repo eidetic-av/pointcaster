@@ -39,54 +39,13 @@ KDDW.DockWidget {
             }
             spacing: Math.round(10 * Scaling.uiScale)
 
-            SessionTimeline {
-                adapter: root.workspace.sessionPointCloudAdapterFor(sessionAdapter.id)
-                Layout.fillWidth: true
-            }
-
-            // Session picker (only when there's more than one session)
-            ComboBox {
-                id: sessionPicker
-                Layout.fillWidth: true
-                visible: root.workspace ? root.workspace.sessionAdapters.length > 1 : false
-
-                model: root.workspace ? root.workspace.sessionAdapters : []
-                textRole: ""
-
-                displayText: root.sessionAdapter ? String(root.sessionAdapter.label || root.sessionAdapter.id) : ""
-
-                delegate: ItemDelegate {
-                    width: sessionPicker.width
-                    text: modelData ? String(modelData.label || modelData.id) : ""
-                    font: Scaling.uiFont
-                    highlighted: sessionPicker.highlightedIndex === index
-                    onClicked: {
-                        sessionPicker.currentIndex = index;
-                        sessionPicker.popup.close();
-                        if (modelData)
-                            root.workspace.selectedSessionId = String(modelData.id);
-                    }
-                }
-            }
-
-            Text {
-                visible: !root.sessionAdapter
-                text: "No session selected"
-                font: Scaling.uiFont
-                color: ThemeColors.placeholderText
-                Layout.fillWidth: true
-            }
-
             ScrollView {
+                id: scrollView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                clip: true
-                visible: !!root.sessionAdapter
-
-                Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                 Column {
-                    width: parent.width
+                    width: scrollView.availableWidth
                     spacing: sessionConfigEditor.groupSpacing
 
                     ConfigurationEditor {
@@ -108,6 +67,45 @@ KDDW.DockWidget {
                     }
                 }
             }
+
+            // SessionTimeline {
+            //     adapter: root.workspace.sessionPointCloudAdapterFor(sessionAdapter.id)
+            //     Layout.fillWidth: true
+            // }
+
+            // // Session picker (only when there's more than one session)
+            // ComboBox {
+            //     id: sessionPicker
+            //     Layout.fillWidth: true
+            //     visible: root.workspace ? root.workspace.sessionAdapters.length > 1 : false
+
+            //     model: root.workspace ? root.workspace.sessionAdapters : []
+            //     textRole: ""
+
+            //     displayText: root.sessionAdapter ? String(root.sessionAdapter.label || root.sessionAdapter.id) : ""
+
+            //     delegate: ItemDelegate {
+            //         width: sessionPicker.width
+            //         text: modelData ? String(modelData.label || modelData.id) : ""
+            //         font: Scaling.uiFont
+            //         highlighted: sessionPicker.highlightedIndex === index
+            //         onClicked: {
+            //             sessionPicker.currentIndex = index;
+            //             sessionPicker.popup.close();
+            //             if (modelData)
+            //                 root.workspace.selectedSessionId = String(modelData.id);
+            //         }
+            //     }
+            // }
+
+            // Text {
+            //     visible: !root.sessionAdapter
+            //     text: "No session selected"
+            //     font: Scaling.uiFont
+            //     color: ThemeColors.placeholderText
+            //     Layout.fillWidth: true
+            // }
+
         }
     }
 }
