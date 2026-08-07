@@ -29,7 +29,7 @@ steps:
         $version = $found.Groups[1].Value
         $tag = $env:CI_COMMIT_TAG -replace "^v", ""
         if ($tag -ne $version) {
-          throw "tag $env:CI_COMMIT_TAG does not match CMakeLists.txt version ${version}: bump project(pointcaster VERSION ...) and re-tag"
+          throw "tag $env:CI_COMMIT_TAG does not match CMakeLists.txt version $version - bump project(pointcaster VERSION ...) and re-tag"
         }
         Write-Host "releasing pointcaster $version"
       - |
