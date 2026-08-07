@@ -250,6 +250,15 @@ if(WIN32)
                 file(RENAME "${_plugin_dll}" "${_dll_dir}/deps/${_dll_name}")
             endif()
         endforeach()
+
+        # remove unused qt quick styles
+        foreach(_style FluentWinUI3 Imagine Material Universal)
+            file(REMOVE_RECURSE "${_prefix}/qml/QtQuick/Controls/${_style}")
+            file(GLOB _style_libs "${_prefix}/Qt6QuickControls2${_style}*.dll")
+            if(_style_libs)
+                file(REMOVE ${_style_libs})
+            endif()
+        endforeach()
     ]])
 
     # portable zip with pointcaster.exe at the archive root (extractors already create a folder named after the zip)
