@@ -153,6 +153,79 @@ session_operator_structure_changed(const QList<OperatorAdapter *> &current,
   return false;
 }
 
+bool path_under_prefix(const std::string &path, const std::string &prefix) {
+  return path.size() > prefix.size() && path.starts_with(prefix) &&
+         path[prefix.size()] == '/';
+}
+
+std::set<std::string> reroot_paths(const std::set<std::string> &paths,
+                                   const std::string &previous_prefix,
+                                   const std::string &new_prefix) {
+  std::set<std::string> rerooted;
+  for (const auto &path : paths) {
+    if (path_under_prefix(path, previous_prefix)) {
+      rerooted.insert(new_prefix + path.substr(previous_prefix.size()));
+    } else {
+      rerooted.insert(path);
+    }
+  }
+  return rerooted;
+}
+
+// the config registry prefix a device or group's fields live under
+std::string node_path_prefix(const pc::WorkspaceConfiguration &config,
+                             const std::string &node_id) {
+  return "device/" + pc::devices::device_address(config, node_id);
+}
+
+// same for a session
+std::string session_path_prefix(const pc::WorkspaceConfiguration &config,
+                                const std::string &session_id) {
+  const int index = find_session_index_by_id(config, session_id);
+  if (index < 0) return "session/" + session_id;
+  return "session/" + pc::session_address(config.sessions[size_t(index)]);
+}
+
+void set_nested_config_path(ConfigAdapter *owner,
+                            const std::string &owner_prefix,
+                            const std::string &member) {
+  if (!owner) return;
+  const auto property_name = member + "Adapter";
+  auto *nested = qobject_cast<ConfigAdapter *>(
+      owner->property(property_name.c_str()).value<QObject *>());
+  if (nested)
+    nested->setConfigPath(QString::fromStdString(owner_prefix + "/" + member));
+}
+
+// for when whatever owns a set of paths moves to a new address
+void reroot_paths_between(pc::WorkspaceConfiguration &config,
+                          const std::string &previous_prefix,
+                          const std::string &new_prefix) {
+  if (new_prefix == previous_prefix) return;
+  config.publish_paths.set(
+      reroot_paths(config.publish_paths.value(), previous_prefix, new_prefix));
+  config.push_paths.set(
+      reroot_paths(config.push_paths.value(), previous_prefix, new_prefix));
+}
+
+// for when a device or other node in the device list is renamed...
+void reroot_node_paths(pc::WorkspaceConfiguration &config,
+                       const std::string &previous_prefix,
+                       const std::string &node_id) {
+  reroot_paths_between(config, previous_prefix,
+                       node_path_prefix(config, node_id));
+}
+
+// for when a node is deleted
+void erase_node_paths(pc::WorkspaceConfiguration &config,
+                      const std::string &prefix) {
+  const auto deleted = [&prefix](const std::string &path) {
+    return path_under_prefix(path, prefix);
+  };
+  std::erase_if(config.publish_paths.value(), deleted);
+  std::erase_if(config.push_paths.value(), deleted);
+}
+
 // -------- undo commands --------
 
 class SetSessionConfigCommand final : public QUndoCommand {
@@ -192,7 +265,14 @@ private:
       return;
     }
 
+    // a label edit moves the session's address, so its publish/push paths go
+    // with it, in both directions since undo restores the old label
+    const auto previous_prefix =
+        session_path_prefix(new_config, _session_id.toStdString());
     new_config.sessions[size_t(idx)] = config_value;
+    reroot_paths_between(
+        new_config, previous_prefix,
+        session_path_prefix(new_config, _session_id.toStdString()));
 
     if (_apply_fn) _apply_fn(std::move(new_config));
   }
@@ -236,53 +316,6 @@ private:
     if (_apply_fn) _apply_fn(std::move(new_config));
   }
 };
-
-bool path_under_prefix(const std::string &path, const std::string &prefix) {
-  return path.size() > prefix.size() && path.starts_with(prefix) &&
-         path[prefix.size()] == '/';
-}
-
-std::set<std::string> reroot_paths(const std::set<std::string> &paths,
-                                   const std::string &previous_prefix,
-                                   const std::string &new_prefix) {
-  std::set<std::string> rerooted;
-  for (const auto &path : paths) {
-    if (path_under_prefix(path, previous_prefix)) {
-      rerooted.insert(new_prefix + path.substr(previous_prefix.size()));
-    } else {
-      rerooted.insert(path);
-    }
-  }
-  return rerooted;
-}
-
-// the config registry prefix a device or group's fields live under
-std::string node_path_prefix(const pc::WorkspaceConfiguration &config,
-                             const std::string &node_id) {
-  return "device/" + pc::devices::device_address(config, node_id);
-}
-
-// for when a device or other node in the device list is renamed...
-void reroot_node_paths(pc::WorkspaceConfiguration &config,
-                       const std::string &previous_prefix,
-                       const std::string &node_id) {
-  const std::string new_prefix = node_path_prefix(config, node_id);
-  if (new_prefix == previous_prefix) return;
-  config.publish_paths.set(
-      reroot_paths(config.publish_paths.value(), previous_prefix, new_prefix));
-  config.push_paths.set(
-      reroot_paths(config.push_paths.value(), previous_prefix, new_prefix));
-}
-
-// for when a node is deleted
-void erase_node_paths(pc::WorkspaceConfiguration &config,
-                      const std::string &prefix) {
-  const auto deleted = [&prefix](const std::string &path) {
-    return path_under_prefix(path, prefix);
-  };
-  std::erase_if(config.publish_paths.value(), deleted);
-  std::erase_if(config.push_paths.value(), deleted);
-}
 
 class SetDeviceLabelCommand final : public QUndoCommand {
 public:
@@ -504,6 +537,7 @@ WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
 
   _pointStreamerAdapter = new pc::networking::PointStreamerConfigurationAdapter(
       _workspace.config.point_streamer.value(), this);
+  _pointStreamerAdapter->setConfigPath(QStringLiteral("streaming"));
   initPointStreamerAdapter();
 
   _streamChannelModel = new StreamChannelListModel(workspace, this);
@@ -1249,15 +1283,24 @@ void WorkspaceModel::removeOperatorFromDevice(int deviceIndex,
   auto new_config = _workspace.config;
   const int idx = find_device_index_by_id(new_config, device_id.toStdString());
   if (idx < 0 || idx >= int(new_config.devices.size())) return;
+  const auto owner_prefix =
+      node_path_prefix(new_config, device_id.toStdString());
+  std::string operator_id;
   std::visit(
-      [operatorIndex](auto &device_config) {
+      [operatorIndex, &operator_id](auto &device_config) {
         if constexpr (requires { device_config.operators; }) {
           auto &ops = device_config.operators;
-          if (operatorIndex >= 0 && operatorIndex < int(ops.size()))
+          if (operatorIndex >= 0 && operatorIndex < int(ops.size())) {
+            operator_id = std::visit(
+                [](const auto &operator_config) { return operator_config.id; },
+                ops[size_t(operatorIndex)]);
             ops.erase(ops.begin() + operatorIndex);
+          }
         }
       },
       new_config.devices[size_t(idx)]);
+  if (!operator_id.empty())
+    erase_node_paths(new_config, owner_prefix + "/operators/" + operator_id);
   // sync workspace config
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::None);
   if (deviceIndex < int(_workspace.devices.size()) &&
@@ -1334,7 +1377,13 @@ void WorkspaceModel::removeOperatorFromSession(const QString &sessionId,
   if (idx < 0 || idx >= int(new_config.sessions.size())) return;
   auto &ops = new_config.sessions[size_t(idx)].operators;
   if (operatorIndex < 0 || operatorIndex >= int(ops.size())) return;
+  const auto operator_id = std::visit(
+      [](const auto &operator_config) { return operator_config.id; },
+      ops[size_t(operatorIndex)]);
+  const auto owner_prefix =
+      session_path_prefix(new_config, sessionId.toStdString());
   ops.erase(ops.begin() + operatorIndex);
+  erase_node_paths(new_config, owner_prefix + "/operators/" + operator_id);
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Sessions);
 }
 
@@ -1355,14 +1404,18 @@ void WorkspaceModel::reorderOperatorOnSession(const QString &sessionId,
 
 void WorkspaceModel::attachOperatorConfigAdapters(
     DeviceAdapter *deviceAdapter) {
+  const std::string owner_prefix = node_path_prefix(
+      _workspace.config, adapterStableId(deviceAdapter).toStdString());
   for (auto *opAdapter : deviceAdapter->operatorAdapters()) {
     auto *plugin = opAdapter->plugin();
     if (!plugin) continue;
     auto &config_variant = plugin->config_variant();
     ConfigAdapter *adapter = nullptr;
+    std::string operator_id;
     std::visit(
-        [opAdapter, &adapter](auto &config) {
+        [opAdapter, &adapter, &operator_id](auto &config) {
           using ConfigType = std::decay_t<decltype(config)>;
+          operator_id = config.id;
           if constexpr (std::is_same_v<
                             ConfigType,
                             pc::operators::FringeRemovalConfiguration>) {
@@ -1379,6 +1432,8 @@ void WorkspaceModel::attachOperatorConfigAdapters(
         },
         config_variant);
     if (adapter) {
+      adapter->setConfigPath(
+          QString::fromStdString(owner_prefix + "/operators/" + operator_id));
       opAdapter->setConfigAdapter(adapter);
       initOperatorAdapter(opAdapter, deviceAdapter);
     }
@@ -1499,14 +1554,18 @@ void WorkspaceModel::initOperatorAdapter(OperatorAdapter *opAdapter,
 
 void WorkspaceModel::attachSessionOperatorConfigAdapters(
     const QString &sessionId, const QList<OperatorAdapter *> &ops) {
+  const std::string owner_prefix =
+      session_path_prefix(_workspace.config, sessionId.toStdString());
   for (auto *opAdapter : ops) {
     auto *plugin = opAdapter->plugin();
     if (!plugin) continue;
     auto &config_variant = plugin->config_variant();
     ConfigAdapter *adapter = nullptr;
+    std::string operator_id;
     std::visit(
-        [opAdapter, &adapter](auto &config) {
+        [opAdapter, &adapter, &operator_id](auto &config) {
           using ConfigType = std::decay_t<decltype(config)>;
+          operator_id = config.id;
           if constexpr (std::is_same_v<
                             ConfigType,
                             pc::operators::FringeRemovalConfiguration>) {
@@ -1520,6 +1579,8 @@ void WorkspaceModel::attachSessionOperatorConfigAdapters(
         },
         config_variant);
     if (adapter) {
+      adapter->setConfigPath(
+          QString::fromStdString(owner_prefix + "/operators/" + operator_id));
       opAdapter->setConfigAdapter(adapter);
       initSessionOperatorAdapter(opAdapter, sessionId);
     }
@@ -2047,7 +2108,10 @@ void WorkspaceModel::syncSessionAdapters() {
     if (!adapter) continue;
     const std::string id = adapterStableId(adapter).toStdString();
     if (id.empty()) continue;
-    const std::string prefix = "session/" + id + "/";
+    const std::string node_prefix = session_path_prefix(_workspace.config, id);
+    adapter->setConfigPath(QString::fromStdString(node_prefix));
+    set_nested_config_path(adapter, node_prefix, "operator_pipeline");
+    const std::string prefix = node_prefix + "/";
     auto adapterPtr = QPointer<ConfigAdapter>(adapter);
     _workspace.config_registry.on_change(
         prefix, [adapterPtr, prefix](std::string_view path) {
@@ -2231,6 +2295,7 @@ void WorkspaceModel::syncDeviceAdapters() {
     if (id.empty()) continue;
     const std::string node_prefix = node_path_prefix(_workspace.config, id);
     adapter->setConfigPath(QString::fromStdString(node_prefix));
+    set_nested_config_path(adapter, node_prefix, "operator_pipeline");
     const std::string prefix = node_prefix + "/";
     pc::logger()->trace(
         "syncDeviceAdapters: registering on_change for prefix='{}'", prefix);

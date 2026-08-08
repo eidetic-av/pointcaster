@@ -28,4 +28,9 @@ struct SessionConfiguration {
   std::vector<operators::OperatorConfigurationVariant> operators;
 };
 
+inline std::string session_address(const SessionConfiguration &config) {
+  const auto &label = config.label.value();
+  return !label.empty() ? label : config.id;
+}
+
 } // namespace pc

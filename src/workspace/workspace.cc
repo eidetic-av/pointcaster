@@ -97,6 +97,24 @@ void Workspace::apply_new_config(const WorkspaceConfiguration &new_config,
   if (osc_receiver) osc_receiver->reconfigure();
 }
 
+namespace {
+// operators sit in a vector, which register_config skips over, so each one is
+// registered by its own id underneath whichever node owns it
+void register_operators(
+    ConfigRegistry &registry, const std::string &prefix,
+    std::vector<operators::OperatorConfigurationVariant> &operators) {
+  for (auto &operator_variant : operators) {
+    std::visit(
+        [&](auto &operator_config) {
+          pc::register_config(registry,
+                              prefix + "/operators/" + operator_config.id,
+                              operator_config);
+        },
+        operator_variant);
+  }
+}
+} // namespace
+
 // TODO not sure about this...
 // could probs be comp time registry? idk at least
 // it probs doesn't need to be rebuilt often
@@ -105,8 +123,9 @@ void Workspace::rebuild_config_registry() {
 
   // register configs for session values
   for (auto &session_config : config.sessions) {
-    pc::register_config(config_registry, "session/" + session_config.id,
-                        session_config);
+    const std::string prefix = "session/" + session_address(session_config);
+    pc::register_config(config_registry, prefix, session_config);
+    register_operators(config_registry, prefix, session_config.operators);
   }
 
   // and for other configs held by the workspace instance
@@ -119,10 +138,14 @@ void Workspace::rebuild_config_registry() {
     if (!device_plugin) continue;
     std::visit(
         [this](auto &device_config) {
-          const std::string address =
-              pc::devices::device_address(config, device_config.id);
-          pc::register_config(config_registry, "device/" + address,
-                              device_config);
+          const std::string prefix =
+              "device/" + pc::devices::device_address(config, device_config.id);
+          pc::register_config(config_registry, prefix, device_config);
+          // groups carry no operators of their own
+          if constexpr (requires { device_config.operators; }) {
+            register_operators(config_registry, prefix,
+                               device_config.operators);
+          }
         },
         device_plugin->config_variant());
   }
