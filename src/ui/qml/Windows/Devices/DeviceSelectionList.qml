@@ -659,12 +659,9 @@ Item {
                     EditableLabel {
                         id: deviceLabel
                         placeholderOpacity: 0.5
-                        value: (dragArea.modelData && dragArea.modelData.label && String(dragArea.modelData.label).length > 0) ? String(dragArea.modelData.label) : ""
-                        placeholder: dragArea.modelData ? String(dragArea.modelData.id) : ""
-                        onCommitted: text => {
-                            if (dragArea.modelData)
-                                dragArea.modelData.label = text;
-                        }
+                        value: (dragArea.row.label && String(dragArea.row.label).length > 0) ? String(dragArea.row.label) : ""
+                        placeholder: dragArea.nodeId
+                        onCommitted: text => root.workspace.setDeviceLabel(dragArea.nodeId, text)
                     }
 
                     // device type, kept inline just left of the control column

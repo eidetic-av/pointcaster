@@ -70,7 +70,8 @@ class WorkspaceModel : public QObject {
   Q_PROPERTY(QObject *selectedDeviceGroupAdapter READ selectedDeviceGroupAdapter
                  NOTIFY selectedDeviceGroupAdapterChanged)
 
-  // publish field paths
+  // config registry paths that leave the machine, bindable so a field row can
+  // show its own state
   Q_PROPERTY(
       QStringList publishPaths READ publishPaths NOTIFY publishPathsChanged)
   Q_PROPERTY(QStringList pushPaths READ pushPaths NOTIFY pushPathsChanged)
@@ -125,6 +126,8 @@ public:
   Q_INVOKABLE void deleteDevice(const QString &target_id);
   Q_INVOKABLE void deleteSelectedDevice();
   Q_INVOKABLE void duplicateDeviceNode(const QString &node_id);
+  Q_INVOKABLE void setDeviceLabel(const QString &device_id,
+                                  const QString &new_label);
 
   QList<QObject *> sessionAdapters() const;
   Q_INVOKABLE QList<QObject *> sessionAdaptersCallable() const {

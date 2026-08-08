@@ -237,11 +237,101 @@ private:
   }
 };
 
+bool path_under_prefix(const std::string &path, const std::string &prefix) {
+  return path.size() > prefix.size() && path.starts_with(prefix) &&
+         path[prefix.size()] == '/';
+}
+
+std::set<std::string> reroot_paths(const std::set<std::string> &paths,
+                                   const std::string &previous_prefix,
+                                   const std::string &new_prefix) {
+  std::set<std::string> rerooted;
+  for (const auto &path : paths) {
+    if (path_under_prefix(path, previous_prefix)) {
+      rerooted.insert(new_prefix + path.substr(previous_prefix.size()));
+    } else {
+      rerooted.insert(path);
+    }
+  }
+  return rerooted;
+}
+
 // the config registry prefix a device or group's fields live under
 std::string node_path_prefix(const pc::WorkspaceConfiguration &config,
                              const std::string &node_id) {
   return "device/" + pc::devices::device_address(config, node_id);
 }
+
+// for when a device or other node in the device list is renamed...
+void reroot_node_paths(pc::WorkspaceConfiguration &config,
+                       const std::string &previous_prefix,
+                       const std::string &node_id) {
+  const std::string new_prefix = node_path_prefix(config, node_id);
+  if (new_prefix == previous_prefix) return;
+  config.publish_paths.set(
+      reroot_paths(config.publish_paths.value(), previous_prefix, new_prefix));
+  config.push_paths.set(
+      reroot_paths(config.push_paths.value(), previous_prefix, new_prefix));
+}
+
+// for when a node is deleted
+void erase_node_paths(pc::WorkspaceConfiguration &config,
+                      const std::string &prefix) {
+  const auto deleted = [&prefix](const std::string &path) {
+    return path_under_prefix(path, prefix);
+  };
+  std::erase_if(config.publish_paths.value(), deleted);
+  std::erase_if(config.push_paths.value(), deleted);
+}
+
+class SetDeviceLabelCommand final : public QUndoCommand {
+public:
+  using ApplyFn = std::function<void(pc::WorkspaceConfiguration)>;
+
+  // the publish/push paths are rooted at the device's address, so they have to
+  // travel with the label through undo and redo
+  struct State {
+    std::string label;
+    std::set<std::string> publish_paths;
+    std::set<std::string> push_paths;
+  };
+
+  SetDeviceLabelCommand(QString device_id, State before_state,
+                        State after_state, QString command_text,
+                        pc::WorkspaceConfiguration base_config_snapshot,
+                        ApplyFn apply_fn)
+      : QUndoCommand(std::move(command_text)), _device_id(std::move(device_id)),
+        _before(std::move(before_state)), _after(std::move(after_state)),
+        _base_snapshot(std::move(base_config_snapshot)),
+        _apply_fn(std::move(apply_fn)) {}
+
+  void undo() override { apply(_before); }
+  void redo() override { apply(_after); }
+
+private:
+  QString _device_id;
+  State _before;
+  State _after;
+  pc::WorkspaceConfiguration _base_snapshot;
+  ApplyFn _apply_fn;
+
+  void apply(const State &state) {
+    auto new_config = _base_snapshot;
+    const int idx =
+        find_device_index_by_id(new_config, _device_id.toStdString());
+    if (idx < 0 || idx >= int(new_config.devices.size())) {
+      pc::logger()->warn("SetDeviceLabelCommand: device id not found '{}'",
+                         _device_id.toStdString());
+      return;
+    }
+    std::visit(
+        [&](auto &device_config) { device_config.label.set(state.label); },
+        new_config.devices[size_t(idx)]);
+    new_config.publish_paths.set(state.publish_paths);
+    new_config.push_paths.set(state.push_paths);
+    if (_apply_fn) _apply_fn(std::move(new_config));
+  }
+};
 
 class SetDeviceGroupConfigCommand final : public QUndoCommand {
 public:
@@ -810,7 +900,9 @@ void WorkspaceModel::deleteDevice(const QString &device_id) {
   pc::logger()->trace("Deleting device id='{}' (index {})", device_id_str,
                       device_index);
 
+  const auto device_prefix = node_path_prefix(new_config, device_id_str);
   new_config.devices.erase(new_config.devices.begin() + device_index);
+  erase_node_paths(new_config, device_prefix);
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
 }
 
@@ -844,7 +936,10 @@ void WorkspaceModel::deleteSelectedDevice() {
   pc::logger()->trace("Deleting device id='{}' (index {})",
                       device_id_q.toStdString(), device_index);
 
+  const auto device_prefix =
+      node_path_prefix(new_config, device_id_q.toStdString());
   new_config.devices.erase(new_config.devices.begin() + device_index);
+  erase_node_paths(new_config, device_prefix);
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
 }
 
@@ -949,6 +1044,52 @@ void WorkspaceModel::duplicateDeviceNode(const QString &node_id) {
   }
 
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
+}
+
+void WorkspaceModel::setDeviceLabel(const QString &device_id,
+                                    const QString &new_label) {
+  const auto id = device_id.toStdString();
+  const auto label = new_label.toStdString();
+
+  SetDeviceLabelCommand::State before;
+  pc::WorkspaceConfiguration base_snapshot;
+  {
+    std::scoped_lock lock(_workspace.config_access);
+    const int idx = find_device_index_by_id(_workspace.config, id);
+    if (idx < 0) return;
+    base_snapshot = _workspace.config;
+    before.label = std::visit(
+        [](const auto &device_config) { return device_config.label.value(); },
+        _workspace.config.devices[size_t(idx)]);
+    before.publish_paths = _workspace.config.publish_paths.value();
+    before.push_paths = _workspace.config.push_paths.value();
+  }
+  if (before.label == label) return;
+
+  // rename a copy first, so the node's new address can be read back out of it
+  const auto previous_prefix = node_path_prefix(base_snapshot, id);
+  auto renamed_config = base_snapshot;
+  const int idx = find_device_index_by_id(renamed_config, id);
+  std::visit([&](auto &device_config) { device_config.label.set(label); },
+             renamed_config.devices[size_t(idx)]);
+  reroot_node_paths(renamed_config, previous_prefix, id);
+
+  SetDeviceLabelCommand::State after{label,
+                                     renamed_config.publish_paths.value(),
+                                     renamed_config.push_paths.value()};
+
+  _undoStack->push(new SetDeviceLabelCommand(
+      device_id, std::move(before), std::move(after),
+      QStringLiteral("Rename device"), std::move(base_snapshot),
+      [this](pc::WorkspaceConfiguration config) {
+        QMetaObject::invokeMethod(
+            this,
+            [this, config = std::move(config)]() mutable {
+              applyWorkspaceConfigAndRebuild(std::move(config),
+                                             RebuildScope::Devices);
+            },
+            Qt::QueuedConnection);
+      }));
 }
 
 DeviceAdapter *WorkspaceModel::deviceAdapterAt(int index) const {
@@ -2264,6 +2405,25 @@ void WorkspaceModel::deleteDeviceGroup(const QString &group_id) {
   const std::string surviving_parent_id =
       new_config.device_groups[size_t(group_index)].parent_id.value();
 
+  // update every child's path
+  const auto group_prefix = node_path_prefix(new_config, target_group_id);
+  std::vector<std::pair<std::string, std::string>> child_prefixes;
+  for (const auto &group_config : new_config.device_groups) {
+    if (group_config.parent_id.value() == target_group_id)
+      child_prefixes.emplace_back(
+          group_config.id, node_path_prefix(new_config, group_config.id));
+  }
+  for (const auto &device_variant : new_config.devices) {
+    std::visit(
+        [&](const auto &device_config) {
+          if (device_config.parent_id.value() == target_group_id)
+            child_prefixes.emplace_back(
+                device_config.id,
+                node_path_prefix(new_config, device_config.id));
+        },
+        device_variant);
+  }
+
   for (auto &group_config : new_config.device_groups) {
     if (group_config.parent_id.value() == target_group_id)
       group_config.parent_id.set(surviving_parent_id);
@@ -2280,6 +2440,10 @@ void WorkspaceModel::deleteDeviceGroup(const QString &group_id) {
   new_config.device_groups.erase(new_config.device_groups.begin() +
                                  group_index);
 
+  for (const auto &[child_id, previous_prefix] : child_prefixes)
+    reroot_node_paths(new_config, previous_prefix, child_id);
+  erase_node_paths(new_config, group_prefix);
+
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
 }
 
@@ -2295,11 +2459,13 @@ void WorkspaceModel::setDeviceGroupCollapsed(const QString &group_id,
 
 void WorkspaceModel::setDeviceGroupLabel(const QString &group_id,
                                          const QString &label) {
+  const auto id = group_id.toStdString();
   auto new_config = _workspace.config;
-  const int group_index =
-      find_device_group_index_by_id(new_config, group_id.toStdString());
+  const int group_index = find_device_group_index_by_id(new_config, id);
   if (group_index < 0) return;
+  const auto previous_prefix = node_path_prefix(new_config, id);
   new_config.device_groups[size_t(group_index)].label.set(label.toStdString());
+  reroot_node_paths(new_config, previous_prefix, id);
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Devices);
 }
 
@@ -2371,10 +2537,16 @@ QVariantList WorkspaceModel::deviceTreeRows() const {
             const std::string device_id = std::visit(
                 [](const auto &device_config) { return device_config.id; },
                 device_variant);
+            const std::string device_label = std::visit(
+                [](const auto &device_config) {
+                  return device_config.label.value();
+                },
+                device_variant);
             QVariantMap device_row;
             device_row["kind"] = "device";
             device_row["id"] = QString::fromStdString(device_id);
             device_row["parentId"] = QString::fromStdString(parent_id);
+            device_row["label"] = QString::fromStdString(device_label);
             device_row["deviceIndex"] = entry.index;
             device_row["depth"] = depth;
             device_row["effectiveRender"] =
@@ -2452,6 +2624,8 @@ void WorkspaceModel::moveDeviceNode(const QString &node_id,
   // node must exist
   if (!node_parent(id).has_value()) return;
 
+  const auto previous_prefix = node_path_prefix(_workspace.config, id);
+
   // prevent moving a group into its own subtree (walk up from the new parent)
   for (std::string p = new_parent; !p.empty();) {
     if (p == id) return;
@@ -2515,6 +2689,8 @@ void WorkspaceModel::moveDeviceNode(const QString &node_id,
 
   for (int i = 0; i < int(ordered.size()); ++i)
     set_order(ordered[size_t(i)], i);
+
+  reroot_node_paths(_workspace.config, previous_prefix, id);
 
   _workspace.rebuild_config_registry();
   syncDeviceAdapters();
