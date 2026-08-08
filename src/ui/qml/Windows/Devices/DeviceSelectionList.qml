@@ -190,9 +190,10 @@ Item {
         function commit() {
             if (!editing)
                 return;
+            const text = field.text;
             editing = false;
-            if (field.text !== startText)
-                committed(field.text);
+            if (text !== startText)
+                committed(text);
         }
 
         Layout.fillWidth: true
@@ -213,12 +214,20 @@ Item {
             enabled: labelRoot.editing
             selectByMouse: labelRoot.editing
 
-            text: labelRoot.value.length > 0 ? labelRoot.value : labelRoot.placeholder
             opacity: labelRoot.value.length > 0 ? 1.0 : labelRoot.placeholderOpacity
 
             onEditingFinished: labelRoot.commit()
             onActiveFocusChanged: if (!activeFocus && labelRoot.editing)
                 labelRoot.commit()
+        }
+
+        readonly property string displayText: value.length > 0 ? value : placeholder
+        Binding {
+            target: field
+            property: "text"
+            value: labelRoot.displayText
+            when: !labelRoot.editing
+            restoreMode: Binding.RestoreNone
         }
     }
 
