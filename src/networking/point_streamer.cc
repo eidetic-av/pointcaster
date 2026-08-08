@@ -49,7 +49,7 @@ void streaming_thread_loop(
     std::atomic<std::shared_ptr<const std::unordered_map<std::string, int>>>
         &subscriber_counts_out) {
   std::string address;
-  int port = 9992;
+  int port;
   {
     std::lock_guard lock(workspace.config_access);
     const auto &config = workspace.config.point_streamer.value();
@@ -86,7 +86,7 @@ void streaming_thread_loop(
   auto next_tick = steady_clock::now();
 
   while (!stop_token.stop_requested()) {
-    // drain subscribe/unsubscribe notifications without blocking
+    // drain subscribe/unsubscribe notifications
     while (true) {
       zmq::message_t msg;
       const auto result = pub_socket.recv(msg, zmq::recv_flags::dontwait);

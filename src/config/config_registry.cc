@@ -45,12 +45,12 @@ std::optional<ConfigValue> ConfigRegistry::get(std::string_view path) const {
 }
 
 void ConfigRegistry::on_change(std::string_view prefix, ChangeCallback cb) {
-  std::unique_lock lock(_mutex);
+  std::scoped_lock lock(_mutex);
   _subs.emplace_back(std::string(prefix), std::move(cb));
 }
 
 void ConfigRegistry::remove_subscriptions(std::string_view prefix) {
-  std::unique_lock lock(_mutex);
+  std::scoped_lock lock(_mutex);
   std::erase_if(_subs,
                 [&](const auto &sub) { return sub.first.starts_with(prefix); });
 }
