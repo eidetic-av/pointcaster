@@ -282,7 +282,7 @@ Item {
             if (desired === current)
                 return;
 
-            root.cameraAdapter.set_orthographic(desired);
+            root.cameraAdapter.orthographic = desired;
         }
 
         target: sessionControls
