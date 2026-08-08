@@ -42,15 +42,11 @@ Item {
 
     anchors.fill: parent
 
-    readonly property var frameSlots: sessionView && sessionView.selectedDeviceAdapter ? sessionView.selectedDeviceAdapter.frameSlots : []
-    readonly property var frameUrls: sessionView && sessionView.selectedDeviceAdapter ? sessionView.selectedDeviceAdapter.frameUrls : ({})
-
-    Connections {
-        target: root.workspace
-        function onSelectedOperatorAdapterChanged() {
-            console.log('eyy: ' + frameSlots.length);
-        }
-    }
+    // camera frames come the selected operator's host...
+    // whether that's a device or the session
+    readonly property var frameSource: root.workspace ? root.workspace.selectedOperatorFrameSource : null
+    readonly property var frameSlots: frameSource ? frameSource.frameSlots : []
+    readonly property var frameUrls: frameSource ? frameSource.frameUrls : ({})
 
     Item {
         id: sessionControlsOverlay

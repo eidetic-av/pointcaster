@@ -76,10 +76,16 @@ class WorkspaceModel : public QObject {
       QStringList publishPaths READ publishPaths NOTIFY publishPathsChanged)
   Q_PROPERTY(QStringList pushPaths READ pushPaths NOTIFY pushPathsChanged)
 
-  // Selected operator (owned by a device)
+  // Selected operator (owned by a device or a session)
   Q_PROPERTY(OperatorAdapter *selectedOperatorAdapter READ
                  selectedOperatorAdapter WRITE setSelectedOperatorAdapter NOTIFY
                      selectedOperatorAdapterChanged)
+
+  // The host of the selected operator's operator pipeline...
+  // either a device or a session
+  Q_PROPERTY(QObject *selectedOperatorFrameSource READ
+                 selectedOperatorFrameSource NOTIFY
+                     selectedOperatorFrameSourceChanged)
 
   Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl NOTIFY
                  saveFileUrlChanged)
@@ -191,6 +197,8 @@ public:
   }
   void setSelectedOperatorAdapter(OperatorAdapter *adapter);
 
+  QObject *selectedOperatorFrameSource() const;
+
   Q_INVOKABLE void addOperatorToDevice(int deviceIndex,
                                        const QString &operatorPluginName);
   Q_INVOKABLE void removeOperatorFromDevice(int deviceIndex, int operatorIndex);
@@ -284,6 +292,7 @@ signals:
   void pushPathsChanged();
 
   void selectedOperatorAdapterChanged();
+  void selectedOperatorFrameSourceChanged();
 
   void consoleOverlayEntriesChanged();
   void consoleHistoryEntriesChanged();

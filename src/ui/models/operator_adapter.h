@@ -49,6 +49,8 @@ public:
 
   pc::operators::OperatorPlugin *plugin() const { return _plugin; }
 
+  pc::operators::OperatorHost *host() const { return _host; }
+
 signals:
   void configAdapterChanged();
 
