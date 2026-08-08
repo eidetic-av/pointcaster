@@ -10,21 +10,6 @@ Rectangle {
     implicitHeight: Math.round(22 * Scaling.uiScale)
     color: ThemeColors.base
 
-    function fileNameFromUrl(url) {
-        const path = url.toString();
-        if (path.length === 0)
-            return "Untitled";
-        return decodeURIComponent(path.substring(path.lastIndexOf("/") + 1));
-    }
-
-    Timer {
-        interval: 5000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: ipAddressesLabel.text = NetUtils.localIpAddresses().join(", ")
-    }
-
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 8 * Scaling.uiScale
@@ -32,7 +17,7 @@ Rectangle {
         spacing: 8 * Scaling.uiScale
 
         Label {
-            text: root.fileNameFromUrl(workspaceModel.saveFileUrl)
+            text: workspaceModel.saveFileUrl
             font: Scaling.uiFont
             color: ThemeColors.midlight
         }
@@ -45,6 +30,10 @@ Rectangle {
             id: ipAddressesLabel
             font: Scaling.uiFont
             color: ThemeColors.midlight
+        }
+
+        Component.onCompleted: {
+            ipAddressesLabel.text = NetUtils.localIpAddresses().join(", ");
         }
     }
 }
