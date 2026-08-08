@@ -173,7 +173,7 @@ Column {
                                 id: label
                                 text: StringUtils.titleFromSnake(StringUtils.leafName(modelData))
                                 color: ThemeColors.text
-                                font: Scaling.uiFont
+                                font: Scaling.fieldLabelFont
 
                                 Layout.preferredWidth: root.labelColumnWidth
                                 Layout.minimumWidth: root.minLabelColumnWidth
@@ -190,15 +190,10 @@ Column {
                                 }
                             }
 
-                            // frames the editor for published fields
-                            Rectangle {
+                            Item {
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: root.minValueColumnWidth
                                 Layout.fillHeight: true
-
-                                color: published ? ThemeColors.withAlpha(stateColor, 0.07) : "transparent"
-                                border.width: published ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
-                                border.color: ThemeColors.withAlpha(stateColor, 0.55)
 
                                 Loader {
                                     id: valueContainer
@@ -223,6 +218,15 @@ Column {
                                             return boolEditor;
                                         return stringEditor;
                                     }
+                                }
+
+                                // frames the editor for published fields
+                                Rectangle {
+                                    anchors.fill: parent
+                                    visible: published
+                                    color: ThemeColors.withAlpha(stateColor, 0.07)
+                                    border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
+                                    border.color: ThemeColors.withAlpha(stateColor, 0.55)
                                 }
                             }
                         }
@@ -517,7 +521,7 @@ Column {
             enabled: root.configAdapter ? !root.configAdapter.isDisabled(path) : true
 
             boundValue: {
-                var n = Number(root.configAdapter.value(path));
+                var n = root.configAdapter ? Number(root.configAdapter.value(path)) : 0.0;
                 return isNaN(n) ? 0.0 : n;
             }
 
@@ -586,7 +590,7 @@ Column {
 
             options: root.configAdapter ? root.configAdapter.enumOptions(path) : undefined
             boundValue: {
-                var n = Number(root.configAdapter.value(path));
+                var n = root.configAdapter ? Number(root.configAdapter.value(path)) : 0;
                 return isNaN(n) ? 0 : Math.trunc(n);
             }
 

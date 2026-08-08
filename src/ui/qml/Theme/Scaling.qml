@@ -23,6 +23,9 @@ QtObject {
         weight: Font.Bold,
         letterSpacing: 1.5
     })
+    readonly property font fieldLabelFont: Qt.font({
+        pointSize: 10 * uiScale
+    })
     readonly property font uiHeaderFont: Qt.font({
         pointSize: headerPointSize,
         weight: Font.Medium

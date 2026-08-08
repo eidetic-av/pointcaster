@@ -49,7 +49,7 @@ Item {
         width: root._isVertical ? root.contentItem.width + spacing : (root.collapsed ? 0 : root.contentItem.width + spacing)
         height: root._isVertical ? (root.collapsed ? 0 : root.contentItem.height + spacing) : root.contentItem.height + spacing
 
-        x: 0
+        x: root.direction === SessionControlCollapser.CollapseRight ? root.width - width : 0
         y: root.direction === SessionControlCollapser.CollapseUp ? 0 : toggleCollapsedButton.height
 
         Behavior on width {
@@ -72,7 +72,7 @@ Item {
         width: root._isVertical ? root._buttonLong : root._buttonShort
         implicitHeight: root._isVertical ? root._buttonShort : root._buttonLong
 
-        x: root._isVertical ? (root._buttonOnLeft ? contentPanel.x + root._margin : contentPanel.x + contentPanel.width - width - root._margin) : contentPanel.x + contentPanel.width - width - root._margin
+        x: root._isVertical ? (root._buttonOnLeft ? contentPanel.x + root._margin : contentPanel.x + contentPanel.width - width - root._margin) : (root.direction === SessionControlCollapser.CollapseLeft ? 0 : root.width - width)
         y: root.direction === SessionControlCollapser.CollapseUp ? contentPanel.y + contentPanel.height : 0
 
         iconSource: {
