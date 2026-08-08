@@ -70,6 +70,11 @@ class WorkspaceModel : public QObject {
   Q_PROPERTY(QObject *selectedDeviceGroupAdapter READ selectedDeviceGroupAdapter
                  NOTIFY selectedDeviceGroupAdapterChanged)
 
+  // publish field paths
+  Q_PROPERTY(
+      QStringList publishPaths READ publishPaths NOTIFY publishPathsChanged)
+  Q_PROPERTY(QStringList pushPaths READ pushPaths NOTIFY pushPathsChanged)
+
   // Selected operator (owned by a device)
   Q_PROPERTY(OperatorAdapter *selectedOperatorAdapter READ
                  selectedOperatorAdapter WRITE setSelectedOperatorAdapter NOTIFY
@@ -235,6 +240,15 @@ public:
 
   void setImageProvider(CameraImageProvider *provider);
 
+  QStringList publishPaths() const;
+  QStringList pushPaths() const;
+
+  Q_INVOKABLE void addPublishPath(const QString &path);
+  Q_INVOKABLE void removePublishPath(const QString &path);
+
+  Q_INVOKABLE void addPushPath(const QString &path);
+  Q_INVOKABLE void removePushPath(const QString &path);
+
 public slots:
   void syncAdapters();
   void syncSessionAdapters();
@@ -262,6 +276,9 @@ signals:
   void deviceDeleted();
 
   void deviceTreeRowsChanged();
+
+  void publishPathsChanged();
+  void pushPathsChanged();
 
   void selectedOperatorAdapterChanged();
 

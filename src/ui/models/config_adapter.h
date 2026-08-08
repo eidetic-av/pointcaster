@@ -17,6 +17,10 @@ class ConfigAdapter : public QObject {
   Q_PROPERTY(
       QVariantList childPathGroups READ childPathGroups NOTIFY structureChanged)
 
+  // the config registry prefix these fields sit under, like
+  // "device/group_a/cam_1"
+  Q_PROPERTY(QString configPath READ configPath NOTIFY configPathChanged)
+
 public:
   explicit ConfigAdapter(QObject *parent = nullptr) : QObject(parent) {}
   ~ConfigAdapter() override = default;
@@ -127,9 +131,21 @@ public:
 
   virtual bool setConfig(const pc::ConfigurationVariant &) { return false; }
 
+  QString configPath() const { return _configPath; }
+
+  void setConfigPath(const QString &path) {
+    if (path == _configPath) return;
+    _configPath = path;
+    emit configPathChanged();
+  }
+
 signals:
   void editRequested(const QString &path, const QVariant &value);
   void fieldChanged(const QString &path);
 
   void structureChanged();
+  void configPathChanged();
+
+private:
+  QString _configPath;
 };

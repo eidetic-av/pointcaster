@@ -9,6 +9,8 @@
 #include <plugins/devices/device_variants.h>
 #include <rfl/DefaultVal.hpp>
 #include <session/session_config.h>
+#include <set>
+#include <string>
 
 namespace pc {
 
@@ -23,6 +25,10 @@ struct WorkspaceConfiguration {
   std::vector<devices::DeviceGroupConfiguration> device_groups;
   rfl::DefaultVal<networking::PointStreamerConfiguration> point_streamer;
   rfl::DefaultVal<networking::osc::OscReceiverConfiguration> osc_receiver;
+
+  // config field paths that should be published
+  rfl::DefaultVal<std::set<std::string>> publish_paths;
+  rfl::DefaultVal<std::set<std::string>> push_paths;
 };
 
 bool load_workspace_from_file(WorkspaceConfiguration &config,

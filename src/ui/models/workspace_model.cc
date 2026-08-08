@@ -21,6 +21,7 @@
 #include <core/uuid/uuid.h>
 #include <filesystem>
 #include <functional>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <plugins/devices/device_group_config.h>
@@ -30,8 +31,10 @@
 #include <session/session.h>
 #include <session/session_config.h>
 #include <session/session_config_adapter.gen.h>
+#include <set>
 #include <spdlog/common.h>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <ui/layout_saver.h>
 #include <unordered_map>
@@ -234,6 +237,12 @@ private:
   }
 };
 
+// the config registry prefix a device or group's fields live under
+std::string node_path_prefix(const pc::WorkspaceConfiguration &config,
+                             const std::string &node_id) {
+  return "device/" + pc::devices::device_address(config, node_id);
+}
+
 class SetDeviceGroupConfigCommand final : public QUndoCommand {
 public:
   using ApplyFn = std::function<void(pc::WorkspaceConfiguration)>;
@@ -387,6 +396,8 @@ void WorkspaceModel::applyWorkspaceConfigAndRebuild(
     break;
   }
   }
+  emit publishPathsChanged();
+  emit pushPathsChanged();
   _streamChannelModel->refresh();
 }
 // ----------------- WorkspaceModel -----------------
@@ -524,6 +535,55 @@ void WorkspaceModel::setImageProvider(CameraImageProvider *provider) {
     syncAdapters();
   }
 }
+
+namespace {
+QStringList to_string_list(const std::set<std::string> &paths) {
+  QStringList list;
+  list.reserve(int(paths.size()));
+  for (const auto &path : paths) list.append(QString::fromStdString(path));
+  return list;
+}
+} // namespace
+
+QStringList WorkspaceModel::publishPaths() const {
+  std::scoped_lock lock(_workspace.config_access);
+  return to_string_list(_workspace.config.publish_paths.value());
+}
+
+QStringList WorkspaceModel::pushPaths() const {
+  std::scoped_lock lock(_workspace.config_access);
+  return to_string_list(_workspace.config.push_paths.value());
+}
+
+// a field's entry is its adapter's configPath joined with the field path.
+// RebuildScope::None because no adapter or device is affected by the sets
+// changing, only the rows drawing their published state
+void WorkspaceModel::addPublishPath(const QString &path) {
+  auto new_config = _workspace.config;
+  new_config.publish_paths.value().insert(path.toStdString());
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::None);
+}
+
+void WorkspaceModel::removePublishPath(const QString &path) {
+  auto new_config = _workspace.config;
+  new_config.publish_paths.value().erase(path.toStdString());
+  // a path cannot be pushed if it is not also published
+  new_config.push_paths.value().erase(path.toStdString());
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::None);
+}
+
+void WorkspaceModel::addPushPath(const QString &path) {
+  auto new_config = _workspace.config;
+  new_config.push_paths.value().insert(path.toStdString());
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::None);
+}
+
+void WorkspaceModel::removePushPath(const QString &path) {
+  auto new_config = _workspace.config;
+  new_config.push_paths.value().erase(path.toStdString());
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::None);
+}
+
 QList<QObject *> WorkspaceModel::sessionAdapters() const {
   return _sessionAdapters;
 }
@@ -913,6 +973,8 @@ void WorkspaceModel::rebuildSelectedGroupAdapter() {
       // groups have no plugin and no image provider, so pass nullptr for both.
       auto *adapter = new pc::devices::DeviceGroupConfigurationAdapter(
           _workspace.config.device_groups[size_t(gi)], nullptr, nullptr, this);
+      adapter->setConfigPath(QString::fromStdString(
+          node_path_prefix(_workspace.config, _selectedNodeId.toStdString())));
       initGroupAdapter(adapter);
       _selectedDeviceGroupAdapter = adapter;
     }
@@ -2026,9 +2088,9 @@ void WorkspaceModel::syncDeviceAdapters() {
     if (!adapter) continue;
     const std::string id = adapterStableId(adapter).toStdString();
     if (id.empty()) continue;
-    const std::string address =
-        pc::devices::device_address(_workspace.config, id);
-    const std::string prefix = "device/" + address + "/";
+    const std::string node_prefix = node_path_prefix(_workspace.config, id);
+    adapter->setConfigPath(QString::fromStdString(node_prefix));
+    const std::string prefix = node_prefix + "/";
     pc::logger()->trace(
         "syncDeviceAdapters: registering on_change for prefix='{}'", prefix);
     auto adapterPtr = QPointer<ConfigAdapter>(adapter);
@@ -2456,6 +2518,8 @@ void WorkspaceModel::moveDeviceNode(const QString &node_id,
 
   _workspace.rebuild_config_registry();
   syncDeviceAdapters();
+  emit publishPathsChanged();
+  emit pushPathsChanged();
   _streamChannelModel->refresh();
 }
 
