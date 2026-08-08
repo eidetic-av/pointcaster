@@ -201,14 +201,14 @@ void OrbbecDevice::start_sync() {
     return;
   }
 
-  const auto config =
-      std::get<OrbbecDeviceConfiguration>(this->config_variant());
+  auto config = std::get<OrbbecDeviceConfiguration>(this->config_variant());
   pc::logger()->info("Initialising OrbbecDevice ({})", config.id);
 
   std::shared_ptr<ob::Device> ob_device;
 
   // try to find existing device in the list by device UID
-  if (auto ob_device_list = ob_ctx->queryDeviceList()) {
+  if (!config.ob_uid.empty()) {
+    auto ob_device_list = ob_ctx->queryDeviceList();
 #if POINTCASTER_ORBBEC_SDK_VERSION >= 2
     const uint32_t device_count = ob_device_list->getCount();
 #else
@@ -216,21 +216,19 @@ void OrbbecDevice::start_sync() {
 #endif
     for (uint32_t i = 0; i < device_count; ++i) {
 #if POINTCASTER_ORBBEC_SDK_VERSION >= 2
-      auto id = ob_device_list->getUid(i);
+      auto uid = ob_device_list->getUid(i);
 #else
-      auto id = ob_device_list->uid(i);
+      auto uid = ob_device_list->uid(i);
 #endif
-      if (!config.id.empty() && id) {
-        if (std::strcmp(id, config.id.c_str()) == 0) {
-          try {
-            ob_device = ob_device_list->getDevice(i);
-            pc::logger()->trace("Completed ob_device_list->getDevice({})", i);
-          } catch (...) {
-            pc::logger()->warn("Unable to open device with matched device UID");
-            pc::logger()->warn("Check connection to camera");
-          }
-          break;
+      if (std::strcmp(uid, config.ob_uid.c_str()) == 0) {
+        try {
+          ob_device = ob_device_list->getDevice(i);
+          pc::logger()->trace("Completed ob_device_list->getDevice({})", i);
+        } catch (...) {
+          pc::logger()->warn("Unable to open device with matched device UID");
+          pc::logger()->warn("Check connection to camera");
         }
+        break;
       }
     }
   }
@@ -244,11 +242,13 @@ void OrbbecDevice::start_sync() {
   const auto &network_config = config.network.value();
   const auto &ip = network_config.ip_address.value();
 
+  bool connected_using_ip = false;
   if (!ob_device && !ip.empty()) {
     try {
       pc::logger()->trace("Attempting createNetDevice at {}:{}", ip,
                           net_device_port);
       ob_device = ob_ctx->createNetDevice(ip.c_str(), net_device_port);
+      connected_using_ip = true;
     } catch (const ob::Error &e) {
       pc::logger()->error("Failed to create OrbbecDevice at {}:{} {}",
                           network_config.ip_address.value(), net_device_port,
@@ -270,6 +270,15 @@ void OrbbecDevice::start_sync() {
     set_error_state(true);
     set_loading(false);
     return;
+  }
+
+  if (config.ob_uid.empty() || connected_using_ip) {
+#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
+      config.ob_uid = ob_device->getDeviceInfo()->getUid();
+#else
+      config.ob_uid = ob_device->getDeviceInfo()->uid();
+#endif
+    update_config(config);
   }
 
   pc::logger()->trace("Successfully created device at {}:{}", ip,
@@ -362,9 +371,10 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
   try {
     pc::logger()->trace("creating new orbbec rgbd pipeline");
 
-    // we get exclusive access to the orbbec device api during initialisation of
-    // this thread, but unlock before starting the working loop. this ensures
-    // that devices are loaded serially because the sdk is not thread safe
+    // we get exclusive access to the orbbec device api during initialisation
+    // of this thread, but unlock before starting the working loop. this
+    // ensures that devices are loaded serially because the sdk is not thread
+    // safe
     std::unique_lock<std::mutex> ob_device_api_access(
         orbbec_context().device_api_access);
 
@@ -691,9 +701,10 @@ void OrbbecDevice::lidar_pipeline_thread_work(
 
     // 1. initialise and start pipeline
 
-    // we get exclusive access to the orbbec device api during initialisation of
-    // this thread, but unlock before starting the working loop. this ensures
-    // that devices are loaded serially because the sdk is not thread safe
+    // we get exclusive access to the orbbec device api during initialisation
+    // of this thread, but unlock before starting the working loop. this
+    // ensures that devices are loaded serially because the sdk is not thread
+    // safe
     std::unique_lock<std::mutex> ob_device_api_access(
         orbbec_context().device_api_access);
 
@@ -840,7 +851,8 @@ void OrbbecDevice::lidar_pipeline_thread_work(
         if (last_world != world) {
           last_world = world;
           pc::logger()->debug(
-              "orbbec '{}' ancestor transform -> address='{}' offset=({}, {}, "
+              "orbbec '{}' ancestor transform -> address='{}' offset=({}, "
+              "{}, "
               "{})mm {}",
               device_config.id,
               pc::devices::device_address(_workspace->config, device_config.id),
@@ -860,8 +872,8 @@ void OrbbecDevice::lidar_pipeline_thread_work(
         // frame_task_slot occupies a frame processing thread for its
         // lifetime... it's what tells try_begin_frame_task() to fail if too
         // many exist per device
-        // TODO how many? where does the concurrent frame processing count come
-        // from?
+        // TODO how many? where does the concurrent frame processing count
+        // come from?
 
         ProfilingZone process_frame_zone("OrbbecDevice::process_lidar_frame");
         FrameTaskSlot frame_task_slot(*this);
