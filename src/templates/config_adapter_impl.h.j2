@@ -213,7 +213,7 @@ public:
 
 {% for m in s.members if m.is_own %}
 {% if m.kind == "nested" %}
-        m_config.{{ m.name }} = config.{{ m.name }};
+{# nested members are handled by the push-down at the end of this function #}
 {% elif m.kind == "variant" %}
         // a different alternative replaces the whole value; the same
         // alternative is diffed field by field below
@@ -272,12 +272,8 @@ public:
 {% endfor %}
 {% endfor %}
 
-        // Push config into nested adapters only after the top-level config has
-        // been updated, and let nested adapters emit their own leaf changes;
-        // constructor wiring already forwards nested field changes with the
-        // appropriate "member/..." prefix.
 {% for m in s.members if m.kind == "nested" %}
-        if (m_{{ m.name }}Adapter.setConfig({{ m.read }})) {
+        if (m_{{ m.name }}Adapter.setConfig(config.{{ m.name }}{% if m.is_rfl %}.value(){% endif %})) {
             anyChanged = true;
             emit {{ m.name }}Changed();
         }

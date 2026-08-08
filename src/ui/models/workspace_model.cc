@@ -1377,9 +1377,9 @@ void WorkspaceModel::removeOperatorFromSession(const QString &sessionId,
   if (idx < 0 || idx >= int(new_config.sessions.size())) return;
   auto &ops = new_config.sessions[size_t(idx)].operators;
   if (operatorIndex < 0 || operatorIndex >= int(ops.size())) return;
-  const auto operator_id = std::visit(
-      [](const auto &operator_config) { return operator_config.id; },
-      ops[size_t(operatorIndex)]);
+  const auto operator_id =
+      std::visit([](const auto &operator_config) { return operator_config.id; },
+                 ops[size_t(operatorIndex)]);
   const auto owner_prefix =
       session_path_prefix(new_config, sessionId.toStdString());
   ops.erase(ops.begin() + operatorIndex);
@@ -1787,6 +1787,8 @@ void WorkspaceModel::syncSessionPointCloudAdapters() {
       ++it;
     }
   }
+
+  emit selectedOperatorFrameSourceChanged();
 }
 
 SessionAdapter *
@@ -1843,9 +1845,36 @@ void WorkspaceModel::setSelectedOperatorAdapter(OperatorAdapter *adapter) {
     connect(adapter, &QObject::destroyed, this, [this] {
       // tell QML when adapters are destroyed
       emit selectedOperatorAdapterChanged();
+      emit selectedOperatorFrameSourceChanged();
     });
   }
   emit selectedOperatorAdapterChanged();
+  emit selectedOperatorFrameSourceChanged();
+}
+
+QObject *WorkspaceModel::selectedOperatorFrameSource() const {
+  if (!_selectedOperatorAdapter) return nullptr;
+  auto *host = _selectedOperatorAdapter->host();
+  if (!host) return nullptr;
+
+  for (QObject *obj : _deviceAdapters) {
+    auto *device_adapter = qobject_cast<DeviceAdapter *>(obj);
+    if (!device_adapter) continue;
+    if (static_cast<pc::operators::OperatorHost *>(device_adapter->plugin()) ==
+        host) {
+      return device_adapter;
+    }
+  }
+
+  for (const auto &session_adapter : _sessionPointCloudAdapters) {
+    if (!session_adapter) continue;
+    if (static_cast<pc::operators::OperatorHost *>(
+            session_adapter->session()) == host) {
+      return session_adapter.data();
+    }
+  }
+
+  return nullptr;
 }
 
 QVariantMap generateConsoleEntryVariant(const LogEntry &entry) {
@@ -2079,7 +2108,8 @@ void WorkspaceModel::syncSessionAdapters() {
         _sessionOperatorAdapters.remove(id);
       }
       if (adapter) {
-        (void)adapter->setConfig(session_config);
+        adapter->setConfig(session_config);
+        adapter->notifyAllFieldsChanged();
       } else {
         auto *new_adapter =
             new SessionConfigurationAdapter(session_config, this);
@@ -2203,6 +2233,7 @@ void WorkspaceModel::syncDeviceAdapters() {
           } else {
             pc::logger()->trace("syncDeviceAdapters: setConfig ok for id='{}'",
                                 device_id);
+            adapter->notifyAllFieldsChanged();
           }
         } else {
           pc::logger()->trace("syncDeviceAdapters: no existing adapter for "
@@ -2368,6 +2399,7 @@ void WorkspaceModel::syncDeviceAdapters() {
   emit deviceVariantNamesChanged();
   emit addDeviceMenuEntriesChanged();
   emit deviceTreeRowsChanged();
+  emit selectedOperatorFrameSourceChanged();
 
   pc::logger()->trace("syncDeviceAdapters: done, workspace device count={}",
                       _workspace.devices.size());

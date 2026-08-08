@@ -129,6 +129,14 @@ public:
     emit fieldChanged(path);
   }
 
+  void notifyAllFieldsChanged() {
+    for (auto *nested :
+         findChildren<ConfigAdapter *>(Qt::FindDirectChildrenOnly)) {
+      nested->notifyAllFieldsChanged();
+    }
+    for (const QString &path : fieldPaths()) { notifyFieldChanged(path); }
+  }
+
   virtual bool setConfig(const pc::ConfigurationVariant &) { return false; }
 
   QString configPath() const { return _configPath; }
