@@ -44,6 +44,11 @@ KDDW.DockWidget {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
+                ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+                clip: true
+
+                Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
+
                 Column {
                     width: scrollView.availableWidth
                     spacing: sessionConfigEditor.groupSpacing
