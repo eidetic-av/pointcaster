@@ -20,6 +20,8 @@ Column {
     property int groupSpacing: Math.round(8 * Scaling.uiScale)
     property int groupInnerPaddingY: Math.round(4 * Scaling.uiScale)
 
+    readonly property string configPath: configAdapter.configPath
+
     spacing: groupSpacing
 
     Repeater {
@@ -156,42 +158,93 @@ Column {
                         return !hidden && !variant;
                     })
 
-                    delegate: RowLayout {
+                    delegate: Item {
+                        id: fieldRow
+
                         visible: nodeRoot.fieldsVisible
                         height: visible ? nodeRoot.fieldHeight : 0
                         width: contentColumn.width
 
-                        Text {
-                            id: label
-                            text: StringUtils.titleFromSnake(StringUtils.leafName(modelData))
-                            color: ThemeColors.text
-                            font: Scaling.uiFont
+                        RowLayout {
+                            anchors.fill: parent
+                            spacing: 0
 
-                            Layout.preferredWidth: root.labelColumnWidth
-                            Layout.minimumWidth: root.minLabelColumnWidth
-                            clip: true
+                            Text {
+                                id: label
+                                text: StringUtils.titleFromSnake(StringUtils.leafName(modelData))
+                                color: ThemeColors.text
+                                font: Scaling.uiFont
 
-                            Layout.leftMargin: Math.round(5 * Scaling.uiScale)
+                                Layout.preferredWidth: root.labelColumnWidth
+                                Layout.minimumWidth: root.minLabelColumnWidth
+                                clip: true
 
-                            InfoToolTip {
-                                visible: labelHover.hovered
-                                textValue: "osc/address/" + modelData
+                                Layout.leftMargin: Math.round(5 * Scaling.uiScale)
+
+                                InfoToolTip {
+                                    visible: labelHover.hovered
+                                    textValue: root.configPath ? `${root.configPath}/${modelData}` : modelData
+                                }
+                                HoverHandler {
+                                    id: labelHover
+                                }
                             }
-                            HoverHandler {
-                                id: labelHover
+
+                            // frames the editor for published fields
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: root.minValueColumnWidth
+                                Layout.fillHeight: true
+
+                                color: published ? ThemeColors.withAlpha(stateColor, 0.07) : "transparent"
+                                border.width: published ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
+                                border.color: ThemeColors.withAlpha(stateColor, 0.55)
+
+                                Loader {
+                                    id: valueContainer
+
+                                    property string path: modelData
+                                    readonly property string typeName: root.configAdapter.typeName(modelData).toLowerCase()
+
+                                    anchors.fill: parent
+
+                                    asynchronous: false
+
+                                    sourceComponent: {
+                                        if (root.configAdapter.isEnum(modelData))
+                                            return enumEditor;
+                                        if (typeName === "int" || typeName === "int32" || typeName === "int32_t" || typeName === "integer")
+                                            return intEditor;
+                                        if (typeName === "float" || typeName === "float32" || typeName === "float32_t" || typeName === "double" || typeName === "real" || typeName === "number")
+                                            return floatEditor;
+                                        if (typeName.includes("pc::float3") || typeName.includes("float3"))
+                                            return float3Editor;
+                                        if (typeName === "bool")
+                                            return boolEditor;
+                                        return stringEditor;
+                                    }
+                                }
                             }
                         }
 
-                        Rectangle {
+                        // grab handle sits over the seam between the two cells
+                        Item {
                             id: dividerHandle
-                            width: Math.round(5 * Scaling.uiScale)
-                            Layout.fillHeight: true
-                            color: "transparent"
 
+                            readonly property int hitWidth: Math.round(9 * Scaling.uiScale)
+
+                            x: label.x + label.width - Math.round(hitWidth / 2)
+                            width: hitWidth
+                            height: parent.height
+
+                            // the line sits entirely on the label side of the
+                            // seam, so it never covers the value frame's border
+                            // and thickens leftwards on hover
                             Rectangle {
+                                x: Math.round(parent.width / 2) - width
                                 height: parent.height
-                                width: (dividerMouseArea.containsMouse || dividerMouseArea.drag.active) ? Math.round(3 * Scaling.uiScale) : Math.max(1, Math.round(1 * Scaling.uiScale))
-                                color: dividerMouseArea.drag.active ? ThemeColors.mid : (dividerMouseArea.containsMouse ? ThemeColors.middark : ThemeColors.almostdark)
+                                width: (dividerMouseArea.containsMouse || dividerMouseArea.dragging) ? Math.round(3 * Scaling.uiScale) : Math.max(1, Math.round(1 * Scaling.uiScale))
+                                color: dividerMouseArea.dragging ? ThemeColors.mid : (dividerMouseArea.containsMouse ? ThemeColors.middark : ThemeColors.almostdark)
 
                                 Behavior on width {
                                     NumberAnimation {
@@ -225,34 +278,49 @@ Column {
                                 onPositionChanged: {
                                     if (!dragging)
                                         return;
-                                    Workspace.labelColumnWidth = Math.round(dividerHandle.x + mouseX);
+                                    Workspace.labelColumnWidth = Math.round(dividerHandle.x + mouseX - label.x);
                                 }
                             }
                         }
 
-                        Loader {
-                            id: valueContainer
+                        // context menu properties outside the Menu...
+                        // to not break ContextMenu lazy loading
+                        readonly property string fieldPath: root.configPath ? `${root.configPath}/${modelData}` : ""
+                        readonly property bool published: fieldPath.length > 0 && !!root.workspace && root.workspace.publishPaths.includes(fieldPath)
+                        readonly property bool pushed: published && root.workspace.pushPaths.includes(fieldPath)
+                        readonly property color stateColor: pushed ? ThemeColors.green : ThemeColors.blue
 
-                            property string path: modelData
-                            readonly property string typeName: root.configAdapter.typeName(modelData).toLowerCase()
+                        ContextMenu.menu: Menu {
 
-                            Layout.fillWidth: true
-                            Layout.minimumWidth: root.minValueColumnWidth
+                            onOpened: {
+                                itemAt(0).checked = published;
+                                itemAt(1).checked = pushed;
+                            }
 
-                            asynchronous: false
-
-                            sourceComponent: {
-                                if (root.configAdapter.isEnum(modelData))
-                                    return enumEditor;
-                                if (typeName === "int" || typeName === "int32" || typeName === "int32_t" || typeName === "integer")
-                                    return intEditor;
-                                if (typeName === "float" || typeName === "float32" || typeName === "float32_t" || typeName === "double" || typeName === "real" || typeName === "number")
-                                    return floatEditor;
-                                if (typeName.includes("pc::float3") || typeName.includes("float3"))
-                                    return float3Editor;
-                                if (typeName === "bool")
-                                    return boolEditor;
-                                return stringEditor;
+                            MenuItem {
+                                text: qsTr("Publish")
+                                checkable: true
+                                enabled: fieldPath.length > 0
+                                onTriggered: {
+                                    if (checked) {
+                                        root.workspace.addPublishPath(fieldPath);
+                                    } else {
+                                        root.workspace.removePublishPath(fieldPath);
+                                    }
+                                }
+                            }
+                            MenuItem {
+                                text: qsTr("Push updates")
+                                checkable: true
+                                enabled: published
+                                opacity: enabled ? 1 : 0.5
+                                onTriggered: {
+                                    if (checked) {
+                                        root.workspace.addPushPath(fieldPath);
+                                    } else {
+                                        root.workspace.removePushPath(fieldPath);
+                                    }
+                                }
                             }
                         }
                     }
