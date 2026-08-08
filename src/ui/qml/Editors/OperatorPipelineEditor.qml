@@ -155,7 +155,7 @@ Column {
                         // OperatorAdapter's configAdapter property.
                         property var configAdapter: modelData ? modelData.configAdapter : null
                         property bool selected: modelData && root.workspace.selectedOperatorAdapter === modelData
-                        property bool active: configAdapter ? !!configAdapter.value("active") : true
+                        property bool active: configAdapter ? configAdapter.active : true
                         property string operatorId: configAdapter ? String(configAdapter.value("id")) : "unknown"
                         property bool expanded: false
 
