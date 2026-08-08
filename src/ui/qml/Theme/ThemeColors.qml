@@ -38,7 +38,7 @@ QtObject {
 
     property color success: green
     property color error: red
-    property color neutralSuccess: blue 
+    property color neutralSuccess: blue
     property color inactive : palette.middark
 
     // Aliases for access
