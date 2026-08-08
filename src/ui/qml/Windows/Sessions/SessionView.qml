@@ -631,7 +631,7 @@ Item {
     // (camera/position) for operators.
     SelectionGizmo {
         id: selectionGizmo
-        visible: (root.selectedOperatorAdapter || root.selectedTransformAdapter) && !sessionControls.viewLocked
+        visible: (root.selectedOperatorAdapter || root.selectedTransformAdapter) && !sessionControls.viewLocked && sessionControls.gizmoEnabled
         view3d: view
         targetNode: selectionProxy
         mode: GizmoEnums.Mode.Both
@@ -647,7 +647,7 @@ Item {
     // Verify GizmoEnums.Mode.Translate matches your GizmoEnums enum value name.
     SelectionGizmo {
         id: lookAtGizmo
-        visible: root._selectionHasLookAt && !sessionControls.viewLocked
+        visible: root._selectionHasLookAt && !sessionControls.viewLocked && sessionControls.gizmoEnabled
         view3d: view
         targetNode: lookAtProxy
         mode: GizmoEnums.Mode.Translate

@@ -38,6 +38,8 @@ Item {
 
     property real controlSpacing: Math.round(16 * Scaling.uiScale)
 
+    property bool gizmoEnabled: true
+
     signal requestHomeCamera
 
     anchors.fill: parent
@@ -239,6 +241,33 @@ Item {
                     InfoToolTip {
                         delay: 800
                         textValue: projectionButton.checked ? "Disable orthographic projection" : "Enable orthographic projection"
+                    }
+                }
+
+                ToolButton {
+                    id: gizmoButton
+                    enabled: !root.viewLocked
+                    opacity: enabled ? 1.0 : 0.35
+
+                    width: Math.round(24 * Scaling.uiScale)
+                    height: Math.round(24 * Scaling.uiScale)
+
+                    checkable: true
+                    checked: root.gizmoEnabled
+                    onToggled: root.gizmoEnabled = checked
+
+                    contentItem: Image {
+                        source: FontAwesome.icon("solid/up-down-left-right")
+                        width: Math.round(16 * Scaling.uiScale)
+                        height: width
+                        anchors.centerIn: parent
+                        smooth: true
+                        mipmap: true
+                    }
+
+                    InfoToolTip {
+                        delay: 800
+                        textValue: gizmoButton.checked ? "Hide selection gizmo" : "Show selection gizmo"
                     }
                 }
             }
