@@ -17,7 +17,14 @@ Item {
     property bool collapsed: false
     property int buttonAlignment: Qt.AlignRight
 
-    property bool applyTransitions: true
+    property real openAmount: collapsed ? 0 : 1
+
+    Behavior on openAmount {
+        NumberAnimation {
+            duration: 160
+            easing.type: Easing.OutCubic
+        }
+    }
 
     property alias container: contentPanel
 
@@ -46,24 +53,11 @@ Item {
 
         property real spacing: Math.round(6 * Scaling.uiScale)
 
-        width: root._isVertical ? root.contentItem.width + spacing : (root.collapsed ? 0 : root.contentItem.width + spacing)
-        height: root._isVertical ? (root.collapsed ? 0 : root.contentItem.height + spacing) : root.contentItem.height + spacing
+        width: root._isVertical ? (root.contentItem.width + spacing) : (root.contentItem.width + spacing) * root.openAmount
+        height: root._isVertical ? (root.contentItem.height + spacing) * root.openAmount : (root.contentItem.height + spacing)
 
         x: root.direction === SessionControlCollapser.CollapseRight ? root.width - width : 0
         y: root.direction === SessionControlCollapser.CollapseUp ? 0 : toggleCollapsedButton.height
-
-        Behavior on width {
-            NumberAnimation {
-                duration: root.applyTransitions ? 160 : 0
-                easing.type: Easing.OutCubic
-            }
-        }
-        Behavior on height {
-            NumberAnimation {
-                duration: root.applyTransitions ? 160 : 0
-                easing.type: Easing.OutCubic
-            }
-        }
     }
 
     IconButton {
@@ -91,10 +85,10 @@ Item {
         topPadding: root._isVertical ? 0 : Math.round(3 * Scaling.uiScale)
         bottomPadding: root._isVertical ? 0 : Math.round(3 * Scaling.uiScale)
 
-        topLeftRadius: (root.direction === SessionControlCollapser.CollapseUp || root.direction === SessionControlCollapser.CollapseRight) ? 0 : undefined
-        topRightRadius: (root.direction === SessionControlCollapser.CollapseUp || root.direction === SessionControlCollapser.CollapseLeft) ? 0 : undefined
-        bottomLeftRadius: (root.direction === SessionControlCollapser.CollapseDown || root.direction === SessionControlCollapser.CollapseRight) ? 0 : undefined
-        bottomRightRadius: (root.direction === SessionControlCollapser.CollapseDown || root.direction === SessionControlCollapser.CollapseLeft) ? 0 : undefined
+        topLeftRadius: (root.direction === SessionControlCollapser.CollapseUp || root.direction === SessionControlCollapser.CollapseLeft) ? 0 : undefined
+        topRightRadius: (root.direction === SessionControlCollapser.CollapseUp || root.direction === SessionControlCollapser.CollapseRight) ? 0 : undefined
+        bottomLeftRadius: (root.direction === SessionControlCollapser.CollapseDown || root.direction === SessionControlCollapser.CollapseLeft) ? 0 : undefined
+        bottomRightRadius: (root.direction === SessionControlCollapser.CollapseDown || root.direction === SessionControlCollapser.CollapseRight) ? 0 : undefined
 
         backgroundColor: ThemeColors.dark
         hoverColor: ThemeColors.middark
