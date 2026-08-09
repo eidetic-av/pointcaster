@@ -23,8 +23,7 @@ WorkspaceSocket::WorkspaceSocket(const std::string_view filter) {
 }
 
 std::optional<WorkspaceSocket::SocketUpdate> WorkspaceSocket::receive() {
-  thread_local static zmq::message_t msg;
-
+  zmq::message_t msg;
   const auto received = _socket->recv(msg);
   if (!received || msg.size() == 0) return std::nullopt;
 
