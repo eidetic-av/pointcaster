@@ -126,6 +126,7 @@ QVariant(QStringLiteral("{{ m.default_value }}"))
 #include <QStringList>
 #include <QMetaType>
 #include <QMap>
+#include <QSet>
 {% if needs_qvector3d -%}
 #include <QVector3D>
 {% endif -%}
@@ -315,6 +316,20 @@ public:
 {% endfor %}
         };
         return parentConfigurationNames.value(path);
+    }
+
+    Q_INVOKABLE bool isFoldedByDefault(const QString &path) const override {
+{% if s.folded_paths %}
+        static const QSet<QString> foldedPaths {
+{% for path in s.folded_paths %}
+            QStringLiteral("{{ path }}"){{ "," if not loop.last else "" }}
+{% endfor %}
+        };
+        return foldedPaths.contains(path);
+{% else %}
+        Q_UNUSED(path);
+        return false;
+{% endif %}
     }
 
 {# ---- Per-field strongly-typed accessors ---- #}

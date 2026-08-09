@@ -12,10 +12,22 @@ Column {
     required property var operators
     required property var pipelineAdapter
 
+    // config path of the device or session hosting this pipeline, like
+    // "device/group_a/cam_1"
+    required property string hostPath
+
     signal addOperatorRequested(string operatorType)
     signal removeOperatorRequested(int operatorIndex)
 
-    property bool sectionExpanded: true
+    // fold keys are config paths
+    readonly property string sectionFoldKey: hostPath ? hostPath + "/operators" : ""
+
+    readonly property bool sectionExpanded: {
+        if (!sectionFoldKey)
+            return true;
+        const storedValue = workspace.foldedPropertyPaths[sectionFoldKey];
+        return storedValue === undefined ? true : storedValue;
+    }
 
     spacing: 0
 
@@ -42,7 +54,10 @@ Column {
             id: sectionHeaderMouse
             anchors.fill: parent
             hoverEnabled: true
-            onClicked: root.sectionExpanded = !root.sectionExpanded
+            onClicked: {
+                if (root.sectionFoldKey)
+                    root.workspace.setFoldedProperty(root.sectionFoldKey, !root.sectionExpanded);
+            }
         }
 
         Row {
@@ -157,7 +172,19 @@ Column {
                         property bool selected: modelData && root.workspace.selectedOperatorAdapter === modelData
                         property bool active: configAdapter ? configAdapter.active : true
                         property string operatorId: configAdapter ? String(configAdapter.value("id")) : "unknown"
-                        property bool expanded: false
+
+                        // the operator's own config path, like
+                        // "device/group_a/cam_1/operators/<id>"
+                        readonly property string foldKey: configAdapter && configAdapter.configPath ? String(configAdapter.configPath) : ""
+
+                        // operators start folded, and stay wherever the user
+                        // last put them once the fold map has an entry
+                        readonly property bool expanded: {
+                            if (!foldKey)
+                                return false;
+                            const storedValue = root.workspace.foldedPropertyPaths[foldKey];
+                            return storedValue === undefined ? false : storedValue;
+                        }
 
                         width: parent.width - Math.round(16 * Scaling.uiScale)
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -191,7 +218,8 @@ Column {
                                     anchors.fill: parent
                                     propagateComposedEvents: true
                                     onClicked: mouse => {
-                                        operatorContainer.expanded = !operatorContainer.expanded;
+                                        if (operatorContainer.foldKey)
+                                            root.workspace.setFoldedProperty(operatorContainer.foldKey, !operatorContainer.expanded);
                                         mouse.accepted = false;
                                     }
                                 }

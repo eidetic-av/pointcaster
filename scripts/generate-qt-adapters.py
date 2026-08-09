@@ -56,6 +56,8 @@ class Member:
     disabled: bool = False
     is_output: bool = False
     hidden: bool = False
+    # a nested or variant member whose editor group starts folded
+    folded: bool = False
     comparable: bool = False
     # nested config members embed an adapter of this type
     adapter_type: str = ""
@@ -155,6 +157,7 @@ SUFFIX_RE = re.compile(r"@suffix\(([^)]+)\)")
 OPTIONAL_RE = re.compile(r"@optional")
 DISABLED_RE = re.compile(r"@disabled")
 HIDDEN_RE = re.compile(r"@hidden")
+FOLDED_RE = re.compile(r"@folded")
 VERBATIM_RE = re.compile(
     r"^\s*((?:static|constexpr|inline|virtual|extern|using)\b.*)$",
     re.MULTILINE,
@@ -692,6 +695,7 @@ def _parse_members(
             disabled=bool(DISABLED_RE.search(comment)) or is_output,
             is_output=is_output,
             hidden=bool(HIDDEN_RE.search(comment)),
+            folded=bool(FOLDED_RE.search(comment)),
             comparable=is_simple_comparable_type(cpp_type),
             adapter_type=f"{cpp_type}Adapter" if kind == "nested" else "",
             alternative=alternative,
@@ -812,10 +816,11 @@ def build_groups(
     struct_label: str,
     members: list[Member],
     paths: list[str],
-) -> tuple[list[Group], dict[str, str]]:
+) -> tuple[list[Group], dict[str, str], list[str]]:
     top_level = [p for p in paths if "/" not in p]
     groups: list[Group] = [Group(label=f"{struct_label} Properties", paths=top_level)]
     parent_names = {path: f"{struct_label} Properties" for path in top_level}
+    folded_paths: list[str] = []
 
     for member in members:
         if member.kind == "nested":
@@ -827,14 +832,18 @@ def build_groups(
             parent_names.update(
                 {p: title_case(p.split("/")[-2]) for p in nested_paths}
             )
+            if member.folded:
+                folded_paths.extend(nested_paths)
         elif member.kind == "variant":
             for alt in member.alternatives:
                 prefix = f"{member.path}/{alt.tag}/"
                 alt_paths = [p for p in paths if p.startswith(prefix)]
                 groups.append(Group(label=alt.label, paths=alt_paths))
                 parent_names.update({p: alt.label for p in alt_paths})
+                if member.folded:
+                    folded_paths.extend(alt_paths)
 
-    return groups, parent_names
+    return groups, parent_names, folded_paths
 
 
 # ----------------------------
@@ -906,7 +915,7 @@ def process_cpp_header(
 
         label = format_struct_name(parsed.name)
         paths = flatten_paths(members, struct_members_map)
-        groups, parent_names = build_groups(label, members, paths)
+        groups, parent_names, folded_paths = build_groups(label, members, paths)
 
         rendered_structs.append(
             {
@@ -926,6 +935,7 @@ def process_cpp_header(
                 "paths": paths,
                 "groups": groups,
                 "parent_names": parent_names,
+                "folded_paths": folded_paths,
             }
         )
 

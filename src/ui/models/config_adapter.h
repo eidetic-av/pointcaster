@@ -100,6 +100,11 @@ public:
     return false;
   }
 
+  Q_INVOKABLE virtual bool isFoldedByDefault(const QString &path) const {
+    Q_UNUSED(path);
+    return false;
+  }
+
   Q_INVOKABLE virtual bool isEnum(const QString &path) const {
     Q_UNUSED(path);
     return false;

@@ -39,7 +39,7 @@ Column {
 
             readonly property bool nested: defaultPath.includes("/")
             readonly property string parentConfigName: root.configAdapter.parentConfigurationName(defaultPath)
-            readonly property string parentKey: root.configAdapter.value("id") + "/" + parentConfigName
+            readonly property string parentKey: root.configPath && parentConfigName ? root.configPath + "/" + parentConfigName : ""
 
             readonly property bool flattened: root.flattenFields
             readonly property bool fieldsVisible: flattened || expanded
@@ -47,7 +47,18 @@ Column {
             property string headerText: parentConfigName
             property int headerHeight: Math.round(28 * Scaling.uiScale)
             property int fieldHeight: Math.round(28 * Scaling.uiScale)
-            property bool expanded: true
+
+            // how the group sits before anyone has folded it, from @folded
+            readonly property bool defaultExpanded: root.configAdapter ? !root.configAdapter.isFoldedByDefault(defaultPath) : true
+
+            readonly property bool expanded: {
+                if (flattened)
+                    return true;
+                if (!parentKey)
+                    return defaultExpanded;
+                const storedValue = root.workspace.foldedPropertyPaths[parentKey];
+                return storedValue === undefined ? defaultExpanded : storedValue;
+            }
 
             width: root.width
             implicitHeight: contentColumn.implicitHeight
@@ -57,29 +68,6 @@ Column {
             color: flattened ? "transparent" : ThemeColors.dark
             border.width: (!flattened && expanded) ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
             border.color: ThemeColors.almostdark
-
-            onExpandedChanged: {
-                if (!flattened)
-                    root.workspace.setFoldedProperty(parentKey, expanded);
-            }
-
-            function syncFoldedProperties() {
-                if (flattened) {
-                    expanded = true;
-                    return;
-                }
-                var existingValue = root.workspace.foldedPropertyPaths[parentKey];
-                expanded = existingValue === undefined ? true : existingValue;
-            }
-
-            Connections {
-                target: root.workspace
-                function onFoldedPropertyPathsChanged() {
-                    nodeRoot.syncFoldedProperties();
-                }
-            }
-
-            Component.onCompleted: syncFoldedProperties()
 
             Column {
                 id: contentColumn
@@ -103,7 +91,10 @@ Column {
                         enabled: !nodeRoot.flattened
                         hoverEnabled: enabled
                         onPressed: headerMouseArea.forceActiveFocus()
-                        onClicked: nodeRoot.expanded = !nodeRoot.expanded
+                        onClicked: {
+                            if (nodeRoot.parentKey)
+                                root.workspace.setFoldedProperty(nodeRoot.parentKey, !nodeRoot.expanded);
+                        }
                     }
 
                     Rectangle {
