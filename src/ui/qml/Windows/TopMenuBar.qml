@@ -188,6 +188,30 @@ MenuBar {
             }
         }
 
+        Action {
+            id: publishersWindowMenuToggle
+            text: qsTr("&Publishers")
+            checkable: true
+            checked: false
+
+            onTriggered: {
+                if (!publishersWindow)
+                    return;
+
+                if (publishersWindow.isOpen)
+                    publishersWindow.forceClose();
+                else
+                    publishersWindow.open();
+            }
+        }
+
+        Connections {
+            target: publishersWindow
+            function onIsOpenChanged() {
+                publishersWindowMenuToggle.checked = publishersWindow.isOpen;
+            }
+        }
+
 
         Action {
             id: alignmentWindowMenuToggle
@@ -220,6 +244,8 @@ MenuBar {
                 recordingWindowMenuToggle.checked = recordingWindow.isOpen;
             if (streamingWindow)
                 streamingWindowMenuToggle.checked = streamingWindow.isOpen;
+            if (publishersWindow)
+                publishersWindowMenuToggle.checked = publishersWindow.isOpen;
             if (alignmentWindow)
                 alignmentWindowMenuToggle.checked = alignmentWindow.isOpen;
         }

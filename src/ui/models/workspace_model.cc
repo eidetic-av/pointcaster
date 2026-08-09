@@ -470,6 +470,32 @@ private:
   }
 };
 
+class SetPublishersConfigCommand final : public QUndoCommand {
+public:
+  using ApplyFn = std::function<void(pc::WorkspaceConfiguration)>;
+  SetPublishersConfigCommand(pc::publishers::PublishersConfiguration before,
+                             pc::publishers::PublishersConfiguration after,
+                             QString command_text,
+                             pc::WorkspaceConfiguration base_snapshot,
+                             ApplyFn apply_fn)
+      : QUndoCommand(std::move(command_text)), _before(std::move(before)),
+        _after(std::move(after)), _base_snapshot(std::move(base_snapshot)),
+        _apply_fn(std::move(apply_fn)) {}
+  void undo() override { apply(_before); }
+  void redo() override { apply(_after); }
+
+private:
+  pc::publishers::PublishersConfiguration _before;
+  pc::publishers::PublishersConfiguration _after;
+  pc::WorkspaceConfiguration _base_snapshot;
+  ApplyFn _apply_fn;
+  void apply(const pc::publishers::PublishersConfiguration &value) {
+    auto new_config = _base_snapshot;
+    new_config.publishers.set(value);
+    if (_apply_fn) _apply_fn(std::move(new_config));
+  }
+};
+
 struct SessionUpdateGate {
   std::atomic<bool> pending{false};
   QPointer<SessionAdapter> adapter;
@@ -501,6 +527,10 @@ void WorkspaceModel::applyWorkspaceConfigAndRebuild(
   if (_pointStreamerAdapter) {
     _pointStreamerAdapter->setConfig(
         pc::ConfigurationVariant{_workspace.config.point_streamer.value()});
+  }
+  if (_publishersConfigAdapter) {
+    _publishersConfigAdapter->setConfig(
+        pc::ConfigurationVariant{_workspace.config.publishers.value()});
   }
   switch (scope) {
   case RebuildScope::None: {
@@ -539,6 +569,11 @@ WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
       _workspace.config.point_streamer.value(), this);
   _pointStreamerAdapter->setConfigPath(QStringLiteral("streaming"));
   initPointStreamerAdapter();
+
+  _publishersConfigAdapter = new pc::publishers::PublishersConfigurationAdapter(
+      _workspace.config.publishers.value(), this);
+  _publishersConfigAdapter->setConfigPath(QStringLiteral("publishers"));
+  initPublishersConfigAdapter();
 
   _streamChannelModel = new StreamChannelListModel(workspace, this);
   _streamChannelModel->refresh();
@@ -1702,6 +1737,65 @@ void WorkspaceModel::initPointStreamerAdapter() {
                     if (_pointStreamerAdapter)
                       _pointStreamerAdapter->setConfig(pc::ConfigurationVariant{
                           _workspace.config.point_streamer.value()});
+                  },
+                  Qt::QueuedConnection);
+            }));
+      });
+}
+
+void WorkspaceModel::initPublishersConfigAdapter() {
+  if (!_publishersConfigAdapter) return;
+
+  // Subscribe to external (OSC/etc.) changes on the publishers config
+  _workspace.config_registry.remove_subscriptions("publishers/");
+  auto adapterPtr = QPointer<ConfigAdapter>(_publishersConfigAdapter.data());
+  _workspace.config_registry.on_change(
+      "publishers/", [adapterPtr](std::string_view path) {
+        if (!adapterPtr) return;
+        const std::string local(
+            path.substr(std::string_view("publishers/").size()));
+        const QString qpath = QString::fromStdString(local);
+        QMetaObject::invokeMethod(
+            adapterPtr.data(),
+            [adapterPtr, qpath]() {
+              if (adapterPtr) adapterPtr->notifyFieldChanged(qpath);
+            },
+            Qt::QueuedConnection);
+      });
+
+  QObject::connect(
+      _publishersConfigAdapter, &ConfigAdapter::editRequested, this,
+      [this](const QString &path, const QVariant &value) {
+        auto *adapter = _publishersConfigAdapter.data();
+        if (!adapter) return;
+
+        pc::publishers::PublishersConfiguration before;
+        pc::publishers::PublishersConfiguration after;
+        pc::WorkspaceConfiguration base_snapshot;
+        {
+          std::scoped_lock lock(_workspace.config_access);
+          base_snapshot = _workspace.config;
+          before = _workspace.config.publishers.value();
+          // apply() mutates the live config member directly (m_config aliases
+          // it)
+          const bool changed = adapter->apply(path, value);
+          if (!changed) return;
+          after = _workspace.config.publishers.value();
+        }
+
+        QString command_text = QStringLiteral("Edit %1").arg(path);
+        _undoStack->push(new SetPublishersConfigCommand(
+            std::move(before), std::move(after), std::move(command_text),
+            std::move(base_snapshot),
+            [this](pc::WorkspaceConfiguration config) {
+              QMetaObject::invokeMethod(
+                  this,
+                  [this, config = std::move(config)]() mutable {
+                    _workspace.apply_new_config(std::move(config), false);
+                    if (_publishersConfigAdapter)
+                      _publishersConfigAdapter->setConfig(
+                          pc::ConfigurationVariant{
+                              _workspace.config.publishers.value()});
                   },
                   Qt::QueuedConnection);
             }));

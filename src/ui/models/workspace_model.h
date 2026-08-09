@@ -16,6 +16,7 @@
 #include <config/config_variant.h>
 #include <functional>
 #include <point_streamer/point_streamer_config_adapter.gen.h>
+#include <publishers/publishers_config_adapter.gen.h>
 #include <qtmetamacros.h>
 #include <session/session_config_adapter.gen.h>
 #include <workspace/workspace_config.h>
@@ -107,6 +108,10 @@ class WorkspaceModel : public QObject {
   Q_PROPERTY(int selectedStreamChannelIndex READ selectedStreamChannelIndex
                  WRITE setSelectedStreamChannelIndex NOTIFY
                      selectedStreamChannelIndexChanged)
+
+  // Publishers
+  Q_PROPERTY(
+      QObject *publishersConfigAdapter READ publishersConfigAdapter CONSTANT)
 
   // Recording
   Q_PROPERTY(RecorderModel *recorder READ recorder NOTIFY recorderChanged)
@@ -221,6 +226,10 @@ public:
 
   QObject *pointStreamerAdapter() const { return _pointStreamerAdapter.data(); }
 
+  QObject *publishersConfigAdapter() const {
+    return _publishersConfigAdapter.data();
+  }
+
   QAbstractListModel *streamChannels() const { return _streamChannelModel; }
 
   int selectedStreamChannelIndex() const { return _selectedStreamChannelIndex; }
@@ -326,6 +335,8 @@ private:
 
   QPointer<ConfigAdapter> _pointStreamerAdapter;
 
+  QPointer<ConfigAdapter> _publishersConfigAdapter;
+
   StreamChannelListModel *_streamChannelModel;
   int _selectedStreamChannelIndex = -1;
 
@@ -386,6 +397,7 @@ private:
                       const std::string &maybe_ancestor_id) const;
 
   void initPointStreamerAdapter();
+  void initPublishersConfigAdapter();
 };
 
 } // namespace pc::ui

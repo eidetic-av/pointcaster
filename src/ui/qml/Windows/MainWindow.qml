@@ -176,6 +176,12 @@ ApplicationWindow {
             affinities: ["edit"]
         }
 
+        PublishersWindow {
+            id: publishersWindow
+            workspace: workspaceModel
+            affinities: ["edit"]
+        }
+
         StreamingWindow {
             id: streamingWindow
             workspace: workspaceModel
@@ -270,6 +276,7 @@ ApplicationWindow {
             devicesWindow.setAsCurrentTab();
 
             addDockWidget(sessionPropertiesWindow, KDDW.KDDockWidgets.Location_OnRight, null, Qt.size(350, 350));
+            sessionPropertiesWindow.addDockWidgetAsTab(publishersWindow);
             sessionPropertiesWindow.addDockWidgetAsTab(streamingWindow);
             sessionPropertiesWindow.setAsCurrentTab();
 
