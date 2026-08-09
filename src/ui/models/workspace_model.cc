@@ -62,6 +62,28 @@ namespace {
 
 // -------- helpers --------
 
+static ConfigAdapter *make_operator_config_adapter(
+    const pc::operators::OperatorConfigurationVariant &config_variant,
+    QObject *parent) {
+  ConfigAdapter *adapter = nullptr;
+  // TODO ok this really isnt right...
+  // this can't be static types -- we need ability to instantiate operator
+  // adapters without knowing their dynamic lib adapter type
+  // ... more like dynamic device plugins?
+  std::visit(
+      [&adapter, parent](const auto &config) {
+        using ConfigType = std::decay_t<decltype(config)>;
+        if constexpr (std::same_as<ConfigType,
+                                   pc::operators::FringeRemovalConfiguration>) {
+          adapter = new pc::operators::FringeRemovalConfigurationAdapter(
+              const_cast<pc::operators::FringeRemovalConfiguration &>(config),
+              parent);
+        }
+      },
+      config_variant);
+  return adapter;
+}
+
 static int find_session_index_by_id(const pc::WorkspaceConfiguration &config,
                                     const std::string &session_id) {
   for (int i = 0; i < int(config.sessions.size()); ++i) {
@@ -1475,28 +1497,10 @@ void WorkspaceModel::attachOperatorConfigAdapters(
     auto *plugin = opAdapter->plugin();
     if (!plugin) continue;
     auto &config_variant = plugin->config_variant();
-    ConfigAdapter *adapter = nullptr;
-    std::string operator_id;
-    std::visit(
-        [opAdapter, &adapter, &operator_id](auto &config) {
-          using ConfigType = std::decay_t<decltype(config)>;
-          operator_id = config.id;
-          if constexpr (std::is_same_v<
-                            ConfigType,
-                            pc::operators::FringeRemovalConfiguration>) {
-            // TODO ok this really isnt right...
-            adapter = new pc::operators::FringeRemovalConfigurationAdapter(
-                const_cast<pc::operators::FringeRemovalConfiguration &>(config),
-                opAdapter);
-            // adapter = new pc::operators::FringeRemovalConfigurationAdapter(
-            //     config, opAdapter);
-          }
-          // TODO
-          // Add branches here for future operator types, or generate a
-          // operator_config_adapter_for_config_t trait like devices have.
-        },
-        config_variant);
+    auto *adapter = make_operator_config_adapter(config_variant, opAdapter);
     if (adapter) {
+      const auto operator_id = std::get<0>(
+          pc::operators::operator_info_from_variant(config_variant));
       adapter->setConfigPath(
           QString::fromStdString(owner_prefix + "/operators/" + operator_id));
       opAdapter->setConfigAdapter(adapter);
@@ -1625,25 +1629,10 @@ void WorkspaceModel::attachSessionOperatorConfigAdapters(
     auto *plugin = opAdapter->plugin();
     if (!plugin) continue;
     auto &config_variant = plugin->config_variant();
-    ConfigAdapter *adapter = nullptr;
-    std::string operator_id;
-    std::visit(
-        [opAdapter, &adapter, &operator_id](auto &config) {
-          using ConfigType = std::decay_t<decltype(config)>;
-          operator_id = config.id;
-          if constexpr (std::is_same_v<
-                            ConfigType,
-                            pc::operators::FringeRemovalConfiguration>) {
-            adapter = new pc::operators::FringeRemovalConfigurationAdapter(
-                const_cast<pc::operators::FringeRemovalConfiguration &>(config),
-                opAdapter);
-          }
-          // TODO
-          // Add branches here for future operator types, mirroring the device
-          // attachOperatorConfigAdapters().
-        },
-        config_variant);
+    auto *adapter = make_operator_config_adapter(config_variant, opAdapter);
     if (adapter) {
+      const auto operator_id = std::get<0>(
+          pc::operators::operator_info_from_variant(config_variant));
       adapter->setConfigPath(
           QString::fromStdString(owner_prefix + "/operators/" + operator_id));
       opAdapter->setConfigAdapter(adapter);
