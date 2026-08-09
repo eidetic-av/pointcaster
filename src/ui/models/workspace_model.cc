@@ -1191,6 +1191,36 @@ void WorkspaceModel::rebuildSelectedGroupAdapter() {
   }
 
   emit selectedDeviceGroupAdapterChanged();
+  refreshSelectedGroupHasSequence();
+}
+
+void WorkspaceModel::refreshSelectedGroupHasSequence() {
+  bool has_sequence = false;
+
+  if (_selectedNodeKind == QStringLiteral("group")) {
+    QSet<QString> sequence_device_ids;
+    for (QObject *obj : _deviceAdapters) {
+      auto *adapter = qobject_cast<DeviceAdapter *>(obj);
+      if (!adapter || !adapter->hasSequence()) continue;
+      const QString id = adapterStableId(adapter);
+      if (!id.isEmpty()) sequence_device_ids.insert(id);
+    }
+
+    if (!sequence_device_ids.isEmpty()) {
+      // walks nested groups too, so a sequence anywhere beneath counts
+      for (const auto &device_id : pc::devices::device_ids_in_group(
+               _workspace.config, _selectedNodeId.toStdString())) {
+        if (sequence_device_ids.contains(QString::fromStdString(device_id))) {
+          has_sequence = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (has_sequence == _selectedGroupHasSequence) return;
+  _selectedGroupHasSequence = has_sequence;
+  emit selectedGroupHasSequenceChanged();
 }
 
 void WorkspaceModel::initGroupAdapter(
@@ -2372,6 +2402,12 @@ void WorkspaceModel::syncDeviceAdapters() {
                   Qt::QueuedConnection);
             });
 
+        // a sequence only shows up once the device has loaded one, so the
+        // group timeline's visibility has to track it as it appears/vanishes
+        QObject::connect(adapter, &DeviceAdapter::sequenceStateChanged, this,
+                         &WorkspaceModel::refreshSelectedGroupHasSequence,
+                         Qt::UniqueConnection);
+
         if (operator_structure_changed(adapter, plugin)) {
           pc::logger()->trace("syncDeviceAdapters: operator structure changed "
                               "for id='{}', rebuilding",
@@ -2488,6 +2524,8 @@ void WorkspaceModel::syncDeviceAdapters() {
   } else {
     setSelectedDeviceIndex(selectedDeviceIndex);
   }
+
+  refreshSelectedGroupHasSequence();
 
   emit deviceAdaptersChanged();
   emit deviceVariantNamesChanged();

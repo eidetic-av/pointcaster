@@ -175,7 +175,7 @@ KDDW.DockWidget {
 
             Timeline {
                 id: sequenceTimeline
-                visible: root.selectedNodeKind === "device"
+                visible: root.selectedNodeKind === "device" && sequenceTimeline.seq !== null
                 adapter: deviceSelectionList.selectedDevice
                 Layout.fillWidth: true
             }
@@ -234,7 +234,9 @@ KDDW.DockWidget {
 
             Item {
                 id: groupTimeline
-                visible: root.selectedNodeKind === "group"
+                // the group's transport drives its descendant devices, so it
+                // only means something when one of them holds a sequence
+                visible: root.selectedNodeKind === "group" && groupTimeline.seq !== null && root.workspace.selectedGroupHasSequence
                 Layout.fillWidth: true
                 implicitHeight: visible ? groupTimelineLayout.implicitHeight : 0
 

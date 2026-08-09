@@ -71,6 +71,9 @@ class WorkspaceModel : public QObject {
   Q_PROPERTY(QObject *selectedDeviceGroupAdapter READ selectedDeviceGroupAdapter
                  NOTIFY selectedDeviceGroupAdapterChanged)
 
+  Q_PROPERTY(bool selectedGroupHasSequence READ selectedGroupHasSequence NOTIFY
+                 selectedGroupHasSequenceChanged)
+
   // config registry paths that leave the machine, bindable so a field row can
   // show its own state
   Q_PROPERTY(
@@ -180,6 +183,8 @@ public:
   Q_INVOKABLE void selectNode(const QString &node_id);
 
   QObject *selectedDeviceGroupAdapter() const;
+
+  bool selectedGroupHasSequence() const { return _selectedGroupHasSequence; }
 
   Q_INVOKABLE QMatrix4x4 nodeAncestorWorldMatrix(const QString &node_id) const;
 
@@ -292,6 +297,8 @@ signals:
 
   void selectedDeviceGroupAdapterChanged();
 
+  void selectedGroupHasSequenceChanged();
+
   void deviceAdded();
   void deviceDeleted();
 
@@ -330,6 +337,7 @@ private:
   QHash<QString, QPointer<SessionAdapter>> _sessionPointCloudAdapters;
 
   QPointer<ConfigAdapter> _selectedDeviceGroupAdapter;
+  bool _selectedGroupHasSequence = false;
 
   QPointer<OperatorAdapter> _selectedOperatorAdapter;
 
@@ -386,6 +394,9 @@ private:
   void syncSessionOperatorAdapters();
 
   void rebuildSelectedGroupAdapter();
+  // recomputes _selectedGroupHasSequence; a plain member (not a lambda) so the
+  // per-device sequenceStateChanged hookups can use Qt::UniqueConnection
+  void refreshSelectedGroupHasSequence();
   void initGroupAdapter(pc::devices::DeviceGroupConfigurationAdapter *adapter);
   void retransformGroupDescendants(const std::string &group_id);
 
