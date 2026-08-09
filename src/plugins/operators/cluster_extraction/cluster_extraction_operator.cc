@@ -24,16 +24,14 @@ void ClusterExtractionOperator::on_config_field_changed(std::string_view path) {
 std::shared_ptr<PointCloud>
 ClusterExtractionOperator::process(const PointCloud &input) {
   using profiling::ProfilingZone;
+
   auto variant = load_config();
   if (!variant) return std::make_shared<PointCloud>(input);
-
   const auto &config = std::get<ClusterExtractionConfiguration>(*variant);
-  // any kid of lock needed here??
-  pc::logger()->debug("find out how to set here: {}",
-                      config.point_count.value());
-  //   config.test_int.set(10);
-  auto output = std::make_shared<PointCloud>(input);
-  return output;
+
+  config.point_count.set(static_cast<int>(input.size()));
+
+  return std::make_shared<PointCloud>(input);
 }
 
 } // namespace pc::operators

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <config/output_value.h>
 #include <pointcaster/core_types.h>
 #include <rfl/DefaultVal.hpp>
 #include <rfl/Skip.hpp>
@@ -37,8 +38,12 @@ public:
 
   void clear();
 
-  // returns false if path not found
+  // returns false if path not found, or if the field is read-only
   [[maybe_unused]] bool set(std::string_view path, ConfigValue value);
+
+  bool is_readonly(std::string_view path) const;
+
+  void notify(std::string_view path);
 
   std::optional<ConfigValue> get(std::string_view path) const;
 
@@ -54,8 +59,6 @@ private:
   mutable std::shared_mutex _mutex;
   StringMap<Field> _fields;
   std::vector<std::pair<std::string, ChangeCallback>> _subs;
-
-  void notify(std::string_view path);
 };
 
 // ---- rfl wrapper type traits ----
@@ -175,6 +178,16 @@ void register_config(ConfigRegistry &reg, std::string_view prefix, T &cfg) {
     const std::string path =
         std::string(prefix) + "/" + std::string(FieldType::name());
     ValType *ptr = field.value_;
+
+    if constexpr (is_output_v<ValType>) {
+      reg.register_field(path, {[ptr]() -> ConfigValue {
+                                  return to_config_value(ptr->value());
+                                },
+                                nullptr});
+      // writes to the registry not coming fron set just notify changes
+      ptr->bind([&reg, path] { reg.notify(path); });
+      return;
+    }
 
     if constexpr (is_rfl_default_val_v<ValType>) {
       using Inner = typename ValType::Type;

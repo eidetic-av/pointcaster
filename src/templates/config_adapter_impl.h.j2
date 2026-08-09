@@ -212,7 +212,9 @@ public:
         bool anyChanged = false;
 
 {% for m in s.members if m.is_own %}
-{% if m.kind == "nested" %}
+{% if m.is_output %}
+{# ignore outputs #}
+{% elif m.kind == "nested" %}
 {# nested members are handled by the push-down at the end of this function #}
 {% elif m.kind == "variant" %}
         // a different alternative replaces the whole value; the same
@@ -427,7 +429,9 @@ public:
     // ---- Path-based apply (mutates config) ----
     Q_INVOKABLE bool apply(const QString &path, const QVariant &value) override {
 {% for m in s.members %}
-{% if m.kind == "nested" %}
+{% if m.is_output %}
+{# read-only: only the plugin writes it #}
+{% elif m.kind == "nested" %}
 {{ forward_case(m, "apply", ", value") }}
 {% elif m.kind == "variant" %}
         // switching alternative replaces the held value with a
@@ -507,6 +511,17 @@ public:
 {% if m.kind == "nested" %}
 {{ forward_case(m, "isDisabled", "") }}
 {% elif m.disabled %}
+        if (path == QStringLiteral("{{ m.path }}")) return true;
+{% endif %}
+{% endfor %}
+        return false;
+    }
+
+    Q_INVOKABLE bool isOutput(const QString &path) const override {
+{% for m in s.members %}
+{% if m.kind == "nested" %}
+{{ forward_case(m, "isOutput", "") }}
+{% elif m.is_output %}
         if (path == QStringLiteral("{{ m.path }}")) return true;
 {% endif %}
 {% endfor %}

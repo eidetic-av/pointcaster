@@ -161,6 +161,13 @@ Column {
                     delegate: Item {
                         id: fieldRow
 
+                        // output and otherwise uneditable fields read dimmer
+                        // than the ones you can actually change. the label and
+                        // the editor carry it individually so the publish /
+                        // push frame behind the editor keeps its own strength
+                        readonly property bool readOnly: root.configAdapter ? root.configAdapter.isDisabled(modelData) : false
+                        readonly property real textOpacity: readOnly ? 0.66 : 1.0
+
                         visible: nodeRoot.fieldsVisible
                         height: visible ? nodeRoot.fieldHeight : 0
                         width: contentColumn.width
@@ -174,6 +181,7 @@ Column {
                                 text: StringUtils.titleFromSnake(StringUtils.leafName(modelData))
                                 color: ThemeColors.text
                                 font: Scaling.fieldLabelFont
+                                opacity: fieldRow.textOpacity
 
                                 Layout.preferredWidth: root.labelColumnWidth
                                 Layout.minimumWidth: root.minLabelColumnWidth
@@ -202,6 +210,7 @@ Column {
                                     readonly property string typeName: root.configAdapter.typeName(modelData).toLowerCase()
 
                                     anchors.fill: parent
+                                    opacity: fieldRow.textOpacity
 
                                     asynchronous: false
 
@@ -586,7 +595,6 @@ Column {
             font: Scaling.uiFont
 
             enabled: root.configAdapter ? !root.configAdapter.isDisabled(path) : true
-            opacity: enabled ? 1.0 : 0.66
 
             options: root.configAdapter ? root.configAdapter.enumOptions(path) : undefined
             boundValue: {
@@ -616,7 +624,6 @@ Column {
         CheckBox {
             id: boolCheckBox
             enabled: root.configAdapter ? !root.configAdapter.isDisabled(path) : true
-            opacity: enabled ? 1.0 : 0.66
             checked: root.configAdapter ? !!root.configAdapter.value(path) : false
             onCheckedChanged: function () {
                 root.configAdapter.set(path, checked);

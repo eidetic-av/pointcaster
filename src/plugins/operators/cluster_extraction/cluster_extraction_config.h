@@ -1,10 +1,10 @@
 #pragma once
 
+#include <config/output_value.h>
 #include <plugins/backend/backend_types.h>
 #include <rfl/DefaultVal.hpp>
 #include <rfl/Literal.hpp>
 #include <string>
-
 
 namespace pc::operators {
 
@@ -14,7 +14,8 @@ struct ClusterExtractionConfiguration {
   std::string id;     // @hidden
   bool active = true; // @hidden
 
-  rfl::DefaultVal<int> point_count = 0;
+  // output fields
+  Output<int> point_count = 0;
 
   rfl::DefaultVal<BackendType> backend = BackendType::CPU;
 

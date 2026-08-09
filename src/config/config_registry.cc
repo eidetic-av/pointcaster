@@ -34,9 +34,16 @@ bool ConfigRegistry::set(std::string_view path, ConfigValue value) {
     }
     setter = it->second.set;
   }
+  if (!setter) return false;
   setter(value);
   notify(path);
   return true;
+}
+
+bool ConfigRegistry::is_readonly(std::string_view path) const {
+  std::shared_lock lock(_mutex);
+  auto it = _fields.find(path);
+  return it != _fields.end() && !it->second.set;
 }
 
 std::optional<ConfigValue> ConfigRegistry::get(std::string_view path) const {

@@ -54,6 +54,7 @@ class Member:
     min_max: tuple[str, str] | None = None
     optional: bool = False
     disabled: bool = False
+    is_output: bool = False
     hidden: bool = False
     comparable: bool = False
     # nested config members embed an adapter of this type
@@ -181,7 +182,9 @@ VARIANT_RE = re.compile(r"^(?:std|rfl)::[Vv]ariant<(.*)>$")
 # by the alternatives
 TAGGED_UNION_RE = re.compile(r"^rfl::TaggedUnion<(.*)>$")
 
-RFL_WRAPPER_RE = re.compile(r"^rfl::\w+<\s*(.+)\s*>$")
+RFL_WRAPPER_RE = re.compile(r"^(?:rfl::\w+|(?:pc::)?Output)<\s*(.+)\s*>$")
+
+OUTPUT_TYPE_RE = re.compile(r"^(?:pc::)?Output<")
 
 TITLE_SPLIT_RE = re.compile(r"([-\s({\[<]+)")
 
@@ -644,6 +647,7 @@ def _parse_members(
         comment = raw_comment.strip() if raw_comment else ""
 
         is_rfl = _rfl_inner_type(raw_type) is not None
+        is_output = bool(OUTPUT_TYPE_RE.match(raw_type.strip()))
         cpp_type = _resolve_aliases(_effective_type(raw_type), context.aliases)
 
         # enums declared by this struct or one enclosing it
@@ -685,7 +689,8 @@ def _parse_members(
             options=_parse_options(comment),
             min_max=_parse_min_max(comment),
             optional=bool(OPTIONAL_RE.search(comment)),
-            disabled=bool(DISABLED_RE.search(comment)),
+            disabled=bool(DISABLED_RE.search(comment)) or is_output,
+            is_output=is_output,
             hidden=bool(HIDDEN_RE.search(comment)),
             comparable=is_simple_comparable_type(cpp_type),
             adapter_type=f"{cpp_type}Adapter" if kind == "nested" else "",

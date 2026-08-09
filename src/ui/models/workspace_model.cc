@@ -2561,13 +2561,13 @@ void WorkspaceModel::syncDeviceAdapters() {
     _workspace.config_registry.on_change(
         prefix, [adapterPtr, prefix, id,
                  &workspace = _workspace](std::string_view path) {
-          {
+          if (!workspace.config_registry.is_readonly(path)) {
             std::scoped_lock lock(workspace.config_access);
             for (auto &device_plugin : workspace.devices) {
               if (!device_plugin) continue;
-              auto [did, _] = pc::devices::device_info_from_variant(
+              auto [device_id, _] = pc::devices::device_info_from_variant(
                   device_plugin->config_variant());
-              if (std::string(did) != id) continue;
+              if (std::string(device_id) != id) continue;
               for (auto &wc : workspace.config.devices) {
                 const bool match =
                     std::visit([&id](const auto &d) { return d.id == id; }, wc);
