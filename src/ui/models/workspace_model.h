@@ -15,7 +15,7 @@
 #include <QVariant>
 #include <config/config_variant.h>
 #include <functional>
-#include <networking/point_streamer_config_adapter.gen.h>
+#include <point_streamer/point_streamer_config_adapter.gen.h>
 #include <qtmetamacros.h>
 #include <session/session_config_adapter.gen.h>
 #include <workspace/workspace_config.h>

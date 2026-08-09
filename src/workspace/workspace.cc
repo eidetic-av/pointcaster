@@ -2,8 +2,8 @@
 
 #include "camera/camera_config.h"
 #include "config/config_registry.h"
-#include "networking/osc/osc_receiver.h"
-#include "networking/point_streamer.h"
+#include "point_streamer/point_streamer.h"
+#include "receivers/osc/osc_receiver.h"
 #include "session/session.h"
 #include "session/session_config.h"
 #include "workspace_config.h"
@@ -70,7 +70,7 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   rebuild_config_registry();
 
   // initialise workspace instances
-  osc_receiver = std::make_unique<networking::osc::OscReceiver>(*this);
+  osc_receiver = std::make_unique<receivers::OscReceiver>(*this);
   session_recorder = std::make_unique<recorder::SessionRecorder>(*this);
   point_streamer = std::make_unique<networking::PointStreamer>(*this);
 

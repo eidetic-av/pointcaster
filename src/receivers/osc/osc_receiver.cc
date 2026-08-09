@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cstring>
 
-namespace pc::networking::osc {
+namespace pc::receivers {
 
 OscReceiver::OscReceiver(Workspace &workspace) : _workspace(workspace) {
   reconfigure();
@@ -114,4 +114,4 @@ void OscReceiver::dispatch(const char *address, const char *types,
   }
 }
 
-} // namespace pc::networking::osc
+} // namespace pc::receivers

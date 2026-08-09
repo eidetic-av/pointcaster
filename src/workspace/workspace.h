@@ -1,8 +1,8 @@
 #pragma once
 
 #include "config/config_registry.h"
-#include "networking/osc/osc_receiver.h"
-#include "networking/point_streamer.h"
+#include "point_streamer/point_streamer.h"
+#include "receivers/osc/osc_receiver.h"
 #include "session/session.h"
 
 #include "recorder/session_recorder.h"
@@ -62,7 +62,7 @@ public:
 
   std::unordered_map<std::string, std::unique_ptr<Session>> sessions;
 
-  std::unique_ptr<networking::osc::OscReceiver> osc_receiver;
+  std::unique_ptr<receivers::OscReceiver> osc_receiver;
 
   explicit Workspace(const WorkspaceConfiguration &initial);
 

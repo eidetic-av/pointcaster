@@ -29,9 +29,9 @@ qt_add_executable(pointcaster
   camera/look_at_camera.cc
   camera/camera_frame.cc
   recorder/session_recorder.cc
-  networking/point_streamer.cc
-  networking/stream_channels.cc
-  networking/osc/osc_receiver.cc
+  point_streamer/point_streamer.cc
+  point_streamer/stream_channels.cc
+  receivers/osc/osc_receiver.cc
   config/config_registry.cc
   ${app_icon_resource}
 )

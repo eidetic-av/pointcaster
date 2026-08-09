@@ -9,7 +9,7 @@
 #include <format>
 #include <memory>
 #include <mutex>
-#include <networking/stream_channels.h>
+#include <point_streamer/stream_channels.h>
 #include <session/session.h>
 #include <string>
 #include <thread>

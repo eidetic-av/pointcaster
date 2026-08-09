@@ -1,12 +1,12 @@
 #pragma once
 
 #include <functional>
-#include <networking/osc/osc_receiver_config.h>
-#include <networking/point_streamer_config.h>
 #include <optional>
 #include <pipeline/concurrent_operator_pipeline_config.h>
 #include <plugins/devices/device_group_config.h>
 #include <plugins/devices/device_variants.h>
+#include <point_streamer/point_streamer_config.h>
+#include <receivers/osc/osc_receiver_config.h>
 #include <rfl/DefaultVal.hpp>
 #include <session/session_config.h>
 #include <set>
@@ -24,7 +24,7 @@ struct WorkspaceConfiguration {
   std::vector<devices::DeviceConfigurationVariant> devices{};
   std::vector<devices::DeviceGroupConfiguration> device_groups;
   rfl::DefaultVal<networking::PointStreamerConfiguration> point_streamer;
-  rfl::DefaultVal<networking::osc::OscReceiverConfiguration> osc_receiver;
+  rfl::DefaultVal<receivers::OscReceiverConfiguration> osc_receiver;
 
   // config field paths that should be published
   rfl::DefaultVal<std::set<std::string>> publish_paths;

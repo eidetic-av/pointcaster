@@ -11,7 +11,7 @@ namespace pc {
 class Workspace;
 }
 
-namespace pc::networking::osc {
+namespace pc::receivers {
 
 class OscReceiver {
 public:
@@ -37,4 +37,4 @@ private:
   void dispatch(const char* address, const char* types, void** argv);
 };
 
-} // namespace pc::networking::osc
+} // namespace pc::receivers

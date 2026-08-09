@@ -8,8 +8,8 @@
 #include "transform_config.h"
 
 #include <concepts>
-#include <networking/point_streamer_config.h>
 #include <pipeline/concurrent_operator_pipeline_config.h>
+#include <point_streamer/point_streamer_config.h>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -21,8 +21,8 @@
 #include <camera/camera_config.h>
 #include <camera/look_at_camera_config.h>
 #include <config/transform_config.h>
-#include <networking/point_streamer_config.h>
 #include <pipeline/concurrent_operator_pipeline_config.h>
+#include <point_streamer/point_streamer_config.h>
 #include <session/session_config.h>
 
 namespace pc {

@@ -3,8 +3,8 @@
 #include <QTimer>
 #include <algorithm>
 #include <mutex>
-#include <networking/point_streamer.h>
-#include <networking/stream_channels.h>
+#include <point_streamer/point_streamer.h>
+#include <point_streamer/stream_channels.h>
 #include <unordered_map>
 #include <workspace/workspace.h>
 
