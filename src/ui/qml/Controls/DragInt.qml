@@ -224,7 +224,9 @@ SpinBox {
     }
 
     function syncDisplayedValue() {
-        if (spinTextInput.activeFocus || dragBehaviour.dragModeActive)
+        if (dragBehaviour.dragModeActive)
+            return;
+        if (spinTextInput.activeFocus && spinTextInput.text !== textFromValue(value, locale))
             return;
         var clamped = clampToRange(boundValue);
         if (root.value !== clamped)
