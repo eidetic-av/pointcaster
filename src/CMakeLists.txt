@@ -71,6 +71,7 @@ find_package(OpenCV CONFIG REQUIRED
   opencv_imgproc
 )
 find_package(cppzmq CONFIG REQUIRED)
+find_package(PahoMqttCpp CONFIG REQUIRED)
 
 target_link_libraries(pointcaster PRIVATE
   pointcaster::core
@@ -86,6 +87,7 @@ target_link_libraries(pointcaster PRIVATE
   liblo::liblo
   TBB::tbb
   cppzmq-static
+  PahoMqttCpp::paho-mqttpp3-static
   ${OpenCV_LIBS}
   ${PCL_LIBRARIES}
 )
