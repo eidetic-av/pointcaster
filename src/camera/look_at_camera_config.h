@@ -19,8 +19,8 @@ struct LookAtCameraConfiguration {
 
   rfl::DefaultVal<float> vertical_fov = 60.0f; // @minmax(5, 355)
 
-  rfl::DefaultVal<int> resolution_x = 1280; // @minmax(64, 4096)
-  rfl::DefaultVal<int> resolution_y = 960;  // @minmax(64, 4096)
+  rfl::DefaultVal<int> resolution_x = 400; // @minmax(64, 4096)
+  rfl::DefaultVal<int> resolution_y = 300;  // @minmax(64, 4096)
 
   rfl::DefaultVal<int> color_fill_passes = 0; // @minmax(0, 20)
 };
