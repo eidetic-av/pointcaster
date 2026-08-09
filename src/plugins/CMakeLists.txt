@@ -41,14 +41,13 @@ set(OPERATORS_PLUGIN_DIR "plugins/operators")
 
 # - static plugins
 add_subdirectory(backend/cpu)
+
 add_subdirectory(devices/null)
 add_subdirectory(devices/ply)
 
 # - dynamic plugins
 add_subdirectory(backend/cuda)
 
-# TODO fix this build on linux
-# orbbec lib dep is not found!!
 add_subdirectory(devices/orbbec)
 
 add_subdirectory(operators/fringe_removal)

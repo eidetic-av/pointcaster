@@ -63,7 +63,7 @@ void StreamChannelListModel::refresh() {
       enabled_overrides[channel.address] = channel.enabled.value();
 
     for (const auto &source :
-        pc::networking::collect_stream_channel_sources(*_workspace)) {
+         pc::networking::collect_stream_channel_sources(*_workspace)) {
       bool enabled = true;
       if (const auto it = enabled_overrides.find(source.address);
           it != enabled_overrides.end())
@@ -89,9 +89,8 @@ bool StreamChannelListModel::setChannelEnabled(int index, bool enabled) {
     const std::string address = _channels[index].address.toStdString();
     std::lock_guard lock(_workspace->config_access);
     auto &channels = _workspace->config.point_streamer.value().channels;
-    auto it = std::find_if(
-        channels.begin(), channels.end(),
-        [&](const auto &c) { return c.address == address; });
+    auto it = std::find_if(channels.begin(), channels.end(),
+                           [&](const auto &c) { return c.address == address; });
     if (it != channels.end()) {
       it->enabled.set(enabled);
     } else {
@@ -103,9 +102,9 @@ bool StreamChannelListModel::setChannelEnabled(int index, bool enabled) {
   }
 
   const auto modelIndex = this->index(index);
-  emit dataChanged(modelIndex, modelIndex,
-                    {static_cast<int>(Role::Enabled),
-                     static_cast<int>(Role::Status)});
+  emit dataChanged(
+      modelIndex, modelIndex,
+      {static_cast<int>(Role::Enabled), static_cast<int>(Role::Status)});
   return true;
 }
 

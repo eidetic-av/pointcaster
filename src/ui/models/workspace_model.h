@@ -87,9 +87,9 @@ class WorkspaceModel : public QObject {
 
   // The host of the selected operator's operator pipeline...
   // either a device or a session
-  Q_PROPERTY(QObject *selectedOperatorFrameSource READ
-                 selectedOperatorFrameSource NOTIFY
-                     selectedOperatorFrameSourceChanged)
+  Q_PROPERTY(
+      QObject *selectedOperatorFrameSource READ selectedOperatorFrameSource
+          NOTIFY selectedOperatorFrameSourceChanged)
 
   Q_PROPERTY(QUrl saveFileUrl READ saveFileUrl WRITE setSaveFileUrl NOTIFY
                  saveFileUrlChanged)

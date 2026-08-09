@@ -1,6 +1,5 @@
 #include "plugin_loader.h"
 #include "backend/cpu/cpu_backend.h"
-#include <pointcaster/task_pool.h>
 #include "backend/cuda/cuda_backend.h"
 #include "devices/device_plugin.h"
 #include "devices/null/null_device.h"
@@ -15,6 +14,7 @@
 #include <cpplocate/cpplocate.h>
 #include <filesystem>
 #include <mutex>
+#include <pointcaster/task_pool.h>
 #include <print>
 #include <string>
 #include <thread>
@@ -139,7 +139,8 @@ void load_orbbec_plugin_variant(
   if (using_v1 != prefer_v1) {
     pc::logger()->warn("OrbbecDevice sdk v{} variant not found in {}, using "
                        "sdk v{} instead",
-                       prefer_v1 ? 1 : 2, orbbec_dir.string(), using_v1 ? 1 : 2);
+                       prefer_v1 ? 1 : 2, orbbec_dir.string(),
+                       using_v1 ? 1 : 2);
   }
 
 #ifdef _WIN32

@@ -274,9 +274,9 @@ void OrbbecDevice::start_sync() {
 
   if (config.ob_uid.empty() || connected_using_ip) {
 #if POINTCASTER_ORBBEC_SDK_VERSION >= 2
-      config.ob_uid = ob_device->getDeviceInfo()->getUid();
+    config.ob_uid = ob_device->getDeviceInfo()->getUid();
 #else
-      config.ob_uid = ob_device->getDeviceInfo()->uid();
+    config.ob_uid = ob_device->getDeviceInfo()->uid();
 #endif
     update_config(config);
   }
@@ -689,7 +689,8 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
 }
 
 void OrbbecDevice::lidar_pipeline_thread_work(
-    std::stop_token stop_token, std::shared_ptr<ob::Device> ob_device) {
+    [[maybe_unused]] std::stop_token stop_token,
+    [[maybe_unused]] std::shared_ptr<ob::Device> ob_device) {
 #if POINTCASTER_ORBBEC_SDK_VERSION < 2
   pc::logger()->error("Lidar sensors are not compatible with Orbbec SDK v1. "
                       "Change the SDK version in Preferences > Orbbec",
