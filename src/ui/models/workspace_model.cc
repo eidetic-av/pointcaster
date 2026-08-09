@@ -90,6 +90,40 @@ static ConfigAdapter *make_operator_config_adapter(
   return adapter;
 }
 
+static void subscribe_adapter_to_registry(pc::ConfigRegistry &registry,
+                                          ConfigAdapter *adapter,
+                                          const std::string &prefix) {
+  // TODO clearing subscriptions here correct?
+  registry.remove_subscriptions(prefix);
+  auto adapterPtr = QPointer<ConfigAdapter>(adapter);
+  registry.on_change(prefix, [adapterPtr, prefix](std::string_view path) {
+    if (!adapterPtr) return;
+    if (path.size() < prefix.size()) return;
+    const QString qpath =
+        QString::fromStdString(std::string(path.substr(prefix.size())));
+    QMetaObject::invokeMethod(
+        adapterPtr.data(),
+        [adapterPtr, qpath]() {
+          if (adapterPtr) adapterPtr->notifyFieldChanged(qpath);
+        },
+        Qt::QueuedConnection);
+  });
+}
+
+static void
+resubscribe_operator_adapters(pc::ConfigRegistry &registry,
+                              const QList<OperatorAdapter *> &ops) {
+  for (auto *opAdapter : ops) {
+    auto *opConfigAdapter = opAdapter ? opAdapter->configAdapter() : nullptr;
+    if (!opConfigAdapter) continue;
+    const std::string operator_prefix =
+        opConfigAdapter->configPath().toStdString();
+    if (operator_prefix.empty()) continue;
+    subscribe_adapter_to_registry(registry, opConfigAdapter,
+                                  operator_prefix + "/");
+  }
+}
+
 static int find_session_index_by_id(const pc::WorkspaceConfiguration &config,
                                     const std::string &session_id) {
   for (int i = 0; i < int(config.sessions.size()); ++i) {
@@ -1681,9 +1715,12 @@ void WorkspaceModel::attachSessionOperatorConfigAdapters(
     if (!storage) continue;
     auto *adapter = make_operator_config_adapter(*storage, opAdapter);
     if (adapter) {
-      adapter->setConfigPath(
-          QString::fromStdString(owner_prefix + "/operators/" + operator_id));
+      const std::string operator_prefix =
+          owner_prefix + "/operators/" + operator_id;
+      adapter->setConfigPath(QString::fromStdString(operator_prefix));
       opAdapter->setConfigAdapter(adapter);
+      subscribe_adapter_to_registry(_workspace.config_registry, adapter,
+                                    operator_prefix + "/");
       initSessionOperatorAdapter(opAdapter, sessionId);
     }
   }
@@ -2040,6 +2077,9 @@ void WorkspaceModel::syncSessionOperatorAdapters() {
     if (!has_entry || session_operator_structure_changed(current, session)) {
       rebuildSessionOperatorAdapters(id, adapter, session);
     }
+
+    resubscribe_operator_adapters(_workspace.config_registry,
+                                  _sessionOperatorAdapters[id]);
   }
 
   // drop operator adapters for sessions that no longer exist; they were
@@ -2595,6 +2635,13 @@ void WorkspaceModel::syncDeviceAdapters() {
               },
               Qt::QueuedConnection);
         });
+
+    // this runs after remove_subscriptions("device/"), so each operator's own
+    // subscription has to be re-registered here
+    if (auto *deviceAdapter = qobject_cast<DeviceAdapter *>(obj)) {
+      resubscribe_operator_adapters(_workspace.config_registry,
+                                    deviceAdapter->operatorAdapters());
+    }
   }
 
   int selectedDeviceIndex = _workspace.config.selectedDeviceIndex.value();
