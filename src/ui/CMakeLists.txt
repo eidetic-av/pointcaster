@@ -72,6 +72,7 @@ set(CONFIG_ADAPTER_INPUTS
     plugins/devices/orbbec/orbbec_device_config.h
     plugins/devices/ply/ply_device_config.h
     plugins/operators/fringe_removal/fringe_removal_config.h
+    plugins/operators/cluster_extraction/cluster_extraction_config.h
 )
 
 add_qml_adapters(

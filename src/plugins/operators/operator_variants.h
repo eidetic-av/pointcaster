@@ -1,6 +1,5 @@
 #pragma once
 
-#include "fringe_removal/fringe_removal_config.h"
 #include <concepts>
 #include <type_traits>
 #include <utility>
@@ -8,6 +7,8 @@
 
 // TODO i think we remove variants entirely for plugins and use runtime
 // polymorphism that uses static meta info as much as possible
+#include "cluster_extraction/cluster_extraction_config.h"
+#include "fringe_removal/fringe_removal_config.h"
 
 namespace pc::operators {
 
@@ -16,7 +17,8 @@ namespace pc::operators {
 // from plugins
 
 // we can't garuntee that all variants live inside this codebase
-using OperatorConfigurationVariant = std::variant<FringeRemovalConfiguration>;
+using OperatorConfigurationVariant =
+    std::variant<FringeRemovalConfiguration, ClusterExtractionConfiguration>;
 
 // compile time utilities
 

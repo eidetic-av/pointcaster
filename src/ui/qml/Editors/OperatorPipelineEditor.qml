@@ -363,6 +363,13 @@ Column {
                     Menu {
                         id: addOperatorMenu
 
+                        // TODO this really needs to be dynamically
+                        // created depending on which operators are available
+
+                        MenuItem {
+                            text: "Cluster Extraction"
+                            onTriggered: root.addOperatorRequested("ClusterExtractionOperator")
+                        }
                         MenuItem {
                             text: "Fringe Removal"
                             onTriggered: root.addOperatorRequested("FringeRemovalOperator")

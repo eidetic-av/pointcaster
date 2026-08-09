@@ -48,6 +48,7 @@
 #include <plugins/devices/orbbec/orbbec_device_config.h>
 #include <plugins/devices/ply/ply_device_adapter.gen.h>
 #include <plugins/devices/ply/ply_device_config.h>
+#include <plugins/operators/cluster_extraction/cluster_extraction_config_adapter.gen.h>
 #include <plugins/operators/fringe_removal/fringe_removal_config_adapter.gen.h>
 
 namespace pc::ui {
@@ -77,6 +78,13 @@ static ConfigAdapter *make_operator_config_adapter(
                                    pc::operators::FringeRemovalConfiguration>) {
           adapter = new pc::operators::FringeRemovalConfigurationAdapter(
               const_cast<pc::operators::FringeRemovalConfiguration &>(config),
+              parent);
+        } else if constexpr (std::same_as<ConfigType,
+                                          pc::operators::
+                                              ClusterExtractionConfiguration>) {
+          adapter = new pc::operators::ClusterExtractionConfigurationAdapter(
+              const_cast<pc::operators::ClusterExtractionConfiguration &>(
+                  config),
               parent);
         }
       },

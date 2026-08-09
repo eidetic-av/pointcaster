@@ -51,6 +51,7 @@ add_subdirectory(backend/cuda)
 add_subdirectory(devices/orbbec)
 
 add_subdirectory(operators/fringe_removal)
+add_subdirectory(operators/cluster_extraction)
 
 
 # the $CORRADE_PLUGINS and $CORRADE_STATIC_PLUGINS lists should 
