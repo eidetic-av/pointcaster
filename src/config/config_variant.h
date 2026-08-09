@@ -22,24 +22,23 @@
 #include <camera/look_at_camera_config.h>
 #include <config/transform_config.h>
 #include <pipeline/concurrent_operator_pipeline_config.h>
-#include <point_streamer/point_streamer_config.h>
+#include <publishers/publishers_config.h>
 #include <session/session_config.h>
 
 namespace pc {
 
-using ConfigurationVariant =
-    std::variant<TransformConfiguration, ColorTransformConfiguration,
-                 FileConfiguration, FileFolderConfiguration,
-                 NetworkConfiguration, CameraConfiguration,
-                 LookAtCameraConfiguration, SessionConfiguration,
-                 SessionTimelineConfiguration, SequenceConfiguration,
-                 GroupSequenceConfiguration,
-                 pipeline::ConcurrentOperatorPipelineConfiguration,
-                 networking::PointStreamerConfiguration,
-                 // TODO REMOVE AND ADD
-                 // specialised jinja with  setConfig overload like device
-                 // adapters
-                 operators::FringeRemovalConfiguration>;
+using ConfigurationVariant = std::variant<
+    TransformConfiguration, ColorTransformConfiguration, FileConfiguration,
+    FileFolderConfiguration, NetworkConfiguration, CameraConfiguration,
+    LookAtCameraConfiguration, SessionConfiguration,
+    SessionTimelineConfiguration, SequenceConfiguration,
+    GroupSequenceConfiguration,
+    pipeline::ConcurrentOperatorPipelineConfiguration,
+    networking::PointStreamerConfiguration, publishers::PublishersConfiguration,
+    // TODO REMOVE AND ADD
+    // specialised jinja with  setConfig overload like device
+    // adapters
+    operators::FringeRemovalConfiguration>;
 
 // compile time utilities
 

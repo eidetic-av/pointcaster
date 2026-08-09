@@ -3,7 +3,9 @@
 #include "camera/camera_config.h"
 #include "config/config_registry.h"
 #include "point_streamer/point_streamer.h"
+#include "publishers/workspace_publisher.h"
 #include "receivers/osc/osc_receiver.h"
+#include "recorder/session_recorder.h"
 #include "session/session.h"
 #include "session/session_config.h"
 #include "workspace_config.h"
@@ -74,6 +76,8 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   session_recorder = std::make_unique<recorder::SessionRecorder>(*this);
   point_streamer = std::make_unique<networking::PointStreamer>(*this);
 
+  workspace_publisher = std::make_unique<publishers::WorkspacePublisher>(*this);
+
   // TODO maybe the metrics server shouldn't be a singleton and should
   // follow the same pattern as session_recorder & point_streamer belonging
   // to this workspace class and the injected workspace is what grabs it
@@ -84,6 +88,8 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   _metrics_thread = std::jthread(
       [this](std::stop_token stop_token) { metrics_thread_work(stop_token); });
 }
+
+Workspace::~Workspace() = default;
 
 void Workspace::apply_new_config(const WorkspaceConfiguration &new_config,
                                  bool should_sync_devices) {
@@ -132,6 +138,7 @@ void Workspace::rebuild_config_registry() {
   pc::register_config(config_registry, "streaming",
                       config.point_streamer.value());
   pc::register_config(config_registry, "osc", config.osc_receiver.value());
+  pc::register_config(config_registry, "publishers", config.publishers.value());
 
   // register configs for every device plugin
   for (auto &device_plugin : devices) {

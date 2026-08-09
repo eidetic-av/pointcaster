@@ -1,5 +1,7 @@
 #include "workspace.h"
 
+#include "point_streamer/point_streamer.h"
+#include "recorder/session_recorder.h"
 #include "session/session.h"
 
 #include <chrono>

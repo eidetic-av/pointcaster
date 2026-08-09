@@ -1,11 +1,6 @@
 #pragma once
 
 #include "config/config_registry.h"
-#include "point_streamer/point_streamer.h"
-#include "receivers/osc/osc_receiver.h"
-#include "session/session.h"
-
-#include "recorder/session_recorder.h"
 #include "session/session.h"
 #include "workspace_config.h"
 
@@ -14,7 +9,6 @@
 #include <atomic>
 #include <functional>
 #include <memory>
-#include <metrics/prometheus_server.h>
 #include <mutex>
 #include <optional>
 #include <plugins/backend/backend_plugin.h>
@@ -28,6 +22,22 @@
 #include <vector>
 
 namespace pc {
+
+namespace recorder {
+class SessionRecorder;
+}
+
+namespace networking {
+class PointStreamer;
+}
+
+namespace publishers {
+class WorkspacePublisher;
+} // namespace publishers
+
+namespace receivers {
+class OscReceiver;
+}
 
 // Workspace is the application, which can read and write the
 // WorkspaceConfiguration.
@@ -60,11 +70,15 @@ public:
   std::unique_ptr<recorder::SessionRecorder> session_recorder;
   std::unique_ptr<networking::PointStreamer> point_streamer;
 
-  std::unordered_map<std::string, std::unique_ptr<Session>> sessions;
+  std::unique_ptr<publishers::WorkspacePublisher> workspace_publisher;
 
   std::unique_ptr<receivers::OscReceiver> osc_receiver;
 
+  std::unordered_map<std::string, std::unique_ptr<Session>> sessions;
+
   explicit Workspace(const WorkspaceConfiguration &initial);
+  // defined in workspace.cc, where the forward-declared members are complete
+  ~Workspace();
 
   // updates config and syncs (creates/destroys) device plugin instances
   void apply_new_config(const WorkspaceConfiguration &new_config,

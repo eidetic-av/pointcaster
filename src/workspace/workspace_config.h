@@ -6,6 +6,7 @@
 #include <plugins/devices/device_group_config.h>
 #include <plugins/devices/device_variants.h>
 #include <point_streamer/point_streamer_config.h>
+#include <publishers/publishers_config.h>
 #include <receivers/osc/osc_receiver_config.h>
 #include <rfl/DefaultVal.hpp>
 #include <session/session_config.h>
@@ -23,6 +24,7 @@ struct WorkspaceConfiguration {
   std::vector<SessionConfiguration> sessions{};
   std::vector<devices::DeviceConfigurationVariant> devices{};
   std::vector<devices::DeviceGroupConfiguration> device_groups;
+  rfl::DefaultVal<publishers::PublishersConfiguration> publishers;
   rfl::DefaultVal<networking::PointStreamerConfiguration> point_streamer;
   rfl::DefaultVal<receivers::OscReceiverConfiguration> osc_receiver;
 
