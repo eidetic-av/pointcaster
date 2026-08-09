@@ -84,9 +84,17 @@ SpinBox {
         commitValue(v);
     }
 
-    Component.onCompleted: syncDisplayedValue()
+    property bool _initialised: false
+
+    Component.onCompleted: {
+        syncDisplayedValue();
+        _initialised = true;
+    }
 
     onValueModified: {
+        if (!_initialised)
+            return;
+
         boundValue = value;
         commitValue(value);
     }

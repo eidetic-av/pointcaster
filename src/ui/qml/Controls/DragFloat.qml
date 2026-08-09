@@ -60,7 +60,12 @@ DoubleSpinBox {
     from: effectiveFrom
     to: effectiveTo
 
-    Component.onCompleted: syncDisplayedValue()
+    property bool _initialised: false
+
+    Component.onCompleted: {
+        syncDisplayedValue();
+        _initialised = true;
+    }
 
     function clampToRange(v) {
         var x = Number(v);
@@ -109,6 +114,9 @@ DoubleSpinBox {
     }
 
     onValueModified: {
+        if (!_initialised)
+            return;
+
         boundValue = value;
         commitValue(value);
     }
