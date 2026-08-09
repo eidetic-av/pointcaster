@@ -33,6 +33,7 @@ class PointStreamer;
 
 namespace publishers {
 class WorkspacePublisher;
+class MqttClient;
 } // namespace publishers
 
 namespace receivers {
@@ -71,6 +72,7 @@ public:
   std::unique_ptr<networking::PointStreamer> point_streamer;
 
   std::unique_ptr<publishers::WorkspacePublisher> workspace_publisher;
+  std::unique_ptr<publishers::MqttClient> mqtt_client;
 
   std::unique_ptr<receivers::OscReceiver> osc_receiver;
 

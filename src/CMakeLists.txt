@@ -25,6 +25,7 @@ qt_add_executable(pointcaster
   workspace/workspace.cc
   workspace/workspace_metrics.cc
   workspace/workspace_config.cc
+  workspace/workspace_socket.cc
   session/session.cc
   config/config_registry.cc
   camera/look_at_camera.cc
@@ -35,6 +36,7 @@ qt_add_executable(pointcaster
   point_streamer/stream_channels.cc
   receivers/osc/osc_receiver.cc
   publishers/workspace_publisher.cc
+  publishers/mqtt/mqtt_client.cc
   ${app_icon_resource}
 )
 

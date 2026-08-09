@@ -22,6 +22,7 @@
 #include <camera/look_at_camera_config.h>
 #include <config/transform_config.h>
 #include <pipeline/concurrent_operator_pipeline_config.h>
+#include <publishers/mqtt/mqtt_client_config.h>
 #include <publishers/publishers_config.h>
 #include <session/session_config.h>
 
@@ -35,6 +36,7 @@ using ConfigurationVariant = std::variant<
     GroupSequenceConfiguration,
     pipeline::ConcurrentOperatorPipelineConfiguration,
     networking::PointStreamerConfiguration, publishers::PublishersConfiguration,
+    publishers::MqttClientConfiguration,
     // TODO REMOVE AND ADD
     // specialised jinja with  setConfig overload like device
     // adapters
