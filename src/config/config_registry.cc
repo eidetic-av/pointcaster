@@ -1,8 +1,10 @@
 #include "config_registry.h"
 
-#include <core/logger/logger.h>
-
 #include <algorithm>
+#include <core/logger/logger.h>
+#include <set>
+#include <string>
+#include <variant>
 
 namespace pc {
 
@@ -26,23 +28,39 @@ bool ConfigRegistry::set(std::string_view path, ConfigValue value) {
   std::function<void(ConfigValue)> setter;
   {
     std::shared_lock lock(_mutex);
-    auto it = _fields.find(std::string(path));
+    auto it = _fields.find(path);
     if (it == _fields.end()) {
       return false;
     }
     setter = it->second.set;
   }
-  setter(std::move(value));
+  setter(value);
   notify(path);
   return true;
 }
 
 std::optional<ConfigValue> ConfigRegistry::get(std::string_view path) const {
   std::shared_lock lock(_mutex);
-  auto it = _fields.find(std::string(path));
+  auto it = _fields.find(path);
   if (it == _fields.end()) return std::nullopt;
   return it->second.get();
 }
+
+template <typename StringCollection>
+void ConfigRegistry::snapshot(const StringCollection &paths,
+                              StringMap<ConfigValue> &out) {
+  out.clear();
+  out.reserve(std::size(paths));
+  std::shared_lock lock(_mutex);
+  for (const auto &path : paths) {
+    const auto it = _fields.find(std::string_view(path));
+    if (it == _fields.end()) continue;
+    out.emplace(it->first, it->second.get());
+  }
+}
+
+template void ConfigRegistry::snapshot<std::set<std::string>>(
+    const std::set<std::string> &paths, StringMap<ConfigValue> &out);
 
 void ConfigRegistry::on_change(std::string_view prefix, ChangeCallback cb) {
   std::scoped_lock lock(_mutex);

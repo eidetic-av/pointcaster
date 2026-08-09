@@ -11,7 +11,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <unordered_map>
+#include <util/string_map.h>
 #include <variant>
 #include <vector>
 
@@ -42,13 +42,17 @@ public:
 
   std::optional<ConfigValue> get(std::string_view path) const;
 
+  // batch reads a whole set of paths in one pass, returning a snapshot
+  template <typename StringCollection>
+  void snapshot(const StringCollection &paths, StringMap<ConfigValue> &out);
+
   void on_change(std::string_view prefix, ChangeCallback cb);
 
   void remove_subscriptions(std::string_view prefix);
 
 private:
   mutable std::shared_mutex _mutex;
-  std::unordered_map<std::string, Field> _fields;
+  StringMap<Field> _fields;
   std::vector<std::pair<std::string, ChangeCallback>> _subs;
 
   void notify(std::string_view path);
