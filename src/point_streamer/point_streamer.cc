@@ -1,4 +1,5 @@
 #include "point_streamer.h"
+#include "networking/zmq_context.h"
 
 #include <algorithm>
 #include <chrono>
@@ -9,6 +10,7 @@
 #include <format>
 #include <memory>
 #include <mutex>
+#include <networking/zmq_context.h>
 #include <point_streamer/stream_channels.h>
 #include <session/session.h>
 #include <string>
@@ -58,7 +60,7 @@ void streaming_thread_loop(
   }
   if (address.empty()) address = "*";
 
-  zmq::context_t ctx{1};
+  auto &ctx = pc::networking::zmq_context();
 
   zmq::socket_t pub_socket{ctx, zmq::socket_type::xpub};
   pub_socket.set(zmq::sockopt::sndhwm, 32);

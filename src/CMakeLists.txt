@@ -29,6 +29,7 @@ qt_add_executable(pointcaster
   camera/look_at_camera.cc
   camera/camera_frame.cc
   recorder/session_recorder.cc
+  networking/zmq_context.cc
   point_streamer/point_streamer.cc
   point_streamer/stream_channels.cc
   receivers/osc/osc_receiver.cc
