@@ -49,6 +49,15 @@ void OperatorHost::sync_operators(
     Corrade::Containers::Pointer<OperatorPlugin> op_plugin;
     bool new_instance = false;
 
+    if (!(_workspace->operator_plugin_manager->loadState(
+              std::string(operator_plugin_name)) &
+          Corrade::PluginManager::LoadState::Loaded)) {
+      pc::logger()->error(
+          "Operator plugin '{}' is not loaded; skipping operator id='{}'",
+          operator_plugin_name, operator_id);
+      continue;
+    }
+
     auto it = existing_index_by_id.find(operator_id);
     if (it != existing_index_by_id.end()) {
       const auto idx = it->second;

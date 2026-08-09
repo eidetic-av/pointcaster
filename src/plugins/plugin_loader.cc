@@ -43,6 +43,12 @@ using namespace Corrade::Containers;
 namespace {
 
 #ifdef _WIN32
+constexpr std::string_view plugin_module_extension = ".dll";
+#else
+constexpr std::string_view plugin_module_extension = ".so";
+#endif
+
+#ifdef _WIN32
 
 std::filesystem::path executable_directory_path() {
   wchar_t module_file_path[MAX_PATH];
@@ -101,6 +107,15 @@ std::filesystem::path device_plugins_root() {
 #else
   // linux bin/ layout: plugins/ sits beside the executable's parent dir
   return exe_dir.parent_path() / "plugins" / "devices";
+#endif
+}
+
+std::filesystem::path operator_plugins_root() {
+  const std::filesystem::path exe_dir(cpplocate::getModulePath());
+#ifdef _WIN32
+  return exe_dir / "plugins" / "operators";
+#else
+  return exe_dir.parent_path() / "plugins" / "operators";
 #endif
 }
 
@@ -268,6 +283,18 @@ load_operator_plugins(Workspace &workspace) {
 
   workspace.loaded_operator_plugin_names.clear();
 
+    namespace fs = std::filesystem;
+  const auto operators_root = operator_plugins_root();
+  if (fs::exists(operators_root)) {
+    for (const auto &node : fs::recursive_directory_iterator(operators_root)) {
+      if (node.path().extension() != ".conf") continue;
+      auto module_path = node.path();
+      module_path.replace_extension(plugin_module_extension);
+      if (!fs::exists(module_path)) continue;
+            operator_plugin_manager->load(module_path.generic_string());
+    }
+  }
+
   for (StringView plugin_name : operator_plugin_manager->pluginList()) {
     if (operator_plugin_manager->loadState(plugin_name) &
         LoadState::WrongMetadataFile) {
@@ -278,6 +305,22 @@ load_operator_plugins(Workspace &workspace) {
       workspace.loaded_operator_plugin_names.push_back(plugin_name);
       pc::logger()->info("Loaded operator plugin '{}'",
                          std::string(plugin_name));
+    } else {
+      std::string_view reason = "unknown load state";
+      if (plugin_status & LoadState::NotFound)
+        reason = "plugin file not found";
+      else if (plugin_status & LoadState::WrongPluginVersion)
+        reason = "wrong plugin version";
+      else if (plugin_status & LoadState::WrongInterfaceVersion)
+        reason = "wrong interface version";
+      else if (plugin_status & LoadState::WrongMetadataFile)
+        reason = "bad or missing .conf";
+      else if (plugin_status & LoadState::UnresolvedDependency)
+        reason = "unresolved dependency";
+      else if (plugin_status & LoadState::LoadFailed)
+        reason = "load failed, check shared libs";
+      pc::logger()->error("Failed to load operator plugin '{}' ({})",
+                          std::string(plugin_name), reason);
     }
   }
 

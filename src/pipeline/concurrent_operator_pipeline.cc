@@ -13,6 +13,13 @@ std::vector<OperatorPipelineWorkerChain> build_worker_chains(
     for (const auto &variant : configs) {
       const auto [operator_id, plugin_name] =
           operators::operator_info_from_variant(variant);
+      if (!(workspace.operator_plugin_manager->loadState(plugin_name) &
+            Corrade::PluginManager::LoadState::Loaded)) {
+        pc::logger()->error("Operator plugin '{}' is not loaded; "
+                            "skipping operator id='{}' in pipeline",
+                            plugin_name, operator_id);
+        continue;
+      }
       auto op = workspace.operator_plugin_manager->instantiate(plugin_name);
       op->update_config(variant);
       op->init(&owner, *workspace.backend_plugin_manager);
