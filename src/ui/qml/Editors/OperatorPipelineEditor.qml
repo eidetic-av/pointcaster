@@ -363,16 +363,14 @@ Column {
                     Menu {
                         id: addOperatorMenu
 
-                        // TODO this really needs to be dynamically
-                        // created depending on which operators are available
+                        Repeater {
+                            model: root.workspace ? root.workspace.availableOperators : []
 
-                        MenuItem {
-                            text: "Cluster Extraction"
-                            onTriggered: root.addOperatorRequested("ClusterExtractionOperator")
-                        }
-                        MenuItem {
-                            text: "Fringe Removal"
-                            onTriggered: root.addOperatorRequested("FringeRemovalOperator")
+                            MenuItem {
+                                required property var modelData
+                                text: modelData.label
+                                onTriggered: root.addOperatorRequested(modelData.name)
+                            }
                         }
                     }
                 }

@@ -105,6 +105,8 @@ class WorkspaceModel : public QObject {
 
   Q_PROPERTY(QVariantMap uiState READ uiState NOTIFY uiStateChanged)
 
+  Q_PROPERTY(QVariantList availableOperators READ availableOperators CONSTANT)
+
   // Streaming
   Q_PROPERTY(QObject *pointStreamerAdapter READ pointStreamerAdapter CONSTANT)
   Q_PROPERTY(QAbstractListModel *streamChannels READ streamChannels CONSTANT)
@@ -241,6 +243,10 @@ public:
   void setSelectedStreamChannelIndex(int index);
 
   RecorderModel *recorder() const { return _recorderModel; }
+
+  // each entry is e.g. { name: "ClusterExtractionOperator", label: "Cluster
+  // Extraction" }
+  Q_INVOKABLE QVariantList availableOperators() const;
 
   Q_INVOKABLE QVariantMap foldedPropertyPaths() const {
     return _foldedPropertyPaths;

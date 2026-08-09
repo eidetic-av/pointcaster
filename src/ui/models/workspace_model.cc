@@ -11,6 +11,7 @@
 #include <QMetaObject>
 #include <QObject>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QSet>
 #include <QString>
 #include <QUndoCommand>
@@ -753,6 +754,23 @@ void WorkspaceModel::save(bool update_last_session_path) {
           Qt::QueuedConnection);
     }
   }).detach();
+}
+
+QVariantList WorkspaceModel::availableOperators() const {
+  static const QRegularExpression camel_boundary(
+      QStringLiteral("([a-z0-9])([A-Z])"));
+  QVariantList entries;
+  for (const auto &plugin_name : _workspace.loaded_operator_plugin_names) {
+    const QString name = QString::fromStdString(plugin_name);
+    QString label = name;
+    if (label.endsWith(QStringLiteral("Operator"))) {
+      label.chop(QStringLiteral("Operator").size());
+    }
+    label.replace(camel_boundary, QStringLiteral("\\1 \\2"));
+    entries.append(QVariantMap{{QStringLiteral("name"), name},
+                               {QStringLiteral("label"), label}});
+  }
+  return entries;
 }
 
 void WorkspaceModel::setImageProvider(CameraImageProvider *provider) {
