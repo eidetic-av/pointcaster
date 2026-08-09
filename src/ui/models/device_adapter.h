@@ -178,6 +178,7 @@ public:
 
   void notifyFieldChanged(const QString &path) override {
     emit fieldChanged(path);
+    if (isRefreshingAllFields()) return;
     if (_plugin) _plugin->on_config_field_changed(path.toStdString());
   }
 

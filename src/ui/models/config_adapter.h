@@ -129,12 +129,18 @@ public:
     emit fieldChanged(path);
   }
 
+  // true while notifyAllFieldsChanged() is walking this adapter's paths...
+  bool isRefreshingAllFields() const { return _refreshingAllFields; }
+
+  // re-announces every field so QML re-reads it
   void notifyAllFieldsChanged() {
+    _refreshingAllFields = true;
     for (auto *nested :
          findChildren<ConfigAdapter *>(Qt::FindDirectChildrenOnly)) {
       nested->notifyAllFieldsChanged();
     }
     for (const QString &path : fieldPaths()) { notifyFieldChanged(path); }
+    _refreshingAllFields = false;
   }
 
   virtual bool setConfig(const pc::ConfigurationVariant &) { return false; }
@@ -156,4 +162,5 @@ signals:
 
 private:
   QString _configPath;
+  bool _refreshingAllFields = false;
 };
