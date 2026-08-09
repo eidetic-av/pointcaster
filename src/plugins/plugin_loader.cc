@@ -283,7 +283,7 @@ load_operator_plugins(Workspace &workspace) {
 
   workspace.loaded_operator_plugin_names.clear();
 
-    namespace fs = std::filesystem;
+  namespace fs = std::filesystem;
   const auto operators_root = operator_plugins_root();
   if (fs::exists(operators_root)) {
     for (const auto &node : fs::recursive_directory_iterator(operators_root)) {
@@ -291,7 +291,7 @@ load_operator_plugins(Workspace &workspace) {
       auto module_path = node.path();
       module_path.replace_extension(plugin_module_extension);
       if (!fs::exists(module_path)) continue;
-            operator_plugin_manager->load(module_path.generic_string());
+      operator_plugin_manager->load(module_path.generic_string());
     }
   }
 

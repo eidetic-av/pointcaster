@@ -2196,44 +2196,44 @@ QVariantList WorkspaceModel::consoleHistoryEntries() const {
 // TODO whats the change here?
 void WorkspaceModel::initSessionAdapter(SessionConfigurationAdapter *adapter) {
   if (!adapter) return;
-  QObject::connect(
-      adapter, &ConfigAdapter::editRequested, this,
-      [this, adapter](const QString &path, const QVariant &value) {
-        auto *session_adapter =
-            qobject_cast<SessionConfigurationAdapter *>(adapter);
-        if (!session_adapter) return;
-        const QString session_id_q = session_adapter->id();
-        if (session_id_q.isEmpty()) return;
-        SessionConfiguration before;
-        SessionConfiguration after;
-        pc::WorkspaceConfiguration base_snapshot;
-        QString command_text;
-        {
-          std::scoped_lock lock(_workspace.config_access);
-          base_snapshot = _workspace.config;
-          const int idx = find_session_index_by_id(_workspace.config,
-                                                   session_id_q.toStdString());
-          if (idx < 0) return;
-          before = _workspace.config.sessions[size_t(idx)];
-          const bool changed = session_adapter->apply(path, value);
-          if (!changed) return;
-          after = _workspace.config.sessions[size_t(idx)];
-        }
-        command_text = QStringLiteral("Edit %1").arg(path);
-        _undoStack->push(new SetSessionConfigCommand(
-            session_id_q, std::move(before), std::move(after),
-            std::move(command_text), std::move(base_snapshot),
-            [this](pc::WorkspaceConfiguration config) {
-              QMetaObject::invokeMethod(
-                  this,
-                  [this, config = std::move(config)]() mutable {
-                    // only update config, don't rebuild devices
-                    _workspace.apply_new_config(std::move(config), false);
-                    syncSessionAdapters();
-                  },
-                  Qt::QueuedConnection);
-            }));
-      });
+  QObject::connect(adapter, &ConfigAdapter::editRequested, this,
+                   [this, adapter](const QString &path, const QVariant &value) {
+                     auto *session_adapter =
+                         qobject_cast<SessionConfigurationAdapter *>(adapter);
+                     if (!session_adapter) return;
+                     const QString session_id_q = session_adapter->id();
+                     if (session_id_q.isEmpty()) return;
+                     SessionConfiguration before;
+                     SessionConfiguration after;
+                     pc::WorkspaceConfiguration base_snapshot;
+                     QString command_text;
+                     {
+                       std::scoped_lock lock(_workspace.config_access);
+                       base_snapshot = _workspace.config;
+                       const int idx = find_session_index_by_id(
+                           _workspace.config, session_id_q.toStdString());
+                       if (idx < 0) return;
+                       before = _workspace.config.sessions[size_t(idx)];
+                       const bool changed = session_adapter->apply(path, value);
+                       if (!changed) return;
+                       after = _workspace.config.sessions[size_t(idx)];
+                     }
+                     command_text = QStringLiteral("Edit %1").arg(path);
+                     _undoStack->push(new SetSessionConfigCommand(
+                         session_id_q, std::move(before), std::move(after),
+                         std::move(command_text), std::move(base_snapshot),
+                         [this](pc::WorkspaceConfiguration config) {
+                           QMetaObject::invokeMethod(
+                               this,
+                               [this, config = std::move(config)]() mutable {
+                                 // only update config, don't rebuild devices
+                                 _workspace.apply_new_config(std::move(config),
+                                                             false);
+                                 syncSessionAdapters();
+                               },
+                               Qt::QueuedConnection);
+                         }));
+                   });
 }
 
 template <typename AdapterT>
