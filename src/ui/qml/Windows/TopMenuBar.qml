@@ -141,28 +141,29 @@ MenuBar {
         }
 
         Action {
-            id: recordingWindowMenuToggle
-            text: qsTr("&Recording")
+            id: publishersWindowMenuToggle
+            text: qsTr("&Publishers")
             checkable: true
             checked: false
 
             onTriggered: {
-                if (!recordingWindow)
+                if (!publishersWindow)
                     return;
 
-                if (recordingWindow.isOpen)
-                    recordingWindow.forceClose();
+                if (publishersWindow.isOpen)
+                    publishersWindow.forceClose();
                 else
-                    recordingWindow.open();
+                    publishersWindow.open();
             }
         }
 
         Connections {
-            target: recordingWindow
+            target: publishersWindow
             function onIsOpenChanged() {
-                recordingWindowMenuToggle.checked = recordingWindow.isOpen;
+                publishersWindowMenuToggle.checked = publishersWindow.isOpen;
             }
         }
+
 
         Action {
             id: streamingWindowMenuToggle
@@ -189,31 +190,6 @@ MenuBar {
         }
 
         Action {
-            id: publishersWindowMenuToggle
-            text: qsTr("&Publishers")
-            checkable: true
-            checked: false
-
-            onTriggered: {
-                if (!publishersWindow)
-                    return;
-
-                if (publishersWindow.isOpen)
-                    publishersWindow.forceClose();
-                else
-                    publishersWindow.open();
-            }
-        }
-
-        Connections {
-            target: publishersWindow
-            function onIsOpenChanged() {
-                publishersWindowMenuToggle.checked = publishersWindow.isOpen;
-            }
-        }
-
-
-        Action {
             id: alignmentWindowMenuToggle
             text: qsTr("&Alignment")
             checkable: true
@@ -234,6 +210,30 @@ MenuBar {
             target: alignmentWindow
             function onVisibleChanged() {
                 alignmentWindowMenuToggle.checked = alignmentWindow.visible;
+            }
+        }
+
+        Action {
+            id: recordingWindowMenuToggle
+            text: qsTr("&Recording")
+            checkable: true
+            checked: false
+
+            onTriggered: {
+                if (!recordingWindow)
+                    return;
+
+                if (recordingWindow.isOpen)
+                    recordingWindow.forceClose();
+                else
+                    recordingWindow.open();
+            }
+        }
+
+        Connections {
+            target: recordingWindow
+            function onIsOpenChanged() {
+                recordingWindowMenuToggle.checked = recordingWindow.isOpen;
             }
         }
 
