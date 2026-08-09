@@ -407,6 +407,8 @@ private:
   bool isDescendantOf(const std::string &node_id,
                       const std::string &maybe_ancestor_id) const;
 
+  void refreshOperatorConfigAdapters();
+  void notifyOperatorConfigAdapters(const QList<OperatorAdapter *> &ops);
   void initPointStreamerAdapter();
   void initPublishersConfigAdapter();
 };

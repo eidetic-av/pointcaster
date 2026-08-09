@@ -32,6 +32,8 @@ public:
       _configAdapter->setParent(this);
       connect(_configAdapter, &ConfigAdapter::fieldChanged, this,
               [this](const QString &path) {
+                if (_configAdapter && _configAdapter->isRefreshingAllFields())
+                  return;
                 if (_plugin) {
                   _plugin->on_config_field_changed(path.toStdString());
                   if (_host) {
