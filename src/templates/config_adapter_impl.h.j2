@@ -356,6 +356,13 @@ public:
 {% endif %}
 {% endfor %}
 
+    // ---- Re-announce every property ----
+    void notifyAllPropertiesChanged() override {
+{% for m in s.members if m.is_own %}
+        emit {{ m.name }}Changed();
+{% endfor %}
+    }
+
 signals:
 {% for m in s.members if m.is_own %}
     void {{ m.name }}Changed();

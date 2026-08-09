@@ -140,8 +140,11 @@ public:
       nested->notifyAllFieldsChanged();
     }
     for (const QString &path : fieldPaths()) { notifyFieldChanged(path); }
+    notifyAllPropertiesChanged();
     _refreshingAllFields = false;
   }
+
+  virtual void notifyAllPropertiesChanged() {}
 
   virtual bool setConfig(const pc::ConfigurationVariant &) { return false; }
 
