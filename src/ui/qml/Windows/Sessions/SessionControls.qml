@@ -50,6 +50,38 @@ Item {
     readonly property var frameSlots: frameSource ? frameSource.frameSlots : []
     readonly property var frameUrls: frameSource ? frameSource.frameUrls : ({})
 
+    readonly property var selectedOperator: root.workspace ? root.workspace.selectedOperatorAdapter : null
+    readonly property var selectedNodeAdapter: selectedOperator ? selectedOperator.configAdapter : (root.sessionView ? (root.sessionView.selectedDeviceAdapter || root.sessionView.selectedGroupAdapter) : null)
+
+    property string selectedNodeName: ""
+
+    function _fieldText(adapter, path) {
+        const v = adapter.value(path);
+        return (v === undefined || v === null) ? "" : String(v);
+    }
+
+    function updateSelectedNodeName() {
+        const adapter = root.selectedNodeAdapter;
+        if (!adapter) {
+            root.selectedNodeName = "";
+            return;
+        }
+        const label = _fieldText(adapter, "label");
+        root.selectedNodeName = label.length > 0 ? label : _fieldText(adapter, "id");
+    }
+
+    onSelectedNodeAdapterChanged: updateSelectedNodeName()
+    Component.onCompleted: updateSelectedNodeName()
+
+    Connections {
+        target: root.selectedNodeAdapter
+        ignoreUnknownSignals: true
+        function onFieldChanged(path) {
+            if (path === "label" || path === "id")
+                root.updateSelectedNodeName();
+        }
+    }
+
     Item {
         id: sessionControlsOverlay
 
@@ -281,97 +313,139 @@ Item {
             anchors.top: parent.top
             anchors.left: parent.left
 
-            contentItem: Item {
-                id: frameContainer
-                width: 200
-                height: 200
+            contentItem: Column {
+                spacing: Math.round(4 * Scaling.uiScale)
 
-                StackLayout {
-                    id: frameStack
-                    currentIndex: 0
-                    anchors.fill: parent
-                    anchors.bottomMargin: navRow.height
+                // names whatever the camera view below belongs to
+                Item {
+                    id: selectionHeader
+                    readonly property real padding: Math.round(3 * Scaling.uiScale)
+                    implicitWidth: headerRow.implicitWidth + padding * 2
+                    implicitHeight: headerRow.implicitHeight + padding * 2
 
-                    // model = frameSlots (channel names, stable across frames)
-                    Repeater {
-                        model: root.frameSlots
+                    Row {
+                        id: headerRow
+                        anchors.centerIn: parent
+                        spacing: Math.round(6 * Scaling.uiScale)
+
                         Image {
-                            // modelData is the channel name string
-                            source: root.frameUrls[modelData] || ""
-                            cache: false
+                            anchors.verticalCenter: parent.verticalCenter
+                            source: FontAwesome.icon("solid/video")
+                            width: Math.round(10 * Scaling.uiScale)
+                            height: width
                             fillMode: Image.PreserveAspectFit
+                            smooth: true
+                            mipmap: true
+                        }
+
+                        Text {
+                            id: selectionName
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root.selectedNodeName
+                            font: Scaling.uiFont
+                            color: ThemeColors.text
+                            elide: Text.ElideRight
+                            // long ids elide rather than stretching the panel
+                            width: Math.min(implicitWidth, Math.round(200 * Scaling.uiScale))
                         }
                     }
+                }
 
-                    property string selectedName: ""
+                Item {
+                    id: frameContainer
+                    width: 200
+                    height: 200
 
-                    function resolveIndex() {
-                        if (selectedName === "" || root.frameSlots.length === 0)
+                    readonly property real navSpacing: Math.round(5 * Scaling.uiScale)
+
+                    StackLayout {
+                        id: frameStack
+                        currentIndex: 0
+                        anchors.fill: parent
+                        // the nav row sits in the space this leaves at the bottom
+                        anchors.bottomMargin: navRow.height + frameContainer.navSpacing
+
+                        Repeater {
+                            model: root.frameSlots
+                            Image {
+                                // modelData is the channel name string
+                                source: root.frameUrls[modelData] || ""
+                                cache: false
+                                fillMode: Image.PreserveAspectFit
+                            }
+                        }
+
+                        property string selectedName: ""
+
+                        function resolveIndex() {
+                            if (selectedName === "" || root.frameSlots.length === 0)
+                                return 0;
+                            for (var i = 0; i < root.frameSlots.length; ++i) {
+                                if (root.frameSlots[i] === selectedName)
+                                    return i;
+                            }
                             return 0;
-                        for (var i = 0; i < root.frameSlots.length; ++i) {
-                            if (root.frameSlots[i] === selectedName)
-                                return i;
                         }
-                        return 0;
+
+                        onSelectedNameChanged: currentIndex = resolveIndex()
                     }
 
-                    onSelectedNameChanged: currentIndex = resolveIndex()
-                }
-
-                Connections {
-                    target: root
-                    function onFrameSlotsChanged() {
-                        Qt.callLater(function () {
-                            if (frameStack.count > 0)
-                                frameStack.currentIndex = frameStack.resolveIndex();
-                        });
-                    }
-                }
-
-                Row {
-                    id: navRow
-                    anchors.bottom: parent.bottom
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: 0
-
-                    IconButton {
-                        id: prevBtn
-                        enabled: frameStack.count > 1
-                        tooltip: "Previous frame"
-                        iconSource: FontAwesome.icon("solid/chevron-left")
-                        iconSize: Math.round(12 * Scaling.uiScale)
-                        topPadding: Math.round(4 * Scaling.uiScale)
-                        bottomPadding: Math.round(4 * Scaling.uiScale)
-                        leftPadding: Math.round(5 * Scaling.uiScale)
-                        rightPadding: Math.round(5 * Scaling.uiScale)
-                        onClicked: {
-                            var idx = (frameStack.currentIndex - 1 + frameStack.count) % frameStack.count;
-                            frameStack.selectedName = root.frameSlots[idx];
+                    Connections {
+                        target: root
+                        function onFrameSlotsChanged() {
+                            Qt.callLater(function () {
+                                if (frameStack.count > 0)
+                                    frameStack.currentIndex = frameStack.resolveIndex();
+                            });
                         }
                     }
 
-                    Label {
-                        text: frameStack.count > 0 ? "%1 (%2/%3)".arg(root.frameSlots[frameStack.currentIndex]).arg(frameStack.currentIndex + 1).arg(frameStack.count) : ""
-                        font: Scaling.uiFont
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        elide: Text.ElideRight
-                        width: frameContainer.width - prevBtn.width - nextBtn.width
-                    }
+                    Row {
+                        id: navRow
+                        anchors.bottom: parent.bottom
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 0
 
-                    IconButton {
-                        id: nextBtn
-                        enabled: frameStack.count > 1
-                        tooltip: "Next frame"
-                        iconSource: FontAwesome.icon("solid/chevron-right")
-                        iconSize: Math.round(12 * Scaling.uiScale)
-                        topPadding: Math.round(4 * Scaling.uiScale)
-                        bottomPadding: Math.round(4 * Scaling.uiScale)
-                        leftPadding: Math.round(5 * Scaling.uiScale)
-                        rightPadding: Math.round(5 * Scaling.uiScale)
-                        onClicked: {
-                            var idx = (frameStack.currentIndex + 1) % frameStack.count;
-                            frameStack.selectedName = root.frameSlots[idx];
+                        IconButton {
+                            id: prevBtn
+                            enabled: frameStack.count > 1
+                            tooltip: "Previous frame"
+                            iconSource: FontAwesome.icon("solid/chevron-left")
+                            iconSize: Math.round(10 * Scaling.uiScale)
+                            topPadding: Math.round(3 * Scaling.uiScale)
+                            bottomPadding: Math.round(3 * Scaling.uiScale)
+                            leftPadding: Math.round(3 * Scaling.uiScale)
+                            rightPadding: Math.round(3 * Scaling.uiScale)
+                            onClicked: {
+                                var idx = (frameStack.currentIndex - 1 + frameStack.count) % frameStack.count;
+                                frameStack.selectedName = root.frameSlots[idx];
+                            }
+                        }
+
+                        Label {
+                            text: frameStack.count > 0 ? "%1 (%2/%3)".arg(root.frameSlots[frameStack.currentIndex]).arg(frameStack.currentIndex + 1).arg(frameStack.count) : ""
+                            font: Scaling.uiFont
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                            width: frameContainer.width - prevBtn.width - nextBtn.width
+                            topPadding: Math.round(1 * Scaling.uiScale)
+                        }
+
+                        IconButton {
+                            id: nextBtn
+                            enabled: frameStack.count > 1
+                            tooltip: "Next frame"
+                            iconSource: FontAwesome.icon("solid/chevron-right")
+                            iconSize: Math.round(10 * Scaling.uiScale)
+                            topPadding: Math.round(3 * Scaling.uiScale)
+                            bottomPadding: Math.round(3 * Scaling.uiScale)
+                            leftPadding: Math.round(3 * Scaling.uiScale)
+                            rightPadding: Math.round(3 * Scaling.uiScale)
+                            onClicked: {
+                                var idx = (frameStack.currentIndex + 1) % frameStack.count;
+                                frameStack.selectedName = root.frameSlots[idx];
+                            }
                         }
                     }
                 }
@@ -413,17 +487,15 @@ Item {
                     id: resizeDrag
                     target: null
                     onActiveChanged: {
-                        if (active) {
-                            resizeHandle.startWidth = cameraFrameCollapser.contentItem.width;
-                            resizeHandle.startHeight = cameraFrameCollapser.contentItem.height;
-                            cameraFrameCollapser.applyTransitions = false;
-                        } else {
-                            cameraFrameCollapser.applyTransitions = true;
-                        }
+                        if (!active)
+                            return;
+
+                        resizeHandle.startWidth = frameContainer.width;
+                        resizeHandle.startHeight = frameContainer.height;
                     }
                     onActiveTranslationChanged: {
-                        cameraFrameCollapser.contentItem.width = Math.max(40, resizeHandle.startWidth + activeTranslation.x);
-                        cameraFrameCollapser.contentItem.height = Math.max(40, resizeHandle.startHeight + activeTranslation.y);
+                        frameContainer.width = Math.max(40, resizeHandle.startWidth + activeTranslation.x);
+                        frameContainer.height = Math.max(40, resizeHandle.startHeight + activeTranslation.y);
                     }
                 }
             }
