@@ -6,7 +6,6 @@ SpinBox {
 
     property int boundValue: 0
     property bool boundEnabled: true
-    property bool commitOnEdit: false
     signal commitValue(int value)
 
     property var minValue: undefined
@@ -89,8 +88,7 @@ SpinBox {
 
     onValueModified: {
         boundValue = value;
-        if (commitOnEdit)
-            commitValue(value);
+        commitValue(value);
     }
 
     // pull typed editor text into value

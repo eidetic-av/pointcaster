@@ -251,6 +251,7 @@ Item {
             var current = Number(root.numericValue());
             root.setNumericValue(current + deltaValue);
             root.edited();
+            root.committed();
 
             wheel.accepted = true;
         }

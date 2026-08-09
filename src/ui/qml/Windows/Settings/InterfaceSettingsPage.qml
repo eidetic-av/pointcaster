@@ -94,7 +94,6 @@ SettingsPage {
                 maxValue: 30
                 defaultValue: 10
                 boundValue: AppSettings.gridSizeMetres
-                commitOnEdit: true
                 onCommitValue: function (v) {
                     AppSettings.gridSizeMetres = v;
                 }

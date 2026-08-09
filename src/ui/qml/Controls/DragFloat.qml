@@ -110,6 +110,7 @@ DoubleSpinBox {
 
     onValueModified: {
         boundValue = value;
+        commitValue(value);
     }
 
     // pull typed editor text into value

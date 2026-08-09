@@ -22,7 +22,6 @@ SettingsPage {
                 maxValue: 256
                 defaultValue: AppSettings.defaultWorkerThreads
                 boundValue: AppSettings.workerThreads
-                commitOnEdit: true
                 onCommitValue: function (v) {
                     AppSettings.workerThreads = v;
                 }
@@ -39,7 +38,6 @@ SettingsPage {
                 maxValue: 64
                 defaultValue: AppSettings.defaultFileWriterThreads
                 boundValue: AppSettings.fileWriterThreads
-                commitOnEdit: true
                 onCommitValue: function (v) {
                     AppSettings.fileWriterThreads = v;
                 }
