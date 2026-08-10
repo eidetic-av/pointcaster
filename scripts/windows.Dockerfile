@@ -72,10 +72,35 @@ RUN mkdir "$Env:TbbInstallDir"; \
 ARG Jinja2Version=3.1.6
 RUN pip install "jinja2==$Env:Jinja2Version"
 
-# NVIDIA CUDA development packages
-ARG CudaVersion=12.9.1.576
-RUN choco install -y cuda --version $Env:CudaVersion
+# NVIDIA CUDA toolkit
+#
+ARG CudaVersion=12.9.1
+ARG CudaBuild=576.57
+ARG CudaSha256="F0CA7CC7B4CEA2FAC2C4951819D2A9CAEA31E04000E9110E2048719525F8EA0E"
+RUN $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; \
+    $Components = 'cuda_nvcc','cuda_cudart','cuda_cccl','cuda_cuobjdump','cuda_cuxxfilt', \
+      'cuda_nvdisasm','cuda_nvprune','cuda_nvrtc','cuda_nvtx','cuda_nvml_dev', \
+      'cuda_profiler_api','cuda_cupti','cuda_opencl','libcublas','libcufft', \
+      'libcurand','libcusolver','libcusparse','libnpp','libnvjpeg','libnvfatbin', \
+      'libnvjitlink','visual_studio_integration'; \
+    Invoke-WebRequest -UseBasicParsing -OutFile C:\cuda.exe \
+      -Uri \"https://developer.download.nvidia.com/compute/cuda/$Env:CudaVersion/local_installers/cuda_$($Env:CudaVersion)_$($Env:CudaBuild)_windows.exe\"; \
+    $Hash = (Get-FileHash C:\cuda.exe -Algorithm SHA256).Hash; \
+    if ($Hash -ne $Env:CudaSha256) { throw \"cuda installer checksum mismatch: expected $Env:CudaSha256 but got $Hash\" }; \
+    & 'C:\ProgramData\chocolatey\tools\7z.exe' x C:\cuda.exe '-oC:\cuda-extract' -y -bso0 -bsp0 @($Components | ForEach-Object { \"$_\*\" }); \
+    if ($LASTEXITCODE -ne 0) { throw \"7z extract failed: $LASTEXITCODE\" }; \
+    $Root = 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9'; \
+    New-Item -ItemType Directory -Force -Path $Root | Out-Null; \
+    foreach ($c in $Components) { \
+      Get-ChildItem \"C:\cuda-extract\$c\" -Directory | ForEach-Object { \
+        robocopy $_.FullName $Root /E /NFL /NDL /NJH /NJS /NP | Out-Null } }; \
+    Remove-Item -Recurse -Force C:\cuda.exe, C:\cuda-extract; \
+    [Environment]::SetEnvironmentVariable('Path', \
+      [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + $Root + '\bin', 'Machine'); \
+    & \"$Root\bin\nvcc.exe\" --version
 
+ENV CUDA_PATH="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9"
+ENV CUDA_PATH_V12_9="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9"
 ENV CUDAToolkit_ROOT="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9"
 ENV CUDACXX="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9\\bin\\nvcc.exe"
 ENV Thrust_DIR="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9\\lib\\cmake\\thrust"
@@ -102,7 +127,11 @@ RUN git clone https://github.com/microsoft/vcpkg.git $Env:VCPKG_ROOT; \
     git reset --hard $Baseline; \
     & .\\bootstrap-vcpkg.bat -disableMetrics
 
-ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR;CUDAToolkit_ROOT;CUDACXX;Thrust_DIR"
+ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR;CUDA_PATH;CUDA_PATH_V12_9;CUDAToolkit_ROOT;CUDACXX;Thrust_DIR"
+
+# cap build parallelism... keeps memory low on some big nvcc TUs in particular
+ARG VcpkgMaxConcurrency=16
+ENV VCPKG_MAX_CONCURRENCY=$VcpkgMaxConcurrency
 
 # activate the VS dev shell and install third-party source-based
 # project dependencies as precompiled libs in this image using vcpkg
