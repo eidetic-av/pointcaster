@@ -1,14 +1,30 @@
 include(GNUInstallDirs)
 
-# windeployqt-only flags; linux uses qt's generic deploy tool which ignores
-# DEPLOY_TOOL_OPTIONS (qmltooling is removed post-install there instead)
+set(excluded_qt_plugin_types
+    qmltooling
+    imageformats
+    tls
+    networkinformation
+)
+set(excluded_qt_plugins "")
+
 if(WIN32)
-    set(_pointcaster_deploy_tool_options
+    set(qt_deploy_tool_options
         DEPLOY_TOOL_OPTIONS
             --no-opengl-sw
             --no-system-dxc-compiler
-            --skip-plugin-types qmltooling
     )
+else()
+    list(APPEND excluded_qt_plugin_types
+        generic
+        egldeviceintegrations
+        # we're relying on xcb+xwayland at the moment while 
+        # we wait for native wayland feature parity with docking/app windows
+        wayland-shell-integration
+        wayland-graphics-integration-client
+        wayland-decoration-client
+    )
+    list(APPEND excluded_qt_plugins qgtk3)
 endif()
 
 qt_generate_deploy_qml_app_script(
@@ -17,7 +33,9 @@ qt_generate_deploy_qml_app_script(
     NO_UNSUPPORTED_PLATFORM_ERROR
     NO_TRANSLATIONS
     NO_COMPILER_RUNTIME
-    ${_pointcaster_deploy_tool_options}
+    EXCLUDE_PLUGIN_TYPES ${excluded_qt_plugin_types}
+    EXCLUDE_PLUGINS ${excluded_qt_plugins}
+    ${qt_deploy_tool_options}
 )
 
 # inject NO_OVERWRITE into the deploy script,
@@ -138,17 +156,9 @@ if(NOT WIN32) # Linux
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps"
     )
 
-    # remove dev-only plugins and unused qml styles
+    # remove unused qml styles
     install(CODE [[
         set(_prefix "${CMAKE_INSTALL_PREFIX}")
-
-        # qml debugger/profiler plugins are dev-only
-        file(REMOVE_RECURSE "${_prefix}/plugins/qmltooling")
-
-        # TODO seems required?
-        # maybe pointcaster freaks out because we should be loading
-        # the host's own gtk ? idk
-        file(REMOVE "${_prefix}/plugins/platformthemes/libqgtk3.so")
 
         # remove unused qt quick styles
         foreach(_style FluentWinUI3 Imagine Material Universal)
@@ -167,6 +177,10 @@ if(NOT WIN32) # Linux
 
     #set(CPACK_SET_DESTDIR ON)
     set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
+
+    # strips every ELF in the staged tree at package time, so `cmake --install`
+    # keeps its symbols for local debugging and only what we ship gets trimmed
+    set(CPACK_STRIP_FILES TRUE)
 
     include(CPack)
 
