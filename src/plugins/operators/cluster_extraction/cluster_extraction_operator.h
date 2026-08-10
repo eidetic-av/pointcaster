@@ -34,13 +34,9 @@ public:
 
   PipelineFramePtr process(PipelineFramePtr input) override;
 
-  void on_config_field_changed(std::string_view path = "") override;
-
   const ClusterExtractionConfiguration &config() const {
     return std::get<ClusterExtractionConfiguration>(config_variant());
   }
-
-private:
 };
 
 } // namespace pc::operators
