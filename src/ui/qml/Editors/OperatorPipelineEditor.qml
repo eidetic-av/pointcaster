@@ -91,7 +91,7 @@ Column {
         visible: root.sectionExpanded
         width: root.width
         height: visible ? pipelineColumn.height : 0
-        color: ThemeColors.dark
+        color: ThemeColors.window
         border.color: ThemeColors.almostdark
         border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
 
@@ -173,6 +173,9 @@ Column {
                         property bool active: configAdapter ? configAdapter.active : true
                         property string operatorId: configAdapter ? String(configAdapter.value("id")) : "unknown"
 
+                        readonly property string operatorLabel: configAdapter ? String(configAdapter.label) : ""
+                        readonly property string displayName: operatorLabel.length > 0 ? operatorLabel : operatorId
+
                         // the operator's own config path, like
                         // "device/group_a/cam_1/operators/<id>"
                         readonly property string foldKey: configAdapter && configAdapter.configPath ? String(configAdapter.configPath) : ""
@@ -186,13 +189,11 @@ Column {
                             return storedValue === undefined ? false : storedValue;
                         }
 
-                        width: parent.width - Math.round(16 * Scaling.uiScale)
+                        width: parent.width - Math.round(12 * Scaling.uiScale)
                         anchors.horizontalCenter: parent.horizontalCenter
                         height: operatorBody.height
 
                         color: active ? ThemeColors.dark : ThemeColors.almostdark
-                        border.color: selected ? ThemeColors.highlight : operatorMouseArea.containsMouse ? ThemeColors.mid : ThemeColors.almostdark
-                        border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
                         opacity: active ? 1.0 : 0.55
 
                         radius: 6 * Scaling.uiScale
@@ -214,65 +215,111 @@ Column {
                                 width: parent.width
                                 height: Math.round(28 * Scaling.uiScale)
 
-                                MouseArea {
+                                Rectangle {
                                     anchors.fill: parent
-                                    propagateComposedEvents: true
-                                    onClicked: mouse => {
-                                        if (operatorContainer.foldKey)
-                                            root.workspace.setFoldedProperty(operatorContainer.foldKey, !operatorContainer.expanded);
-                                        mouse.accepted = false;
-                                    }
+                                    color: ThemeColors.middark
+                                    topLeftRadius: operatorContainer.radius
+                                    topRightRadius: operatorContainer.radius
+                                    bottomLeftRadius: operatorContainer.expanded ? 0 : operatorContainer.radius
+                                    bottomRightRadius: operatorContainer.expanded ? 0 : operatorContainer.radius
                                 }
 
-                                Grid {
-                                    id: gripDots
-                                    columns: 2
-                                    columnSpacing: Math.round(3 * Scaling.uiScale)
-                                    rowSpacing: Math.round(2 * Scaling.uiScale)
+                                Item {
+                                    id: foldButton
+
                                     anchors {
                                         left: parent.left
-                                        leftMargin: Math.round(8 * Scaling.uiScale)
-                                        verticalCenter: parent.verticalCenter
+                                        top: parent.top
+                                        bottom: parent.bottom
                                     }
-                                    opacity: 0.3
+                                    width: parent.height
 
-                                    Repeater {
-                                        model: 6
-                                        Rectangle {
-                                            width: Math.round(2 * Scaling.uiScale)
-                                            height: width
-                                            radius: width / 2
-                                            color: ThemeColors.text
+                                    Image {
+                                        anchors.centerIn: parent
+                                        width: Math.round(12 * Scaling.uiScale)
+                                        fillMode: Image.PreserveAspectFit
+                                        source: operatorContainer.expanded ? FontAwesome.icon("solid/caret-down") : FontAwesome.icon("solid/caret-right")
+                                        opacity: foldMouseArea.containsMouse ? 1.0 : 0.75
+                                    }
+
+                                    MouseArea {
+                                        id: foldMouseArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: {
+                                            if (operatorContainer.foldKey)
+                                                root.workspace.setFoldedProperty(operatorContainer.foldKey, !operatorContainer.expanded);
                                         }
                                     }
                                 }
 
-                                Image {
-                                    id: headerArrowIcon
-                                    anchors {
-                                        left: gripDots.right
-                                        leftMargin: Math.round(6 * Scaling.uiScale)
-                                        verticalCenter: parent.verticalCenter
-                                    }
-                                    width: Math.round(12 * Scaling.uiScale)
-                                    fillMode: Image.PreserveAspectFit
-                                    source: operatorContainer.expanded ? FontAwesome.icon("solid/caret-down") : FontAwesome.icon("solid/caret-right")
-                                    opacity: 0.75
-                                }
+                                // double-click to set the operator label
+                                Item {
+                                    id: operatorHeaderLabel
 
-                                Text {
-                                    id: operatorHeaderText
+                                    property bool editing: false
+                                    property string startText: ""
+
+                                    function beginEdit() {
+                                        startText = nameField.text;
+                                        editing = true;
+                                        nameField.forceActiveFocus();
+                                        nameField.selectAll();
+                                    }
+
+                                    function commit() {
+                                        if (!editing)
+                                            return;
+                                        const newText = nameField.text;
+                                        editing = false;
+                                        if (newText !== startText && operatorContainer.configAdapter)
+                                            operatorContainer.configAdapter.set("label", newText);
+                                    }
+
                                     anchors {
-                                        left: headerArrowIcon.right
-                                        leftMargin: Math.round(6 * Scaling.uiScale)
+                                        left: foldButton.right
                                         right: rightControls.left
                                         rightMargin: Math.round(6 * Scaling.uiScale)
-                                        verticalCenter: parent.verticalCenter
+                                        top: parent.top
+                                        bottom: parent.bottom
                                     }
-                                    text: operatorContainer.operatorId
-                                    font: Scaling.uiFont
-                                    color: operatorContainer.active ? ThemeColors.text : ThemeColors.placeholderText
-                                    elide: Text.ElideRight
+
+                                    TextInput {
+                                        id: nameField
+                                        anchors.fill: parent
+                                        verticalAlignment: TextEdit.AlignVCenter
+                                        font: Scaling.uiFont
+                                        color: operatorContainer.active ? ThemeColors.text : ThemeColors.placeholderText
+                                        selectionColor: ThemeColors.highlight
+                                        selectedTextColor: ThemeColors.highlightedText
+                                        clip: true
+
+                                        enabled: operatorHeaderLabel.editing
+                                        selectByMouse: operatorHeaderLabel.editing
+
+                                        onEditingFinished: operatorHeaderLabel.commit()
+                                        onActiveFocusChanged: if (!activeFocus && operatorHeaderLabel.editing)
+                                            operatorHeaderLabel.commit()
+                                    }
+
+                                    Binding {
+                                        target: nameField
+                                        property: "text"
+                                        value: operatorContainer.displayName
+                                        when: !operatorHeaderLabel.editing
+                                        restoreMode: Binding.RestoreNone
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: !operatorHeaderLabel.editing
+                                        propagateComposedEvents: true
+
+                                        // a single click still reaches the card
+                                        // underneath and selects the operator
+                                        onClicked: mouse => mouse.accepted = false
+                                        onDoubleClicked: operatorHeaderLabel.beginEdit()
+                                    }
                                 }
 
                                 Row {
@@ -332,20 +379,47 @@ Column {
                             Column {
                                 visible: operatorContainer.expanded && operatorContainer.configAdapter
                                 width: parent.width
+                                bottomPadding: Math.round(4 * Scaling.uiScale)
 
-                                Rectangle {
+                                Item {
+                                    // id: operator variant header
                                     width: parent.width
-                                    height: Math.max(1, Math.round(1 * Scaling.uiScale))
-                                    color: ThemeColors.almostdark
+                                    height: Math.round(22 * Scaling.uiScale)
+
+                                    Text {
+                                        anchors {
+                                            left: parent.left
+                                            leftMargin: operatorConfigEditor.fieldIndent
+                                            right: parent.right
+                                            rightMargin: operatorConfigEditor.fieldIndent
+                                            top: parent.top
+                                            topMargin: operatorConfigEditor.fieldIndent * 0.8
+                                        }
+                                        text: operatorContainer.configAdapter ? operatorContainer.configAdapter.displayName() : ""
+                                        font: Scaling.headerSmallFont
+                                        color: ThemeColors.readOnlyText
+                                        elide: Text.ElideRight
+                                    }
                                 }
 
                                 ConfigurationEditor {
+                                    id: operatorConfigEditor
                                     configAdapter: operatorContainer.configAdapter
                                     workspace: root.workspace
                                     flattenFields: true
-                                    width: parent.width
+                                    showTypeHeader: false
+                                    width: parent.width - 1
+                                    anchors.left: parent.left
                                 }
                             }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "transparent"
+                            radius: operatorContainer.radius
+                            border.color: operatorContainer.selected ? ThemeColors.highlight : operatorMouseArea.containsMouse ? ThemeColors.midlight : ThemeColors.mid
+                            border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
                         }
                     }
                 }

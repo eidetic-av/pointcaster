@@ -289,6 +289,13 @@ std::string session_path_prefix(const pc::WorkspaceConfiguration &config,
   return "session/" + pc::session_address(config.sessions[size_t(index)]);
 }
 
+std::string operator_path_prefix(
+    const std::string &owner_prefix,
+    const pc::operators::OperatorConfigurationVariant &operator_variant) {
+  return owner_prefix + "/operators/" +
+         pc::operators::operator_address(operator_variant);
+}
+
 void set_nested_config_path(ConfigAdapter *owner,
                             const std::string &owner_prefix,
                             const std::string &member) {
@@ -375,10 +382,31 @@ private:
     // with it, in both directions since undo restores the old label
     const auto previous_prefix =
         session_path_prefix(new_config, _session_id.toStdString());
+
+    // the same goes for an operator's own label
+    std::unordered_map<std::string, std::string> previous_operator_nodes;
+    for (const auto &operator_variant :
+         new_config.sessions[size_t(idx)].operators) {
+      previous_operator_nodes.emplace(
+          std::get<0>(operators::operator_info_from_variant(operator_variant)),
+          operators::operator_address(operator_variant));
+    }
+
     new_config.sessions[size_t(idx)] = config_value;
-    reroot_paths_between(
-        new_config, previous_prefix,
-        session_path_prefix(new_config, _session_id.toStdString()));
+
+    const auto new_prefix =
+        session_path_prefix(new_config, _session_id.toStdString());
+    reroot_paths_between(new_config, previous_prefix, new_prefix);
+
+    for (const auto &operator_variant :
+         new_config.sessions[size_t(idx)].operators) {
+      const auto previous_node = previous_operator_nodes.find(
+          std::get<0>(operators::operator_info_from_variant(operator_variant)));
+      if (previous_node == previous_operator_nodes.end()) continue;
+      reroot_paths_between(new_config,
+                           new_prefix + "/operators/" + previous_node->second,
+                           operator_path_prefix(new_prefix, operator_variant));
+    }
 
     if (_apply_fn) _apply_fn(std::move(new_config));
   }
@@ -540,13 +568,28 @@ private:
     const int op_idx = find_operator_index_by_id(
         new_config.devices[size_t(device_index)], _operator_id.toStdString());
     if (op_idx < 0) return;
+
+    // a label edit moves the operator's address under its device, so its
+    // publish/push paths travel with it
+    std::string previous_node;
     std::visit(
         [&](auto &device_config) {
           if constexpr (requires { device_config.operators; }) {
-            device_config.operators[size_t(op_idx)] = config_value;
+            auto &operator_variant = device_config.operators[size_t(op_idx)];
+            previous_node = operators::operator_address(operator_variant);
+            operator_variant = config_value;
           }
         },
         new_config.devices[size_t(device_index)]);
+
+    if (!previous_node.empty()) {
+      const auto owner_prefix =
+          node_path_prefix(new_config, _device_id.toStdString());
+      reroot_paths_between(new_config,
+                           owner_prefix + "/operators/" + previous_node,
+                           operator_path_prefix(owner_prefix, config_value));
+    }
+
     if (_apply_fn) _apply_fn(std::move(new_config));
   }
 };
@@ -1500,22 +1543,21 @@ void WorkspaceModel::removeOperatorFromDevice(int deviceIndex,
   if (idx < 0 || idx >= int(new_config.devices.size())) return;
   const auto owner_prefix =
       node_path_prefix(new_config, device_id.toStdString());
-  std::string operator_id;
+  std::string operator_prefix;
   std::visit(
-      [operatorIndex, &operator_id](auto &device_config) {
+      [operatorIndex, &operator_prefix, &owner_prefix](auto &device_config) {
         if constexpr (requires { device_config.operators; }) {
           auto &ops = device_config.operators;
           if (operatorIndex >= 0 && operatorIndex < int(ops.size())) {
-            operator_id = std::visit(
-                [](const auto &operator_config) { return operator_config.id; },
-                ops[size_t(operatorIndex)]);
+            operator_prefix =
+                operator_path_prefix(owner_prefix, ops[size_t(operatorIndex)]);
             ops.erase(ops.begin() + operatorIndex);
           }
         }
       },
       new_config.devices[size_t(idx)]);
-  if (!operator_id.empty())
-    erase_node_paths(new_config, owner_prefix + "/operators/" + operator_id);
+  if (!operator_prefix.empty())
+    erase_node_paths(new_config, operator_prefix);
   // sync workspace config
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::None);
   if (deviceIndex < int(_workspace.devices.size()) &&
@@ -1592,13 +1634,12 @@ void WorkspaceModel::removeOperatorFromSession(const QString &sessionId,
   if (idx < 0 || idx >= int(new_config.sessions.size())) return;
   auto &ops = new_config.sessions[size_t(idx)].operators;
   if (operatorIndex < 0 || operatorIndex >= int(ops.size())) return;
-  const auto operator_id =
-      std::visit([](const auto &operator_config) { return operator_config.id; },
-                 ops[size_t(operatorIndex)]);
   const auto owner_prefix =
       session_path_prefix(new_config, sessionId.toStdString());
+  const auto operator_prefix =
+      operator_path_prefix(owner_prefix, ops[size_t(operatorIndex)]);
   ops.erase(ops.begin() + operatorIndex);
-  erase_node_paths(new_config, owner_prefix + "/operators/" + operator_id);
+  erase_node_paths(new_config, operator_prefix);
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Sessions);
 }
 
@@ -1633,7 +1674,7 @@ void WorkspaceModel::attachOperatorConfigAdapters(
     auto *adapter = make_operator_config_adapter(*storage, opAdapter);
     if (adapter) {
       adapter->setConfigPath(
-          QString::fromStdString(owner_prefix + "/operators/" + operator_id));
+          QString::fromStdString(operator_path_prefix(owner_prefix, *storage)));
       opAdapter->setConfigAdapter(adapter);
       initOperatorAdapter(opAdapter, deviceAdapter);
     }
@@ -1746,7 +1787,7 @@ void WorkspaceModel::attachSessionOperatorConfigAdapters(
     auto *adapter = make_operator_config_adapter(*storage, opAdapter);
     if (adapter) {
       const std::string operator_prefix =
-          owner_prefix + "/operators/" + operator_id;
+          operator_path_prefix(owner_prefix, *storage);
       adapter->setConfigPath(QString::fromStdString(operator_prefix));
       opAdapter->setConfigAdapter(adapter);
       subscribe_adapter_to_registry(_workspace.config_registry, adapter,

@@ -23,6 +23,11 @@ QtObject {
         weight: Font.Bold,
         letterSpacing: 1.5
     })
+    readonly property font headerSmallFont: Qt.font({
+        pointSize: basePointSize * 0.90 * uiScale,
+        weight: Font.Normal,
+        letterSpacing: 0.9
+    })
     readonly property font fieldLabelFont: Qt.font({
         pointSize: 10 * uiScale
     })

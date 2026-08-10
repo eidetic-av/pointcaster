@@ -12,8 +12,9 @@ namespace pc::operators {
 class ClusterExtractionOperator;
 
 struct ClusterExtractionConfiguration {
-  std::string id;     // @hidden
-  bool active = true; // @hidden
+  std::string id;                      // @hidden
+  rfl::DefaultVal<std::string> label;  // @hidden
+  rfl::DefaultVal<bool> active = true; // @hidden
 
   // output fields
   Output<int> point_count = 0;

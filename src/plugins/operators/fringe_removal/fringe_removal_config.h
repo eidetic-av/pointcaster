@@ -11,8 +11,9 @@ namespace pc::operators {
 class FringeRemovalOperator;
 
 struct FringeRemovalConfiguration {
-  std::string id;     // @hidden
-  bool active = true; // @hidden
+  std::string id;                      // @hidden
+  rfl::DefaultVal<std::string> label;  // @hidden
+  rfl::DefaultVal<bool> active = true; // @hidden
 
   LookAtCameraConfiguration camera;
 
@@ -30,8 +31,8 @@ struct FringeRemovalConfiguration {
   rfl::DefaultVal<int> canny_erosion_px = 1;   // @minmax(0, 20)
 
   // mask smoothing
-  rfl::DefaultVal<int> morph_close_radius = 2;   // @minmax(0, 10)
-  rfl::DefaultVal<int> blur_radius = 3;          // @minmax(0, 10)
+  rfl::DefaultVal<int> morph_close_radius = 2;    // @minmax(0, 10)
+  rfl::DefaultVal<int> blur_radius = 3;           // @minmax(0, 10)
   rfl::DefaultVal<float> blur_threshold = 128.0f; // @minmax(1, 254)
 
   rfl::DefaultVal<float> removal_depth_range = 0.0f; // @minmax(0, 10)

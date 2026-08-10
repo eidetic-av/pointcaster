@@ -112,11 +112,11 @@ void register_operators(
     ConfigRegistry &registry, const std::string &prefix,
     std::vector<operators::OperatorConfigurationVariant> &operators) {
   for (auto &operator_variant : operators) {
+    const auto operator_prefix =
+        prefix + "/operators/" + operators::operator_address(operator_variant);
     std::visit(
         [&](auto &operator_config) {
-          pc::register_config(registry,
-                              prefix + "/operators/" + operator_config.id,
-                              operator_config);
+          pc::register_config(registry, operator_prefix, operator_config);
         },
         operator_variant);
   }

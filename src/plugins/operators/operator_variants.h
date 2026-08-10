@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -41,8 +42,19 @@ operator_info_from_variant(const OperatorConfigurationVariant &v) {
       v);
 }
 
+// the node an operator's config paths sit under...
+// its label if it has one and its id otherwise
+inline std::string operator_address(const OperatorConfigurationVariant &v) {
+  return std::visit(
+      [](const auto &config) {
+        const auto &label = config.label.value();
+        return !label.empty() ? label : config.id;
+      },
+      v);
+}
+
 constexpr bool check_active(const OperatorConfigurationVariant &v) {
-  return std::visit([&](auto &config) { return config.active; }, v);
+  return std::visit([&](auto &config) { return config.active.value(); }, v);
 }
 
 } // namespace pc::operators
