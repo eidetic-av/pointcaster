@@ -39,15 +39,12 @@ KDDW.DockWidget {
             }
             spacing: Math.round(10 * Scaling.uiScale)
 
-            ScrollView {
+            PaddedScrollView {
                 id: scrollView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
-                ScrollBar.vertical.policy: ScrollBar.AlwaysOn
                 clip: true
-
-                Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                 Column {
                     width: scrollView.availableWidth

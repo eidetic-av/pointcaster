@@ -180,7 +180,7 @@ KDDW.DockWidget {
                 Layout.fillWidth: true
             }
 
-            ScrollView {
+            PaddedScrollView {
                 id: deviceConfigScrollView
                 visible: root.selectedNodeKind === "device"
 
@@ -188,11 +188,7 @@ KDDW.DockWidget {
                 Layout.fillHeight: true
                 Layout.minimumHeight: Math.round(140 * Scaling.uiScale)
 
-                // TODO, figure out how to show it when needed but always outside the view
-                ScrollBar.vertical.policy: ScrollBar.AlwaysOn
                 clip: true
-
-                Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                 Column {
                     width: deviceConfigScrollView.availableWidth
@@ -296,15 +292,13 @@ KDDW.DockWidget {
                 }
             }
 
-            ScrollView {
+            PaddedScrollView {
                 id: groupConfigScrollView
                 visible: root.selectedNodeKind === "group"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: Math.round(140 * Scaling.uiScale)
                 clip: true
-
-                Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                 Column {
                     width: groupConfigScrollView.availableWidth

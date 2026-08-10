@@ -16,17 +16,13 @@ Item {
         color: ThemeColors.window
     }
 
-    ScrollView {
+    PaddedScrollView {
         id: scroll
 
         anchors.fill: parent
         clip: true
         padding: Math.round(16 * Scaling.uiScale)
         contentWidth: availableWidth
-
-        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-
-        Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
         ColumnLayout {
             id: body

@@ -27,6 +27,7 @@ qt_add_qml_module(PointcasterQml
         Controls/IconButton.qml
         Controls/ListToggleButton.qml
         Controls/InfoToolTip.qml
+        Controls/PaddedScrollView.qml
         Controls/OriginGizmo.qml
         Controls/OrbitViewController.qml
         Controls/Gizmos/SelectionGizmo.qml

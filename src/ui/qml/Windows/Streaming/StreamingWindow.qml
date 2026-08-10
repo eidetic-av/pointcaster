@@ -125,14 +125,12 @@ KDDW.DockWidget {
             }
 
             // settings and connected clients for the selected channel
-            ScrollView {
+            PaddedScrollView {
                 id: streamChannelDetailsScrollView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: Math.round(50 * Scaling.uiScale)
                 clip: true
-
-                Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
                 Column {
                     width: streamChannelDetailsScrollView.availableWidth

@@ -20,9 +20,9 @@ KDDW.DockWidget {
             color: ThemeColors.base
         }
 
-        ScrollView {
+        PaddedScrollView {
+            id: publishersScrollView
             clip: true
-            Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
             anchors {
                 fill: parent
                 topMargin: Math.round(10 * Scaling.uiScale)
@@ -33,7 +33,7 @@ KDDW.DockWidget {
 
             ConfigurationEditor {
                 id: publishersConfigEditor
-                width: parent.width
+                width: publishersScrollView.availableWidth
                 visible: !!(root.workspace && root.workspace.publishersConfigAdapter)
                 configAdapter: root.workspace ? root.workspace.publishersConfigAdapter : null
                 workspace: root.workspace

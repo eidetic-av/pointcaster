@@ -611,17 +611,18 @@ Item {
                         height: parent.height
                     }
 
-                    ScrollView {
+                    PaddedScrollView {
                         id: consolePanelScrollView
                         width: parent.width
                         height: parent.height
                         clip: true
 
                         wheelEnabled: !root.consolePanelCollapsed
-                        ScrollBar.vertical.policy: root.consolePanelCollapsed ? ScrollBar.AlwaysOff : ScrollBar.AlwaysOn
+                        // collapsed, the bar goes away and takes its gutter
+                        // with it
+                        scrollBarEnabled: !root.consolePanelCollapsed
 
                         ListView {
-                            boundsBehavior: Flickable.StopAtBounds
                             spacing: 0
 
                             model: root.workspace ? root.workspace.consoleHistoryEntries : []
