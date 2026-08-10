@@ -100,6 +100,16 @@ public:
     return false;
   }
 
+  Q_INVOKABLE virtual bool isStream(const QString &path) const {
+    Q_UNUSED(path);
+    return false;
+  }
+
+  Q_INVOKABLE virtual QString streamType(const QString &path) const {
+    Q_UNUSED(path);
+    return {};
+  }
+
   Q_INVOKABLE virtual bool isFoldedByDefault(const QString &path) const {
     Q_UNUSED(path);
     return false;

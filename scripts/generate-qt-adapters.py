@@ -59,6 +59,8 @@ class Member:
     # a nested or variant member whose editor group starts folded
     folded: bool = False
     comparable: bool = False
+    # stream output member of e.g. operator
+    stream_label: str = ""
     # nested config members embed an adapter of this type
     adapter_type: str = ""
     # variant members
@@ -119,7 +121,7 @@ class GeneratorArgs:
 
 KINDS = (
     "nested", "variant", "enum", "string", "bool", "int", "float", "float3",
-    "quaternion", "opaque",
+    "quaternion", "stream", "opaque",
 )
 
 
@@ -235,6 +237,18 @@ def _bare_type_name(type_name: str) -> str:
 # Type classification
 # ----------------------------
 
+# the point cloud streams an operator can write into its own config as output
+STREAM_TYPE_LABELS = {
+    "PointCloudPtr": "Point Cloud",
+    "VoxelisedCloudPtr": "Voxels",
+    "AabbListPtr": "AABB List",
+}
+
+
+def stream_type_label(type_name: str) -> str:
+    return STREAM_TYPE_LABELS.get(_bare_type_name(type_name), "")
+
+
 def is_float3_type(type_name: str) -> bool:
     return type_name.strip() in ("pc::float3", "float3")
 
@@ -330,6 +344,8 @@ def classify(cpp_type: str, is_enum: bool, is_variant: bool) -> tuple[str, str]:
         return "variant", "int"
     if is_enum:
         return "enum", "int"
+    if stream_type_label(cpp_type):
+        return "stream", ""
     if _is_nested_config_type(cpp_type):
         return "nested", ""
     if is_float3_type(cpp_type):
@@ -701,6 +717,7 @@ def _parse_members(
             hidden=bool(HIDDEN_RE.search(comment)),
             folded=bool(FOLDED_RE.search(comment)),
             comparable=is_simple_comparable_type(cpp_type),
+            stream_label=stream_type_label(cpp_type) if kind == "stream" else "",
             adapter_type=f"{cpp_type}Adapter" if kind == "nested" else "",
             alternative=alternative,
         )

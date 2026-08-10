@@ -309,6 +309,8 @@ void reroot_paths_between(pc::WorkspaceConfiguration &config,
       reroot_paths(config.publish_paths.value(), previous_prefix, new_prefix));
   config.push_paths.set(
       reroot_paths(config.push_paths.value(), previous_prefix, new_prefix));
+  config.render_paths.set(
+      reroot_paths(config.render_paths.value(), previous_prefix, new_prefix));
 }
 
 // for when a device or other node in the device list is renamed...
@@ -327,6 +329,7 @@ void erase_node_paths(pc::WorkspaceConfiguration &config,
   };
   std::erase_if(config.publish_paths.value(), deleted);
   std::erase_if(config.push_paths.value(), deleted);
+  std::erase_if(config.render_paths.value(), deleted);
 }
 
 // -------- undo commands --------
@@ -654,6 +657,7 @@ void WorkspaceModel::applyWorkspaceConfigAndRebuild(
   }
   emit publishPathsChanged();
   emit pushPathsChanged();
+  emit renderPathsChanged();
   _streamChannelModel->refresh();
 }
 // ----------------- WorkspaceModel -----------------
@@ -834,6 +838,11 @@ QStringList WorkspaceModel::pushPaths() const {
   return to_string_list(_workspace.config.push_paths.value());
 }
 
+QStringList WorkspaceModel::renderPaths() const {
+  std::scoped_lock lock(_workspace.config_access);
+  return to_string_list(_workspace.config.render_paths.value());
+}
+
 // a field's entry is its adapter's configPath joined with the field path.
 // RebuildScope::None because no adapter or device is affected by the sets
 // changing, only the rows drawing their published state
@@ -861,6 +870,27 @@ void WorkspaceModel::removePushPath(const QString &path) {
   auto new_config = _workspace.config;
   new_config.push_paths.value().erase(path.toStdString());
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::None);
+}
+
+void WorkspaceModel::addRenderPath(const QString &path) {
+  auto new_config = _workspace.config;
+  new_config.render_paths.value().insert(path.toStdString());
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::None);
+}
+
+void WorkspaceModel::removeRenderPath(const QString &path) {
+  auto new_config = _workspace.config;
+  new_config.render_paths.value().erase(path.toStdString());
+  applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::None);
+}
+
+StreamSource *WorkspaceModel::streamSourceFor(const QString &path) {
+  auto it = _streamSources.find(path);
+  if (it != _streamSources.end()) return it.value();
+  auto *source =
+      new StreamSource(_workspace.config_registry, path.toStdString(), this);
+  _streamSources.insert(path, source);
+  return source;
 }
 
 QList<QObject *> WorkspaceModel::sessionAdapters() const {
@@ -3069,6 +3099,7 @@ void WorkspaceModel::moveDeviceNode(const QString &node_id,
   syncDeviceAdapters();
   emit publishPathsChanged();
   emit pushPathsChanged();
+  emit renderPathsChanged();
   _streamChannelModel->refresh();
 }
 

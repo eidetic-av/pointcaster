@@ -125,6 +125,12 @@ Item {
         }
     }
 
+    // this view draws the rendered streams that belong to its own session,
+    // plus any belonging to a device, since a device feeds every session it
+    // is part of rather than sitting under one
+    readonly property string sessionPathPrefix: sessionAdapter ? String(sessionAdapter.configPath) + "/" : ""
+    readonly property var renderPathsForSession: (workspace && sessionPathPrefix) ? workspace.renderPaths.filter(path => path.startsWith(sessionPathPrefix) || !path.startsWith("session/")) : []
+
     readonly property real defaultCameraDistance: 250
     readonly property vector3d defaultOrbitOriginPosition: Qt.vector3d(0, 0, 0)
     readonly property quaternion defaultOrbitOriginRotation: {
@@ -364,6 +370,52 @@ Item {
                 ignoreUnknownSignals: true
                 function onPointCloudUpdated() {
                     sessionGeo.updateGeometry();
+                }
+            }
+        }
+
+        // the operator output streams switched on for rendering, each one
+        // drawn as translucent boxes over the cloud they came out of
+        Repeater3D {
+            model: root.renderPathsForSession
+
+            Node {
+                id: streamNode
+
+                readonly property string streamPath: modelData
+                readonly property var streamSource: root.workspace ? root.workspace.streamSourceFor(streamNode.streamPath) : null
+
+                Model {
+                    source: "#Cube"
+
+                    instancing: StreamInstancing {
+                        id: streamInstances
+                        streamAdapter: streamNode.streamSource ? streamNode.streamSource.streamAdapter() : null
+                        color: ThemeColors.highlight
+                        hasTransparency: true
+                        depthSortingEnabled: true
+                    }
+
+                    materials: [
+                        PrincipledMaterial {
+                            baseColor: "white"
+                            opacity: 0.35
+                            alphaMode: PrincipledMaterial.Blend
+                            lighting: PrincipledMaterial.NoLighting
+                            cullMode: Material.NoCulling
+                        }
+                    ]
+                }
+
+                // the streams come out of the same pipeline as the cloud, so
+                // they are read back on the same tick it redraws on
+                Connections {
+                    target: sessionCloudNode.adapter
+                    enabled: sessionCloudNode.adapter !== null
+                    ignoreUnknownSignals: true
+                    function onPointCloudUpdated() {
+                        streamInstances.updateInstances();
+                    }
                 }
             }
         }

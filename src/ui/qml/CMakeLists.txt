@@ -95,6 +95,8 @@ qt_add_qml_module(PointcasterQml
         AlignmentController.cc
         PointCloudGeometry.h
         PointCloudGeometry.cc
+        StreamInstancing.h
+        StreamInstancing.cc
         color_picker.h
         color_picker.cc
         net_utils.h

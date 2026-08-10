@@ -11,6 +11,8 @@ add_library(pointcaster_ui
     models/session_recorder_model.cc
     models/operator_adapter.cc
     models/session_adapter.cc
+    models/stream_source.h
+    models/stream_source.cc
     window/view_factory.cc
 )
 add_library(pointcaster::ui ALIAS pointcaster_ui)

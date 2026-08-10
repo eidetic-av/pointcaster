@@ -7,6 +7,7 @@
 #include "session_adapter.h"
 #include "session_recorder_model.h"
 #include "stream_channel_model.h"
+#include "stream_source.h"
 #include <QMatrix4x4>
 #include <QObject>
 #include <QPointer>
@@ -79,6 +80,9 @@ class WorkspaceModel : public QObject {
   Q_PROPERTY(
       QStringList publishPaths READ publishPaths NOTIFY publishPathsChanged)
   Q_PROPERTY(QStringList pushPaths READ pushPaths NOTIFY pushPathsChanged)
+
+  // and the output stream paths the 3d scene draws
+  Q_PROPERTY(QStringList renderPaths READ renderPaths NOTIFY renderPathsChanged)
 
   // Selected operator (owned by a device or a session)
   Q_PROPERTY(OperatorAdapter *selectedOperatorAdapter READ
@@ -273,12 +277,18 @@ public:
 
   QStringList publishPaths() const;
   QStringList pushPaths() const;
+  QStringList renderPaths() const;
 
   Q_INVOKABLE void addPublishPath(const QString &path);
   Q_INVOKABLE void removePublishPath(const QString &path);
 
   Q_INVOKABLE void addPushPath(const QString &path);
   Q_INVOKABLE void removePushPath(const QString &path);
+
+  Q_INVOKABLE void addRenderPath(const QString &path);
+  Q_INVOKABLE void removeRenderPath(const QString &path);
+
+  Q_INVOKABLE StreamSource *streamSourceFor(const QString &path);
 
 public slots:
   void syncAdapters();
@@ -312,6 +322,7 @@ signals:
 
   void publishPathsChanged();
   void pushPathsChanged();
+  void renderPathsChanged();
 
   void selectedOperatorAdapterChanged();
   void selectedOperatorFrameSourceChanged();
@@ -341,6 +352,9 @@ private:
   QList<QObject *> _deviceAdapters;
 
   QHash<QString, QPointer<SessionAdapter>> _sessionPointCloudAdapters;
+
+  // one per path the scene has been asked to draw
+  QHash<QString, StreamSource *> _streamSources;
 
   QPointer<ConfigAdapter> _selectedDeviceGroupAdapter;
   bool _selectedGroupHasSequence = false;

@@ -31,6 +31,9 @@ struct WorkspaceConfiguration {
   // config field paths that should be published
   rfl::DefaultVal<std::set<std::string>> publish_paths;
   rfl::DefaultVal<std::set<std::string>> push_paths;
+  // output stream paths that should be drawn in the 3d scene, kept apart from
+  // publishing so a stream can be looked at without leaving the machine
+  rfl::DefaultVal<std::set<std::string>> render_paths;
 };
 
 bool load_workspace_from_file(WorkspaceConfiguration &config,

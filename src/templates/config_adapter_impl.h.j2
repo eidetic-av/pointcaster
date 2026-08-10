@@ -35,6 +35,9 @@
 {% elif m.kind == "quaternion" %}
             const auto &v = {{ m.read }};
             return QVariant::fromValue(QQuaternion(v.scalar, v.x, v.y, v.z));
+{% elif m.kind == "stream" %}
+            const auto stream = {{ m.read }};
+            return QVariant(stream ? int(stream->size()) : -1);
 {% else %}
             return QVariant::fromValue({{ m.read }});
 {% endif %}
@@ -105,6 +108,8 @@ QVariant({{ m.enum_default if m.enum_default is not none else 0 }})
 QVariant::fromValue(QVector3D({{ (m.default_components or [0.0, 0.0, 0.0]) | join('f, ') }}f))
 {%- elif m.kind == "quaternion" %}
 QVariant::fromValue(QQuaternion({{ (m.default_components or [1.0, 0.0, 0.0, 0.0]) | join('f, ') }}f))
+{%- elif m.kind == "stream" %}
+QVariant()
 {%- elif m.default_value is none %}
 QVariant()
 {%- elif m.default_value is boolean %}
@@ -541,6 +546,28 @@ public:
 {% endif %}
 {% endfor %}
         return false;
+    }
+
+    Q_INVOKABLE bool isStream(const QString &path) const override {
+{% for m in s.members %}
+{% if m.kind == "nested" %}
+{{ forward_case(m, "isStream", "") }}
+{% elif m.kind == "stream" %}
+        if (path == QStringLiteral("{{ m.path }}")) return true;
+{% endif %}
+{% endfor %}
+        return false;
+    }
+
+    Q_INVOKABLE QString streamType(const QString &path) const override {
+{% for m in s.members %}
+{% if m.kind == "nested" %}
+{{ forward_case(m, "streamType", "") }}
+{% elif m.kind == "stream" %}
+        if (path == QStringLiteral("{{ m.path }}")) return QStringLiteral("{{ m.stream_label }}");
+{% endif %}
+{% endfor %}
+        return {};
     }
 
     Q_INVOKABLE bool isHidden(const QString &path) const override {

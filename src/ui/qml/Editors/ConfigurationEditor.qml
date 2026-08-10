@@ -13,12 +13,16 @@ Column {
 
     property bool flattenFields: true
 
+    property bool showTypeHeader: true
+
     readonly property int labelColumnWidth: Workspace.labelColumnWidth
     property int minLabelColumnWidth: Math.round(40 * Scaling.uiScale)
     property int minValueColumnWidth: Math.round(170 * Scaling.uiScale)
 
     property int groupSpacing: Math.round(8 * Scaling.uiScale)
     property int groupInnerPaddingY: Math.round(4 * Scaling.uiScale)
+
+    property int fieldIndent: Math.round(8 * Scaling.uiScale)
 
     readonly property string configPath: configAdapter.configPath
 
@@ -45,8 +49,8 @@ Column {
             readonly property bool fieldsVisible: flattened || expanded
 
             property string headerText: parentConfigName
-            property int headerHeight: Math.round(28 * Scaling.uiScale)
-            property int fieldHeight: Math.round(28 * Scaling.uiScale)
+            property int headerHeight: Math.round(26 * Scaling.uiScale)
+            property int fieldHeight: Math.round(30 * Scaling.uiScale)
 
             // how the group sits before anyone has folded it, from @folded
             readonly property bool defaultExpanded: root.configAdapter ? !root.configAdapter.isFoldedByDefault(defaultPath) : true
@@ -72,13 +76,14 @@ Column {
             Column {
                 id: contentColumn
                 width: parent.width
+                topPadding: nodeRoot.flattened ? root.groupInnerPaddingY : 0
 
                 // Header
                 Rectangle {
                     id: nodeHeader
                     width: parent.width
                     height: nodeRoot.headerHeight
-                    visible: fieldRepeater.count > 0
+                    visible: fieldRepeater.count > 0 && (root.showTypeHeader || nodeRoot.nested)
 
                     color: nodeRoot.flattened ? "transparent" : (headerMouseArea.containsMouse ? ThemeColors.middark : (nodeRoot.expanded ? ThemeColors.almostdark : ThemeColors.dark))
 
@@ -110,12 +115,9 @@ Column {
 
                     Row {
                         anchors.fill: parent
+                        leftPadding: root.fieldIndent
+                        rightPadding: root.fieldIndent
                         spacing: Math.round(5 * Scaling.uiScale)
-
-                        Item {
-                            width: 1
-                            height: 1
-                        }
 
                         Image {
                             id: headerArrowIcon
@@ -132,7 +134,7 @@ Column {
                             elide: Text.ElideRight
                             font: Scaling.uiFont
                             color: ThemeColors.text
-                            width: parent.width - Math.round(10 * Scaling.uiScale) - (headerArrowIcon.visible ? headerArrowIcon.width + parent.spacing : 0)
+                            width: parent.width - parent.leftPadding - parent.rightPadding - (headerArrowIcon.visible ? headerArrowIcon.width + parent.spacing : 0)
                             anchors.verticalCenter: parent.verticalCenter
                         }
                     }
@@ -152,11 +154,10 @@ Column {
                     delegate: Item {
                         id: fieldRow
 
-                        // output and otherwise uneditable fields read dimmer
-                        // than the ones you can actually change. the label and
-                        // the editor carry it individually so the publish /
-                        // push frame behind the editor keeps its own strength
                         readonly property bool readOnly: root.configAdapter ? root.configAdapter.isDisabled(modelData) : false
+                        readonly property bool isOutput: root.configAdapter ? root.configAdapter.isOutput(modelData) : false
+                        readonly property bool isStream: root.configAdapter ? root.configAdapter.isStream(modelData) : false
+
                         readonly property real textOpacity: readOnly ? 0.66 : 1.0
 
                         visible: nodeRoot.fieldsVisible
@@ -178,7 +179,7 @@ Column {
                                 Layout.minimumWidth: root.minLabelColumnWidth
                                 clip: true
 
-                                Layout.leftMargin: Math.round(5 * Scaling.uiScale)
+                                Layout.leftMargin: root.fieldIndent
 
                                 InfoToolTip {
                                     visible: labelHover.hovered
@@ -194,6 +195,54 @@ Column {
                                 Layout.minimumWidth: root.minValueColumnWidth
                                 Layout.fillHeight: true
 
+                                Rectangle {
+                                    id: outputDot
+
+                                    readonly property int inset: Math.round(6 * Scaling.uiScale)
+
+                                    visible: fieldRow.isOutput
+                                    width: Math.round(6 * Scaling.uiScale)
+                                    height: width
+                                    radius: width / 2
+                                    color: ThemeColors.yellow
+
+                                    anchors {
+                                        left: parent.left
+                                        leftMargin: inset
+                                        verticalCenter: parent.verticalCenter
+                                    }
+                                }
+
+                                // every stream carries its own toggle for
+                                // drawing it in the 3d scene, at the tail of
+                                // the row, the same eye the device list uses
+                                ListToggleButton {
+                                    id: renderToggle
+
+                                    visible: fieldRow.isStream
+                                    width: Math.round(iconSize * 0.9)
+                                    height: Math.round(iconSize * 0.9)
+
+                                    iconOn: FontAwesome.icon("solid/eye")
+                                    iconOff: FontAwesome.icon("solid/eye-slash")
+                                    checked: fieldRow.rendered
+                                    tip: qsTr("Render in the session view")
+
+                                    anchors {
+                                        right: parent.right
+                                        rightMargin: Math.round(8 * Scaling.uiScale)
+                                        verticalCenter: parent.verticalCenter
+                                    }
+
+                                    onToggled: {
+                                        if (checked) {
+                                            root.workspace.addRenderPath(fieldRow.fieldPath);
+                                        } else {
+                                            root.workspace.removeRenderPath(fieldRow.fieldPath);
+                                        }
+                                    }
+                                }
+
                                 Loader {
                                     id: valueContainer
 
@@ -201,11 +250,15 @@ Column {
                                     readonly property string typeName: root.configAdapter.typeName(modelData).toLowerCase()
 
                                     anchors.fill: parent
+                                    anchors.leftMargin: outputDot.visible ? outputDot.inset * 2 + outputDot.width : outputDot.inset
+                                    anchors.rightMargin: renderToggle.visible ? outputDot.inset * 2 + renderToggle.width : 0
                                     opacity: fieldRow.textOpacity
 
                                     asynchronous: false
 
                                     sourceComponent: {
+                                        if (root.configAdapter.isStream(modelData))
+                                            return streamEditor;
                                         if (root.configAdapter.isEnum(modelData))
                                             return enumEditor;
                                         if (typeName === "int" || typeName === "int32" || typeName === "int32_t" || typeName === "integer")
@@ -292,6 +345,7 @@ Column {
                         readonly property string fieldPath: root.configPath ? `${root.configPath}/${modelData}` : ""
                         readonly property bool published: fieldPath.length > 0 && !!root.workspace && root.workspace.publishPaths.includes(fieldPath)
                         readonly property bool pushed: published && root.workspace.pushPaths.includes(fieldPath)
+                        readonly property bool rendered: fieldPath.length > 0 && !!root.workspace && root.workspace.renderPaths.includes(fieldPath)
                         readonly property color stateColor: pushed ? ThemeColors.green : ThemeColors.blue
 
                         ContextMenu.menu: Menu {
@@ -471,6 +525,48 @@ Column {
 
                 // onClicked: fileOpenDialog.open()
 
+            }
+        }
+    }
+
+    // For the writeable output streams attached to a config
+    Component {
+        id: streamEditor
+
+        RowLayout {
+            id: streamRow
+
+            anchors.fill: parent
+            spacing: Math.round(5 * Scaling.uiScale)
+
+            property int elementCount: root.configAdapter ? root.configAdapter.value(path) : -1
+
+            Text {
+                text: streamRow.elementCount
+                font: Scaling.uiFont
+                color: ThemeColors.text
+
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+            }
+
+            Text {
+                text: root.configAdapter ? root.configAdapter.streamType(path) : ""
+                font: Scaling.uiFont
+                color: ThemeColors.readOnlyText
+                elide: Text.ElideRight
+
+                Layout.alignment: Qt.AlignVCenter
+                Layout.rightMargin: Math.round(6 * Scaling.uiScale)
+            }
+
+            Connections {
+                target: root.configAdapter
+                function onFieldChanged(changedPath) {
+                    if (String(changedPath) !== path)
+                        return;
+                    streamRow.elementCount = Number(root.configAdapter.value(path));
+                }
             }
         }
     }
