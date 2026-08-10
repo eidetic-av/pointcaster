@@ -1,1 +1,6 @@
-build
+# just ignore everything except these files we explicity copy in
+*
+!vcpkg.json
+!triplets
+!ports
+!scripts
