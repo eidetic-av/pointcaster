@@ -1,5 +1,8 @@
 #pragma once
 
+#include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <pointcaster/core.h>
 #include <pointcaster/core_types.h>
 
@@ -18,5 +21,17 @@ struct decomposed_transform {
 
 POINTCASTER_CORE_EXPORT
 decomposed_transform decompose_transform(const float4x4 &matrix);
+
+inline int16_t to_position_axis(float value) {
+  constexpr auto lowest =
+      static_cast<float>(std::numeric_limits<int16_t>::lowest());
+  constexpr auto highest =
+      static_cast<float>(std::numeric_limits<int16_t>::max());
+  return static_cast<int16_t>(std::clamp(value, lowest, highest));
+}
+
+inline position to_position(float x, float y, float z) {
+  return {to_position_axis(x), to_position_axis(y), to_position_axis(z)};
+}
 
 } // namespace pc

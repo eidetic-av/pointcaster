@@ -71,6 +71,16 @@ struct position_bounds {
   position max{std::numeric_limits<int16_t>::min(),
                std::numeric_limits<int16_t>::min(),
                std::numeric_limits<int16_t>::min()};
+
+  // grow to contain a position
+  constexpr void encompass(const position &p) {
+    if (p.x < min.x) min.x = p.x;
+    if (p.y < min.y) min.y = p.y;
+    if (p.z < min.z) min.z = p.z;
+    if (p.x > max.x) max.x = p.x;
+    if (p.y > max.y) max.y = p.y;
+    if (p.z > max.z) max.z = p.z;
+  }
 };
 
 struct color {
