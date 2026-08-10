@@ -3,6 +3,7 @@
 #include <memory>
 #include <mutex>
 #include <pipeline/concurrent_operator_pipeline_config.h>
+#include <pipeline/pipeline_frame.h>
 #include <plugins/operators/operator_variants.h>
 #include <pointcaster/point_cloud.h>
 #include <span>
@@ -12,7 +13,7 @@
 namespace pc {
 class Workspace;
 }
-namespace pc::pipeline {
+namespace pc::operators {
 class ConcurrentOperatorPipeline;
 }
 
@@ -45,15 +46,15 @@ protected:
   Workspace *_workspace = nullptr;
 
   std::mutex _pipeline_mutex;
-  std::unique_ptr<pipeline::ConcurrentOperatorPipeline> _pipeline;
+  std::unique_ptr<operators::ConcurrentOperatorPipeline> _pipeline;
 
   void sync_operators(std::span<const OperatorConfigurationVariant> configs);
   void rebuild_pipeline(std::span<const OperatorConfigurationVariant> configs);
 
-  virtual pipeline::ConcurrentOperatorPipelineConfiguration &
+  virtual operators::ConcurrentOperatorPipelineConfiguration &
   pipeline_config() = 0;
 
-  virtual void on_pipeline_output(std::shared_ptr<PointCloud>) {}
+  virtual void on_pipeline_output(PipelineFramePtr) {}
 };
 
 } // namespace pc::operators

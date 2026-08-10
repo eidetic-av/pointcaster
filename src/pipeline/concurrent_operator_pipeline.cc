@@ -1,8 +1,12 @@
 #include "concurrent_operator_pipeline.h"
 #include <logger/logger.h>
+#include <memory>
+#include <profiling/profiling_zone.h>
 #include <workspace/workspace.h>
 
-namespace pc::pipeline {
+namespace pc::operators {
+
+using namespace pc::profiling;
 
 std::vector<OperatorPipelineWorkerChain> build_worker_chains(
     std::span<const operators::OperatorConfigurationVariant> configs,
@@ -42,34 +46,62 @@ void ConcurrentOperatorPipeline::stop() {
   _worker_threads.clear();
 }
 
+bool ConcurrentOperatorPipeline::submit(std::shared_ptr<PointCloud> raw) {
+  if (!raw) return false;
+  PipelineFramePtr frame = std::make_shared<const PipelineFrame>(PipelineFrame{
+      .seq = _input_seq.fetch_add(1, std::memory_order_relaxed) + 1,
+      .cloud = std::move(raw),
+      .additional_streams = {}});
+  while (!_input_queue.try_push(frame)) {
+    PipelineFramePtr dropped;
+    _input_queue.try_pop(dropped); // evict oldest, then retry
+  }
+  return true;
+}
+
 void ConcurrentOperatorPipeline::worker_loop(size_t worker_index,
                                              std::stop_token stop_token) {
   auto &chain = _worker_chains[worker_index];
   std::stop_callback on_stop(stop_token, [this] { _input_queue.abort(); });
   try {
     while (!stop_token.stop_requested()) {
-      PipelineFrame frame;
-      _input_queue.pop(frame);
+      PipelineFramePtr current;
+      _input_queue.pop(current);
       if (stop_token.stop_requested()) break;
+      if (!current) continue;
+
+      const uint64_t seq = current->seq;
 
       // skip work that's already been superseded
-      if (frame.seq <= _published_seq.load(std::memory_order_acquire)) continue;
+      if (seq <= _published_seq.load(std::memory_order_acquire)) continue;
 
-      auto current = frame.cloud;
-      for (auto &op : chain) current = op->process(*current);
-
-      // TODO win is a weird var name??
+      {
+        ProfilingZone zone("Operators::process");
+        // the actual operator processing occurs here
+        for (auto &op : chain) {
+          auto next = op->process(current);
+          if (!next) {
+            pc::logger()->error("Operator '{}' returned no frame; "
+                                "dropping this frame",
+                                std::string_view{op->plugin()});
+            current.reset();
+            break;
+          }
+          current = std::move(next);
+        }
+      }
+      if (!current) continue;
 
       // Monotonic output gate: only publish if this frame is strictly newer
       // than whatever has already been shown
       uint64_t prev = _published_seq.load(std::memory_order_acquire);
-      bool win = frame.seq > prev;
-      while (win && !_published_seq.compare_exchange_weak(
-                        prev, frame.seq, std::memory_order_acq_rel,
-                        std::memory_order_acquire)) {
-        win = frame.seq > prev;
+      bool is_newest = seq > prev;
+      while (is_newest && !_published_seq.compare_exchange_weak(
+                              prev, seq, std::memory_order_acq_rel,
+                              std::memory_order_acquire)) {
+        is_newest = seq > prev;
       }
-      if (!win) {
+      if (!is_newest) {
         // a newer frame already won; drop this result
         continue;
       }
@@ -89,7 +121,13 @@ void ConcurrentOperatorPipeline::worker_loop(size_t worker_index,
     }
   } catch (const tbb::user_abort &) {
     // expected when aborting the tbb input queue
+  } catch (const std::exception &e) {
+    pc::logger()->error("An operator threw the exception: {}", e.what());
+    pc::logger()->error("Pipeline has been stopped");
+  } catch (...) {
+    pc::logger()->error("An operator threw an unknown exception...");
+    pc::logger()->error("Pipeline has been stopped");
   }
 }
 
-} // namespace pc::pipeline
+} // namespace pc::operators

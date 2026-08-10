@@ -36,7 +36,7 @@ using ConfigurationVariant = std::variant<
     LookAtCameraConfiguration, SessionConfiguration,
     SessionTimelineConfiguration, SequenceConfiguration,
     GroupSequenceConfiguration,
-    pipeline::ConcurrentOperatorPipelineConfiguration,
+    operators::ConcurrentOperatorPipelineConfiguration,
     networking::PointStreamerConfiguration, publishers::PublishersConfiguration,
     publishers::MqttClientConfiguration,
     // TODO REMOVE AND ADD

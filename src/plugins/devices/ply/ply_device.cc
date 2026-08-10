@@ -124,8 +124,7 @@ bool PlyDevice::load(std::string_view url) {
 
   _input_cloud = std::move(input_cloud);
   _loaded_file_path = std::string(url);
-  if (_cuda_backend)
-    _cuda_backend->init(_input_cloud->size());
+  if (_cuda_backend) _cuda_backend->init(_input_cloud->size());
   apply_transform();
   pc::logger()->trace("PlyDevice::load: done");
   return true;
@@ -156,8 +155,7 @@ bool PlyDevice::load_directory(const std::filesystem::path &dir) {
   // _status = DeviceStatus::Loaded;
 
   _input_cloud = _sequence_loader->get_frame(0);
-  if (_cuda_backend && _input_cloud)
-    _cuda_backend->init(_input_cloud->size());
+  if (_cuda_backend && _input_cloud) _cuda_backend->init(_input_cloud->size());
   apply_transform();
   return true;
 }
@@ -392,17 +390,21 @@ void PlyDevice::apply_transform() {
   pc::logger()->trace("PlyDevice::apply_transform: done");
 }
 
-void PlyDevice::on_pipeline_output(std::shared_ptr<PointCloud> processed) {
+void PlyDevice::on_pipeline_output(
+    operators::PipelineFramePtr output_frame) {
+  if (!output_frame) return;
+  auto cloud = output_frame->cloud;
   if (rendering()) {
+    if (!cloud) return;
     if (_cpu_backend) {
-      auto buf = std::make_shared<std::vector<std::byte>>(processed->size() * 16);
-      _cpu_backend->pack_render_buffer(*processed, *buf);
+      auto buf = std::make_shared<std::vector<std::byte>>(cloud->size() * 16);
+      _cpu_backend->pack_render_buffer(*cloud, *buf);
       _latest_render_data.store(std::move(buf), std::memory_order_release);
     }
   } else {
     _latest_render_data.store(nullptr, std::memory_order_release);
   }
-  _current_point_cloud.store(std::move(processed), std::memory_order_release);
+  _current_point_cloud.store(std::move(cloud), std::memory_order_release);
   notify_point_cloud_updated();
 }
 

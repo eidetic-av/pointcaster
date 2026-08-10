@@ -29,7 +29,7 @@ struct PlyDeviceConfiguration {
   rfl::DefaultVal<TransformConfiguration> transform;
   rfl::DefaultVal<ColorTransformConfiguration> color;
 
-  rfl::DefaultVal<pipeline::ConcurrentOperatorPipelineConfiguration>
+  rfl::DefaultVal<operators::ConcurrentOperatorPipelineConfiguration>
       operator_pipeline;                                          // @hidden
   std::vector<operators::OperatorConfigurationVariant> operators; // @hidden
 

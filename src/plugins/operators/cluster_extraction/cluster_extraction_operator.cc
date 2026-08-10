@@ -21,17 +21,16 @@ void ClusterExtractionOperator::on_config_field_changed(std::string_view path) {
   }
 }
 
-std::shared_ptr<PointCloud>
-ClusterExtractionOperator::process(const PointCloud &input) {
+PipelineFramePtr ClusterExtractionOperator::process(PipelineFramePtr input) {
   using profiling::ProfilingZone;
 
   auto variant = load_config();
-  if (!variant) return std::make_shared<PointCloud>(input);
+  if (!variant) return input;
   const auto &config = std::get<ClusterExtractionConfiguration>(*variant);
 
-  config.point_count.set(static_cast<int>(input.size()));
+  config.point_count.set(static_cast<int>(input->cloud->size()));
 
-  return std::make_shared<PointCloud>(input);
+  return input;
 }
 
 } // namespace pc::operators

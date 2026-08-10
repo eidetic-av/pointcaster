@@ -1,4 +1,5 @@
 #pragma once
+#include "pipeline_frame.h"
 
 #include "plugins/operators/operator_host.h"
 #include <atomic>
@@ -15,7 +16,7 @@
 #include <oneapi/tbb/concurrent_queue.h>
 #pragma pop_macro("emit")
 
-namespace pc::pipeline {
+namespace pc::operators {
 
 using OperatorPipelineWorkerChain =
     std::vector<std::unique_ptr<operators::OperatorPlugin>>;
@@ -47,20 +48,17 @@ public:
   void start();
   void stop();
 
-  // Assumes ownership of the submitted shared_ptr. Never blocks the producer.
-  bool submit(std::shared_ptr<PointCloud> raw) {
-    if (!raw) return false;
-    PipelineFrame frame{_input_seq.fetch_add(1, std::memory_order_relaxed) + 1,
-                        std::move(raw)};
-    while (!_input_queue.try_push(frame)) {
-      PipelineFrame dropped;
-      _input_queue.try_pop(dropped); // evict oldest, then retry
-    }
-    return true;
+  // non-blocking. submit ownership of the PointCloud
+  bool submit(std::shared_ptr<PointCloud> raw);
+
+  // null until the first frame has been published
+  PipelineFramePtr latest_frame() const {
+    return _latest.load(std::memory_order_acquire);
   }
 
   std::shared_ptr<PointCloud> latest_cloud() const {
-    return _latest.load(std::memory_order_acquire);
+    auto frame = _latest.load(std::memory_order_acquire);
+    return frame ? frame->cloud : nullptr;
   }
 
   const std::vector<std::vector<std::unique_ptr<operators::OperatorPlugin>>> &
@@ -68,7 +66,7 @@ public:
     return _worker_chains;
   }
 
-  void set_on_complete(std::function<void(std::shared_ptr<PointCloud>)> cb) {
+  void set_on_complete(std::function<void(PipelineFramePtr)> cb) {
     _on_complete = std::move(cb);
   }
 
@@ -78,17 +76,13 @@ public:
   }
 
 private:
-  struct PipelineFrame {
-    uint64_t seq = 0;
-    std::shared_ptr<PointCloud> cloud;
-  };
-
   std::vector<std::vector<std::unique_ptr<operators::OperatorPlugin>>>
       _worker_chains;
 
-  tbb::concurrent_bounded_queue<PipelineFrame> _input_queue;
+  tbb::concurrent_bounded_queue<PipelineFramePtr> _input_queue;
 
-  std::atomic<std::shared_ptr<PointCloud>> _latest;
+  std::atomic<PipelineFramePtr> _latest;
+
   std::atomic<std::shared_ptr<const std::vector<camera::CameraFrame>>>
       _latest_camera_frames;
 
@@ -96,10 +90,10 @@ private:
   std::atomic<uint64_t> _input_seq{0};
   std::atomic<uint64_t> _published_seq{0};
 
-  std::function<void(std::shared_ptr<PointCloud>)> _on_complete;
+  std::function<void(PipelineFramePtr)> _on_complete;
   std::vector<std::jthread> _worker_threads;
 
   void worker_loop(size_t worker_index, std::stop_token stop_token);
 };
 
-} // namespace pc::pipeline
+} // namespace pc::operators

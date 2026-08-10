@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <logger/logger.h>
 #include <pipeline/concurrent_container.h>
+#include <pipeline/pipeline_frame.h>
 #include <plugins/backend/backend_plugin.h>
 #include <plugins/backend/backend_types.h>
 #include <pointcaster/point_cloud.h>
@@ -63,7 +64,8 @@ public:
       }
     }
 
-    // corrade requires at least one search path entry even when no plugins exist
+    // corrade requires at least one search path entry even when no plugins
+    // exist
     if (search_paths.empty()) {
       search_paths.emplace_back(plugin_dir.string());
     }
@@ -92,8 +94,8 @@ public:
   explicit OperatorPlugin(Corrade::PluginManager::AbstractManager &manager,
                           Corrade::Containers::StringView plugin)
       : Corrade::PluginManager::AbstractPlugin{manager, plugin} {
-        pc::logger()->debug("Operator plugin constructor");
-      }
+    pc::logger()->debug("Operator plugin constructor");
+  }
 
   virtual ~OperatorPlugin() = default;
 
@@ -139,7 +141,9 @@ public:
         config_variant());
   };
 
-  virtual std::shared_ptr<PointCloud> process(const PointCloud &input) = 0;
+  // return 'input' unchanged to pass a frame straight through...
+  // to change the frame, take input->clone(), modify that, and return it
+  virtual PipelineFramePtr process(PipelineFramePtr input) = 0;
 
   void update_config(const OperatorConfigurationVariant &config) {
     _config.store(std::make_shared<const OperatorConfigurationVariant>(config));

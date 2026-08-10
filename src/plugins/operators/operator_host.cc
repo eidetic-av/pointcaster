@@ -121,9 +121,9 @@ void OperatorHost::sync_operators(
 void OperatorHost::rebuild_pipeline(
     std::span<const OperatorConfigurationVariant> configs) {
   // build the chains outside the lock; they don't touch _pipeline
-  std::vector<pipeline::OperatorPipelineWorkerChain> pipeline_worker_chains =
-      pipeline::build_worker_chains(configs, pipeline_concurrency(), *this,
-                                    *_workspace);
+  std::vector<operators::OperatorPipelineWorkerChain> pipeline_worker_chains =
+      operators::build_worker_chains(configs, pipeline_concurrency(), *this,
+                                     *_workspace);
 
   std::scoped_lock lock(_pipeline_mutex);
   if (_pipeline) {
@@ -131,11 +131,11 @@ void OperatorHost::rebuild_pipeline(
     _pipeline.reset();
   }
 
-  _pipeline = std::make_unique<pipeline::ConcurrentOperatorPipeline>(
+  _pipeline = std::make_unique<operators::ConcurrentOperatorPipeline>(
       std::move(pipeline_worker_chains));
 
-  _pipeline->set_on_complete([this](std::shared_ptr<PointCloud> output_cloud) {
-    on_pipeline_output(output_cloud);
+  _pipeline->set_on_complete([this](PipelineFramePtr output_frame) {
+    on_pipeline_output(std::move(output_frame));
   });
 
   _pipeline->start();

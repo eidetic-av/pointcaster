@@ -105,9 +105,9 @@ public:
   }
 
 protected:
-  void on_pipeline_output(std::shared_ptr<PointCloud> cloud) override;
+  void on_pipeline_output(operators::PipelineFramePtr output_frame) override;
 
-  pipeline::ConcurrentOperatorPipelineConfiguration &
+  operators::ConcurrentOperatorPipelineConfiguration &
   pipeline_config() override {
     return _config.operator_pipeline.value();
   }

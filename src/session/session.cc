@@ -58,7 +58,9 @@ std::vector<camera::CameraFrame> Session::latest_camera_frames() const {
   return {};
 }
 
-void Session::on_pipeline_output(std::shared_ptr<PointCloud> cloud) {
+void Session::on_pipeline_output(operators::PipelineFramePtr output_frame) {
+  if (!output_frame) return;
+  auto cloud = output_frame->cloud;
   if (cloud && !cloud->empty() && _cpu_backend) {
     auto buf = std::make_shared<std::vector<std::byte>>(cloud->size() * 16);
     _cpu_backend->pack_render_buffer(*cloud, *buf);

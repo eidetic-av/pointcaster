@@ -48,7 +48,7 @@ public:
     apply_transform();
   }
 
-  void on_pipeline_output(std::shared_ptr<PointCloud> processed) override;
+  void on_pipeline_output(operators::PipelineFramePtr output_frame) override;
 
   void on_config_field_changed(std::string_view path = "") override;
 

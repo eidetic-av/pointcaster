@@ -18,6 +18,7 @@
 #include <memory>
 #include <metrics/metrics.h>
 #include <pipeline/concurrent_operator_pipeline.h>
+#include <pipeline/pipeline_frame.h>
 #include <plugins/operators/operator_host.h>
 #include <plugins/operators/operator_plugin.h>
 #include <plugins/operators/operator_variants.h>
@@ -244,17 +245,17 @@ public:
     return {};
   }
 
-  pipeline::ConcurrentOperatorPipelineConfiguration &
+  operators::ConcurrentOperatorPipelineConfiguration &
   pipeline_config() override {
     return std::visit(
         [](auto &device_config)
-            -> pipeline::ConcurrentOperatorPipelineConfiguration & {
+            -> operators::ConcurrentOperatorPipelineConfiguration & {
           if constexpr (requires { device_config.operator_pipeline; }) {
             return device_config.operator_pipeline.value();
           } else {
             // TODO
             // groups have no operator pipeline yet...
-            static pipeline::ConcurrentOperatorPipelineConfiguration fallback;
+            static operators::ConcurrentOperatorPipelineConfiguration fallback;
             return fallback;
           }
         },
@@ -273,7 +274,7 @@ protected:
 
   std::atomic<std::shared_ptr<std::vector<std::byte>>> _latest_render_data;
 
-  void on_pipeline_output(std::shared_ptr<PointCloud>) override {
+  void on_pipeline_output(operators::PipelineFramePtr) override {
     notify_point_cloud_updated();
   }
 

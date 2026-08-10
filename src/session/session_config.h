@@ -19,12 +19,12 @@ struct SessionTimelineConfiguration {
 };
 
 struct SessionConfiguration {
-  std::string id;
-  rfl::DefaultVal<std::string> label;
-  rfl::DefaultVal<CameraConfiguration> camera;
-  rfl::DefaultVal<SessionTimelineConfiguration> timeline;
-  rfl::DefaultVal<pipeline::ConcurrentOperatorPipelineConfiguration>
-      operator_pipeline;
+  std::string id;                                         // @hidden
+  rfl::DefaultVal<std::string> label;                     // @hidden
+  rfl::DefaultVal<CameraConfiguration> camera;            // @folded
+  rfl::DefaultVal<SessionTimelineConfiguration> timeline; // @folded
+  rfl::DefaultVal<operators::ConcurrentOperatorPipelineConfiguration>
+      operator_pipeline; // @folded
   std::vector<operators::OperatorConfigurationVariant> operators;
 };
 

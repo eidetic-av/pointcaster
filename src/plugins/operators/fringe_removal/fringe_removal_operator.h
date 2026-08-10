@@ -22,8 +22,8 @@ public:
       Corrade::PluginManager::AbstractManager &manager,
       Corrade::Containers::StringView plugin)
       : OperatorPlugin(manager, plugin) {
-        pc::logger()->debug("Fringe removal operator constructor");
-      }
+    pc::logger()->debug("Fringe removal operator constructor");
+  }
 
   ~FringeRemovalOperator() override {}
 
@@ -36,7 +36,7 @@ public:
             Corrade::PluginManager::Manager<backend::BackendPlugin>
                 &backend_plugin_manager) override;
 
-  std::shared_ptr<PointCloud> process(const PointCloud &input) override;
+  PipelineFramePtr process(PipelineFramePtr input) override;
 
   void on_config_field_changed(std::string_view path = "") override;
 

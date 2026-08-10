@@ -43,28 +43,27 @@ void FringeRemovalOperator::on_config_field_changed(std::string_view path) {
   }
 }
 
-std::shared_ptr<PointCloud>
-FringeRemovalOperator::process(const PointCloud &input) {
+PipelineFramePtr FringeRemovalOperator::process(PipelineFramePtr input) {
   using profiling::ProfilingZone;
 
   auto variant = load_config();
-  if (!variant) return std::make_shared<PointCloud>(input);
+  if (!variant) return input;
 
   const auto &config = std::get<FringeRemovalConfiguration>(*variant);
 
   // TODO is this sync on every process necessary?
   _camera.update_config(config.camera);
 
-  if (!config.active) return std::make_shared<PointCloud>(input);
+  if (!config.active) return input;
 
   if (!config.remove_occluding_fringe.value() &&
       !config.remove_canny_fringe.value()) {
-    return std::make_shared<PointCloud>(input);
+    return input;
   }
 
   if (!_current_backend) {
     pc::logger()->error("No backend set for {}", std::string_view{plugin()});
-    return std::make_shared<PointCloud>(input);
+    return input;
   }
 
   ProfilingZone operator_zone("FringeRemovalOperator");
@@ -72,7 +71,7 @@ FringeRemovalOperator::process(const PointCloud &input) {
 
   {
     ProfilingZone projection_zone("_camera.project");
-    _camera.project(input, _current_backend);
+    _camera.project(*input->cloud, _current_backend);
     _input_image = {.name = "Input", .frame_data = _camera.result()};
   }
 
@@ -242,14 +241,17 @@ FringeRemovalOperator::process(const PointCloud &input) {
                         .frame_data = std::move(drop_visualisation)};
   }
 
-  // apply the output pixel mask to input point cloud to create our result
-  auto output = std::make_shared<PointCloud>(input);
+  // apply the output pixel mask to copy of input point cloud to create our
+  // result
+  auto output_frame = input->clone();
+  auto output_cloud = std::make_shared<PointCloud>(*input->cloud);
   {
     ProfilingZone filter_pointcloud_zone("filter_cloud_by_mask");
-    camera::filter_cloud_by_pixel_mask(input_frame, drop_mask, *output,
+    camera::filter_cloud_by_pixel_mask(input_frame, drop_mask, *output_cloud,
                                        config.removal_depth_range.value());
   }
-  return output;
+  output_frame->cloud = std::move(output_cloud);
+  return output_frame;
 }
 
 } // namespace pc::operators
