@@ -1,0 +1,7 @@
+if(PORT MATCHES "opencv4")
+    set(VCPKG_CMAKE_CONFIGURE_OPTIONS
+        ${VCPKG_CMAKE_CONFIGURE_OPTIONS}
+        -DENABLE_FAST_MATH=ON
+        -DCUDA_FAST_MATH=ON
+    )
+endif()
