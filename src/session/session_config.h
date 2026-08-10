@@ -24,8 +24,8 @@ struct SessionConfiguration {
   rfl::DefaultVal<CameraConfiguration> camera;            // @folded
   rfl::DefaultVal<SessionTimelineConfiguration> timeline; // @folded
   rfl::DefaultVal<operators::ConcurrentOperatorPipelineConfiguration>
-      operator_pipeline; // @folded
-  std::vector<operators::OperatorConfigurationVariant> operators;
+      operator_pipeline;                                          // @folded
+  std::vector<operators::OperatorConfigurationVariant> operators; // @hidden
 };
 
 inline std::string session_address(const SessionConfiguration &config) {

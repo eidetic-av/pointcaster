@@ -24,6 +24,8 @@ Item {
     function selectionPositionOrDefault() {
         if (selectedOperatorAdapter) {
             var pc = selectedOperatorAdapter.value("camera/position");
+            if (pc === undefined || pc === null || pc.x === undefined)
+                return Qt.vector3d(0, 0, 0);
             return Qt.vector3d(pc.x * 100, pc.y * 100, pc.z * 100);
         }
         if (selectedTransformAdapter) {
@@ -43,6 +45,20 @@ Item {
         if (v === undefined || v === null || v.x === undefined)
             return Qt.vector3d(0, 0, 0);
         return Qt.vector3d(v.x * 100, v.y * 100, v.z * 100);
+    }
+
+    // True when the selected thing (the device, the operator etc)
+    // has something to display as a gizmo
+    readonly property bool _selectionHasGizmoTarget: {
+        if (selectedOperatorAdapter) {
+            var pc = selectedOperatorAdapter.value("camera/position");
+            return pc !== undefined && pc !== null && pc.x !== undefined;
+        }
+        if (selectedTransformAdapter) {
+            var lp = selectedTransformAdapter.value("transform/position");
+            return lp !== undefined && lp !== null && lp.x !== undefined;
+        }
+        return false;
     }
 
     // True when the selected operator exposes camera/look_at_position
@@ -631,7 +647,7 @@ Item {
     // (camera/position) for operators.
     SelectionGizmo {
         id: selectionGizmo
-        visible: (root.selectedOperatorAdapter || root.selectedTransformAdapter) && !sessionControls.viewLocked && sessionControls.gizmoEnabled
+        visible: root._selectionHasGizmoTarget && !sessionControls.viewLocked && sessionControls.gizmoEnabled
         view3d: view
         targetNode: selectionProxy
         mode: GizmoEnums.Mode.Both

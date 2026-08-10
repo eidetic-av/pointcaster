@@ -25,7 +25,7 @@ struct PlyDeviceConfiguration {
   rfl::DefaultVal<int> order = 0;         // @hidden
 
   rfl::DefaultVal<FileFolderConfiguration> file;
-  rfl::DefaultVal<SequenceConfiguration> sequence;
+  rfl::DefaultVal<SequenceConfiguration> sequence; // @folded
   rfl::DefaultVal<TransformConfiguration> transform;
   rfl::DefaultVal<ColorTransformConfiguration> color;
 

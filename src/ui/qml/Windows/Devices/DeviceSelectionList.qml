@@ -370,13 +370,15 @@ Item {
                 property bool selected: root.workspace && root.workspace.selectedNodeKind === "group" && root.workspace.selectedNodeId === groupArea.nodeId
                 readonly property bool intoTarget: root.dragOverIndex === groupArea.rowIndex && root.dragOverZone === "into"
 
+                readonly property bool outlined: selected && !(root.workspace && root.workspace.selectedOperatorAdapter)
+
                 HoverHandler {
                     id: hoverHandler
                 }
 
                 color: intoTarget ? ThemeColors.mid : (hovered ? ThemeColors.midlight : (selected ? ThemeColors.mid : ThemeColors.almostdark))
-                border.color: intoTarget ? ThemeColors.highlight : ThemeColors.almostdark
-                border.width: intoTarget ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
+                border.color: (intoTarget || outlined) ? ThemeColors.highlight : ThemeColors.almostdark
+                border.width: (intoTarget || outlined) ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
 
                 states: State {
                     when: groupDrag.active
@@ -544,6 +546,11 @@ Item {
                 property bool selected: root.workspace && root.workspace.selectedNodeKind === "device" && root.workspace.selectedNodeId === dragArea.nodeId
                 property bool hovered: hoverHandler.hovered
 
+                // the device stays the selected node while its panel is open,
+                // but an operator picked inside that panel takes over the
+                // outline and the scene gizmo along with it
+                readonly property bool outlined: selected && !(root.workspace && root.workspace.selectedOperatorAdapter)
+
                 HoverHandler {
                     id: hoverHandler
                 }
@@ -552,7 +559,8 @@ Item {
                 height: dragArea.rowHeight
 
                 color: hovered ? ThemeColors.midlight : selected ? ThemeColors.mid : ThemeColors.almostdark
-                border.width: 0
+                border.color: ThemeColors.highlight
+                border.width: outlined ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
 
                 states: State {
                     when: deviceDrag.active
@@ -783,17 +791,6 @@ Item {
                     }
                 }
             }
-        }
-
-        // focus ring
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: 1
-            radius: frame.radius
-            color: "transparent"
-            border.width: list.activeFocus ? Math.max(1, Math.round(1 * Scaling.uiScale)) : 0
-            border.color: ThemeColors.highlight
-            visible: border.width > 0
         }
 
         // currently being dragged rows are parented to this so they appear on top of everything else
