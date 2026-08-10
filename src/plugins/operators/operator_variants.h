@@ -41,4 +41,8 @@ operator_info_from_variant(const OperatorConfigurationVariant &v) {
       v);
 }
 
+constexpr bool check_active(const OperatorConfigurationVariant &v) {
+  return std::visit([&](auto &config) { return config.active; }, v);
+}
+
 } // namespace pc::operators

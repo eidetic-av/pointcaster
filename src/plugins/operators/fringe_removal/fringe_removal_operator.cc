@@ -54,8 +54,6 @@ PipelineFramePtr FringeRemovalOperator::process(PipelineFramePtr input) {
   // TODO is this sync on every process necessary?
   _camera.update_config(config.camera);
 
-  if (!config.active) return input;
-
   if (!config.remove_occluding_fringe.value() &&
       !config.remove_canny_fringe.value()) {
     return input;

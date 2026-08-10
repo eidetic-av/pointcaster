@@ -1,4 +1,5 @@
 #include "concurrent_operator_pipeline.h"
+#include "plugins/operators/operator_variants.h"
 #include <logger/logger.h>
 #include <memory>
 #include <profiling/profiling_zone.h>
@@ -79,15 +80,8 @@ void ConcurrentOperatorPipeline::worker_loop(size_t worker_index,
         ProfilingZone zone("Operators::process");
         // the actual operator processing occurs here
         for (auto &op : chain) {
-          auto next = op->process(current);
-          if (!next) {
-            pc::logger()->error("Operator '{}' returned no frame; "
-                                "dropping this frame",
-                                std::string_view{op->plugin()});
-            current.reset();
-            break;
-          }
-          current = std::move(next);
+          if (!check_active(op->config_variant())) continue;
+          current = op->process(current);
         }
       }
       if (!current) continue;
