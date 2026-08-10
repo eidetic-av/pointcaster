@@ -192,11 +192,25 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
               }
             } else if constexpr (pc::is_cloud_stream_v<VariantType>) {
               if (!v) return;
-              pc::logger()->debug(
-                  "MQTT received cloud stream '{}' ({} elements), no payload "
-                  "format for it yet",
-                  path, v->size());
-              return;
+
+              using std_position = std::array<int16_t, 3>;
+              const auto positions =
+                  v->positions | std::views::transform([](const auto &p) {
+                    return std_position{{p.x, p.y, p.z}};
+                  }) |
+                  std::ranges::to<std::vector>();
+
+              if (serialization_format ==
+                  MqttClientConfiguration::SerializationFormat::JSON) {
+                ProfilingZone json_zone("serialize::json");
+                msg = mqtt::make_message(path, rfl::json::write(positions));
+              } else { // SerializationFormat::MessagePack
+                ProfilingZone msgpack_zone("serialize::msgpack");
+                msgpack::sbuffer send_buffer;
+                msgpack::pack(send_buffer, positions);
+                msg = mqtt::make_message(path, send_buffer.data(),
+                                         send_buffer.size());
+              }
             } else {
               msg = mqtt::make_message(path, std::format("{}", v));
             }
