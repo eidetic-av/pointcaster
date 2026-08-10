@@ -56,7 +56,13 @@ struct alignas(4) short3 {
   auto operator<=>(const short3 &s) const = default;
 };
 
-using position = short3;
+struct alignas(4) position {
+  int16_t x = 0;
+  int16_t y = 0;
+  int16_t z = 0;
+  int16_t __pad = 0;
+  auto operator<=>(const position &p) const = default;
+};
 
 struct position_bounds {
   position min{std::numeric_limits<int16_t>::max(),
