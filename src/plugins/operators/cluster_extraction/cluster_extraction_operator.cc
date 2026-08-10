@@ -30,7 +30,27 @@ PipelineFramePtr ClusterExtractionOperator::process(PipelineFramePtr input) {
 
   config.point_count.set(static_cast<int>(input->cloud->size()));
 
-  return input;
+  // TODO placeholder...
+
+  auto clusters = std::make_shared<AabbList>();
+  clusters->resize(2);
+  const auto drift = static_cast<int16_t>(input->seq % 500);
+  clusters->min_positions()[0] = {-500, -500, drift};
+  clusters->max_positions()[0] = {500, 500, static_cast<int16_t>(drift + 1000)};
+  clusters->min_positions()[1] = {static_cast<int16_t>(-1500 + drift), -500,
+                                  -500};
+  clusters->max_positions()[1] = {static_cast<int16_t>(-500 + drift), 500, 500};
+
+  // send the output data downstream the pipeline for other operators
+  // that need access, they can get to it accessing the "clusters" stream
+  auto output_frame = input->clone();
+  output_frame->set_stream("clusters", clusters);
+
+  // and set the output value on the config, so that publishers can watch that
+  // through the config registry and react to updates
+  config.clusters.set(std::move(clusters));
+
+  return output_frame;
 }
 
 } // namespace pc::operators

@@ -2,6 +2,7 @@
 
 #include <config/output_value.h>
 #include <pointcaster/core_types.h>
+#include <pointcaster/point_cloud.h>
 #include <rfl/DefaultVal.hpp>
 #include <rfl/Skip.hpp>
 #include <rfl/internal/to_ptr_named_tuple.hpp>
@@ -19,8 +20,10 @@
 namespace pc {
 
 // all scalar types representable inside configs...
-// vector types & other configs are aggregates of these
-using ConfigValue = std::variant<bool, int, float, double, std::string>;
+// vector types and other configs are aggregates of the scalars,
+// and the PointCloudPtr and sibling types are for possible output values
+using ConfigValue = std::variant<bool, int, float, double, std::string,
+                                 PointCloudPtr, VoxelisedCloudPtr, AabbListPtr>;
 
 class ConfigRegistry {
 public:
@@ -100,6 +103,8 @@ template <class T> ConfigValue to_config_value(const T &v) {
     return v;
   else if constexpr (std::is_enum_v<T>)
     return static_cast<int>(v);
+  else if constexpr (is_cloud_stream_v<T>)
+    return v;
   else
     static_assert(sizeof(T) == 0, "to_config_value: unsupported type");
 }

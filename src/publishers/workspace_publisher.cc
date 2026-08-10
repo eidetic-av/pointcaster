@@ -21,6 +21,21 @@ constexpr auto period_for(int hz) {
       duration<double>(1.0 / std::max(hz, 1)));
 }
 
+bool has_payload(const ConfigValue &value) {
+  // regular value types always hold payloads...
+  // for a point cloud stream, check the ptr the config value holds is valid
+  return std::visit(
+      [](const auto &held_value) {
+        using ValueType = std::decay_t<decltype(held_value)>;
+        if constexpr (is_cloud_stream_v<ValueType>) {
+          return held_value != nullptr;
+        } else {
+          return true;
+        }
+      },
+      value);
+}
+
 void publisher_thread_loop(std::stop_token stop_token, Workspace &workspace) {
 
   auto &ctx = pc::networking::zmq_context();
@@ -32,7 +47,7 @@ void publisher_thread_loop(std::stop_token stop_token, Workspace &workspace) {
         "Workspace publisher failed to bind socket 'inproc://workspace'");
     return;
   }
-    
+
   auto next_tick = steady_clock::now();
 
   StringMap<ConfigValue> current_snapshot;
@@ -58,11 +73,15 @@ void publisher_thread_loop(std::stop_token stop_token, Workspace &workspace) {
     for (const auto &kvp : current_snapshot) {
       const auto &path = kvp.first;
       const auto &value = kvp.second;
+      if (!has_payload(value)) continue;
+
       const auto previous = previous_snapshot.find(kvp.first);
       const bool changed =
           previous == previous_snapshot.end() || previous->second != value;
 
-      // pushed paths go out every tick, published paths only when they change
+      // pushed paths go out every tick, published paths only when they change.
+      // a stream compares by pointer, so a cloud produced this tick is always
+      // a change and the same cloud twice never is
       if (changed || push_paths.contains(path)) {
         // serialize our variant into bytes
         auto [data, serialize] = zpp::bits::data_out();

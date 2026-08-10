@@ -1,5 +1,6 @@
 #pragma once
 #include <rfl/DefaultVal.hpp>
+#include <string>
 
 namespace pc::publishers {
 
@@ -10,6 +11,12 @@ struct MqttClientConfiguration {
   rfl::DefaultVal<bool> auto_reconnect = true;
   rfl::DefaultVal<bool> publish_empty_stream = false;
   rfl::DefaultVal<bool> publish_empty_once = false;
+
+  // how a value that isn't a plain scalar or string gets encoded
+  enum class SerializationFormat { JSON, MessagePack };
+  rfl::DefaultVal<SerializationFormat> serialization_format =
+      SerializationFormat::JSON;
+  rfl::DefaultVal<bool> serialize_as_structures = false;
 };
 
 } // namespace pc::publishers

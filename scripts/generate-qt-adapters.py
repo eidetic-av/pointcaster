@@ -665,6 +665,10 @@ def _parse_members(
         alternative_names = _variant_alternative_names(cpp_type) or []
         kind, qt_type = classify(cpp_type, bool(enum_entries), bool(alternative_names))
 
+        # an output holding something the ui has no control for
+        if is_output and kind == "opaque":
+            continue
+
         default_components: list[float] | None = None
         if kind == "float3":
             needs_qvector3d = True

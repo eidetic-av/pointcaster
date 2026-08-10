@@ -2,6 +2,7 @@
 
 #include <config/output_value.h>
 #include <plugins/backend/backend_types.h>
+#include <pointcaster/point_cloud.h>
 #include <rfl/DefaultVal.hpp>
 #include <rfl/Literal.hpp>
 #include <string>
@@ -16,6 +17,7 @@ struct ClusterExtractionConfiguration {
 
   // output fields
   Output<int> point_count = 0;
+  Output<AabbListPtr> clusters;
 
   rfl::DefaultVal<BackendType> backend = BackendType::CPU;
 

@@ -16,6 +16,7 @@
 		"kddockwidgets",
 		"liblo",
 		"libcpplocate",
+		"msgpack",
 		{
 			"name": "opencv4",
 			"default-features": false,
@@ -53,6 +54,7 @@
 			]
 		},
 		"yaml-cpp",
+		"yyjson",
 		"zpp-bits"
 	]
 }
