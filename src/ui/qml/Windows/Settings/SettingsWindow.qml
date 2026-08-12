@@ -91,7 +91,7 @@ Dialog {
                         required property bool isSection
 
                         readonly property bool current: ListView.isCurrentItem
-                        readonly property real rowHeight: Math.round(24 * Scaling.uiScale)
+                        readonly property real rowHeight: Math.max(Math.round(30 * Scaling.uiScale), Math.ceil(Scaling.pointSize * 2.1))
 
                         width: ListView.view.width
 
@@ -127,27 +127,18 @@ Dialog {
 
                             background: Rectangle {
                                 color: {
-                                    if (entry.current)
-                                        return ThemeColors.withAlpha(ThemeColors.highlight, 0.16);
                                     if (pageEntry.hovered)
-                                        return ThemeColors.withAlpha(ThemeColors.mid, 0.45);
+                                        return ThemeColors.midlight;
+                                    if (entry.current)
+                                        return ThemeColors.mid;
                                     return "transparent";
-                                }
-
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.top: parent.top
-                                    anchors.bottom: parent.bottom
-                                    width: Math.max(1, Math.round(1.5 * Scaling.uiScale))
-                                    visible: entry.current
-                                    color: ThemeColors.highlight
                                 }
                             }
 
                             contentItem: Label {
                                 text: entry.title
                                 font: Scaling.uiFont
-                                color: entry.current ? ThemeColors.text : ThemeColors.withAlpha(ThemeColors.text, 0.72)
+                                color: ThemeColors.text
                                 verticalAlignment: Text.AlignVCenter
                                 elide: Text.ElideRight
                             }
