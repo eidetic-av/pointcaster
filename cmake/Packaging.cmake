@@ -24,6 +24,8 @@ else()
         wayland-graphics-integration-client
         wayland-decoration-client
     )
+    # required to exclude gtk3 platform theme
+    # to use the hosts instead for file/folder pickers
     list(APPEND excluded_qt_plugins qgtk3)
 endif()
 

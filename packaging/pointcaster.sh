@@ -32,6 +32,9 @@ export PATH="$install_dir/bin:$PATH"
 # https://github.com/KDAB/KDDockWidgets/blob/main/docs/book/src/qpa-wayland.md
 export QT_QPA_PLATFORM=xcb
 
+# use the desktop's own file/folder pickers via xdg-desktop-portal
+export QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-xdgdesktopportal}"
+
 set +x
 
 exec "$install_dir/bin/pointcaster" "$@"
