@@ -41,6 +41,8 @@ Window {
         property var pendingPrimaryPick: null
     }
 
+    FocusReleaser {}
+
     AlignmentController {
         id: alignmentController
     }

@@ -24,6 +24,7 @@ qt_add_qml_module(PointcasterQml
         Controls/DragFloat.qml
         Controls/DragFloat3.qml
         Controls/EnumSelector.qml
+        Controls/FocusReleaser.qml
         Controls/IconButton.qml
         Controls/ListToggleButton.qml
         Controls/InfoToolTip.qml

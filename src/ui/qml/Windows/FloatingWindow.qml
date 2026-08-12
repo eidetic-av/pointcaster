@@ -11,6 +11,8 @@
 
 import QtQuick
 
+import Pointcaster 1.0
+
 import "qrc:/kddockwidgets/qtquick/views/qml/" as KDDW
 
 Rectangle {
@@ -35,15 +37,7 @@ Rectangle {
             floatingWindowCpp.geometryUpdated();
     }
 
-    // clicks that no control accepts land here and clear keyboard focus
-    MouseArea {
-        id: unfocusCatcher
-        anchors.fill: parent
-        onPressed: mouse => {
-            unfocusCatcher.forceActiveFocus();
-            mouse.accepted = false;
-        }
-    }
+    FocusReleaser {}
 
     Loader {
         id: titleBar

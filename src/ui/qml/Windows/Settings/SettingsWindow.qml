@@ -58,6 +58,8 @@ Dialog {
     contentItem: Item {
         id: windowContent
 
+        FocusReleaser {}
+
         RowLayout {
             anchors.fill: parent
             spacing: 0
