@@ -168,6 +168,9 @@ public:
 
   virtual bool setConfig(const pc::ConfigurationVariant &) { return false; }
 
+  // the address of the configuration this adapter's reference is bound to
+  virtual const void *configStorage() const { return nullptr; }
+
   QString configPath() const { return _configPath; }
 
   void setConfigPath(const QString &path) {

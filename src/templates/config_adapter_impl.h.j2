@@ -204,6 +204,8 @@ public:
     QString configType() const override { return QStringLiteral("{{ s.struct_name }}"); }
     Q_INVOKABLE QString displayName() const override { return QStringLiteral("{{ s.label }}"); }
 
+    const void *configStorage() const override { return &m_config; }
+
 {% block set_config_variant_wrapper scoped %}
     // ---- Core-only ----
     bool setConfig(const pc::ConfigurationVariant &config) override {

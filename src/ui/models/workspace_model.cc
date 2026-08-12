@@ -237,6 +237,35 @@ static bool operator_structure_changed(DeviceAdapter *adapter,
   }
   return false;
 }
+
+// the address a config adapter would bind to for this operator, matching what
+// ConfigAdapter::configStorage() reports
+static const void *operator_config_storage_address(
+    const pc::operators::OperatorConfigurationVariant &variant) {
+  return std::visit([](const auto &config) -> const void * { return &config; },
+                    variant);
+}
+
+// operator config adapters hold references into the WorkspaceConfiguration,
+// so a reused adapter has to be rebound whenever its storage has moved
+template <typename ResolveStorage>
+static bool operator_config_storage_moved(const QList<OperatorAdapter *> &ops,
+                                          ResolveStorage &&resolve_storage) {
+  for (auto *opAdapter : ops) {
+    if (!opAdapter) return true;
+    auto *configAdapter = opAdapter->configAdapter();
+    if (!configAdapter) continue;
+    const std::string operator_id = operator_id_of(opAdapter->plugin());
+    if (operator_id.empty()) continue;
+    const auto *storage = resolve_storage(operator_id);
+    if (!storage) return true;
+    if (configAdapter->configStorage() !=
+        operator_config_storage_address(*storage))
+      return true;
+  }
+  return false;
+}
+
 // session analogue of operator_structure_changed
 static bool
 session_operator_structure_changed(const QList<OperatorAdapter *> &current,
@@ -2147,6 +2176,13 @@ void WorkspaceModel::syncSessionOperatorAdapters() {
     const auto &current = _sessionOperatorAdapters[id];
     if (!has_entry || session_operator_structure_changed(current, session)) {
       rebuildSessionOperatorAdapters(id, adapter, session);
+    } else if (operator_config_storage_moved(
+                   current, [&](const std::string &operator_id) {
+                     return find_session_operator_config(
+                         _workspace.config, id.toStdString(), operator_id);
+                   })) {
+      // structure is intact but the session config storage moved underneath
+      attachSessionOperatorConfigAdapters(id, current);
     }
 
     resubscribe_operator_adapters(_workspace.config_registry,
@@ -2616,11 +2652,27 @@ void WorkspaceModel::syncDeviceAdapters() {
                          &WorkspaceModel::refreshSelectedGroupHasSequence,
                          Qt::UniqueConnection);
 
-        if (operator_structure_changed(adapter, plugin)) {
+        const bool structure_changed =
+            operator_structure_changed(adapter, plugin);
+        if (structure_changed) {
           pc::logger()->trace("syncDeviceAdapters: operator structure changed "
                               "for id='{}', rebuilding",
                               device_id);
           adapter->rebuildOperatorAdapters();
+        }
+        // an unchanged operator structure still leaves the config adapters of
+        // a reused device adapter pointing at the previous workspace config
+        const std::string device_id_str(device_id);
+        if (structure_changed ||
+            operator_config_storage_moved(
+                adapter->operatorAdapters(),
+                [&](const std::string &operator_id) {
+                  return find_device_operator_config(
+                      _workspace.config, device_id_str, operator_id);
+                })) {
+          pc::logger()->trace("syncDeviceAdapters: rebinding operator config "
+                              "adapters for id='{}'",
+                              device_id);
           attachOperatorConfigAdapters(adapter);
         }
       }
