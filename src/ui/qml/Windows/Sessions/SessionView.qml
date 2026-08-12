@@ -385,16 +385,20 @@ Item {
                 readonly property string streamPath: modelData
                 readonly property var streamSource: root.workspace ? root.workspace.streamSourceFor(streamNode.streamPath) : null
 
+                StreamInstancing {
+                    id: streamInstances
+                    streamAdapter: streamNode.streamSource ? streamNode.streamSource.streamAdapter() : null
+                    color: ThemeColors.highlight
+                    // only the solid boxes need sorting against each other
+                    hasTransparency: !streamInstances.voxelised
+                    depthSortingEnabled: !streamInstances.voxelised
+                }
+
                 Model {
                     source: "#Cube"
+                    visible: !streamInstances.voxelised
 
-                    instancing: StreamInstancing {
-                        id: streamInstances
-                        streamAdapter: streamNode.streamSource ? streamNode.streamSource.streamAdapter() : null
-                        color: ThemeColors.highlight
-                        hasTransparency: true
-                        depthSortingEnabled: true
-                    }
+                    instancing: streamInstances
 
                     materials: [
                         PrincipledMaterial {
@@ -407,8 +411,38 @@ Item {
                     ]
                 }
 
-                // the streams come out of the same pipeline as the cloud, so
-                // they are read back on the same tick it redraws on
+                Model {
+                    visible: streamInstances.voxelised
+
+                    geometry: ProceduralMesh {
+                        primitiveMode: ProceduralMesh.Lines
+                        positions: [
+                            Qt.vector3d(-50, -50, -50),
+                            Qt.vector3d(50, -50, -50),
+                            Qt.vector3d(50, -50, 50),
+                            Qt.vector3d(-50, -50, 50),
+                            Qt.vector3d(-50, 50, -50),
+                            Qt.vector3d(50, 50, -50),
+                            Qt.vector3d(50, 50, 50),
+                            Qt.vector3d(-50, 50, 50)
+                        ]
+                        indexes: [
+                            0, 1, 1, 2, 2, 3, 3, 0, // bottom
+                            4, 5, 5, 6, 6, 7, 7, 4, // top
+                            0, 4, 1, 5, 2, 6, 3, 7  // the uprights
+                        ]
+                    }
+
+                    instancing: streamInstances
+
+                    materials: [
+                        PrincipledMaterial {
+                            baseColor: "white"
+                            lighting: PrincipledMaterial.NoLighting
+                        }
+                    ]
+                }
+
                 Connections {
                     target: sessionCloudNode.adapter
                     enabled: sessionCloudNode.adapter !== null

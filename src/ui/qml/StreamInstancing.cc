@@ -69,6 +69,11 @@ void StreamInstancing::updateInstances() {
   } else if (const auto voxels = _streamAdapter
                                      ? _streamAdapter->voxelised_cloud()
                                      : nullptr) {
+    if (!_voxelised) {
+      _voxelised = true;
+      emit voxelisedChanged();
+    }
+
     // or one the size of the grid centred on each occupied voxel. a voxel has
     // no identity to key a colour off, so the whole grid takes the flat one
     const auto voxel_size =

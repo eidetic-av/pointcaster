@@ -261,8 +261,15 @@ PipelineFramePtr ClusterExtractionOperator::process(PipelineFramePtr input) {
     auto voxel_entries = std::views::zip(voxelised_cloud->points,
                                          voxels->positions, voxels->colors);
 
+    const auto to_leaf_centre = [leaf_size](float value) {
+      return (std::floor(value / leaf_size) + 0.5f) * leaf_size;
+    };
+
     for (auto [point, voxel_position, color] : voxel_entries) {
-      voxel_position = to_position(point.x, point.y, point.z);
+      voxel_position =
+          to_position(to_leaf_centre(point.x), to_leaf_centre(point.y),
+                      to_leaf_centre(point.z));
+      // TODO options to fill colour with average or brightest as well as solid
       color = {255, 255, 255, 255};
       bounds.encompass(voxel_position);
     }

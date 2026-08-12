@@ -26,6 +26,8 @@ class StreamInstancing : public QQuick3DInstancing {
   Q_PROPERTY(
       int instanceCount READ instanceCount NOTIFY instanceCountChanged)
 
+  Q_PROPERTY(bool voxelised READ voxelised NOTIFY voxelisedChanged)
+
 public:
   explicit StreamInstancing(QQuick3DObject *parent = nullptr)
       : QQuick3DInstancing(parent) {}
@@ -38,6 +40,8 @@ public:
 
   int instanceCount() const { return _instanceCount; }
 
+  bool voxelised() const { return _voxelised; }
+
   // re-reads the stream and redraws it... the scene calls this every time the
   // session it sits in produces a frame
   Q_INVOKABLE void updateInstances();
@@ -46,6 +50,7 @@ signals:
   void streamAdapterChanged();
   void colorChanged();
   void instanceCountChanged();
+  void voxelisedChanged();
 
 protected:
   QByteArray getInstanceBuffer(int *instanceCount) override;
@@ -56,6 +61,7 @@ private:
 
   QByteArray _instanceData;
   int _instanceCount = 0;
+  bool _voxelised = false;
 };
 
 } // namespace pc::ui::qml
