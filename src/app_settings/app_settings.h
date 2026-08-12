@@ -189,6 +189,7 @@ private:
   double m_uiScale = 1.0;
   int m_gridSizeMetres = 10;
   QString m_backgroundColor = "#00010A";
+  
   Antialiasing m_antialiasing = Antialiasing::MSAA;
   int m_pointSize = 5;
 

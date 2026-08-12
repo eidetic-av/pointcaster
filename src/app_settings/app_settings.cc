@@ -43,9 +43,11 @@ AppSettings::AppSettings(QObject *parent)
   m_backgroundColor =
       m_settings.value("viewport/backgroundColor", QStringLiteral("#00010A"))
           .toString();
-  m_antialiasing = antialiasingFromString(
+  
+          m_antialiasing = antialiasingFromString(
       m_settings.value("viewport/antialiasing", QStringLiteral("msaa"))
           .toString());
+
   const int stored_point_size =
       m_settings.value("viewport/pointSize", 5).toInt();
   m_pointSize = stored_point_size >= 1 ? qBound(1, stored_point_size, 250) : 5;
