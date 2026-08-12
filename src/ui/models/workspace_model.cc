@@ -1449,6 +1449,31 @@ void WorkspaceModel::refreshSelectedGroupHasSequence() {
 void WorkspaceModel::initGroupAdapter(
     pc::devices::DeviceGroupConfigurationAdapter *adapter) {
   if (!adapter) return;
+
+  QObject::connect(
+      adapter, &ConfigAdapter::previewRequested, this,
+      [this, adapter](const QString &path, const QVariant &value) {
+        const QString group_id_q = adapter->id();
+        if (group_id_q.isEmpty()) return;
+
+        if (!_groupPreview || _groupPreview->id != group_id_q) {
+          std::scoped_lock lock(_workspace.config_access);
+          const int group_index = find_device_group_index_by_id(
+              _workspace.config, group_id_q.toStdString());
+          if (group_index < 0) return;
+          _groupPreview.emplace(
+              PreviewSession<pc::devices::DeviceGroupConfiguration>{
+                  group_id_q,
+                  _workspace.config.device_groups[size_t(group_index)],
+                  _workspace.config});
+        }
+
+        if (!adapter->apply(path, value)) return;
+        _groupPreview->dirty = true;
+
+        retransformGroupDescendants(group_id_q.toStdString());
+      });
+
   QObject::connect(
       adapter, &ConfigAdapter::editRequested, this,
       [this, adapter](const QString &path, const QVariant &value) {
@@ -1458,7 +1483,13 @@ void WorkspaceModel::initGroupAdapter(
         pc::devices::DeviceGroupConfiguration before;
         pc::devices::DeviceGroupConfiguration after;
         pc::WorkspaceConfiguration base_snapshot;
-        {
+
+        const bool closing_preview =
+            _groupPreview && _groupPreview->id == group_id_q;
+        if (closing_preview) {
+          before = _groupPreview->before;
+          base_snapshot = _groupPreview->base_snapshot;
+        } else {
           std::scoped_lock lock(_workspace.config_access);
           base_snapshot = _workspace.config;
           const int group_index = find_device_group_index_by_id(
@@ -1469,7 +1500,9 @@ void WorkspaceModel::initGroupAdapter(
 
         // apply mutates the live group config through the adapter's reference.
         const bool changed = adapter->apply(path, value);
-        if (!changed) return;
+        const bool gesture_changed = closing_preview && _groupPreview->dirty;
+        if (closing_preview) _groupPreview.reset();
+        if (!changed && !gesture_changed) return;
 
         {
           std::scoped_lock lock(_workspace.config_access);
@@ -2300,6 +2333,39 @@ void WorkspaceModel::initDeviceAdapter(AdapterT *adapter,
   pc::logger()->trace("Initialising device adapter '{}' for plugin '{}'",
                       device_id, plugin_name);
   QObject::connect(
+      adapter, &ConfigAdapter::previewRequested, this,
+      [this, adapter](const QString &path, const QVariant &value) {
+        auto *device_adapter = qobject_cast<DeviceAdapter *>(adapter);
+        if (!device_adapter) return;
+
+        const QString device_id_q = adapterStableId(device_adapter);
+        if (device_id_q.isEmpty()) return;
+
+        // the first 'preview' that was captured is what undo has to come back to
+        if (!_devicePreview || _devicePreview->id != device_id_q) {
+          std::scoped_lock lock(_workspace.config_access);
+          const int idx = find_device_index_by_id(_workspace.config,
+                                                  device_id_q.toStdString());
+          if (idx < 0) return;
+          _devicePreview.emplace(
+              PreviewSession<pc::devices::DeviceConfigurationVariant>{
+                  device_id_q, _workspace.config.devices[size_t(idx)],
+                  _workspace.config});
+        }
+
+        if (!device_adapter->apply(path, value)) return;
+        auto *p = device_adapter->plugin();
+        if (!p) return;
+
+        _devicePreview->dirty = true;
+        std::scoped_lock lock(_workspace.config_access);
+        const int idx = find_device_index_by_id(_workspace.config,
+                                                device_id_q.toStdString());
+        if (idx < 0) return;
+        _workspace.config.devices[size_t(idx)] = p->config_variant();
+      });
+
+  QObject::connect(
       adapter, &ConfigAdapter::editRequested, this,
       [this, adapter](const QString &path, const QVariant &value) {
         auto *device_adapter = qobject_cast<DeviceAdapter *>(adapter);
@@ -2312,7 +2378,13 @@ void WorkspaceModel::initDeviceAdapter(AdapterT *adapter,
         pc::devices::DeviceConfigurationVariant after;
         pc::WorkspaceConfiguration base_snapshot;
         QString command_text;
-        {
+
+        const bool closing_preview =
+            _devicePreview && _devicePreview->id == device_id_q;
+        if (closing_preview) {
+          before = _devicePreview->before;
+          base_snapshot = _devicePreview->base_snapshot;
+        } else {
           std::scoped_lock lock(_workspace.config_access);
           base_snapshot = _workspace.config;
           const int idx = find_device_index_by_id(_workspace.config,
@@ -2320,8 +2392,13 @@ void WorkspaceModel::initDeviceAdapter(AdapterT *adapter,
           if (idx < 0) return;
           before = _workspace.config.devices[size_t(idx)];
         }
+
         const bool changed = device_adapter->apply(path, value);
-        if (!changed) return;
+        // a commit landing on the last previewed value changes nothing here,
+        // but the gesture as a whole still has to be recorded
+        const bool gesture_changed = closing_preview && _devicePreview->dirty;
+        if (closing_preview) _devicePreview.reset();
+        if (!changed && !gesture_changed) return;
         auto *p = device_adapter->plugin();
         if (!p) return;
         after = p->config_variant();

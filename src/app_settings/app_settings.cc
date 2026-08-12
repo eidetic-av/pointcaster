@@ -43,8 +43,9 @@ AppSettings::AppSettings(QObject *parent)
   m_backgroundColor =
       m_settings.value("viewport/backgroundColor", QStringLiteral("#00010A"))
           .toString();
-  
-
+  m_antialiasing = antialiasingFromString(
+      m_settings.value("viewport/antialiasing", QStringLiteral("msaa"))
+          .toString());
   const int stored_point_size =
       m_settings.value("viewport/pointSize", 5).toInt();
   m_pointSize = stored_point_size >= 1 ? qBound(1, stored_point_size, 250) : 5;
@@ -246,6 +247,52 @@ void AppSettings::setBackgroundColor(const QString &value) {
 
 QString AppSettings::backgroundColor() const {
   return m_backgroundColor;
+}
+
+AppSettings::Antialiasing AppSettings::antialiasing() const {
+  return m_antialiasing;
+}
+
+void AppSettings::setAntialiasing(Antialiasing value) {
+  if (value == m_antialiasing) return;
+
+  if (!onObjectThread(this)) {
+    QMetaObject::invokeMethod(
+        this, [this, value] { setAntialiasing(value); }, Qt::QueuedConnection);
+    return;
+  }
+
+  m_antialiasing = value;
+  write("viewport/antialiasing", antialiasingToString(m_antialiasing));
+  emit antialiasingChanged();
+}
+
+AppSettings::Antialiasing
+AppSettings::antialiasingFromString(QStringView modeText) {
+  const QString s = modeText.trimmed().toString().toLower();
+
+  if (s == QLatin1String("none") || s == QLatin1String("noaa"))
+    return Antialiasing::NoAA;
+  if (s == QLatin1String("ssaa")) return Antialiasing::SSAA;
+  if (s == QLatin1String("msaa")) return Antialiasing::MSAA;
+  if (s == QLatin1String("progressive") || s == QLatin1String("progressiveaa"))
+    return Antialiasing::ProgressiveAA;
+
+  return Antialiasing::MSAA;
+}
+
+QString AppSettings::antialiasingToString(Antialiasing mode) {
+  switch (mode) {
+  case Antialiasing::NoAA:
+    return QStringLiteral("none");
+  case Antialiasing::SSAA:
+    return QStringLiteral("ssaa");
+  case Antialiasing::MSAA:
+    return QStringLiteral("msaa");
+  case Antialiasing::ProgressiveAA:
+    return QStringLiteral("progressive");
+  }
+  return QStringLiteral("msaa");
 }
 
 int AppSettings::pointSize() const {

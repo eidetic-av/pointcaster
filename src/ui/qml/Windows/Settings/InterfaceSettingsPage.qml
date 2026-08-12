@@ -85,6 +85,55 @@ SettingsPage {
         }
 
         SettingsRow {
+            label: "Antialiasing"
+
+            ComboBox {
+                id: antialiasingCombo
+
+                font: Scaling.uiFont
+                textRole: "text"
+                valueRole: "value"
+                Layout.preferredWidth: Math.round(160 * Scaling.uiScale)
+
+                model: [
+                    {
+                        text: "None",
+                        value: AppSettings.NoAA
+                    },
+                    {
+                        text: "SSAA",
+                        value: AppSettings.SSAA
+                    },
+                    {
+                        text: "MSAA",
+                        value: AppSettings.MSAA
+                    },
+                    {
+                        text: "Progressive",
+                        value: AppSettings.ProgressiveAA
+                    }
+                ]
+
+                Component.onCompleted: currentIndex = indexOfValue(AppSettings.antialiasing)
+
+                onActivated: {
+                    const v = currentValue;
+                    if (v !== undefined && v !== null)
+                        AppSettings.antialiasing = v;
+                }
+
+                Connections {
+                    target: AppSettings
+                    function onAntialiasingChanged() {
+                        const idx = antialiasingCombo.indexOfValue(AppSettings.antialiasing);
+                        if (idx >= 0 && idx !== antialiasingCombo.currentIndex)
+                            antialiasingCombo.currentIndex = idx;
+                    }
+                }
+            }
+        }
+
+        SettingsRow {
             label: "Grid size (metres)"
 
             DragInt {

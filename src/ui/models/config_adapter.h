@@ -59,6 +59,12 @@ public:
     emit editRequested(path, value);
   }
 
+  // set the preview of the adapter state without
+  // committing it to the workspace
+  Q_INVOKABLE void setPreview(const QString &path, const QVariant &value) {
+    emit previewRequested(path, value);
+  }
+
   // Mutating apply that directly changes the referenced config.
   // Returns true if a change actually happened.
   Q_INVOKABLE virtual bool apply(const QString &path,
@@ -181,6 +187,7 @@ public:
 
 signals:
   void editRequested(const QString &path, const QVariant &value);
+  void previewRequested(const QString &path, const QVariant &value);
   void fieldChanged(const QString &path);
 
   void structureChanged();

@@ -17,6 +17,7 @@
 #include <QVariant>
 #include <config/config_variant.h>
 #include <functional>
+#include <optional>
 #include <point_streamer/point_streamer_config_adapter.gen.h>
 #include <publishers/publishers_config_adapter.gen.h>
 #include <qtmetamacros.h>
@@ -334,6 +335,23 @@ signals:
   void selectedStreamChannelIndexChanged();
 
 private:
+  // a preview of session data before its written...
+  // for when in the middle of transforming something
+  // using a gizmo but haven't yet 'commited' it into the workspace for undo
+  // etc.
+  template <typename ConfigT> struct PreviewSession {
+    QString id;
+    ConfigT before;
+    pc::WorkspaceConfiguration base_snapshot;
+    // whether any preview actually changed something
+    bool dirty = false;
+  };
+
+  std::optional<PreviewSession<pc::devices::DeviceConfigurationVariant>>
+      _devicePreview;
+  std::optional<PreviewSession<pc::devices::DeviceGroupConfiguration>>
+      _groupPreview;
+
   pc::Workspace &_workspace;
 
   CameraImageProvider *_imageProvider = nullptr;

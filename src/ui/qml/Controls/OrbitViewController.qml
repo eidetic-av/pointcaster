@@ -12,8 +12,8 @@ Item {
     required property Node origin
     required property Camera camera
 
-    property real xSpeed: 0.1
-    property real ySpeed: 0.5
+    property real xSpeed: 0.16666666667
+    property real ySpeed: 0.83333333333
     property real panScale: 0.002
 
     property bool xInvert: false

@@ -567,7 +567,19 @@ Item {
             backgroundMode: SceneEnvironment.Color
             depthPrePassEnabled: false
             // fog: Fog { enabled: false }
-            // antialiasingMode: SceneEnvironment.SSAA
+
+            antialiasingMode: {
+                switch (AppSettings.antialiasing) {
+                case AppSettings.SSAA:
+                    return SceneEnvironment.SSAA;
+                case AppSettings.MSAA:
+                    return SceneEnvironment.MSAA;
+                case AppSettings.ProgressiveAA:
+                    return SceneEnvironment.ProgressiveAA;
+                default:
+                    return SceneEnvironment.NoAA;
+                }
+            }
         }
 
         // ---------- CAMERA ----------

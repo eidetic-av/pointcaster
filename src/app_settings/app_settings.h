@@ -37,6 +37,8 @@ class APP_SETTINGS_API AppSettings final : public QObject {
                  NOTIFY gridSizeMetresChanged)
   Q_PROPERTY(QString backgroundColor READ backgroundColor WRITE
                  setBackgroundColor NOTIFY backgroundColorChanged)
+  Q_PROPERTY(Antialiasing antialiasing READ antialiasing WRITE setAntialiasing
+                 NOTIFY antialiasingChanged)
 
   Q_PROPERTY(
       int pointSize READ pointSize WRITE setPointSize NOTIFY pointSizeChanged)
@@ -99,6 +101,12 @@ public:
   QString backgroundColor() const;
   void setBackgroundColor(const QString &value);
 
+  enum class Antialiasing : int { NoAA, SSAA, MSAA, ProgressiveAA };
+  Q_ENUM(Antialiasing)
+
+  Antialiasing antialiasing() const;
+  void setAntialiasing(Antialiasing value);
+
   int pointSize() const;
   void setPointSize(int value);
 
@@ -144,6 +152,7 @@ signals:
   void uiScaleChanged();
   void gridSizeMetresChanged();
   void backgroundColorChanged();
+  void antialiasingChanged();
   void pointSizeChanged();
 
   void enablePrometheusMetricsChanged();
@@ -166,6 +175,9 @@ private:
   static LogLevel logLevelFromString(QStringView levelText);
   static QString logLevelToString(LogLevel level);
 
+  static Antialiasing antialiasingFromString(QStringView modeText);
+  static QString antialiasingToString(Antialiasing mode);
+
   QSettings m_settings;
 
   bool m_restoreLastWorkspace = true;
@@ -177,7 +189,7 @@ private:
   double m_uiScale = 1.0;
   int m_gridSizeMetres = 10;
   QString m_backgroundColor = "#00010A";
-  
+  Antialiasing m_antialiasing = Antialiasing::MSAA;
   int m_pointSize = 5;
 
   bool m_enablePrometheusMetrics = true;
