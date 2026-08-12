@@ -110,9 +110,8 @@ static void subscribe_adapter_to_registry(pc::ConfigRegistry &registry,
   });
 }
 
-static void
-resubscribe_operator_adapters(pc::ConfigRegistry &registry,
-                              const QList<OperatorAdapter *> &ops) {
+static void resubscribe_operator_adapters(pc::ConfigRegistry &registry,
+                                          const QList<OperatorAdapter *> &ops) {
   for (auto *opAdapter : ops) {
     auto *opConfigAdapter = opAdapter ? opAdapter->configAdapter() : nullptr;
     if (!opConfigAdapter) continue;
@@ -756,6 +755,8 @@ WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
 
   _streamChannelModel = new StreamChannelListModel(workspace, this);
   _streamChannelModel->refresh();
+
+  _logModel = new LogModel(this);
 }
 
 void WorkspaceModel::close() {
@@ -1585,8 +1586,7 @@ void WorkspaceModel::removeOperatorFromDevice(int deviceIndex,
         }
       },
       new_config.devices[size_t(idx)]);
-  if (!operator_prefix.empty())
-    erase_node_paths(new_config, operator_prefix);
+  if (!operator_prefix.empty()) erase_node_paths(new_config, operator_prefix);
   // sync workspace config
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::None);
   if (deviceIndex < int(_workspace.devices.size()) &&
@@ -2245,61 +2245,6 @@ QObject *WorkspaceModel::selectedOperatorFrameSource() const {
   return nullptr;
 }
 
-QVariantMap generateConsoleEntryVariant(const LogEntry &entry) {
-  QVariantMap item;
-  switch (entry.level) {
-  case spdlog::level::trace:
-    item["logLevel"] = "trace";
-    item["logLevelColor"] = "midlight";
-    break;
-  case spdlog::level::debug:
-    item["logLevel"] = "debug";
-    item["logLevelColor"] = "blue";
-    break;
-  case spdlog::level::info:
-    item["logLevel"] = "info";
-    item["logLevelColor"] = "text";
-    break;
-  case spdlog::level::warn:
-    item["logLevel"] = "warning";
-    item["logLevelColor"] = "yellow";
-    break;
-  case spdlog::level::err:
-    item["logLevel"] = "error";
-    item["logLevelColor"] = "red";
-    break;
-  case spdlog::level::critical:
-    item["logLevel"] = "critical";
-    item["logLevelColor"] = "red";
-    break;
-  default:
-    item["logLevel"] = "";
-    item["logLevelColor"] = "text";
-    break;
-  }
-  item["message"] = QString::fromStdString(entry.message);
-  return item;
-}
-
-QVariantList WorkspaceModel::consoleOverlayEntries() const {
-  QVariantList entries;
-  using namespace std::chrono_literals;
-  for (auto log_entry : pc::logger_lines(6, 10s)) {
-    entries.push_back(generateConsoleEntryVariant(log_entry));
-  }
-  return entries;
-}
-
-QVariantList WorkspaceModel::consoleHistoryEntries() const {
-  QVariantList entries;
-  using namespace std::chrono_literals;
-  constexpr auto consoleHistoryMax = 200;
-  for (auto log_entry : pc::logger_lines(consoleHistoryMax)) {
-    entries.push_back(generateConsoleEntryVariant(log_entry));
-  }
-  return entries;
-}
-
 // TODO whats the change here?
 void WorkspaceModel::initSessionAdapter(SessionConfigurationAdapter *adapter) {
   if (!adapter) return;
@@ -2664,12 +2609,12 @@ void WorkspaceModel::syncDeviceAdapters() {
         // a reused device adapter pointing at the previous workspace config
         const std::string device_id_str(device_id);
         if (structure_changed ||
-            operator_config_storage_moved(
-                adapter->operatorAdapters(),
-                [&](const std::string &operator_id) {
-                  return find_device_operator_config(
-                      _workspace.config, device_id_str, operator_id);
-                })) {
+            operator_config_storage_moved(adapter->operatorAdapters(),
+                                          [&](const std::string &operator_id) {
+                                            return find_device_operator_config(
+                                                _workspace.config,
+                                                device_id_str, operator_id);
+                                          })) {
           pc::logger()->trace("syncDeviceAdapters: rebinding operator config "
                               "adapters for id='{}'",
                               device_id);
@@ -2802,16 +2747,6 @@ void WorkspaceModel::syncDeviceAdapters() {
 
   pc::logger()->trace("syncDeviceAdapters: done, workspace device count={}",
                       _workspace.devices.size());
-}
-
-void WorkspaceModel::syncConsole() {
-  static QVariantList last_entries(6);
-  auto current_entries = consoleOverlayEntries();
-  if (last_entries != current_entries) {
-    emit consoleOverlayEntriesChanged();
-    emit consoleHistoryEntriesChanged();
-    last_entries = current_entries;
-  }
 }
 
 void WorkspaceModel::triggerDeviceDiscovery() {

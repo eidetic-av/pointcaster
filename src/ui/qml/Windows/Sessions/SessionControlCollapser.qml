@@ -17,6 +17,9 @@ Item {
     property bool collapsed: false
     property int buttonAlignment: Qt.AlignRight
 
+    // for panels that float over the view rather than sitting against its edge
+    property real panelRadius: 0
+
     property real openAmount: collapsed ? 0 : 1
 
     Behavior on openAmount {
@@ -49,6 +52,7 @@ Item {
         id: contentPanel
         color: ThemeColors.dark
         opacity: 0.75
+        radius: root.panelRadius
         clip: true
 
         property real spacing: Math.round(6 * Scaling.uiScale)

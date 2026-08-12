@@ -1,17 +1,62 @@
 #include "logger.h"
-#include <spdlog/sinks/ringbuffer_sink.h>
+#include <deque>
+#include <iterator>
+#include <mutex>
+#include <spdlog/sinks/base_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace pc::log::detail {
+
+// extends spdlog sink to keep recent entries for the UI console to take
+class buffer_sink final : public spdlog::sinks::base_sink<std::mutex> {
+public:
+  static constexpr std::size_t max_entries = 1024;
+
+  std::vector<pc::LogEntry> take() {
+    // held for the swap only, so logging threads never wait on the consumer
+    std::deque<pc::LogEntry> taken;
+    {
+      std::scoped_lock lock(base_sink::mutex_);
+      taken.swap(_entries);
+    }
+    return std::vector<pc::LogEntry>(std::make_move_iterator(taken.begin()),
+                                     std::make_move_iterator(taken.end()));
+  }
+
+  void set_wakeup(pc::LogWakeup wakeup) {
+    std::scoped_lock lock(base_sink::mutex_);
+    _wakeup = std::move(wakeup);
+  }
+
+protected:
+  void sink_it_(const spdlog::details::log_msg &msg) override {
+    const bool was_empty = _entries.empty();
+
+    _entries.push_back(pc::LogEntry{
+        msg.level, std::string(msg.payload.data(), msg.payload.size()),
+        msg.time});
+    if (_entries.size() > max_entries) _entries.pop_front();
+
+    // the rest of a burst is picked up by the same take
+    if (was_empty && _wakeup) _wakeup();
+  }
+
+  void flush_() override {}
+
+private:
+  std::deque<pc::LogEntry> _entries;
+  pc::LogWakeup _wakeup;
+};
+
 static std::shared_ptr<spdlog::logger> instance;
 static std::shared_ptr<spdlog::sinks::basic_file_sink_mt> file_sink;
-static std::shared_ptr<spdlog::sinks::ringbuffer_sink_mt> ringbuffer_sink;
+static std::shared_ptr<buffer_sink> buffer_sink_instance;
 
 static std::shared_ptr<spdlog::logger> &get_logger_impl() {
   if (!instance) {
-    ringbuffer_sink = std::make_shared<spdlog::sinks::ringbuffer_sink_mt>(1024);
+    buffer_sink_instance = std::make_shared<buffer_sink>();
     auto stdout_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    std::vector<spdlog::sink_ptr> sinks{ringbuffer_sink, stdout_sink};
+    std::vector<spdlog::sink_ptr> sinks{buffer_sink_instance, stdout_sink};
     instance =
         std::make_shared<spdlog::logger>("pc", sinks.begin(), sinks.end());
     instance->set_level(spdlog::level::info);
@@ -159,27 +204,14 @@ void disable_file_logging() {
   logger->info("disabled file logging");
 }
 
-std::vector<LogEntry>
-logger_lines(std::size_t n, std::chrono::system_clock::duration duration) {
-
+std::vector<LogEntry> take_log_entries() {
   (void)pc::logger();
+  return pc::log::detail::buffer_sink_instance->take();
+}
 
-  auto raw_msgs = pc::log::detail::ringbuffer_sink->last_raw(n);
-  std::vector<LogEntry> log_entries;
-
-  const bool has_duration =
-      duration != std::chrono::system_clock::duration::zero();
-
-  std::chrono::system_clock::time_point now;
-  if (has_duration) now = std::chrono::system_clock::now();
-
-  for (const auto &msg : raw_msgs) {
-    if (has_duration && (now - msg.time > duration)) continue;
-
-    log_entries.emplace_back(LogEntry{
-        msg.level, std::string(msg.payload.data(), msg.payload.size())});
-  }
-  return log_entries;
+void set_log_wakeup(LogWakeup wakeup) {
+  (void)pc::logger();
+  pc::log::detail::buffer_sink_instance->set_wakeup(std::move(wakeup));
 }
 
 } // namespace pc

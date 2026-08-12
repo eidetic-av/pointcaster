@@ -3,6 +3,7 @@
 #include "config_adapter.h"
 #include "device_adapter.h"
 #include "enum_adapters.h"
+#include "log_model.h"
 #include "operator_adapter.h"
 #include "session_adapter.h"
 #include "session_recorder_model.h"
@@ -99,10 +100,7 @@ class WorkspaceModel : public QObject {
                  saveFileUrlChanged)
 
   // Console logger window
-  Q_PROPERTY(QVariantList consoleOverlayEntries READ consoleOverlayEntries
-                 NOTIFY consoleOverlayEntriesChanged)
-  Q_PROPERTY(QVariantList consoleHistoryEntries READ consoleHistoryEntries
-                 NOTIFY consoleHistoryEntriesChanged)
+  Q_PROPERTY(LogModel *logModel READ logModel CONSTANT)
 
   Q_PROPERTY(QVariantMap foldedPropertyPaths READ foldedPropertyPaths NOTIFY
                  foldedPropertyPathsChanged)
@@ -232,8 +230,7 @@ public:
     emit saveFileUrlChanged();
   }
 
-  QVariantList consoleOverlayEntries() const;
-  QVariantList consoleHistoryEntries() const;
+  LogModel *logModel() const { return _logModel; }
 
   QObject *pointStreamerAdapter() const { return _pointStreamerAdapter.data(); }
 
@@ -294,7 +291,6 @@ public slots:
   void syncAdapters();
   void syncSessionAdapters();
   void syncDeviceAdapters();
-  void syncConsole();
 
 signals:
   void openSaveAsDialog();
@@ -326,9 +322,6 @@ signals:
 
   void selectedOperatorAdapterChanged();
   void selectedOperatorFrameSourceChanged();
-
-  void consoleOverlayEntriesChanged();
-  void consoleHistoryEntriesChanged();
 
   void foldedPropertyPathsChanged();
 
@@ -367,6 +360,8 @@ private:
 
   StreamChannelListModel *_streamChannelModel;
   int _selectedStreamChannelIndex = -1;
+
+  LogModel *_logModel;
 
   RecorderModel *_recorderModel;
 

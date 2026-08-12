@@ -7,8 +7,8 @@
 
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <spdlog/sinks/basic_file_sink.h>
-#include <spdlog/sinks/ringbuffer_sink.h>
 #include <string_view>
 
 namespace pc {
@@ -25,9 +25,12 @@ POINTCASTER_CORE_EXPORT void set_log_file_target_name(std::string_view name);
 struct LogEntry {
   spdlog::level::level_enum level;
   std::string message;
+  std::chrono::system_clock::time_point time{};
 };
 
-POINTCASTER_CORE_EXPORT std::vector<LogEntry>
-logger_lines(std::size_t n, std::chrono::system_clock::duration duration = {});
+POINTCASTER_CORE_EXPORT std::vector<LogEntry> take_log_entries();
+
+using LogWakeup = std::function<void()>;
+POINTCASTER_CORE_EXPORT void set_log_wakeup(LogWakeup wakeup);
 
 } // namespace pc
