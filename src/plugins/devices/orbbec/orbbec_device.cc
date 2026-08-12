@@ -592,12 +592,13 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
           [this, &color_intrinsics, &cuda_backend, &cpu_backend,
            frame_set = std::move(frame_set), device_config = device_config,
            max_point_count = max_point_count, world = world]() {
+            FrameTaskSlot frame_task_slot(*this);
+
             auto colour_frame = frame_set->colorFrame();
             auto depth_frame = frame_set->depthFrame();
             if (!colour_frame || !depth_frame) return;
 
             ProfilingZone process_frame_zone("OrbbecDevice::process_frame");
-            FrameTaskSlot frame_task_slot(*this);
 
             const auto frame_width = colour_frame->width();
             const auto frame_height = colour_frame->height();
