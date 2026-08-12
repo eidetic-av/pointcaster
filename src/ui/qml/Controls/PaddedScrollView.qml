@@ -15,24 +15,14 @@ ScrollView {
 
     ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-    ScrollBar.vertical: ScrollBar {
-        id: verticalScrollBar
-
+    ScrollBar.vertical: PaddedScrollBar {
         parent: root
         x: root.mirrored ? 0 : root.width - width
         y: root.topPadding
         height: root.availableHeight
 
-        policy: (root.scrollBarEnabled && size < 1.0) ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
-
-        leftPadding: root.scrollBarGap
-        hoverEnabled: true
-
-        contentItem: Rectangle {
-            implicitWidth: Math.round(6 * Scaling.uiScale)
-            radius: width / 2
-            color: verticalScrollBar.pressed ? ThemeColors.highlight : verticalScrollBar.hovered ? ThemeColors.midlight : ThemeColors.mid
-        }
+        barEnabled: root.scrollBarEnabled
+        gap: root.scrollBarGap
     }
 
     // with the bar hidden its width is not reserved

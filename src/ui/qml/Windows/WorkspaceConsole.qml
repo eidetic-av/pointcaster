@@ -51,9 +51,9 @@ Item {
             // collapsed so don't take the scroll wheel
             interactive: !root.collapsed
 
-            ScrollBar.vertical: ScrollBar {
+            ScrollBar.vertical: PaddedScrollBar {
                 id: scrollbackBar
-                policy: root.collapsed ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
+                barEnabled: !root.collapsed
             }
 
             property bool followTail: true
