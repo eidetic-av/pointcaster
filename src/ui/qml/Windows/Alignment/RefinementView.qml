@@ -31,6 +31,7 @@ Item {
             materials: [
                 PointCloudMaterial {
                     uPointSize: viewController.shaderPointSize
+                    uViewportHeight: viewController.shaderViewportHeight
                 }
             ]
         }
@@ -42,6 +43,7 @@ Item {
             materials: [
                 PointSolidMaterial {
                     uPointSize: viewController.shaderPointSize
+                    uViewportHeight: viewController.shaderViewportHeight
                     uColor: root.primaryColorMode > 0 ? root.solidColors[root.primaryColorMode - 1] : "white"
                 }
             ]
@@ -65,6 +67,7 @@ Item {
                 materials: [
                     PointCloudMaterial {
                         uPointSize: viewController.shaderPointSize
+                        uViewportHeight: viewController.shaderViewportHeight
                     }
                 ]
             }
@@ -76,6 +79,7 @@ Item {
                 materials: [
                     PointSolidMaterial {
                         uPointSize: viewController.shaderPointSize
+                        uViewportHeight: viewController.shaderViewportHeight
                         uColor: root.secondaryColorMode > 0 ? root.solidColors[root.secondaryColorMode - 1] : "white"
                     }
                 ]

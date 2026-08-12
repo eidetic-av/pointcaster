@@ -20,5 +20,10 @@ void MAIN()
     vColor = vec4(srgb, 1.0);
 
     POSITION = MODELVIEWPROJECTION_MATRIX * vec4(pos, 1.0);
-    POINT_SIZE = uPointSize;
+
+    float viewportHeight = uViewportHeight > 1.0 ? uViewportHeight : 1080.0;
+    float pixelsPerUnit = abs(PROJECTION_MATRIX[1][1]) * viewportHeight * 0.5;
+    float diameter = uPointSize * pixelsPerUnit / max(POSITION.w, 0.001);
+
+    POINT_SIZE = clamp(diameter, uMinPointPixels, uMaxPointPixels);
 }

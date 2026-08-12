@@ -360,6 +360,7 @@ Item {
                 materials: [
                     PointCloudMaterial {
                         uPointSize: viewController.shaderPointSize
+                        uViewportHeight: viewController.shaderViewportHeight
                     }
                 ]
             }

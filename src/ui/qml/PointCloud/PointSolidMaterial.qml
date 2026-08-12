@@ -8,6 +8,10 @@ CustomMaterial {
     shadingMode: CustomMaterial.Unshaded
     cullMode: Material.NoCulling
 
-    property real uPointSize: 1.0
+    property real uPointSize: 0.5  // world units (cm)
+    property real uViewportHeight: 1080.0
+    property real uMinPointPixels: 1.0
+    property real uMaxPointPixels: 64.0
+
     property color uColor: "white"
 }

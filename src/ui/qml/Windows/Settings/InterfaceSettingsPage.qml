@@ -101,29 +101,17 @@ SettingsPage {
         }
 
         SettingsRow {
-            label: "Point size (min / max)"
+            label: "Point size (mm)"
 
-            DragFloat {
+            DragInt {
                 font: Scaling.uiFont
                 Layout.preferredWidth: Math.round(110 * Scaling.uiScale)
-                minValue: 0.5
-                maxValue: 20.0
-                defaultValue: 1.0
-                boundValue: AppSettings.pointSizeMin
+                minValue: 1
+                maxValue: 250
+                defaultValue: 5
+                boundValue: AppSettings.pointSize
                 onCommitValue: function (v) {
-                    AppSettings.pointSizeMin = v;
-                }
-            }
-
-            DragFloat {
-                font: Scaling.uiFont
-                Layout.preferredWidth: Math.round(110 * Scaling.uiScale)
-                minValue: 0.5
-                maxValue: 20.0
-                defaultValue: 5.0
-                boundValue: AppSettings.pointSizeMax
-                onCommitValue: function (v) {
-                    AppSettings.pointSizeMax = v;
+                    AppSettings.pointSize = v;
                 }
             }
         }

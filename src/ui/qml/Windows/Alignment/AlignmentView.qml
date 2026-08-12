@@ -30,6 +30,7 @@ Item {
             materials: [
                 PointIndexMaterial {
                     uPointSize: viewController.shaderPointSize
+                    uViewportHeight: viewController.shaderViewportHeight
                 }
             ]
         }
@@ -65,6 +66,7 @@ Item {
             materials: [
                 PointCloudMaterial {
                     uPointSize: viewController.shaderPointSize
+                    uViewportHeight: viewController.shaderViewportHeight
                 }
             ]
         }

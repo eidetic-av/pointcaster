@@ -43,8 +43,11 @@ AppSettings::AppSettings(QObject *parent)
   m_backgroundColor =
       m_settings.value("viewport/backgroundColor", QStringLiteral("#00010A"))
           .toString();
-  m_pointSizeMin = m_settings.value("viewport/pointSizeMin", 1.0).toDouble();
-  m_pointSizeMax = m_settings.value("viewport/pointSizeMax", 5.0).toDouble();
+  
+
+  const int stored_point_size =
+      m_settings.value("viewport/pointSize", 5).toInt();
+  m_pointSize = stored_point_size >= 1 ? qBound(1, stored_point_size, 250) : 5;
 
   m_enablePrometheusMetrics =
       m_settings.value("prometheusEnabled", true).toBool();
@@ -245,38 +248,23 @@ QString AppSettings::backgroundColor() const {
   return m_backgroundColor;
 }
 
-double AppSettings::pointSizeMin() const {
-  return m_pointSizeMin;
+int AppSettings::pointSize() const {
+  return m_pointSize;
 }
 
-void AppSettings::setPointSizeMin(double value) {
-  const double v = qBound(0.5, value, 20.0);
-  if (qFuzzyCompare(v, m_pointSizeMin)) return;
+void AppSettings::setPointSize(int value) {
+  const int v = qBound(1, value, 250);
+  if (v == m_pointSize) return;
+
   if (!onObjectThread(this)) {
     QMetaObject::invokeMethod(
-        this, [this, v] { setPointSizeMin(v); }, Qt::QueuedConnection);
+        this, [this, v] { setPointSize(v); }, Qt::QueuedConnection);
     return;
   }
-  m_pointSizeMin = v;
-  write("viewport/pointSizeMin", m_pointSizeMin);
-  emit pointSizeMinChanged();
-}
 
-double AppSettings::pointSizeMax() const {
-  return m_pointSizeMax;
-}
-
-void AppSettings::setPointSizeMax(double value) {
-  const double v = qBound(0.5, value, 20.0);
-  if (qFuzzyCompare(v, m_pointSizeMax)) return;
-  if (!onObjectThread(this)) {
-    QMetaObject::invokeMethod(
-        this, [this, v] { setPointSizeMax(v); }, Qt::QueuedConnection);
-    return;
-  }
-  m_pointSizeMax = v;
-  write("viewport/pointSizeMax", m_pointSizeMax);
-  emit pointSizeMaxChanged();
+  m_pointSize = v;
+  write("viewport/pointSize", m_pointSize);
+  emit pointSizeChanged();
 }
 
 bool AppSettings::restoreLastWorkspace() const {

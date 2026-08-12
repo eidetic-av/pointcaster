@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only
 
 import QtQuick
+import QtQuick.Window
 import QtQuick3D
+
+import Pointcaster 1.0
 
 Item {
     id: root
@@ -28,23 +31,8 @@ Item {
     property alias scrolling: viewState.isScrolling
     property alias dragActive: rmbDragHandler.active
 
-    property real shaderMinPointSize: AppSettings.pointSizeMin
-    property real shaderMaxPointSize: AppSettings.pointSizeMax
-    property real shaderPointSizeExponent: 2
-    property real shaderPointSizeCameraZMin: 10
-    property real shaderPointSizeCameraZMax: 1000
-
-    property real shaderPointSize: {
-        const cameraZRange = shaderPointSizeCameraZMax - shaderPointSizeCameraZMin;
-
-        let t = 1 - ((camera.z - shaderPointSizeCameraZMin) / cameraZRange);
-        t = Math.max(0, Math.min(1, t));
-
-        const raised = Math.pow(t, shaderPointSizeExponent);
-        const pointSizeRange = shaderMaxPointSize - shaderMinPointSize;
-
-        return shaderMinPointSize + raised * pointSizeRange;
-    }
+    property real shaderPointSize: AppSettings.pointSize * 0.1
+    property real shaderViewportHeight: height * Screen.devicePixelRatio
 
     DragHandler {
         id: dragHandler
@@ -166,21 +154,18 @@ Item {
         }
 
         function processInput(frameDelta) {
-            // To keep the sensitivty compatible with the old frame based system
-            // we add a constant frame delta factor equivalent to 60 fps
-            const legacyDeltaScale = 1.66666666667;
             if (useMouse) {
                 // Get the delta
                 var rotationVector = root.origin.eulerRotation;
                 var delta = Qt.vector2d(lastPos.x - currentPos.x, lastPos.y - currentPos.y);
                 // rotate x
-                var rotateX = delta.x * root.xSpeed * legacyDeltaScale;
+                var rotateX = delta.x * root.xSpeed;
                 if (root.xInvert)
                     rotateX = -rotateX;
                 rotationVector.y += rotateX;
 
                 // rotate y
-                var rotateY = delta.y * -root.ySpeed * legacyDeltaScale;
+                var rotateY = delta.y * -root.ySpeed;
                 if (root.yInvert)
                     rotateY = -rotateY;
                 rotationVector.x += rotateY;
@@ -191,8 +176,8 @@ Item {
                 let delta = currentPanPos.minus(lastPanPos);
                 delta.x = -delta.x;
 
-                delta.x = (delta.x / root.width) * root.camera.z * legacyDeltaScale;
-                delta.y = (delta.y / root.height) * root.camera.z * legacyDeltaScale;
+                delta.x = (delta.x / root.width) * root.camera.z;
+                delta.y = (delta.y / root.height) * root.camera.z;
 
                 let velocity = Qt.vector3d(0, 0, 0);
                 // X Movement
