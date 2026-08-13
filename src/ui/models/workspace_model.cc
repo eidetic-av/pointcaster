@@ -1480,6 +1480,8 @@ void WorkspaceModel::initGroupAdapter(
         const QString group_id_q = adapter->id();
         if (group_id_q.isEmpty()) return;
 
+        propagateGroupTransport(group_id_q.toStdString(), path, value);
+
         pc::devices::DeviceGroupConfiguration before;
         pc::devices::DeviceGroupConfiguration after;
         pc::WorkspaceConfiguration base_snapshot;
@@ -1539,6 +1541,53 @@ void WorkspaceModel::retransformGroupDescendants(const std::string &group_id) {
         pc::devices::device_info_from_variant(device_plugin->config_variant());
     if (isDescendantOf(std::string(device_id), group_id))
       device_plugin->on_config_field_changed("transform");
+  }
+}
+
+void WorkspaceModel::propagateGroupTransport(const std::string &group_id,
+                                             const QString &path,
+                                             const QVariant &value) {
+  const bool set_playing = path == QStringLiteral("sequence/playing");
+  const bool set_frame = path == QStringLiteral("sequence/current_frame");
+  if (!set_playing && !set_frame) return;
+
+  std::vector<std::string> group_device_ids;
+  {
+    std::scoped_lock lock(_workspace.config_access);
+    group_device_ids =
+        pc::devices::device_ids_in_group(_workspace.config, group_id);
+  }
+  if (group_device_ids.empty()) return;
+
+  for (auto &device_plugin : _workspace.devices) {
+    if (!device_plugin || !device_plugin->is_sequence()) continue;
+    if (device_plugin->is_discovery_instance()) continue;
+    auto [device_id, plugin_name] =
+        pc::devices::device_info_from_variant(device_plugin->config_variant());
+    if (!std::ranges::contains(group_device_ids, device_id)) continue;
+
+    std::visit(
+        [&](auto &device_config) {
+          if constexpr (requires { device_config.sequence.value().playing; }) {
+            auto &sequence = device_config.sequence.value();
+            if (set_playing) {
+              sequence.playing.set(value.toBool());
+            } else {
+              sequence.current_frame.set(value.toInt());
+            }
+          }
+        },
+        device_plugin->config());
+
+    device_plugin->on_config_field_changed(path.toStdString());
+
+    // the plugin holds its own config, so mirror the change back into the
+    // workspace copy the way a per-device edit would
+    std::scoped_lock lock(_workspace.config_access);
+    const int index =
+        find_device_index_by_id(_workspace.config, std::string(device_id));
+    if (index < 0) continue;
+    _workspace.config.devices[size_t(index)] = device_plugin->config_variant();
   }
 }
 

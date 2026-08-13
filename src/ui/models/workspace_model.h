@@ -433,6 +433,10 @@ private:
   void initGroupAdapter(pc::devices::DeviceGroupConfigurationAdapter *adapter);
   void retransformGroupDescendants(const std::string &group_id);
 
+  // a group's transport buttons control every child sequence device
+  void propagateGroupTransport(const std::string &group_id, const QString &path,
+                               const QVariant &value);
+
   DeviceAdapter *makeDeviceAdapterForPlugin(
       pc::devices::DevicePlugin *plugin,
       pc::devices::DeviceConfigurationVariant &config_variant);

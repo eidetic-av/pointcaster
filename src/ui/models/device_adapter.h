@@ -227,7 +227,7 @@ public:
     _lastHasSequence = _plugin && _plugin->is_sequence();
     _lastFrameCount = _plugin ? static_cast<int>(_plugin->frame_count()) : 1;
 
-    if (seqChanged || frameCountChanged || frameChanged)
+    if (seqChanged || frameCountChanged || frameChanged || playingChanged)
       emit sequenceStateChanged();
   }
 
