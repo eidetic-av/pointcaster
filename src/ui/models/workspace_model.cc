@@ -11,14 +11,18 @@
 #include <QMetaObject>
 #include <QObject>
 #include <QPointer>
+#include <QQuaternion>
 #include <QRegularExpression>
 #include <QSet>
 #include <QString>
 #include <QUndoCommand>
 #include <QVariant>
+#include <QVector3D>
 #include <algorithm>
 #include <chrono>
+#include <config/transform_config.h>
 #include <core/logger/logger.h>
+#include <core/util/geometry_utils.h>
 #include <core/uuid/uuid.h>
 #include <filesystem>
 #include <functional>
@@ -1137,6 +1141,67 @@ WorkspaceModel::nodeAncestorWorldMatrix(const QString &node_id) const {
   v[7] *= 0.001f;
   v[11] *= 0.001f;
   return QMatrix4x4(v.data());
+}
+
+QVariantMap WorkspaceModel::localTransformForWorldAlignment(
+    const QString &device_id, const QMatrix4x4 &worldAlignment) const {
+  QVariantMap result;
+
+  const auto id = device_id.toStdString();
+
+  pc::TransformConfiguration device_transform;
+  pc::float4x4 world;
+  {
+    std::scoped_lock lock(_workspace.config_access);
+    const int index = find_device_index_by_id(_workspace.config, id);
+    if (index < 0) {
+      pc::logger()->error("Alignment: no device '{}' to place", id);
+      return result;
+    }
+    std::visit(
+        [&](const auto &device_config) {
+          device_transform = device_config.transform.value();
+        },
+        _workspace.config.devices[size_t(index)]);
+    world = pc::devices::effective_world_transform(_workspace.config, id);
+  }
+
+  // the qt 3d scene uses centimeters, but point clouds
+  // are all in milimeter shorts, so multiply cm -> mm
+  QMatrix4x4 alignment = worldAlignment;
+  alignment(0, 3) *= 10.0f;
+  alignment(1, 3) *= 10.0f;
+  alignment(2, 3) *= 10.0f;
+
+  const QMatrix4x4 ancestors(world.values.data());
+
+  bool invertible = false;
+  const QMatrix4x4 ancestors_inverse = ancestors.inverted(&invertible);
+  if (!invertible) {
+    pc::logger()->error(
+        "Alignment: '{}' sits under a group transform that can't be inverted",
+        id);
+    return result;
+  }
+
+  // the device's own placement without its scale
+  auto rigid_transform = device_transform;
+  rigid_transform.scale.set(pc::float3{1.0f, 1.0f, 1.0f});
+  const QMatrix4x4 local(pc::to_float4x4(rigid_transform).values.data());
+
+  // pull the world-space delta back into the device's parent space before
+  // stacking it on what the device already has
+  const QMatrix4x4 placed = ancestors_inverse * alignment * ancestors * local;
+
+  pc::float4x4 placed_matrix;
+  placed.copyDataTo(placed_matrix.values.data());
+
+  const auto [position, rotation] = pc::decompose_transform(placed_matrix);
+  result["position"] = QVector3D(position.x, position.y, position.z) * 0.001f;
+  result["rotation"] =
+      QQuaternion(rotation.scalar, rotation.x, rotation.y, rotation.z)
+          .toEulerAngles();
+  return result;
 }
 
 void WorkspaceModel::addNewDevice(const QString &plugin_name,

@@ -206,10 +206,13 @@ Window {
                     if (!alignmentController.hasResult)
                         return;
                     var adapter = root.workspace.deviceAdapters[windowState.secondaryDeviceIndex];
-                    var pos = alignmentController.resultPosition;
-                    adapter.set("transform/position", Qt.vector3d(pos.x * 0.01, pos.y * 0.01, pos.z * 0.01));
-                    var euler = alignmentController.resultRotation.toEulerAngles();
-                    adapter.set("transform/rotation", Qt.vector3d(euler.x, euler.y, euler.z));
+                    // the result is a world-space delta...
+                    // so transform to internal space
+                    var local = root.workspace.localTransformForWorldAlignment(adapter.id, alignmentController.transform);
+                    if (local.position === undefined)
+                        return;
+                    adapter.set("transform/position", local.position);
+                    adapter.set("transform/rotation", local.rotation);
                 }
             }
         }

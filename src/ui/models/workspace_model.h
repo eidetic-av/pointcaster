@@ -193,6 +193,9 @@ public:
 
   Q_INVOKABLE QMatrix4x4 nodeAncestorWorldMatrix(const QString &node_id) const;
 
+  Q_INVOKABLE QVariantMap localTransformForWorldAlignment(
+      const QString &device_id, const QMatrix4x4 &worldAlignment) const;
+
   Q_INVOKABLE void moveDeviceNode(const QString &node_id,
                                   const QString &new_parent_id,
                                   const QString &before_node_id = "");
