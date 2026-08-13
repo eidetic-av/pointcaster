@@ -27,23 +27,20 @@ Item {
         return (owner && owner.contentItem === item) ? owner : item;
     }
 
-    MouseArea {
+    PointHandler {
         id: pressWatcher
-        anchors.fill: parent
-
-        hoverEnabled: false
         acceptedButtons: Qt.AllButtons
 
-        onPressed: mouse => {
-            // let the press through to whatever was actually clicked
-            mouse.accepted = false;
+        onActiveChanged: {
+            if (!pressWatcher.active)
+                return;
 
             const focusItem = root.Window.activeFocusItem;
             if (!focusItem || focusItem === focusSink)
                 return;
 
             const control = root.focusedControl(focusItem);
-            if (control.contains(pressWatcher.mapToItem(control, mouse.x, mouse.y)))
+            if (control.contains(control.mapFromItem(null, pressWatcher.point.scenePosition)))
                 return;
 
             root.release();
