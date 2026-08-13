@@ -25,6 +25,7 @@
 #include <config/transform_config.h>
 #include <pipeline/concurrent_operator_pipeline_config.h>
 #include <publishers/mqtt/mqtt_client_config.h>
+#include <publishers/osc/osc_sender_config.h>
 #include <publishers/publishers_config.h>
 #include <session/session_config.h>
 
@@ -38,7 +39,7 @@ using ConfigurationVariant = std::variant<
     GroupSequenceConfiguration,
     operators::ConcurrentOperatorPipelineConfiguration,
     networking::PointStreamerConfiguration, publishers::PublishersConfiguration,
-    publishers::MqttClientConfiguration,
+    publishers::MqttClientConfiguration, publishers::OscSenderConfiguration,
     // TODO REMOVE AND ADD
     // specialised jinja with  setConfig overload like device
     // adapters

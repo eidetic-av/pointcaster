@@ -37,6 +37,7 @@ qt_add_executable(pointcaster
   receivers/osc/osc_receiver.cc
   publishers/workspace_publisher.cc
   publishers/mqtt/mqtt_client.cc
+  publishers/osc/osc_sender.cc
   ${app_icon_resource}
 )
 

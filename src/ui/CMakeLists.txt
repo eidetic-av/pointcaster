@@ -69,6 +69,7 @@ set(CONFIG_ADAPTER_INPUTS
     plugins/devices/device_group_config.h
     publishers/publishers_config.h
     publishers/mqtt/mqtt_client_config.h
+    publishers/osc/osc_sender_config.h
     # TODO we need some faculty to create these adapters
     # without them being expressed in the main module here...
     # i guess the UI adapters need to be generated inside the 

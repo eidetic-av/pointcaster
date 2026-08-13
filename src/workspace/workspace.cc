@@ -4,6 +4,7 @@
 #include "config/config_registry.h"
 #include "point_streamer/point_streamer.h"
 #include "publishers/mqtt/mqtt_client.h"
+#include "publishers/osc/osc_sender.h"
 #include "publishers/workspace_publisher.h"
 #include "receivers/osc/osc_receiver.h"
 #include "recorder/session_recorder.h"
@@ -79,6 +80,7 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
 
   workspace_publisher = std::make_unique<publishers::WorkspacePublisher>(*this);
   mqtt_client = std::make_unique<publishers::MqttClient>(*this);
+  osc_sender = std::make_unique<publishers::OscSender>(*this);
 
   // TODO maybe the metrics server shouldn't be a singleton and should
   // follow the same pattern as session_recorder & point_streamer belonging
