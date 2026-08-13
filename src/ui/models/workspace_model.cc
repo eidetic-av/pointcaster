@@ -2341,7 +2341,8 @@ void WorkspaceModel::initDeviceAdapter(AdapterT *adapter,
         const QString device_id_q = adapterStableId(device_adapter);
         if (device_id_q.isEmpty()) return;
 
-        // the first 'preview' that was captured is what undo has to come back to
+        // the first 'preview' that was captured is what undo has to come back
+        // to
         if (!_devicePreview || _devicePreview->id != device_id_q) {
           std::scoped_lock lock(_workspace.config_access);
           const int idx = find_device_index_by_id(_workspace.config,
@@ -2845,6 +2846,18 @@ void WorkspaceModel::triggerDeviceDiscovery() {
 bool WorkspaceModel::isDescendantOf(
     const std::string &node_id, const std::string &maybe_ancestor_id) const {
   std::string current_id = node_id;
+
+  if (find_device_group_index_by_id(_workspace.config, node_id) < 0) {
+    const int device_index =
+        find_device_index_by_id(_workspace.config, node_id);
+    if (device_index < 0) return false;
+    current_id = std::visit(
+        [](const auto &device_config) {
+          return device_config.parent_id.value();
+        },
+        _workspace.config.devices[size_t(device_index)]);
+  }
+
   while (!current_id.empty()) {
     if (current_id == maybe_ancestor_id) return true;
     const int group_index =
