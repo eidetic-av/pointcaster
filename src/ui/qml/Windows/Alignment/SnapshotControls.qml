@@ -63,10 +63,9 @@ RowLayout {
             flat: true
             model: root.deviceAdapters
             currentIndex: root.primaryDeviceIndex
-            textRole: "id"
 
             contentItem: Text {
-                text: primaryDeviceList.displayText
+                text: root.devicePath(root.deviceAdapters[primaryDeviceList.currentIndex])
                 font: Scaling.uiFont
                 color: ThemeColors.text
                 verticalAlignment: Text.AlignVCenter
@@ -97,10 +96,9 @@ RowLayout {
             flat: true
             model: root.deviceAdapters
             currentIndex: root.secondaryDeviceIndex
-            textRole: "id"
 
             contentItem: Text {
-                text: secondaryDeviceList.displayText
+                text: root.devicePath(root.deviceAdapters[secondaryDeviceList.currentIndex])
                 font: Scaling.uiFont
                 color: ThemeColors.text
                 verticalAlignment: Text.AlignVCenter
