@@ -2881,6 +2881,17 @@ void WorkspaceModel::syncDeviceAdapters() {
           }
           if (!adapterPtr) return;
           std::string local(path.substr(prefix.size()));
+          // the node prefix on its own means the whole config was replaced
+          // underneath the adapter, so every field has to be read
+          if (local.empty()) {
+            QMetaObject::invokeMethod(
+                adapterPtr.data(),
+                [adapterPtr]() {
+                  if (adapterPtr) adapterPtr->notifyAllFieldsChanged();
+                },
+                Qt::QueuedConnection);
+            return;
+          }
           for (std::string_view sfx : {"/x", "/y", "/z"}) {
             if (local.ends_with(sfx)) {
               local = local.substr(0, local.size() - sfx.size());
