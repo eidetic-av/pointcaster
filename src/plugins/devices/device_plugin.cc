@@ -28,6 +28,37 @@ bool DevicePlugin::rendering() {
       _config);
 }
 
+void DevicePlugin::update_config(const DeviceConfigurationVariant &config) {
+  _config = config;
+  std::visit(
+      [this](auto &device_config) {
+        if constexpr (requires { device_config.operators; }) {
+          sync_operators(device_config.operators);
+        }
+      },
+      _config);
+
+  if (!_workspace) return;
+
+  // we updated the plugin's config copy, now update the actual config thats
+  // part of the workspace
+  const auto device_id = device_id_from_variant(_config);
+  std::string node_prefix;
+  {
+    std::scoped_lock lock(_workspace->config_access);
+    for (auto &device_config_variant : _workspace->config.devices) {
+      if (device_id_from_variant(device_config_variant) != device_id) continue;
+      device_config_variant = _config;
+      node_prefix = "device/" +
+                    device_address(_workspace->config, std::string(device_id));
+      break;
+    }
+  }
+  if (node_prefix.empty()) return;
+
+  _workspace->config_registry.notify(node_prefix + "/");
+}
+
 void DevicePlugin::on_config_field_changed(std::string_view path) {
   // For operator changes, forward the new config to all pipeline worker
   // instances

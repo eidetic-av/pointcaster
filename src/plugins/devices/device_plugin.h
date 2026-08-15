@@ -141,16 +141,8 @@ public:
 
   DeviceConfigurationVariant &config() { return _config; }
 
-  virtual void update_config(const DeviceConfigurationVariant &config) {
-    _config = config;
-    std::visit(
-        [this](auto &device_config) {
-          if constexpr (requires { device_config.operators; }) {
-            sync_operators(device_config.operators);
-          }
-        },
-        _config);
-  }
+  POINTCASTER_API virtual void
+  update_config(const DeviceConfigurationVariant &config);
 
   POINTCASTER_API virtual void
   on_config_field_changed([[maybe_unused]] std::string_view path = "");
