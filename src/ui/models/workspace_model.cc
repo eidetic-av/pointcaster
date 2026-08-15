@@ -2654,9 +2654,9 @@ void WorkspaceModel::syncSessionAdapters() {
           std::string local(path.substr(prefix.size()));
           // collapse float3 component sub-paths to the parent path
           // e.g. "transform/position/x" becomes "transform/position"
-          for (std::string_view sfx : {"/x", "/y", "/z"}) {
-            if (local.ends_with(sfx)) {
-              local = local.substr(0, local.size() - sfx.size());
+          for (std::string_view component_suffix : {"/x", "/y", "/z"}) {
+            if (local.ends_with(component_suffix)) {
+              local = local.substr(0, local.size() - component_suffix.size());
               break;
             }
           }
@@ -2892,9 +2892,9 @@ void WorkspaceModel::syncDeviceAdapters() {
                 Qt::QueuedConnection);
             return;
           }
-          for (std::string_view sfx : {"/x", "/y", "/z"}) {
-            if (local.ends_with(sfx)) {
-              local = local.substr(0, local.size() - sfx.size());
+          for (std::string_view component_suffix : {"/x", "/y", "/z"}) {
+            if (local.ends_with(component_suffix)) {
+              local = local.substr(0, local.size() - component_suffix.size());
               break;
             }
           }
