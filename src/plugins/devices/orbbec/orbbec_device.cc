@@ -459,9 +459,10 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
       // need to do stuff here
     }
 
+    // sensor_config aliases _config, so this lands on the plugin's own copy
+    // directly. fps is rfl::Skip, so there is nothing to persist upstream
     const auto fps = std::min(depth_profile->fps(), colour_profile->fps());
-    device_config.fps.set(fps);
-    update_config(device_config);
+    sensor_config.fps.set(fps);
 
     pc::logger()->trace("enabling stream at: {} fps", fps);
 

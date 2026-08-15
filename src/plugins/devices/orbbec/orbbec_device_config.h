@@ -26,8 +26,6 @@ struct OrbbecDeviceConfiguration {
   rfl::DefaultVal<bool> active = true; // @hidden
   rfl::DefaultVal<bool> render = true; // @hidden
 
-  rfl::Skip<int> fps; // @disabled
-
   // enumerations shared among sensor configuration types
 
   enum class DepthMode { Narrow, Wide };
@@ -62,11 +60,15 @@ struct OrbbecDeviceConfiguration {
         DepthResolution::NFOV_640x576;
     rfl::DefaultVal<SyncMode> sync_mode = SyncMode::Standalone;
 
+    // resolved from the stream profiles once the pipeline starts
+    rfl::Skip<int> fps; // @disabled
+
     using Tag = rfl::Literal<"rgbd">;
   };
 
   struct LidarSensorConfiguration {
-    rfl::DefaultVal<uint32_t> scan_rate = 30; // @options(15, 20, 25, 30, 40) @suffix(Hz)
+    rfl::DefaultVal<uint32_t> scan_rate =
+        30; // @options(15, 20, 25, 30, 40) @suffix(Hz)
 
     using Tag = rfl::Literal<"lidar">;
   };
