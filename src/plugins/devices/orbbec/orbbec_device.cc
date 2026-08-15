@@ -206,26 +206,18 @@ void OrbbecDevice::start_sync() {
 
   std::shared_ptr<ob::Device> ob_device;
 
-  // try to find existing device in the list by device UID
-  if (!config.ob_uid.empty()) {
+  // try to find existing device in the list by device serial num
+  if (!config.serial.empty()) {
     auto ob_device_list = ob_ctx->queryDeviceList();
-#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
-    const uint32_t device_count = ob_device_list->getCount();
-#else
     const uint32_t device_count = ob_device_list->deviceCount();
-#endif
     for (uint32_t i = 0; i < device_count; ++i) {
-#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
-      auto uid = ob_device_list->getUid(i);
-#else
-      auto uid = ob_device_list->uid(i);
-#endif
-      if (std::strcmp(uid, config.ob_uid.c_str()) == 0) {
+      auto serial = ob_device_list->serialNumber(i);
+      if (std::strcmp(serial, config.serial.c_str()) == 0) {
         try {
           ob_device = ob_device_list->getDevice(i);
           pc::logger()->trace("Completed ob_device_list->getDevice({})", i);
         } catch (...) {
-          pc::logger()->warn("Unable to open device with matched device UID");
+          pc::logger()->warn("Unable to open device with matched serial");
           pc::logger()->warn("Check connection to camera");
         }
         break;
@@ -272,14 +264,25 @@ void OrbbecDevice::start_sync() {
     return;
   }
 
-  if (config.ob_uid.empty() || connected_using_ip) {
-#if POINTCASTER_ORBBEC_SDK_VERSION >= 2
-    config.ob_uid = ob_device->getDeviceInfo()->getUid();
-#else
-    config.ob_uid = ob_device->getDeviceInfo()->uid();
-#endif
-    update_config(config);
+  const auto device_info = ob_device->getDeviceInfo();
+  bool config_changed = false;
+
+  if (config.serial.empty() || connected_using_ip) {
+    config.serial = device_info->serialNumber();
+    config_changed = true;
   }
+
+  // the sdk hands back 0.0.0.0 rather than nothing when it has no ip
+  constexpr auto unassigned_ip = "0.0.0.0";
+  const std::string device_ip = device_info->ipAddress();
+  if (device_ip != unassigned_ip && ip != device_ip) {
+    pc::logger()->warn("OrbbecDevice ({}) is at {}, was {}", config.id,
+                       device_ip, ip.empty() ? "unset" : ip);
+    config.network.value().ip_address.set(device_ip);
+    config_changed = true;
+  }
+
+  if (config_changed) update_config(config);
 
   pc::logger()->trace("Successfully created device at {}:{}", ip,
                       net_device_port);

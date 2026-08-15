@@ -17,7 +17,7 @@ class OrbbecDevice;
 
 struct OrbbecDeviceConfiguration {
   std::string id;                     // @hidden
-  std::string ob_uid;                 // @disabled
+  std::string serial;                  // @disabled
   rfl::DefaultVal<std::string> label; // @hidden
 
   rfl::DefaultVal<std::string> parent_id; // @hidden
