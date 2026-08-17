@@ -47,14 +47,18 @@ struct StructuredAabbList {
 // main worker thread
 void mqtt_client_thread_worker(std::stop_token stop_token,
                                Workspace &workspace) {
-  auto socket = WorkspaceSocket::create_subscriber();
+
+  using EmptyMessageHandling = MqttClientConfiguration::EmptyMessageHandling;
+  using SerializationFormat = MqttClientConfiguration::SerializationFormat;
 
   bool enabled;
   std::string broker_uri;
   std::string client_id;
   bool auto_reconnect;
-  MqttClientConfiguration::SerializationFormat serialization_format;
+  SerializationFormat serialization_format;
   bool serialize_as_structures;
+  bool send_retained;
+  EmptyMessageHandling empty_message_handling;
 
   const auto sync_config_vars = [&] {
     std::scoped_lock lock(workspace.config_access);
@@ -65,10 +69,16 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
     auto_reconnect = config.auto_reconnect.value();
     serialization_format = config.serialization_format.value();
     serialize_as_structures = config.serialize_as_structures.value();
+    send_retained = config.send_retained.value();
+    empty_message_handling = config.empty_message_handling.value();
   };
 
   sync_config_vars();
 
+  // workspace input
+  auto socket = WorkspaceSocket::create_subscriber();
+
+  // broker output
   auto client = std::make_unique<mqtt::client>(broker_uri, client_id);
 
   try {
@@ -129,13 +139,16 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
 
           using VariantType = std::decay_t<decltype(v)>;
           mqtt::message_ptr msg;
+          bool payload_empty;
           {
             ProfilingZone mqtt_serialization_zone("MqttClient::serialize");
 
             if constexpr (std::is_convertible<VariantType, std::string>()) {
               msg = mqtt::make_message(path, v);
+              payload_empty = std::empty(v);
             } else if constexpr (std::is_arithmetic<VariantType>()) {
               msg = mqtt::make_message(path, std::to_string(v));
+              payload_empty = false;
             } else if constexpr (std::same_as<VariantType, AabbListPtr>) {
               if (!v) return;
 
@@ -155,6 +168,7 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
                                                 .max = {max.x, max.y, max.z}};
                         }) |
                         std::ranges::to<std::vector>()};
+                payload_empty = list.aabbs.empty();
 
                 if (serialization_format ==
                     MqttClientConfiguration::SerializationFormat::JSON) {
@@ -177,9 +191,9 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
                           {{min.x, min.y, min.z}, {max.x, max.y, max.z}}};
                     }) |
                     std::ranges::to<std::vector>();
+                payload_empty = aabbs.empty();
 
-                if (serialization_format ==
-                    MqttClientConfiguration::SerializationFormat::JSON) {
+                if (serialization_format == SerializationFormat::JSON) {
                   ProfilingZone json_zone("serialize::json");
                   msg = mqtt::make_message(path, rfl::json::write(aabbs));
                 } else { // SerializationFormat::MessagePack
@@ -194,14 +208,14 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
               if (!v) return;
 
               using std_position = std::array<int16_t, 3>;
-              const auto positions =
-                  v->positions | std::views::transform([](const auto &p) {
-                    return std_position{{p.x, p.y, p.z}};
-                  }) |
-                  std::ranges::to<std::vector>();
+              const auto positions = v->positions |
+                                     std::views::transform([](const auto &p) {
+                                       return std_position{{p.x, p.y, p.z}};
+                                     }) |
+                                     std::ranges::to<std::vector>();
+              payload_empty = positions.empty();
 
-              if (serialization_format ==
-                  MqttClientConfiguration::SerializationFormat::JSON) {
+              if (serialization_format == SerializationFormat::JSON) {
                 ProfilingZone json_zone("serialize::json");
                 msg = mqtt::make_message(path, rfl::json::write(positions));
               } else { // SerializationFormat::MessagePack
@@ -212,13 +226,30 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
                                          send_buffer.size());
               }
             } else {
-              msg = mqtt::make_message(path, std::format("{}", v));
+              const auto msg_str = std::format("{}", v);
+              payload_empty = msg_str.empty();
+              msg = mqtt::make_message(path, std::move(msg_str));
             }
           }
           {
             ProfilingZone mqtt_publish_zone("MqttClient::publish");
+
+            static thread_local bool has_published_empty_once = false;
+            msg->set_retained(send_retained);
+
             try {
-              client->publish(msg);
+              if (!payload_empty) {
+                client->publish(msg);
+                has_published_empty_once = false;
+              } else if (empty_message_handling ==
+                         EmptyMessageHandling::PublishEmptyAlways) {
+                client->publish(msg);
+              } else if (empty_message_handling ==
+                             EmptyMessageHandling::PublishEmptyOnce &&
+                         !has_published_empty_once) {
+                client->publish(msg);
+                has_published_empty_once = true;
+              }
             } catch (mqtt::exception e) {
               pc::logger()->error("MQTT publish failed with exception: {}",
                                   e.get_message());
