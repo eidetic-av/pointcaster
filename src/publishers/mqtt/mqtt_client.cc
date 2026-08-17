@@ -33,11 +33,12 @@ using namespace pc::profiling;
 
 namespace {
 
-// some intermediary structs needed to send complex types over mqtt
+// some intermediary structs needed to serialize complex types over mqtt
 struct StructuredAabb {
   std::array<int16_t, 3> min;
   std::array<int16_t, 3> max;
   MSGPACK_DEFINE_MAP(min, max);
+  const std::string id;
 };
 struct StructuredAabbList {
   std::vector<StructuredAabb> aabbs;
@@ -134,23 +135,23 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
     auto &[path, value] = msg.value();
 
     std::visit(
-        [&](auto &v) {
+        [&](auto &value) {
           ProfilingZone mqtt_zone("MqttClient::process_msg");
 
-          using VariantType = std::decay_t<decltype(v)>;
+          using VariantType = std::decay_t<decltype(value)>;
           mqtt::message_ptr msg;
           bool payload_empty;
           {
             ProfilingZone mqtt_serialization_zone("MqttClient::serialize");
 
             if constexpr (std::is_convertible<VariantType, std::string>()) {
-              msg = mqtt::make_message(path, v);
-              payload_empty = std::empty(v);
+              msg = mqtt::make_message(path, value);
+              payload_empty = std::empty(value);
             } else if constexpr (std::is_arithmetic<VariantType>()) {
-              msg = mqtt::make_message(path, std::to_string(v));
+              msg = mqtt::make_message(path, std::to_string(value));
               payload_empty = false;
             } else if constexpr (std::same_as<VariantType, AabbListPtr>) {
-              if (!v) return;
+              if (!value) return;
 
               // we either serialize as typed aabb structs, which are easier to
               // read for instance in mqtt explorer as json, and may be easier
@@ -158,16 +159,24 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
               // array / list types of min/max bounds, which is more efficient
 
               if (serialize_as_structures) {
+                const auto &min = value->min_positions();
+                const auto &max = value->max_positions();
+                const auto indices =
+                    std::ranges::iota_view(0, static_cast<int>(value->size()));
+                // TODO cpp26...
+                // const auto indices =
+                // std::views::indices(std::ranges::size(min));
                 StructuredAabbList list{
-                    .aabbs =
-                        std::views::zip(v->min_positions(),
-                                        v->max_positions()) |
-                        std::views::transform([](const auto &min_max) {
-                          const auto &[min, max] = min_max;
-                          return StructuredAabb{.min = {min.x, min.y, min.z},
-                                                .max = {max.x, max.y, max.z}};
-                        }) |
-                        std::ranges::to<std::vector>()};
+                    .aabbs = std::views::zip(min, max, indices) |
+                             std::views::transform([](const auto &aabb) {
+                               const auto &[min, max, i] = aabb;
+                               return StructuredAabb{
+                                   .min = {min.x, min.y, min.z},
+                                   .max = {max.x, max.y, max.z},
+                                   // TODO id's are just indices for now
+                                   .id = std::format("{}", i)};
+                             }) |
+                             std::ranges::to<std::vector>()};
                 payload_empty = list.aabbs.empty();
 
                 if (serialization_format ==
@@ -184,7 +193,8 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
               } else {
                 using std_aabb = std::array<std::array<int16_t, 3>, 2>;
                 const auto aabbs =
-                    std::views::zip(v->min_positions(), v->max_positions()) |
+                    std::views::zip(value->min_positions(),
+                                    value->max_positions()) |
                     std::views::transform([](const auto &min_max) {
                       const auto &[min, max] = min_max;
                       return std_aabb{
@@ -205,10 +215,10 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
                 }
               }
             } else if constexpr (pc::is_cloud_stream_v<VariantType>) {
-              if (!v) return;
+              if (!value) return;
 
               using std_position = std::array<int16_t, 3>;
-              const auto positions = v->positions |
+              const auto positions = value->positions |
                                      std::views::transform([](const auto &p) {
                                        return std_position{{p.x, p.y, p.z}};
                                      }) |
@@ -226,7 +236,7 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
                                          send_buffer.size());
               }
             } else {
-              const auto msg_str = std::format("{}", v);
+              const auto msg_str = std::format("{}", value);
               payload_empty = msg_str.empty();
               msg = mqtt::make_message(path, std::move(msg_str));
             }
