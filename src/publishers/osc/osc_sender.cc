@@ -198,6 +198,9 @@ void osc_sender_thread_worker(std::stop_token stop_token,
                 ProfilingZone osc_encode_zone("OscSender::encode");
                 if constexpr (std::same_as<VariantType, bool>) {
                   out.add_bool(v);
+                } else if constexpr (std::same_as<VariantType, radius> ||
+                                     std::same_as<VariantType, length>) {
+                  out.add_int32(static_cast<int32_t>(v.mm));
                 } else if constexpr (std::same_as<VariantType, std::string>) {
                   out.add_string(v);
                 } else if constexpr (std::same_as<VariantType, float>) {

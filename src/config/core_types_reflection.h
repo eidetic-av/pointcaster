@@ -33,4 +33,13 @@ template <> struct Reflector<pc::length> {
   static ReflType from(const pc::length &l) { return l.mm; }
 };
 
+// and a pc::radius is one too, in unsigned millimetres
+template <> struct Reflector<pc::radius> {
+  using ReflType = uint16_t;
+
+  static pc::radius to(const ReflType &mm) noexcept { return pc::radius{mm}; }
+
+  static ReflType from(const pc::radius &r) { return r.mm; }
+};
+
 } // namespace rfl

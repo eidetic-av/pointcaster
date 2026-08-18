@@ -270,6 +270,11 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
                                            send_buffer.size());
                 }
               }
+            } else if constexpr (std::same_as<VariantType, radius> ||
+                                 std::same_as<VariantType, length>) {
+              auto msg_str = std::format("{}", value.mm);
+              payload_empty = false;
+              msg = mqtt::make_message(path, std::move(msg_str));
             } else {
               const auto msg_str = std::format("{}", value);
               payload_empty = msg_str.empty();

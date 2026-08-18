@@ -119,6 +119,45 @@ struct length {
   }
 };
 
+// an unsigned distance out from a point, stored as an unsigned millimeter
+struct radius {
+  uint16_t mm = 0;
+  auto operator<=>(const radius &r) const = default;
+
+  constexpr float metres() const { return mm / 1000.0f; }
+  constexpr float centimetres() const { return mm / 10.0f; }
+
+  static constexpr radius from_millimetres(float millimetres) {
+    constexpr auto highest =
+        static_cast<float>(std::numeric_limits<uint16_t>::max());
+    const float rounded = millimetres + 0.5f;
+    if (rounded <= 0) return radius{0};
+    if (rounded >= highest) return radius{std::numeric_limits<uint16_t>::max()};
+    return radius{static_cast<uint16_t>(rounded)};
+  }
+
+  static constexpr radius from_metres(float metres) {
+    return from_millimetres(metres * 1000.0f);
+  }
+
+  static constexpr radius from_centimetres(float centimetres) {
+    return from_millimetres(centimetres * 10.0f);
+  }
+};
+
+// a value the configuration can switch off without losing what it holds
+template <class T> struct Toggleable {
+  using value_type = T;
+
+  bool active = false;
+  T value{};
+
+  bool operator==(const Toggleable &t) const = default;
+};
+
+inline constexpr Toggleable<position_bounds> default_crop_bounds{
+    false, default_config_bounds};
+
 struct color {
   unsigned char r = 0, g = 0, b = 0, a = 0;
   auto operator<=>(const color &c) const = default;

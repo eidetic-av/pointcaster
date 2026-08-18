@@ -21,7 +21,7 @@ namespace pc {
 
 // all types representable inside configs...
 using ConfigValue =
-    std::variant<bool, int, float, double, std::string, position_bounds,
+    std::variant<bool, int, float, double, std::string, position_bounds, radius,
                  PointCloudPtr, VoxelisedCloudPtr, AabbListPtr>;
 
 class ConfigRegistry {
@@ -75,6 +75,11 @@ template <class T> struct is_rfl_skip : std::false_type {};
 template <class T> struct is_rfl_skip<rfl::Skip<T>> : std::true_type {};
 template <class T> inline constexpr bool is_rfl_skip_v = is_rfl_skip<T>::value;
 
+template <class T> struct is_toggleable : std::false_type {};
+template <class T> struct is_toggleable<Toggleable<T>> : std::true_type {};
+template <class T>
+inline constexpr bool is_toggleable_v = is_toggleable<T>::value;
+
 // Types that map to a ConfigValue variant arm directly
 template <class T>
 concept ConfigValueCompatible =
@@ -82,10 +87,25 @@ concept ConfigValueCompatible =
     std::is_same_v<T, float> || std::is_same_v<T, double> ||
     std::is_same_v<T, std::string> || std::is_enum_v<T>;
 
+// Types that sit at a registry path as one whole value, rather than being
+// walked into for the fields underneath them
+template <class T>
+concept RegistryLeaf = ConfigValueCompatible<T> ||
+                       std::is_same_v<T, position_bounds> ||
+                       std::is_same_v<T, radius>;
+
 // Types rfl can traverse recursively (plain aggregates; excludes arrays,
 // std::string, std::vector, etc. which are not aggregates)
 template <class T>
 concept RflTraversable = std::is_aggregate_v<T> && !std::is_array_v<T>;
+
+// A tagged union is not an aggregate, so the field walk cannot see into one
+// the way it sees into a nested configuration
+template <class T>
+concept RflTaggedUnion = requires(T &t) {
+  typename T::VariantType;
+  { t.variant() } -> std::convertible_to<typename T::VariantType &>;
+};
 
 // ---- Value conversion ----
 
@@ -103,6 +123,8 @@ template <class T> ConfigValue to_config_value(const T &v) {
   else if constexpr (std::is_enum_v<T>)
     return static_cast<int>(v);
   else if constexpr (std::is_same_v<T, position_bounds>)
+    return v;
+  else if constexpr (std::is_same_v<T, radius>)
     return v;
   else if constexpr (is_cloud_stream_v<T>)
     return v;
@@ -162,6 +184,18 @@ template <class T> T from_config_value(const ConfigValue &v) {
   } else if constexpr (std::is_same_v<T, position_bounds>) {
     const auto *held = std::get_if<T>(&v);
     return held ? *held : T{};
+  } else if constexpr (std::is_same_v<T, radius>) {
+    // a bare number coming the other way is read as the millimetre count it
+    // would have serialised as
+    return std::visit(
+        [](auto &&val) -> radius {
+          using V = std::decay_t<decltype(val)>;
+          if constexpr (std::is_same_v<V, radius>) return val;
+          if constexpr (std::is_arithmetic_v<V>)
+            return radius::from_millimetres(static_cast<float>(val));
+          return radius{};
+        },
+        v);
   } else {
     return std::get<T>(v);
   }
@@ -172,6 +206,44 @@ template <class T> T from_config_value(const ConfigValue &v) {
 // Forward declaration so nested calls compile
 template <class T>
 void register_config(ConfigRegistry &reg, std::string_view prefix, T &cfg);
+
+// A Toggleable keeps the shape its inner value already had...
+//  the wrapper's own path still reads and writes that value, and the switch
+//  sits beside it under its own "/active".
+template <class Switched, class Read, class Write>
+void register_toggleable(ConfigRegistry &reg, const std::string &path,
+                         Read read, Write write) {
+  using Value = typename Switched::value_type;
+
+  reg.register_field(
+      path, {[read]() -> ConfigValue { return to_config_value(read().value); },
+             [read, write](ConfigValue v) {
+               auto held = read();
+               held.value = from_config_value<Value>(v);
+               write(held);
+             }});
+
+  reg.register_field(
+      path + "/active",
+      {[read]() -> ConfigValue { return ConfigValue(read().active); },
+       [read, write](ConfigValue v) {
+         auto held = read();
+         held.active = from_config_value<bool>(v);
+         write(held);
+       }});
+}
+
+template <class Variant>
+void register_variant(ConfigRegistry &reg, const std::string &path,
+                      Variant &variant) {
+  variant.visit([&](auto &alternative) {
+    using Alt = std::decay_t<decltype(alternative)>;
+    // an alternative with no tag has no name to sit under
+    if constexpr (requires { typename Alt::Tag; }) {
+      register_config(reg, path + "/" + Alt::Tag::strings().at(0), alternative);
+    }
+  });
+}
 
 template <class T>
 void register_config(ConfigRegistry &reg, std::string_view prefix, T &cfg) {
@@ -200,11 +272,19 @@ void register_config(ConfigRegistry &reg, std::string_view prefix, T &cfg) {
 
     if constexpr (is_rfl_default_val_v<ValType>) {
       using Inner = typename ValType::Type;
-      if constexpr (std::is_same_v<Inner, position_bounds>) {
+      if constexpr (is_toggleable_v<Inner>) {
+        if constexpr (RegistryLeaf<typename Inner::value_type>) {
+          register_toggleable<Inner>(
+              reg, path, [ptr] { return ptr->value(); },
+              [ptr](const Inner &held) { ptr->set(held); });
+        }
+      } else if constexpr (std::is_same_v<Inner, position_bounds>) {
         reg.register_field(
             path,
             {[ptr]() -> ConfigValue { return to_config_value(ptr->value()); },
              [ptr](ConfigValue v) { ptr->set(from_config_value<Inner>(v)); }});
+      } else if constexpr (RflTaggedUnion<Inner>) {
+        register_variant(reg, path, ptr->value().variant());
       } else if constexpr (RflTraversable<Inner>) {
         register_config(reg, path, ptr->value());
       } else if constexpr (ConfigValueCompatible<Inner>) {
@@ -213,12 +293,20 @@ void register_config(ConfigRegistry &reg, std::string_view prefix, T &cfg) {
             {[ptr]() -> ConfigValue { return to_config_value(ptr->value()); },
              [ptr](ConfigValue v) { ptr->set(from_config_value<Inner>(v)); }});
       }
-      // else: vector, variant, etc. inside DefaultVal — skip
+      // else: vector, map, etc. inside DefaultVal and skip
+    } else if constexpr (is_toggleable_v<ValType>) {
+      if constexpr (RegistryLeaf<typename ValType::value_type>) {
+        register_toggleable<ValType>(
+            reg, path, [ptr] { return *ptr; },
+            [ptr](const ValType &held) { *ptr = held; });
+      }
     } else if constexpr (std::is_same_v<ValType, position_bounds>) {
       reg.register_field(
           path,
           {[ptr]() -> ConfigValue { return to_config_value(*ptr); },
            [ptr](ConfigValue v) { *ptr = from_config_value<ValType>(v); }});
+    } else if constexpr (RflTaggedUnion<ValType>) {
+      register_variant(reg, path, ptr->variant());
     } else if constexpr (RflTraversable<ValType>) {
       register_config(reg, path, *ptr);
     } else if constexpr (ConfigValueCompatible<ValType>) {
