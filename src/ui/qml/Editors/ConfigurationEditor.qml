@@ -161,10 +161,31 @@ Column {
                         readonly property bool isStream: root.configAdapter ? root.configAdapter.isStream(modelData) : false
                         readonly property string typeName: root.configAdapter ? root.configAdapter.typeName(modelData).toLowerCase() : ""
                         readonly property bool isBounds: fieldRow.typeName.includes("position_bounds")
+                        readonly property bool isRadius: fieldRow.typeName.includes("radius")
+
+                        // a switched value carries its own on/off beside it,
+                        // and nothing draws it in the scene while it is off
+                        readonly property bool isToggleable: fieldRow.typeName.includes("toggleable")
+
+                        property bool switchedOn: fieldRow.switchedOnOrDefault()
+                        function switchedOnOrDefault() {
+                            if (!fieldRow.isToggleable)
+                                return true;
+                            const held = root.configAdapter ? root.configAdapter.value(modelData) : null;
+                            return !!(held && held.active);
+                        }
+
+                        Connections {
+                            target: root.configAdapter
+                            function onFieldChanged(changedPath) {
+                                if (String(changedPath) === modelData)
+                                    fieldRow.switchedOn = fieldRow.switchedOnOrDefault();
+                            }
+                        }
 
                         readonly property real textOpacity: readOnly ? 0.66 : 1.0
 
-                        readonly property int rowSpan: Math.max(1, Math.ceil((valueContainer.implicitHeight - 1) / nodeRoot.fieldHeight))
+                        readonly property int rowSpan: Math.max(1, Math.ceil((valueColumn.implicitHeight - 1) / nodeRoot.fieldHeight))
 
                         visible: nodeRoot.fieldsVisible
                         height: visible ? nodeRoot.fieldHeight * fieldRow.rowSpan : 0
@@ -188,6 +209,9 @@ Column {
                                 clip: true
 
                                 Layout.leftMargin: root.fieldIndent
+
+                                Layout.alignment: fieldRow.isToggleable ? Qt.AlignTop : Qt.AlignVCenter
+                                Layout.topMargin: fieldRow.isToggleable ? Math.round((nodeRoot.fieldHeight - implicitHeight) / 2) : 0
 
                                 InfoToolTip {
                                     visible: labelHover.hovered
@@ -217,30 +241,29 @@ Column {
                                     anchors {
                                         left: parent.left
                                         leftMargin: inset
-                                        verticalCenter: parent.verticalCenter
+                                        top: parent.top
+                                        topMargin: Math.round((nodeRoot.fieldHeight - height) / 2)
                                     }
                                 }
 
-                                // every stream and every bounds box carries
-                                // its own toggle for drawing it in the 3d
-                                // scene, at the tail of the row, the same eye
-                                // the device list uses
                                 ListToggleButton {
                                     id: renderToggle
 
-                                    visible: fieldRow.isStream || fieldRow.isBounds
+                                    visible: fieldRow.isStream || fieldRow.isBounds || fieldRow.isRadius
                                     width: Math.round(iconSize * 0.9)
                                     height: Math.round(iconSize * 0.9)
 
                                     iconOn: FontAwesome.icon("solid/eye")
                                     iconOff: FontAwesome.icon("solid/eye-slash")
                                     checked: fieldRow.rendered
-                                    tip: qsTr("Render in the session view")
+                                    gated: !fieldRow.switchedOn
+                                    tip: fieldRow.switchedOn ? qsTr("Render in the session view") : qsTr("Switch the field on to render it")
 
                                     anchors {
                                         right: parent.right
                                         rightMargin: Math.round(8 * Scaling.uiScale)
-                                        verticalCenter: parent.verticalCenter
+                                        top: parent.top
+                                        topMargin: Math.round((nodeRoot.fieldHeight - height) / 2)
                                     }
 
                                     onToggled: {
@@ -252,39 +275,97 @@ Column {
                                     }
                                 }
 
-                                Loader {
-                                    id: valueContainer
+                                // a switched field reads as one row until it
+                                // is turned on, and unfolds the rows carrying
+                                // its actual value underneath once it is
+                                Column {
+                                    id: valueColumn
 
-                                    property string path: modelData
-                                    readonly property string typeName: fieldRow.typeName
+                                    anchors {
+                                        left: parent.left
+                                        right: parent.right
+                                        top: parent.top
+                                        leftMargin: outputDot.visible ? outputDot.inset * 2 + outputDot.width : outputDot.inset
+                                        rightMargin: renderToggle.visible ? outputDot.inset * 2 + renderToggle.width : 0
+                                    }
 
-                                    anchors.fill: parent
-                                    anchors.leftMargin: outputDot.visible ? outputDot.inset * 2 + outputDot.width : outputDot.inset
-                                    anchors.rightMargin: renderToggle.visible ? outputDot.inset * 2 + renderToggle.width : 0
-                                    opacity: fieldRow.textOpacity
+                                    Item {
+                                        id: switchStrip
 
-                                    asynchronous: false
+                                        visible: fieldRow.isToggleable
+                                        width: parent.width
+                                        height: visible ? nodeRoot.fieldHeight : 0
 
-                                    sourceComponent: {
-                                        if (root.configAdapter.isStream(modelData))
-                                            return streamEditor;
-                                        if (root.configAdapter.isEnum(modelData))
-                                            return enumEditor;
-                                        if (typeName === "int" || typeName === "int32" || typeName === "int32_t" || typeName === "integer")
-                                            return intEditor;
-                                        if (typeName === "float" || typeName === "float32" || typeName === "float32_t" || typeName === "double" || typeName === "real" || typeName === "number")
-                                            return floatEditor;
-                                        if (typeName.includes("length"))
-                                            return floatEditor;
-                                        if (typeName.includes("pc::float3") || typeName.includes("float3"))
-                                            return float3Editor;
-                                        if (typeName.includes("position_bounds"))
-                                            return positionBoundsEditor;
-                                        if (typeName.includes("position"))
-                                            return float3Editor;
-                                        if (typeName === "bool")
-                                            return boolEditor;
-                                        return stringEditor;
+                                        CheckBox {
+                                            id: fieldSwitch
+
+                                            enabled: !fieldRow.readOnly
+                                            checked: fieldRow.switchedOn
+
+                                            anchors {
+                                                left: parent.left
+                                                verticalCenter: parent.verticalCenter
+                                            }
+
+                                            onToggled: root.configAdapter.set(modelData, {
+                                                active: checked
+                                            })
+                                        }
+
+                                        // the same caret a folded group wears,
+                                        // saying there is something under this
+                                        // row the checkbox is holding shut
+                                        Image {
+                                            anchors {
+                                                left: fieldSwitch.right
+                                                verticalCenter: parent.verticalCenter
+                                            }
+                                            width: Math.round(10 * Scaling.uiScale)
+                                            height: width
+                                            fillMode: Image.PreserveAspectFit
+                                            source: fieldRow.switchedOn ? FontAwesome.icon("solid/caret-down") : FontAwesome.icon("solid/caret-right")
+                                            opacity: fieldRow.switchedOn ? 0.75 : 0.4
+                                        }
+                                    }
+
+                                    Loader {
+                                        id: valueContainer
+
+                                        property string path: modelData
+                                        readonly property string typeName: fieldRow.typeName
+
+                                        // an unswitched field keeps its value,
+                                        // it just stops showing it
+                                        visible: fieldRow.switchedOn
+                                        width: parent.width
+                                        height: visible ? Math.max(nodeRoot.fieldHeight, implicitHeight) : 0
+                                        opacity: fieldRow.textOpacity
+
+                                        asynchronous: false
+
+                                        sourceComponent: {
+                                            if (root.configAdapter.isStream(modelData))
+                                                return streamEditor;
+                                            if (root.configAdapter.isEnum(modelData))
+                                                return enumEditor;
+                                            if (typeName === "int" || typeName === "int32" || typeName === "int32_t" || typeName === "integer")
+                                                return intEditor;
+                                            if (typeName === "float" || typeName === "float32" || typeName === "float32_t" || typeName === "double" || typeName === "real" || typeName === "number")
+                                                return floatEditor;
+                                            if (typeName.includes("length"))
+                                                return floatEditor;
+                                            if (typeName.includes("radius"))
+                                                return radiusEditor;
+                                            if (typeName.includes("pc::float3") || typeName.includes("float3"))
+                                                return float3Editor;
+                                            if (typeName.includes("position_bounds"))
+                                                return positionBoundsEditor;
+                                            if (typeName.includes("position"))
+                                                return float3Editor;
+                                            if (typeName === "bool")
+                                                return boolEditor;
+                                            return stringEditor;
+                                        }
                                     }
                                 }
 
@@ -300,9 +381,9 @@ Column {
                         }
 
                         Column {
-                            visible: fieldRow.isBounds
+                            visible: fieldRow.isBounds && fieldRow.switchedOn
                             x: label.x + label.width - width
-                            y: nodeRoot.fieldHeight - Math.round(15 * Scaling.uiScale)
+                            y: nodeRoot.fieldHeight - Math.round(15 * Scaling.uiScale) + (fieldRow.isToggleable ? nodeRoot.fieldHeight : 0)
                             width: root.boundsTagWidth
 
                             Repeater {
@@ -687,6 +768,46 @@ Column {
                         return;
                     var n = Number(root.configAdapter.value(path));
                     floatEditorControl.boundValue = isNaN(n) ? 0.0 : n;
+                }
+            }
+        }
+    }
+
+    Component {
+        id: radiusEditor
+        DragFloat {
+            id: radiusControl
+            font: Scaling.uiFont
+
+            minValue: root.configAdapter ? root.configAdapter.minMax(path)[0] : undefined
+            maxValue: root.configAdapter ? root.configAdapter.minMax(path)[1] : undefined
+            defaultValue: root.configAdapter ? radiusControl.numberOf(root.configAdapter.defaultValue(path)) : undefined
+
+            enabled: root.configAdapter ? !root.configAdapter.isDisabled(path) : true
+
+            function numberOf(held) {
+                if (held === undefined || held === null)
+                    return 0.0;
+                const n = Number(held.value !== undefined ? held.value : held);
+                return isNaN(n) ? 0.0 : n;
+            }
+
+            boundValue: root.configAdapter ? radiusControl.numberOf(root.configAdapter.value(path)) : 0.0
+
+            onPreviewValue: function (value) {
+                root.configAdapter.setPreview(path, value);
+            }
+
+            onCommitValue: function (value) {
+                root.configAdapter.set(path, value);
+            }
+
+            Connections {
+                target: root.configAdapter
+                function onFieldChanged(changedPath) {
+                    if (String(changedPath) !== path)
+                        return;
+                    radiusControl.boundValue = radiusControl.numberOf(root.configAdapter.value(path));
                 }
             }
         }
