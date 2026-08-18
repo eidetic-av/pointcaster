@@ -59,8 +59,8 @@ PipelineFramePtr ClusterExtractionOperator::process(PipelineFramePtr input) {
 
   // reduce the cloud to one point per occupied voxel
 
-  const auto leaf_size =
-      static_cast<float>(std::max(1, config.voxel_leaf_size.value()));
+  const auto leaf_size = static_cast<float>(
+      std::max<int16_t>(1, config.voxel_leaf_size.value().mm));
 
   auto voxelised_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
   if (!cloud->empty()) {
@@ -100,7 +100,7 @@ PipelineFramePtr ClusterExtractionOperator::process(PipelineFramePtr input) {
     ProfilingZone extract_zone("Extract clusters");
     pcl::EuclideanClusterExtraction<pcl::PointXYZ> extraction;
     extraction.setClusterTolerance(
-        static_cast<double>(config.cluster_tolerance.value()));
+        static_cast<double>(config.cluster_tolerance.value().mm));
     extraction.setMinClusterSize(static_cast<pcl::uindex_t>(
         std::max(1, config.cluster_voxel_count_min.value())));
     extraction.setMaxClusterSize(static_cast<pcl::uindex_t>(
@@ -165,8 +165,8 @@ PipelineFramePtr ClusterExtractionOperator::process(PipelineFramePtr input) {
           return std::sqrt(dx * dx + dy * dy + dz * dz) <= tolerance;
         };
 
-    const auto match_tolerance =
-        static_cast<float>(std::max(0, config.cluster_match_tolerance.value()));
+    const auto match_tolerance = static_cast<float>(
+        std::max<int16_t>(0, config.cluster_match_tolerance.value().mm));
     const auto timeout = std::chrono::milliseconds(
         std::max(0, config.cluster_timeout_ms.value()));
     const auto now = std::chrono::steady_clock::now();
