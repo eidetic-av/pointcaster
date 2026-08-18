@@ -37,6 +37,16 @@ public:
                 if (_configAdapter && _configAdapter->isOutput(path)) return;
                 if (_plugin) {
                   _plugin->on_config_field_changed(path.toStdString());
+
+                  if (path == QStringLiteral("backend")) {
+                    const auto backend_in_use =
+                        static_cast<int>(_plugin->current_backend_type());
+                    if (_configAdapter->value(path).toInt() != backend_in_use) {
+                      _configAdapter->set(path, backend_in_use);
+                      return;
+                    }
+                  }
+
                   if (_host) {
                     auto updated_config = _plugin->config_variant();
                     _host->update_operator_in_pipeline(updated_config,

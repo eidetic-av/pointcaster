@@ -157,16 +157,11 @@ public:
   // OperatorPlugin::on_config_field_changed as well...
   virtual void on_config_field_changed(std::string_view path = "") {
     if (path == "backend") {
-      pc::logger()->error("Backend switch not implemented");
-      // TODO
-      // std::visit(
-      //     [this](const auto &config) {
-      //       auto it = _backends.find(config.backend);
-      //       if (it != _backends.end()) {
-      //         _current_backend = it->second.get();
-      //       }
-      //     },
-      //     _config);
+      std::visit(
+          [this](const auto &config) {
+            set_current_backend(config.backend.value());
+          },
+          config_variant());
     }
   }
 
@@ -177,11 +172,35 @@ public:
   // here
   virtual std::vector<camera::CameraFrameRef> camera_frames() { return {}; }
 
-  void set_current_backend(BackendType backend_type) {
-    auto it = _backends.find(backend_type);
+  // switches to a backend and reports the one actually in use
+  BackendType set_current_backend(BackendType requested_backend) {
+    auto it = _backends.find(requested_backend);
     if (it != _backends.end()) {
       _current_backend = it->second.get();
+      _current_backend_type = requested_backend;
+      return _current_backend_type;
     }
+
+    pc::logger()->warn("{} backend is not loaded, staying on {}",
+                       backend_name(requested_backend),
+                       backend_name(_current_backend_type));
+
+    if (!_current_backend && !_backends.empty()) {
+      // default to first backend
+      auto first_loaded = _backends.begin();
+      _current_backend = first_loaded->second.get();
+      _current_backend_type = first_loaded->first;
+    }
+
+    return _current_backend_type;
+  }
+
+  BackendType current_backend_type() const { return _current_backend_type; }
+
+  bool has_backend() const { return _current_backend != nullptr; }
+
+  static constexpr std::string_view backend_name(BackendType backend_type) {
+    return backend_type == BackendType::CUDA ? "CUDA" : "CPU";
   }
 
 protected:
@@ -197,7 +216,8 @@ protected:
                      Corrade::Containers::Pointer<backend::BackendPlugin>>
       _backends;
 
-  backend::BackendPlugin *_current_backend;
+  backend::BackendPlugin *_current_backend = nullptr;
+  BackendType _current_backend_type = BackendType::CPU;
 };
 
 } // namespace pc::operators
