@@ -38,6 +38,7 @@
 #include <ranges>
 #include <span>
 #include <thread>
+#include <util/color_utils.h>
 #include <util/string_utils.h>
 #include <variant>
 #include <workspace/workspace.h>
@@ -782,8 +783,6 @@ void OrbbecDevice::lidar_pipeline_thread_work(
     // ob_device->setIntProperty(OB_PROP_LIDAR_TAIL_FILTER_LEVEL_INT, 0);
     //
 
-    // 2. while loop reading lidar frames as they arrive
-
     ob_device_api_access.unlock();
 
     // create instances to the available backend plugins to transform our
@@ -817,17 +816,7 @@ void OrbbecDevice::lidar_pipeline_thread_work(
     }
 
     // scan samples are polar: an angle in degrees and a distance in mm.
-    // distances already match our position units, but int16 positions can't
-    // hold anything past ~32.7m, and a zero distance is the sensor reporting
     // no return at that angle
-    constexpr float minimum_scan_distance = 1.0f;
-    constexpr float maximum_scan_distance = 32767.0f;
-    constexpr float degrees_to_radians = std::numbers::pi_v<float> / 180.0f;
-    // OBLiDARScanPoint documents intensity as 0~2000
-    constexpr uint16_t maximum_scan_intensity = 2000;
-
-    // logged on first resolve and whenever it changes, so group placement is
-    // visible without a per-frame log
     std::optional<pc::float4x4> last_world;
 
     while (!stop_token.stop_requested()) {
@@ -880,6 +869,9 @@ void OrbbecDevice::lidar_pipeline_thread_work(
         // many exist per device
         // TODO how many? where does the concurrent frame processing count
         // come from?
+        const auto &sensor_config =
+            rfl::get<OrbbecDeviceConfiguration::LidarSensorConfiguration>(
+                device_config.sensor.get().variant());
 
         ProfilingZone process_frame_zone("OrbbecDevice::process_lidar_frame");
         FrameTaskSlot frame_task_slot(*this);
@@ -887,42 +879,77 @@ void OrbbecDevice::lidar_pipeline_thread_work(
         auto frame = frame_set->getFrame(OB_FRAME_LIDAR_POINTS);
         auto lidar_frame = frame->as<ob::LiDARPointsFrame>();
 
-        std::span scan_samples{
+        std::span raw_scan_samples{
             reinterpret_cast<const OBLiDARScanPoint *>(lidar_frame->getData()),
             lidar_frame->getDataSize() / sizeof(OBLiDARScanPoint)};
 
+        constexpr float minimum_distance = 1.0f;
+        constexpr float degrees_to_radians = std::numbers::pi_v<float> / 180.0f;
+
+        // constexpr uint16_t minimum_intensity = 1;
+        constexpr uint16_t maximum_intensity = 2000;
+
+        using ColorMapping = OrbbecDeviceConfiguration::ColorMapping;
+        const auto color_mapping = sensor_config.color_mapping.value();
+        // cuts the scan off, and doubles as the range the Depth mapping
+        // spreads its color spectrum across
+        const auto maximum_distance = std::max(
+            static_cast<float>(sensor_config.maximum_depth.value().mm), 1.0f);
+
+        auto filtered_cloud =
+            raw_scan_samples | std::views::filter([&](const auto &scan_sample) {
+              // here we can filter the cloud based on scan distance
+              const auto &distance = scan_sample.distance;
+              if (distance < minimum_distance || distance > maximum_distance) {
+                return false;
+              }
+              // TODO and by minimum and maximum angles
+              return true;
+            }) |
+            std::views::transform([&](const auto &scan_sample) {
+              // then transform the incoming OBLidarScanPoint types into
+              // world-space XYZ along with mapped colors
+              const auto &distance = scan_sample.distance;
+              const auto angle = scan_sample.angle * degrees_to_radians;
+              const auto x = distance * std::sin(angle);
+              const auto z = -distance * std::cos(angle);
+              const position pos{.x = static_cast<int16_t>(std::lround(x)),
+                                 .y = 0,
+                                 .z = static_cast<int16_t>(std::lround(z))};
+
+              const auto col = [&]() -> color {
+                if (color_mapping == ColorMapping::Solid) {
+                  return {255, 255, 255, 255};
+                }
+                if (color_mapping == ColorMapping::Depth) {
+                  // near returns come out blue and far ones red
+                  constexpr float blue_hue = 2.0f / 3.0f;
+                  const float normalised_distance =
+                      std::clamp(distance / maximum_distance, 0.0f, 1.0f);
+                  return hue_color(blue_hue * (1.0f - normalised_distance));
+                }
+                const uint16_t scan_intensity =
+                    std::min(scan_sample.intensity, maximum_intensity);
+                const float normalised_intensity =
+                    color_mapping == ColorMapping::LogIntensity
+                        ? std::log1p(static_cast<float>(scan_intensity)) /
+                              std::log1p(static_cast<float>(maximum_intensity))
+                        : static_cast<float>(scan_intensity) /
+                              maximum_intensity;
+                const auto intensity = static_cast<unsigned char>(
+                    std::lround(normalised_intensity * 255.0f));
+                return {intensity, intensity, intensity, 255};
+              }();
+
+              return std::pair{pos, col};
+            });
+
         auto scan_cloud = std::make_shared<PointCloud>();
-        scan_cloud->reserve(scan_samples.size());
-
-        // TODO this could be implemented by backends and move onto the
-        // transform and operators
-
-        for (const auto &sample : scan_samples) {
-          const auto distance = sample.distance;
-          if (!std::isfinite(distance) || distance < minimum_scan_distance ||
-              distance > maximum_scan_distance)
-            continue;
-
-          // convert the angular data into our 3d point cloud space
-          const auto angle = sample.angle * degrees_to_radians;
-          const auto x = distance * std::sin(angle);
-          const auto z = -distance * std::cos(angle);
-
-          scan_cloud->positions.push_back(
-              {.x = static_cast<int16_t>(std::lround(x)),
-               .y = 0,
-               .z = static_cast<int16_t>(std::lround(z))});
-
-          // a lidar return carries no colour, so intensity drives greyscale
-          const uint16_t scan_intensity =
-              sample.intensity < maximum_scan_intensity
-                  ? sample.intensity
-                  : maximum_scan_intensity;
-          const auto intensity = static_cast<unsigned char>(
-              scan_intensity * 255 / maximum_scan_intensity);
-          scan_cloud->colors.push_back({intensity, intensity, intensity, 255});
+        scan_cloud->reserve(raw_scan_samples.size());
+        for (auto [pos, col] : filtered_cloud) {
+          scan_cloud->positions.push_back(pos);
+          scan_cloud->colors.push_back(col);
         }
-
         if (scan_cloud->empty()) return;
 
         const bool using_cuda =

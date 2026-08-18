@@ -1,6 +1,7 @@
 #pragma once
 
 #include <config/color_transform_config.h>
+#include <config/core_types_reflection.h>
 #include <config/network_config.h>
 #include <config/transform_config.h>
 #include <pipeline/concurrent_operator_pipeline_config.h>
@@ -17,7 +18,7 @@ class OrbbecDevice;
 
 struct OrbbecDeviceConfiguration {
   std::string id;                     // @hidden
-  std::string serial;                  // @disabled
+  std::string serial;                 // @disabled
   rfl::DefaultVal<std::string> label; // @hidden
 
   rfl::DefaultVal<std::string> parent_id; // @hidden
@@ -45,6 +46,7 @@ struct OrbbecDeviceConfiguration {
     WFOV_1024x1024
   };
   enum class SyncMode { Standalone, Software };
+  enum class ColorMapping { LogIntensity, LinearIntensity, Depth, Solid };
 
   // the different sensor types that the orbbec driver supports have different
   // configuration shapes and defaults
@@ -69,6 +71,9 @@ struct OrbbecDeviceConfiguration {
   struct LidarSensorConfiguration {
     rfl::DefaultVal<uint32_t> scan_rate =
         30; // @options(15, 20, 25, 30, 40) @suffix(Hz)
+
+    rfl::DefaultVal<ColorMapping> color_mapping = ColorMapping::LogIntensity;
+    rfl::DefaultVal<length> maximum_depth = length{32767}; // @minmax(50, 32767)
 
     using Tag = rfl::Literal<"lidar">;
   };
