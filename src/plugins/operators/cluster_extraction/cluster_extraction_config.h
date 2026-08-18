@@ -18,7 +18,7 @@ struct ClusterExtractionConfiguration {
   rfl::DefaultVal<bool> active = true; // @hidden
 
   // voxelisation
-  rfl::DefaultVal<length> voxel_leaf_size = length{200}; // @minmax(100, 1000)
+  rfl::DefaultVal<length> voxel_leaf_size = length{200}; // @minmax(50, 1000)
   rfl::DefaultVal<int> minimum_points_per_voxel = 0;     // @minmax(0, 1000)
 
   rfl::DefaultVal<bool> filter_outlier_voxels = false;
