@@ -72,8 +72,10 @@ struct OrbbecDeviceConfiguration {
     rfl::DefaultVal<uint32_t> scan_rate =
         30; // @options(15, 20, 25, 30, 40) @suffix(Hz)
 
+    rfl::DefaultVal<Toggleable<radius>> maximum_distance = Toggleable<radius>{
+        .active = false, .value = radius{5000}}; // @minmax(50, 65535)
+
     rfl::DefaultVal<ColorMapping> color_mapping = ColorMapping::LogIntensity;
-    rfl::DefaultVal<length> maximum_depth = length{32767}; // @minmax(50, 32767)
 
     using Tag = rfl::Literal<"lidar">;
   };

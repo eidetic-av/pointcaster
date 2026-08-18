@@ -69,10 +69,10 @@ Item {
         }
         if (!selectedTransformAdapter)
             return false;
-        if (!selectedTransformAdapter.value("transform/crop_to_bounds"))
-            return false;
         var b = selectedTransformAdapter.value("transform/bounds");
-        return b !== undefined && b !== null && b.min !== undefined;
+        if (b === undefined || b === null || b.min === undefined)
+            return false;
+        return b.active !== false;
     }
 
     readonly property bool _selectionHasLookAt: {
@@ -141,8 +141,8 @@ Item {
         }
     }
 
-    // deactivating an operator takes its box away, the same way clearing
-    // crop_to_bounds does for a device
+    // deactivating an operator takes its box away, the same way switching
+    // its crop bounds off does for a device
     Connections {
         target: root.selectedOperatorAdapter
         ignoreUnknownSignals: true

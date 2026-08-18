@@ -46,12 +46,13 @@ struct TransformFilterParameters {
     auto max_y = static_cast<float>(std::numeric_limits<int16_t>::max());
     auto max_z = static_cast<float>(std::numeric_limits<int16_t>::max());
 
-    if (transform_config.crop_to_bounds.value()) {
-      const auto &min_bound = transform_config.bounds.value().min;
+    const auto &crop = transform_config.bounds.value();
+    if (crop.active) {
+      const auto &min_bound = crop.value.min;
       min_x = static_cast<float>(min_bound.x);
       min_y = static_cast<float>(min_bound.y);
       min_z = static_cast<float>(min_bound.z);
-      const auto &max_bound = transform_config.bounds.value().max;
+      const auto &max_bound = crop.value.max;
       max_x = static_cast<float>(max_bound.x);
       max_y = static_cast<float>(max_bound.y);
       max_z = static_cast<float>(max_bound.z);

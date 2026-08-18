@@ -24,6 +24,7 @@
 #include <libobsensor/hpp/Frame.hpp>
 #include <libobsensor/hpp/Pipeline.hpp>
 #include <libobsensor/hpp/Utils.hpp>
+#include <limits>
 #include <memory>
 #include <metrics/metrics.h>
 #include <mutex>
@@ -892,9 +893,11 @@ void OrbbecDevice::lidar_pipeline_thread_work(
         using ColorMapping = OrbbecDeviceConfiguration::ColorMapping;
         const auto color_mapping = sensor_config.color_mapping.value();
         // cuts the scan off, and doubles as the range the Depth mapping
-        // spreads its color spectrum across
-        const auto maximum_distance = std::max(
-            static_cast<float>(sensor_config.maximum_depth.value().mm), 1.0f);
+        const auto &distance_cap = sensor_config.maximum_distance.value();
+        const auto maximum_distance =
+            distance_cap.active
+                ? std::max(static_cast<float>(distance_cap.value.mm), 1.0f)
+                : static_cast<float>(std::numeric_limits<uint16_t>::max());
 
         auto filtered_cloud =
             raw_scan_samples | std::views::filter([&](const auto &scan_sample) {

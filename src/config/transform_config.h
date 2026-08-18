@@ -11,10 +11,9 @@ namespace pc {
 struct TransformConfiguration {
   rfl::DefaultVal<float3> position = float3(0, 0, 0); // @minmax(-10, 10)
   rfl::DefaultVal<float3> rotation = float3(0, 0, 0); // @minmax(-360, 360)
-  rfl::DefaultVal<float3> scale = float3(1, 1, 1);    // @minmax(0, 2.5)
+  rfl::DefaultVal<float3> scale = float3(1, 1, 1);    // @minmax(-1, 2.5)
 
-  rfl::DefaultVal<bool> crop_to_bounds = false;
-  rfl::DefaultVal<position_bounds> bounds = pc::default_config_bounds;
+  rfl::DefaultVal<Toggleable<position_bounds>> bounds = pc::default_crop_bounds;
 
   rfl::DefaultVal<int> sample = 1; // @minmax(1, 64)
 
