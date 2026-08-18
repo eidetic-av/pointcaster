@@ -40,7 +40,7 @@ Item {
         enabled: root.mouseEnabled
 
         acceptedButtons: Qt.LeftButton
-        acceptedModifiers: Qt.NoModifier
+        acceptedModifiers: Qt.KeyboardModifierMask
 
         onCentroidChanged: {
             root.mouseMoved(Qt.vector2d(centroid.position.x, centroid.position.y), false);
@@ -60,7 +60,7 @@ Item {
         enabled: root.mouseEnabled && root.panEnabled
 
         acceptedButtons: Qt.RightButton
-        acceptedModifiers: Qt.NoModifier
+        acceptedModifiers: Qt.KeyboardModifierMask
 
         property real lastX: 0
         property real lastY: 0
