@@ -18,6 +18,7 @@
 // specialised jinja with  setConfig overload like device adapters
 #include <plugins/operators/cluster_extraction/cluster_extraction_config.h>
 #include <plugins/operators/fringe_removal/fringe_removal_config.h>
+#include <plugins/operators/range_filter/range_filter_config.h>
 
 
 #include <camera/camera_config.h>
@@ -44,7 +45,8 @@ using ConfigurationVariant = std::variant<
     // specialised jinja with  setConfig overload like device
     // adapters
     operators::FringeRemovalConfiguration,
-    operators::ClusterExtractionConfiguration>;
+    operators::ClusterExtractionConfiguration,
+    operators::RangeFilterConfiguration>;
 
 // compile time utilities
 
