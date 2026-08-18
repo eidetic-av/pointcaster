@@ -229,6 +229,75 @@ find_session_operator_config(pc::WorkspaceConfiguration &config,
   return &session.operators[size_t(o)];
 }
 
+// a preview session is keyed by its owner and its operator together
+static QString operator_preview_id(const QString &owner_id,
+                                   const std::string &operator_id) {
+  return owner_id + QStringLiteral("/") + QString::fromStdString(operator_id);
+}
+
+static std::optional<pc::operators::OperatorConfigurationVariant>
+publish_device_operator_edit(pc::Workspace &workspace,
+                             OperatorAdapter *opAdapter,
+                             const std::string &device_id,
+                             const std::string &operator_id,
+                             const QString &changed_path) {
+  pc::operators::OperatorConfigurationVariant config;
+  {
+    std::scoped_lock lock(workspace.config_access);
+    auto *storage =
+        find_device_operator_config(workspace.config, device_id, operator_id);
+    if (!storage) return std::nullopt;
+    config = *storage;
+
+    const int device_index =
+        find_device_index_by_id(workspace.config, device_id);
+    if (device_index >= 0 && device_index < int(workspace.devices.size()) &&
+        workspace.devices[size_t(device_index)]) {
+      auto &device_config_variant =
+          workspace.devices[size_t(device_index)]->config_variant();
+      const int op_index =
+          find_operator_index_by_id(device_config_variant, operator_id);
+      if (op_index >= 0) {
+        std::visit(
+            [op_index, &config](auto &device_config) {
+              if constexpr (requires { device_config.operators; }) {
+                device_config.operators[size_t(op_index)] = config;
+              }
+            },
+            device_config_variant);
+      }
+    }
+  }
+
+  if (auto *plugin = opAdapter->plugin()) plugin->update_config(config);
+  if (auto *host = opAdapter->host()) {
+    host->update_operator_in_pipeline(config, changed_path.toStdString());
+    host->reprocess();
+  }
+  return config;
+}
+
+static void publish_session_operator_edit(pc::Workspace &workspace,
+                                          OperatorAdapter *opAdapter,
+                                          const std::string &session_id,
+                                          const std::string &operator_id,
+                                          const QString &changed_path) {
+  pc::operators::OperatorConfigurationVariant config;
+  {
+    std::scoped_lock lock(workspace.config_access);
+    auto *storage =
+        find_session_operator_config(workspace.config, session_id, operator_id);
+    if (!storage) return;
+    config = *storage;
+  }
+
+  if (auto *plugin = opAdapter->plugin()) plugin->update_config(config);
+  if (auto *host = opAdapter->host()) {
+    host->update_operator_in_pipeline(config, changed_path.toStdString());
+    host->reprocess();
+  }
+}
+
 // compares current adapter list to plugin operators by id & order
 static bool operator_structure_changed(DeviceAdapter *adapter,
                                        pc::devices::DevicePlugin *plugin) {
@@ -1867,6 +1936,45 @@ void WorkspaceModel::initOperatorAdapter(OperatorAdapter *opAdapter,
                                          DeviceAdapter *deviceAdapter) {
   auto *innerAdapter = opAdapter->configAdapter();
   if (!innerAdapter) return;
+
+  // a gizmo drag previews continuously and commits once on release, so these
+  // land in the workspace config and the running pipeline without touching undo
+  QObject::connect(
+      innerAdapter, &ConfigAdapter::previewRequested, this,
+      [this, opAdapter, deviceAdapter](const QString &path,
+                                       const QVariant &value) {
+        auto *configAdapter = opAdapter->configAdapter();
+        if (!configAdapter) return;
+        const QString device_id = adapterStableId(deviceAdapter);
+        if (device_id.isEmpty()) return;
+        const std::string operator_id_str = operator_id_of(opAdapter->plugin());
+        if (operator_id_str.empty()) return;
+
+        const QString preview_id =
+            operator_preview_id(device_id, operator_id_str);
+
+        // the first 'preview' that was captured is what undo has to come back
+        // to
+        if (!_deviceOperatorPreview ||
+            _deviceOperatorPreview->id != preview_id) {
+          std::scoped_lock lock(_workspace.config_access);
+          auto *storage = find_device_operator_config(
+              _workspace.config, device_id.toStdString(), operator_id_str);
+          if (!storage) return;
+          _deviceOperatorPreview.emplace(
+              PreviewSession<pc::operators::OperatorConfigurationVariant>{
+                  preview_id, *storage, _workspace.config});
+        }
+
+        // the adapter aliases the workspace configuration, so this lands there
+        if (!configAdapter->apply(path, value)) return;
+        _deviceOperatorPreview->dirty = true;
+
+        publish_device_operator_edit(_workspace, opAdapter,
+                                     device_id.toStdString(), operator_id_str,
+                                     path);
+      });
+
   QObject::connect(
       innerAdapter, &ConfigAdapter::editRequested, this,
       [this, opAdapter, deviceAdapter](const QString &path,
@@ -1887,9 +1995,17 @@ void WorkspaceModel::initOperatorAdapter(OperatorAdapter *opAdapter,
         if (operator_id_str.empty()) return;
         const QString operator_id = QString::fromStdString(operator_id_str);
 
+        const QString preview_id =
+            operator_preview_id(device_id, operator_id_str);
+        const bool closing_preview =
+            _deviceOperatorPreview && _deviceOperatorPreview->id == preview_id;
+
         pc::operators::OperatorConfigurationVariant before;
         pc::WorkspaceConfiguration base_snapshot;
-        {
+        if (closing_preview) {
+          before = _deviceOperatorPreview->before;
+          base_snapshot = _deviceOperatorPreview->base_snapshot;
+        } else {
           std::scoped_lock lock(_workspace.config_access);
           base_snapshot = _workspace.config;
           auto *storage = find_device_operator_config(
@@ -1899,48 +2015,19 @@ void WorkspaceModel::initOperatorAdapter(OperatorAdapter *opAdapter,
         }
 
         const bool changed = configAdapter->apply(path, value);
-        if (!changed) return;
+        const bool gesture_changed =
+            closing_preview && _deviceOperatorPreview->dirty;
+        if (closing_preview) _deviceOperatorPreview.reset();
+        if (!changed && !gesture_changed) return;
 
-        pc::operators::OperatorConfigurationVariant after;
-        {
-          std::scoped_lock lock(_workspace.config_access);
-          auto *storage = find_device_operator_config(
-              _workspace.config, device_id.toStdString(), operator_id_str);
-          if (!storage) return;
-          after = *storage;
-
-          // the device plugin holds its own copy of the operator list
-          const int device_index = find_device_index_by_id(
-              _workspace.config, device_id.toStdString());
-          if (device_index >= 0 &&
-              device_index < int(_workspace.devices.size()) &&
-              _workspace.devices[device_index]) {
-            auto *device_storage = find_device_operator_config(
-                _workspace.config, device_id.toStdString(), operator_id_str);
-            const int op_idx = find_operator_index_by_id(
-                _workspace.devices[device_index]->config_variant(),
-                operator_id_str);
-            if (op_idx >= 0 && device_storage) {
-              std::visit(
-                  [&](auto &device_config) {
-                    if constexpr (requires { device_config.operators; }) {
-                      device_config.operators[size_t(op_idx)] = after;
-                    }
-                  },
-                  _workspace.devices[device_index]->config_variant());
-            }
-          }
-        }
-
-        plugin->update_config(after);
-        if (auto *host = opAdapter->host()) {
-          host->update_operator_in_pipeline(after, path.toStdString());
-          host->reprocess();
-        }
+        auto after = publish_device_operator_edit(_workspace, opAdapter,
+                                                  device_id.toStdString(),
+                                                  operator_id_str, path);
+        if (!after) return;
 
         QString command_text = QStringLiteral("Edit %1").arg(path);
         _undoStack->push(new SetOperatorConfigCommand(
-            device_id, operator_id, std::move(before), std::move(after),
+            device_id, operator_id, std::move(before), std::move(*after),
             std::move(command_text), std::move(base_snapshot),
             [this](pc::WorkspaceConfiguration config) {
               QMetaObject::invokeMethod(
@@ -2040,6 +2127,40 @@ void WorkspaceModel::initSessionOperatorAdapter(OperatorAdapter *opAdapter,
                                                 const QString &sessionId) {
   auto *innerAdapter = opAdapter->configAdapter();
   if (!innerAdapter) return;
+
+  // a gizmo drag previews continuously and commits once on release
+  QObject::connect(
+      innerAdapter, &ConfigAdapter::previewRequested, this,
+      [this, opAdapter, sessionId](const QString &path, const QVariant &value) {
+        auto *configAdapter = opAdapter->configAdapter();
+        if (!configAdapter) return;
+        const std::string operator_id_str = operator_id_of(opAdapter->plugin());
+        if (operator_id_str.empty()) return;
+
+        const QString preview_id =
+            operator_preview_id(sessionId, operator_id_str);
+
+        // the first 'preview' that was captured is what undo has to come back
+        // to
+        if (!_sessionOperatorPreview ||
+            _sessionOperatorPreview->id != preview_id) {
+          std::scoped_lock lock(_workspace.config_access);
+          const int s = find_session_index_by_id(_workspace.config,
+                                                 sessionId.toStdString());
+          if (s < 0) return;
+          _sessionOperatorPreview.emplace(PreviewSession<SessionConfiguration>{
+              preview_id, _workspace.config.sessions[size_t(s)],
+              _workspace.config});
+        }
+
+        if (!configAdapter->apply(path, value)) return;
+        _sessionOperatorPreview->dirty = true;
+
+        publish_session_operator_edit(_workspace, opAdapter,
+                                      sessionId.toStdString(), operator_id_str,
+                                      path);
+      });
+
   QObject::connect(
       innerAdapter, &ConfigAdapter::editRequested, this,
       [this, opAdapter, sessionId](const QString &path, const QVariant &value) {
@@ -2050,10 +2171,18 @@ void WorkspaceModel::initSessionOperatorAdapter(OperatorAdapter *opAdapter,
         const std::string operator_id_str = operator_id_of(plugin);
         if (operator_id_str.empty()) return;
 
+        const QString preview_id =
+            operator_preview_id(sessionId, operator_id_str);
+        const bool closing_preview = _sessionOperatorPreview &&
+                                     _sessionOperatorPreview->id == preview_id;
+
         SessionConfiguration before;
         SessionConfiguration after;
         pc::WorkspaceConfiguration base_snapshot;
-        {
+        if (closing_preview) {
+          before = _sessionOperatorPreview->before;
+          base_snapshot = _sessionOperatorPreview->base_snapshot;
+        } else {
           std::scoped_lock lock(_workspace.config_access);
           base_snapshot = _workspace.config;
           const int s = find_session_index_by_id(_workspace.config,
@@ -2064,7 +2193,10 @@ void WorkspaceModel::initSessionOperatorAdapter(OperatorAdapter *opAdapter,
 
         // the adapter aliases the workspace configuration, so this lands there
         const bool changed = configAdapter->apply(path, value);
-        if (!changed) return;
+        const bool gesture_changed =
+            closing_preview && _sessionOperatorPreview->dirty;
+        if (closing_preview) _sessionOperatorPreview.reset();
+        if (!changed && !gesture_changed) return;
 
         {
           std::scoped_lock lock(_workspace.config_access);
@@ -2074,15 +2206,9 @@ void WorkspaceModel::initSessionOperatorAdapter(OperatorAdapter *opAdapter,
           after = _workspace.config.sessions[size_t(s)];
         }
 
-        const int o = find_session_operator_index_by_id(after, operator_id_str);
-        if (o >= 0) {
-          const auto &updated = after.operators[size_t(o)];
-          plugin->update_config(updated);
-          if (auto *host = opAdapter->host()) {
-            host->update_operator_in_pipeline(updated, path.toStdString());
-            host->reprocess();
-          }
-        }
+        publish_session_operator_edit(_workspace, opAdapter,
+                                      sessionId.toStdString(), operator_id_str,
+                                      path);
 
         QString command_text = QStringLiteral("Edit %1").arg(path);
         _undoStack->push(new SetSessionConfigCommand(

@@ -355,6 +355,12 @@ private:
   std::optional<PreviewSession<pc::devices::DeviceGroupConfiguration>>
       _groupPreview;
 
+  // a gizmo bound to an operator's field previews through these
+  std::optional<PreviewSession<pc::operators::OperatorConfigurationVariant>>
+      _deviceOperatorPreview;
+  std::optional<PreviewSession<pc::SessionConfiguration>>
+      _sessionOperatorPreview;
+
   pc::Workspace &_workspace;
 
   CameraImageProvider *_imageProvider = nullptr;
