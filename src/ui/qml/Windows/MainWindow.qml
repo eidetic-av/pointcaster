@@ -325,7 +325,5 @@ ApplicationWindow {
 
     SettingsWindow {
         id: settingsWindow
-        x: mainDockingArea.x + (mainDockingArea.width / 2) - (settingsWindow.width / 2)
-        y: mainDockingArea.y + (mainDockingArea.height / 2) - (settingsWindow.height / 2)
     }
 }

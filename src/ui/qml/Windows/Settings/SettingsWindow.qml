@@ -4,24 +4,17 @@ import QtQuick.Layouts
 
 import Pointcaster 1.0
 
-Dialog {
+ApplicationWindow {
     id: root
     title: "Preferences"
 
-    popupType: Popup.Window
-    focus: true
-    modal: false
-    dim: false
+    flags: Qt.Dialog
     visible: false
 
     font: Scaling.uiFont
 
-    implicitWidth: Math.round(720 * Scaling.uiScale)
-    implicitHeight: Math.round(480 * Scaling.uiScale)
-
-    padding: 0
-
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    width: Math.round(720 * Scaling.uiScale)
+    height: Math.round(480 * Scaling.uiScale)
 
     background: Rectangle {
         color: ThemeColors.window
@@ -55,8 +48,10 @@ Dialog {
         }
     }
 
-    contentItem: Item {
+    Item {
         id: windowContent
+
+        anchors.fill: parent
 
         FocusReleaser {}
 
@@ -164,6 +159,25 @@ Dialog {
             }
         }
 
+    }
+
+    Shortcut {
+        sequence: "Esc"
+        onActivated: root.close()
+    }
+
+    // centre on the main window each time it is opened
+    function open() {
+        if (!root.visible) {
+            const parentWindow = root.transientParent;
+            if (parentWindow) {
+                root.x = parentWindow.x + (parentWindow.width - root.width) / 2;
+                root.y = parentWindow.y + (parentWindow.height - root.height) / 2;
+            }
+            root.show();
+        }
+        root.raise();
+        root.requestActivate();
     }
 
     function setPageIndex(newIndex) {
