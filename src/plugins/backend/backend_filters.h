@@ -3,6 +3,7 @@
 #include <cmath>
 #include <config/color_transform_config.h>
 #include <config/transform_config.h>
+#include <limits>
 #include <optional>
 #include <pointcaster/core_types.h>
 
@@ -37,8 +38,24 @@ struct TransformFilterParameters {
     const auto &position = transform_config.position.value();
     const auto &rotation = transform_config.rotation.value();
     const auto &scale = transform_config.scale.value();
-    const auto &min_bound = transform_config.min_bound.value();
-    const auto &max_bound = transform_config.max_bound.value();
+
+    auto min_x = static_cast<float>(std::numeric_limits<int16_t>::min());
+    auto min_y = static_cast<float>(std::numeric_limits<int16_t>::min());
+    auto min_z = static_cast<float>(std::numeric_limits<int16_t>::min());
+    auto max_x = static_cast<float>(std::numeric_limits<int16_t>::max());
+    auto max_y = static_cast<float>(std::numeric_limits<int16_t>::max());
+    auto max_z = static_cast<float>(std::numeric_limits<int16_t>::max());
+
+    if (transform_config.crop_to_bounds.value()) {
+      const auto &min_bound = transform_config.bounds.value().min;
+      min_x = static_cast<float>(min_bound.x);
+      min_y = static_cast<float>(min_bound.y);
+      min_z = static_cast<float>(min_bound.z);
+      const auto &max_bound = transform_config.bounds.value().max;
+      max_x = static_cast<float>(max_bound.x);
+      max_y = static_cast<float>(max_bound.y);
+      max_z = static_cast<float>(max_bound.z);
+    }
 
     constexpr float deg_2_rad = 3.14159265358979f / 180.0f;
     const float cx = std::cos(rotation.x * deg_2_rad);
@@ -58,12 +75,12 @@ struct TransformFilterParameters {
             .scale_x = scale.x,
             .scale_y = scale.y,
             .scale_z = scale.z,
-            .min_x = min_bound.x * 1000.f,
-            .min_y = min_bound.y * 1000.f,
-            .min_z = min_bound.z * 1000.f,
-            .max_x = max_bound.x * 1000.f,
-            .max_y = max_bound.y * 1000.f,
-            .max_z = max_bound.z * 1000.f,
+            .min_x = min_x,
+            .min_y = min_y,
+            .min_z = min_z,
+            .max_x = max_x,
+            .max_y = max_y,
+            .max_z = max_z,
             .sample = transform_config.sample.value(),
             .color = {.gain = color_config.gain.value()}};
   }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <config/core_types_reflection.h>
 #include <plugins/backend/backend_types.h>
 #include <pointcaster/core.h>
 #include <pointcaster/core_types.h>
@@ -12,8 +13,8 @@ struct TransformConfiguration {
   rfl::DefaultVal<float3> rotation = float3(0, 0, 0); // @minmax(-360, 360)
   rfl::DefaultVal<float3> scale = float3(1, 1, 1);    // @minmax(0, 2.5)
 
-  rfl::DefaultVal<float3> min_bound = float3(-10, -10, -10); // @minmax(-10, 10)
-  rfl::DefaultVal<float3> max_bound = float3(10, 10, 10);    // @minmax(-10, 10)
+  rfl::DefaultVal<bool> crop_to_bounds = false;
+  rfl::DefaultVal<position_bounds> bounds = pc::default_config_bounds;
 
   rfl::DefaultVal<int> sample = 1; // @minmax(1, 64)
 
