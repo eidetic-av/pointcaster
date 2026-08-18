@@ -72,6 +72,8 @@ struct position_bounds {
                std::numeric_limits<int16_t>::min(),
                std::numeric_limits<int16_t>::min()};
 
+  bool operator==(const position_bounds &b) const = default;
+
   // grow to contain a position
   constexpr void encompass(const position &p) {
     if (p.x < min.x) min.x = p.x;
@@ -80,6 +82,40 @@ struct position_bounds {
     if (p.x > max.x) max.x = p.x;
     if (p.y > max.y) max.y = p.y;
     if (p.z > max.z) max.z = p.z;
+  }
+};
+
+inline constexpr position_bounds default_config_bounds{{-2500, 0, -2500},
+                                                       {2500, 2500, 2500}};
+
+// a scalar distance in the int16 millimetre space...
+// we tag it as a "length" instead of a bare int16_t
+// for a bit more static info, along with some helpers for converting units
+struct length {
+  int16_t mm = 0;
+  auto operator<=>(const length &l) const = default;
+
+  constexpr float metres() const { return mm / 1000.0f; }
+  constexpr float centimetres() const { return mm / 10.0f; }
+
+  static constexpr length from_millimetres(float millimetres) {
+    constexpr auto lowest =
+        static_cast<float>(std::numeric_limits<int16_t>::min());
+    constexpr auto highest =
+        static_cast<float>(std::numeric_limits<int16_t>::max());
+    const float rounded =
+        millimetres < 0 ? millimetres - 0.5f : millimetres + 0.5f;
+    if (rounded <= lowest) return length{std::numeric_limits<int16_t>::min()};
+    if (rounded >= highest) return length{std::numeric_limits<int16_t>::max()};
+    return length{static_cast<int16_t>(rounded)};
+  }
+
+  static constexpr length from_metres(float metres) {
+    return from_millimetres(metres * 1000.0f);
+  }
+
+  static constexpr length from_centimetres(float centimetres) {
+    return from_millimetres(centimetres * 10.0f);
   }
 };
 

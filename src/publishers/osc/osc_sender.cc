@@ -123,9 +123,9 @@ void osc_sender_thread_worker(std::stop_token stop_token,
     // positions can go out as either raw millimeter ints or floats as metres
     const auto push_back_position = [&](lo::Message &out, const position &p) {
       if (position_encoding == PositionEncoding::Metres) {
-        out.add_float(p.x / 1000.0f);
-        out.add_float(p.y / 1000.0f);
-        out.add_float(p.z / 1000.0f);
+        out.add_float(length{p.x}.metres());
+        out.add_float(length{p.y}.metres());
+        out.add_float(length{p.z}.metres());
       } else {
         out.add_int32(p.x);
         out.add_int32(p.y);
