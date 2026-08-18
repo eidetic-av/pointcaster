@@ -1045,11 +1045,9 @@ StreamSource *WorkspaceModel::streamSourceFor(const QString &path) {
   return source;
 }
 
-// the world transform of the space a rendered path's value sits in. a device
-// or group crops its points in its parent's space, so a box of theirs is drawn
-// under the ancestor transform, while an operator sees a cloud that has
-// already been world-transformed and an output stream comes out the same way
-QMatrix4x4 WorkspaceModel::renderPathParentWorld(const QString &path) const {
+// the device or group a rendered path belongs to, or empty for a path that
+// belongs to no node in the tree
+QString WorkspaceModel::renderPathOwnerId(const QString &path) const {
   const std::string target = path.toStdString();
   if (!target.starts_with("device/") || target.contains("/operators/"))
     return {};
@@ -1083,9 +1081,58 @@ QMatrix4x4 WorkspaceModel::renderPathParentWorld(const QString &path) const {
     }
   }
 
-  if (node_id.empty()) return {};
+  return QString::fromStdString(node_id);
+}
+
+// the world transform of the space a rendered path's value sits in. a device
+// or group crops its points in its parent's space, so a box of theirs is drawn
+// under the ancestor transform, while an operator sees a cloud that has
+// already been world-transformed and an output stream comes out the same way
+QMatrix4x4 WorkspaceModel::renderPathParentWorld(const QString &path) const {
+  const QString node_id = renderPathOwnerId(path);
+  if (node_id.isEmpty()) return {};
   // nodeAncestorWorldMatrix takes the config lock itself
-  return nodeAncestorWorldMatrix(QString::fromStdString(node_id));
+  return nodeAncestorWorldMatrix(node_id);
+}
+
+// and the transform of the node itself, for the values that sit in its own
+// space rather than its parent's. a sensor's reach is measured from where the
+// sensor is, so a disc of one turns and travels with the device
+QMatrix4x4 WorkspaceModel::renderPathOwnerWorld(const QString &path) const {
+  return nodeWorldMatrix(renderPathOwnerId(path));
+}
+
+QMatrix4x4 WorkspaceModel::nodeWorldMatrix(const QString &node_id) const {
+  if (node_id.isEmpty()) return {};
+
+  const QMatrix4x4 ancestors = nodeAncestorWorldMatrix(node_id);
+
+  pc::TransformConfiguration local;
+  {
+    std::scoped_lock lock(_workspace.config_access);
+    const std::string id = node_id.toStdString();
+    if (const int group_index =
+            pc::devices::group_index_by_id(_workspace.config, id);
+        group_index >= 0) {
+      local = _workspace.config.device_groups[std::size_t(group_index)]
+                  .transform.value();
+    } else {
+      const int device_index = find_device_index_by_id(_workspace.config, id);
+      if (device_index < 0) return ancestors;
+      std::visit(
+          [&](const auto &device_config) {
+            local = device_config.transform.value();
+          },
+          _workspace.config.devices[std::size_t(device_index)]);
+    }
+  }
+
+  std::array<float, 16> v = pc::to_float4x4(local).values;
+  // a local transform carries its translation in millimetres
+  v[3] *= 0.001f;
+  v[7] *= 0.001f;
+  v[11] *= 0.001f;
+  return ancestors * QMatrix4x4(v.data());
 }
 
 // a scene object draws whatever sits at its path, and unlike a stream, a value

@@ -294,6 +294,12 @@ public:
   // the world transform of the space the value at a rendered path sits in
   Q_INVOKABLE QMatrix4x4 renderPathParentWorld(const QString &path) const;
 
+  Q_INVOKABLE QMatrix4x4 renderPathOwnerWorld(const QString &path) const;
+
+  Q_INVOKABLE QString renderPathOwnerId(const QString &path) const;
+
+  Q_INVOKABLE QMatrix4x4 nodeWorldMatrix(const QString &node_id) const;
+
 public slots:
   void syncAdapters();
   void syncSessionAdapters();

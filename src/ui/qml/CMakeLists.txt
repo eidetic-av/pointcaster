@@ -37,6 +37,8 @@ qt_add_qml_module(PointcasterQml
         Controls/Gizmos/SelectionGizmo.qml
         Controls/Gizmos/BoundsGizmo.qml
         Controls/Gizmos/SelectionBoundsGizmo.qml
+        Controls/Gizmos/RadiusGizmo.qml
+        Controls/Gizmos/SelectionRadiusGizmo.qml
         Controls/Timeline.qml
         Editors/ConfigurationEditor.qml
         Editors/OperatorPipelineEditor.qml

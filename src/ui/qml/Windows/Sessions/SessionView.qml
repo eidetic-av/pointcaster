@@ -75,6 +75,28 @@ Item {
         return b.active !== false;
     }
 
+    // the first radius the selected configuration carries
+    property string selectionRadiusPath: selectionRadiusPathOrEmpty()
+    function selectionRadiusPathOrEmpty() {
+        const adapter = selectedOperatorAdapter || selectedTransformAdapter;
+        if (!adapter || !adapter.radiusPaths)
+            return "";
+        const paths = adapter.radiusPaths();
+        return paths && paths.length > 0 ? paths[0] : "";
+    }
+
+    property bool selectionHasRadius: selectionHasRadiusOrDefault()
+    function selectionHasRadiusOrDefault() {
+        if (!selectionRadiusPath)
+            return false;
+        const adapter = selectedOperatorAdapter || selectedTransformAdapter;
+        const held = adapter.value(selectionRadiusPath);
+        if (held === undefined || held === null)
+            return false;
+        // same rule the box follows: a switch that is off hides the drawing
+        return held.active !== false;
+    }
+
     readonly property bool _selectionHasLookAt: {
         if (!selectedOperatorAdapter)
             return false;
@@ -93,15 +115,19 @@ Item {
 
     property matrix4x4 selectionParentWorld: Qt.matrix4x4()
 
+    property matrix4x4 selectionOwnWorld: Qt.matrix4x4()
+
     function updateSelectionParentWorld() {
         if (root.workspace && selectedTransformAdapter) {
             var id = root.workspace.selectedNodeId;
             if (id && id.length > 0) {
                 selectionParentWorld = root.workspace.nodeAncestorWorldMatrix(id);
+                selectionOwnWorld = root.workspace.nodeWorldMatrix(id);
                 return;
             }
         }
         selectionParentWorld = Qt.matrix4x4();
+        selectionOwnWorld = Qt.matrix4x4();
     }
 
     signal selectionTransformUpdate
@@ -114,6 +140,8 @@ Item {
         selectionLookAtPosition = selectionLookAtPositionOrDefault();
         selectionRotation = selectionRotationOrDefault();
         selectionHasBounds = selectionHasBoundsOrDefault();
+        selectionRadiusPath = selectionRadiusPathOrEmpty();
+        selectionHasRadius = selectionHasRadiusOrDefault();
     }
 
     Connections {
@@ -137,7 +165,11 @@ Item {
         function onFieldChanged(path) {
             if (path.includes("transform")) {
                 root.selectionTransformUpdate();
+                return;
             }
+            // flicking a distance on or off changes what the scene draws
+            if (path === root.selectionRadiusPath)
+                root.selectionHasRadius = root.selectionHasRadiusOrDefault();
         }
     }
 
@@ -153,10 +185,34 @@ Item {
     }
 
     // this view draws the rendered streams that belong to its own session,
-    // plus any belonging to a device, since a device feeds every session it
-    // is part of rather than sitting under one
+    // plus any belonging to a device
     readonly property string sessionPathPrefix: sessionAdapter ? String(sessionAdapter.configPath) + "/" : ""
     readonly property var renderPathsForSession: (workspace && sessionPathPrefix) ? workspace.renderPaths.filter(path => path.startsWith(sessionPathPrefix) || !path.startsWith("session/")) : []
+
+    // one unit circle, scaled to whatever distance each radius disc draws
+    readonly property int discSegments: 96
+    readonly property var discPositions: {
+        const points = [Qt.vector3d(0, 0, 0)];
+        for (let i = 0; i < root.discSegments; i++) {
+            const angle = i / root.discSegments * Math.PI * 2;
+            points.push(Qt.vector3d(Math.cos(angle), 0, Math.sin(angle)));
+        }
+        return points;
+    }
+    readonly property var discFillIndexes: {
+        const indexes = [];
+        for (let i = 0; i < root.discSegments; i++) {
+            indexes.push(0, 1 + i, 1 + (i + 1) % root.discSegments);
+        }
+        return indexes;
+    }
+    readonly property var discRimIndexes: {
+        const indexes = [];
+        for (let i = 0; i < root.discSegments; i++) {
+            indexes.push(1 + i, 1 + (i + 1) % root.discSegments);
+        }
+        return indexes;
+    }
 
     readonly property real defaultCameraDistance: 250
     readonly property vector3d defaultOrbitOriginPosition: Qt.vector3d(0, 0, 0)
@@ -412,9 +468,13 @@ Item {
                 readonly property string streamPath: modelData
                 readonly property var streamSource: root.workspace ? root.workspace.streamSourceFor(streamNode.streamPath) : null
                 readonly property bool isBounds: streamInstances.kind === StreamInstancing.Bounds
+                readonly property bool isDisc: streamNode.streamSource ? streamNode.streamSource.isRadius : false
+                readonly property real discRadius: streamNode.streamSource ? streamNode.streamSource.radiusMetres * 100 : 0
 
                 function refreshParentWorld() {
-                    const parentWorld = root.workspace ? root.workspace.renderPathParentWorld(streamNode.streamPath) : Qt.matrix4x4();
+                    // a box is cropped in its owner's parent space, while a
+                    // distance is measured from where the owner itself sits
+                    const parentWorld = root.workspace ? (streamNode.isDisc ? root.workspace.renderPathOwnerWorld(streamNode.streamPath) : root.workspace.renderPathParentWorld(streamNode.streamPath)) : Qt.matrix4x4();
                     // the transform carries its translation in metres
                     streamNode.position = TransformUtils.positionFromMatrix(parentWorld).times(100);
                     streamNode.rotation = TransformUtils.rotationFromMatrix(parentWorld);
@@ -425,16 +485,54 @@ Item {
 
                 StreamInstancing {
                     id: streamInstances
-                    streamAdapter: streamNode.streamSource ? streamNode.streamSource.streamAdapter() : null
+                    streamAdapter: (streamNode.streamSource && !streamNode.isDisc) ? streamNode.streamSource.streamAdapter() : null
                     color: streamNode.isBounds ? ThemeColors.yellow : ThemeColors.highlight
                     // only the solid boxes need sorting against each other
                     hasTransparency: streamInstances.kind !== StreamInstancing.Voxels
                     depthSortingEnabled: streamInstances.kind !== StreamInstancing.Voxels
                 }
 
+                // the radial disc model itself
+                Node {
+                    visible: streamNode.isDisc && streamNode.discRadius > 0
+                    scale: Qt.vector3d(streamNode.discRadius, 1, streamNode.discRadius)
+
+                    Model {
+                        geometry: ProceduralMesh {
+                            positions: root.discPositions
+                            indexes: root.discFillIndexes
+                        }
+
+                        materials: [
+                            PrincipledMaterial {
+                                baseColor: ThemeColors.yellow
+                                opacity: 0.05
+                                alphaMode: PrincipledMaterial.Blend
+                                lighting: PrincipledMaterial.NoLighting
+                                cullMode: Material.NoCulling
+                            }
+                        ]
+                    }
+
+                    Model {
+                        geometry: ProceduralMesh {
+                            primitiveMode: ProceduralMesh.Lines
+                            positions: root.discPositions
+                            indexes: root.discRimIndexes
+                        }
+
+                        materials: [
+                            PrincipledMaterial {
+                                baseColor: ThemeColors.yellow
+                                lighting: PrincipledMaterial.NoLighting
+                            }
+                        ]
+                    }
+                }
+
                 Model {
                     source: "#Cube"
-                    visible: streamInstances.kind !== StreamInstancing.Voxels
+                    visible: !streamNode.isDisc && streamInstances.kind !== StreamInstancing.Voxels
 
                     instancing: streamInstances
 
@@ -450,7 +548,7 @@ Item {
                 }
 
                 Model {
-                    visible: streamInstances.kind !== StreamInstancing.Aabbs
+                    visible: !streamNode.isDisc && streamInstances.kind !== StreamInstancing.Aabbs
 
                     geometry: ProceduralMesh {
                         primitiveMode: ProceduralMesh.Lines
@@ -832,6 +930,16 @@ Item {
         targetAdapter: root.selectedOperatorAdapter || root.selectedTransformAdapter
         boundsPath: root.selectedOperatorAdapter ? "bounds" : "transform/bounds"
         parentWorldTransform: root.selectedOperatorAdapter ? Qt.matrix4x4() : root.selectionParentWorld
+        z: 99
+    }
+
+    SelectionRadiusGizmo {
+        id: radiusGizmo
+        visible: root.selectionHasRadius && !sessionControls.viewLocked && sessionControls.gizmoEnabled
+        view3d: view
+        targetAdapter: root.selectedOperatorAdapter || root.selectedTransformAdapter
+        radiusPath: root.selectionRadiusPath
+        parentWorldTransform: root.selectedOperatorAdapter ? Qt.matrix4x4() : root.selectionOwnWorld
         z: 99
     }
 

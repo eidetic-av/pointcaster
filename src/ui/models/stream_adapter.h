@@ -11,6 +11,6 @@ public:
 
   virtual pc::AabbListPtr aabb_list() { return nullptr; }
   virtual pc::VoxelisedCloudPtr voxelised_cloud() { return nullptr; }
-  // a box a configuration carries, rather than anything an operator produced
   virtual std::optional<pc::position_bounds> bounds() { return std::nullopt; }
+  virtual std::optional<pc::radius> radius() { return std::nullopt; }
 };
