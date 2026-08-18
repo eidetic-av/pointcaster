@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <pointcaster/point_cloud.h>
 
 // what a scene object reads to draw an operator's output stream.
@@ -10,4 +11,6 @@ public:
 
   virtual pc::AabbListPtr aabb_list() { return nullptr; }
   virtual pc::VoxelisedCloudPtr voxelised_cloud() { return nullptr; }
+  // a box a configuration carries, rather than anything an operator produced
+  virtual std::optional<pc::position_bounds> bounds() { return std::nullopt; }
 };

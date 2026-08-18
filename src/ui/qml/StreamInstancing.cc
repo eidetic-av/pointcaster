@@ -1,6 +1,7 @@
 #include "StreamInstancing.h"
 
 #include <QVector3D>
+#include <optional>
 #include <ranges>
 #include <utility>
 
@@ -53,8 +54,16 @@ void StreamInstancing::updateInstances() {
     _instanceCount++;
   };
 
+  const auto set_kind = [&](Kind kind) {
+    if (_kind == kind) return;
+    _kind = kind;
+    emit kindChanged();
+  };
+
   if (const auto aabbs =
           _streamAdapter ? _streamAdapter->aabb_list() : nullptr) {
+    set_kind(Aabbs);
+
     // an instance spanning each aabb's min and max corners, in the colour the
     // operator gave it to tell it apart from the others
     const auto boxes = std::views::zip(
@@ -69,10 +78,7 @@ void StreamInstancing::updateInstances() {
   } else if (const auto voxels = _streamAdapter
                                      ? _streamAdapter->voxelised_cloud()
                                      : nullptr) {
-    if (!_voxelised) {
-      _voxelised = true;
-      emit voxelisedChanged();
-    }
+    set_kind(Voxels);
 
     // or one the size of the grid centred on each occupied voxel. a voxel has
     // no identity to key a colour off, so the whole grid takes the flat one
@@ -82,6 +88,15 @@ void StreamInstancing::updateInstances() {
     for (const auto &voxel : voxels->positions) {
       add_instance(to_scene(voxel), voxel_size, _color);
     }
+  } else if (const auto bounds = _streamAdapter
+                                     ? _streamAdapter->bounds()
+                                     : std::optional<pc::position_bounds>{}) {
+    set_kind(Bounds);
+
+    const auto min_corner = to_scene(bounds->min);
+    const auto max_corner = to_scene(bounds->max);
+    add_instance((min_corner + max_corner) / 2.0f, max_corner - min_corner,
+                 _color);
   }
 
   if (_instanceCount != previous_count) emit instanceCountChanged();

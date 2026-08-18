@@ -402,8 +402,7 @@ Item {
             }
         }
 
-        // the operator output streams switched on for rendering, each one
-        // drawn as translucent boxes over the cloud they came out of
+        // the paths switched on for rendering
         Repeater3D {
             model: root.renderPathsForSession
 
@@ -412,26 +411,37 @@ Item {
 
                 readonly property string streamPath: modelData
                 readonly property var streamSource: root.workspace ? root.workspace.streamSourceFor(streamNode.streamPath) : null
+                readonly property bool isBounds: streamInstances.kind === StreamInstancing.Bounds
+
+                function refreshParentWorld() {
+                    const parentWorld = root.workspace ? root.workspace.renderPathParentWorld(streamNode.streamPath) : Qt.matrix4x4();
+                    // the transform carries its translation in metres
+                    streamNode.position = TransformUtils.positionFromMatrix(parentWorld).times(100);
+                    streamNode.rotation = TransformUtils.rotationFromMatrix(parentWorld);
+                    streamNode.scale = TransformUtils.scaleFromMatrix(parentWorld);
+                }
+
+                Component.onCompleted: streamNode.refreshParentWorld()
 
                 StreamInstancing {
                     id: streamInstances
                     streamAdapter: streamNode.streamSource ? streamNode.streamSource.streamAdapter() : null
-                    color: ThemeColors.highlight
+                    color: streamNode.isBounds ? ThemeColors.yellow : ThemeColors.highlight
                     // only the solid boxes need sorting against each other
-                    hasTransparency: !streamInstances.voxelised
-                    depthSortingEnabled: !streamInstances.voxelised
+                    hasTransparency: streamInstances.kind !== StreamInstancing.Voxels
+                    depthSortingEnabled: streamInstances.kind !== StreamInstancing.Voxels
                 }
 
                 Model {
                     source: "#Cube"
-                    visible: !streamInstances.voxelised
+                    visible: streamInstances.kind !== StreamInstancing.Voxels
 
                     instancing: streamInstances
 
                     materials: [
                         PrincipledMaterial {
                             baseColor: "white"
-                            opacity: 0.35
+                            opacity: streamNode.isBounds ? 0.05 : 0.35
                             alphaMode: PrincipledMaterial.Blend
                             lighting: PrincipledMaterial.NoLighting
                             cullMode: Material.NoCulling
@@ -440,7 +450,7 @@ Item {
                 }
 
                 Model {
-                    visible: streamInstances.voxelised
+                    visible: streamInstances.kind !== StreamInstancing.Aabbs
 
                     geometry: ProceduralMesh {
                         primitiveMode: ProceduralMesh.Lines
@@ -477,6 +487,15 @@ Item {
                     ignoreUnknownSignals: true
                     function onPointCloudUpdated() {
                         streamInstances.updateInstances();
+                    }
+                }
+
+                Connections {
+                    target: streamNode.streamSource
+                    ignoreUnknownSignals: true
+                    function onContentChanged() {
+                        streamInstances.updateInstances();
+                        streamNode.refreshParentWorld();
                     }
                 }
             }

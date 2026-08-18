@@ -1045,6 +1045,73 @@ StreamSource *WorkspaceModel::streamSourceFor(const QString &path) {
   return source;
 }
 
+// the world transform of the space a rendered path's value sits in. a device
+// or group crops its points in its parent's space, so a box of theirs is drawn
+// under the ancestor transform, while an operator sees a cloud that has
+// already been world-transformed and an output stream comes out the same way
+QMatrix4x4 WorkspaceModel::renderPathParentWorld(const QString &path) const {
+  const std::string target = path.toStdString();
+  if (!target.starts_with("device/") || target.contains("/operators/"))
+    return {};
+
+  std::string node_id;
+  {
+    std::scoped_lock lock(_workspace.config_access);
+    const auto &config = _workspace.config;
+
+    // an address is built from labels, which repeat across the tree, so the
+    // node that owns the path is the deepest one the path sits under
+    std::size_t owner_prefix_length = 0;
+    const auto consider = [&](const std::string &id) {
+      const std::string prefix = node_path_prefix(config, id) + "/";
+      if (prefix.size() <= owner_prefix_length || !target.starts_with(prefix))
+        return;
+      owner_prefix_length = prefix.size();
+      node_id = id;
+    };
+
+    for (const auto &device_variant : config.devices) {
+      consider(std::visit(
+          [](const auto &device_config) -> const std::string & {
+            return device_config.id;
+          },
+          device_variant));
+    }
+
+    for (const auto &group : config.device_groups) {
+      consider(group.id);
+    }
+  }
+
+  if (node_id.empty()) return {};
+  // nodeAncestorWorldMatrix takes the config lock itself
+  return nodeAncestorWorldMatrix(QString::fromStdString(node_id));
+}
+
+// a scene object draws whatever sits at its path, and unlike a stream, a value
+// a configuration carries only moves when something edits it. node addresses
+// nest, so an edit under one node reaches its descendants' paths too, and a
+// group moving takes the boxes of the devices beneath it along
+void WorkspaceModel::watchStreamSourcesFor(ConfigAdapter *adapter) {
+  if (!adapter) return;
+  // adapters are re-pathed on every sync, so drop any previous hookup first
+  QObject::disconnect(adapter, &ConfigAdapter::fieldChanged, this, nullptr);
+  // queued because an edit reaches an operator's registered configuration on
+  // the way back out of the handler that announced the field, so reading it
+  // any earlier hands the scene the value it is replacing
+  QObject::connect(
+      adapter, &ConfigAdapter::fieldChanged, this,
+      [this, adapterPtr = QPointer<ConfigAdapter>(adapter)]() {
+        if (!adapterPtr) return;
+        const QString prefix = adapterPtr->configPath() + "/";
+        for (auto *source : _streamSources) {
+          if (source && source->path().startsWith(prefix))
+            source->notifyChanged();
+        }
+      },
+      Qt::QueuedConnection);
+}
+
 QList<QObject *> WorkspaceModel::sessionAdapters() const {
   return _sessionAdapters;
 }
@@ -1548,6 +1615,7 @@ void WorkspaceModel::rebuildSelectedGroupAdapter() {
           _workspace.config.device_groups[size_t(gi)], nullptr, nullptr, this);
       adapter->setConfigPath(QString::fromStdString(
           node_path_prefix(_workspace.config, _selectedNodeId.toStdString())));
+      watchStreamSourcesFor(adapter);
       initGroupAdapter(adapter);
       _selectedDeviceGroupAdapter = adapter;
     }
@@ -1927,6 +1995,7 @@ void WorkspaceModel::attachOperatorConfigAdapters(
       adapter->setConfigPath(
           QString::fromStdString(operator_path_prefix(owner_prefix, *storage)));
       opAdapter->setConfigAdapter(adapter);
+      watchStreamSourcesFor(adapter);
       initOperatorAdapter(opAdapter, deviceAdapter);
     }
   }
@@ -1937,8 +2006,9 @@ void WorkspaceModel::initOperatorAdapter(OperatorAdapter *opAdapter,
   auto *innerAdapter = opAdapter->configAdapter();
   if (!innerAdapter) return;
 
-  // a gizmo drag previews continuously and commits once on release, so these
-  // land in the workspace config and the running pipeline without touching undo
+  // a gizmo or a ui input component drag previews continuously and commits once
+  // on release, so these land in the workspace config and the running pipeline
+  // without touching undo
   QObject::connect(
       innerAdapter, &ConfigAdapter::previewRequested, this,
       [this, opAdapter, deviceAdapter](const QString &path,
@@ -2061,6 +2131,7 @@ void WorkspaceModel::attachSessionOperatorConfigAdapters(
       opAdapter->setConfigAdapter(adapter);
       subscribe_adapter_to_registry(_workspace.config_registry, adapter,
                                     operator_prefix + "/");
+      watchStreamSourcesFor(adapter);
       initSessionOperatorAdapter(opAdapter, sessionId);
     }
   }
@@ -2128,7 +2199,7 @@ void WorkspaceModel::initSessionOperatorAdapter(OperatorAdapter *opAdapter,
   auto *innerAdapter = opAdapter->configAdapter();
   if (!innerAdapter) return;
 
-  // a gizmo drag previews continuously and commits once on release
+  // a gizmo or a ui input component drag previews continuously and commits once on release
   QObject::connect(
       innerAdapter, &ConfigAdapter::previewRequested, this,
       [this, opAdapter, sessionId](const QString &path, const QVariant &value) {
@@ -2986,6 +3057,7 @@ void WorkspaceModel::syncDeviceAdapters() {
     const std::string node_prefix = node_path_prefix(_workspace.config, id);
     adapter->setConfigPath(QString::fromStdString(node_prefix));
     set_nested_config_path(adapter, node_prefix, "operator_pipeline");
+    watchStreamSourcesFor(adapter);
     const std::string prefix = node_prefix + "/";
     pc::logger()->trace(
         "syncDeviceAdapters: registering on_change for prefix='{}'", prefix);

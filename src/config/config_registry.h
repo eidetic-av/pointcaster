@@ -19,11 +19,10 @@
 
 namespace pc {
 
-// all scalar types representable inside configs...
-// vector types and other configs are aggregates of the scalars,
-// and the PointCloudPtr and sibling types are for possible output values
-using ConfigValue = std::variant<bool, int, float, double, std::string,
-                                 PointCloudPtr, VoxelisedCloudPtr, AabbListPtr>;
+// all types representable inside configs...
+using ConfigValue =
+    std::variant<bool, int, float, double, std::string, position_bounds,
+                 PointCloudPtr, VoxelisedCloudPtr, AabbListPtr>;
 
 class ConfigRegistry {
 public:
@@ -103,6 +102,8 @@ template <class T> ConfigValue to_config_value(const T &v) {
     return v;
   else if constexpr (std::is_enum_v<T>)
     return static_cast<int>(v);
+  else if constexpr (std::is_same_v<T, position_bounds>)
+    return v;
   else if constexpr (is_cloud_stream_v<T>)
     return v;
   else
@@ -158,6 +159,9 @@ template <class T> T from_config_value(const ConfigValue &v) {
           return {};
         },
         v);
+  } else if constexpr (std::is_same_v<T, position_bounds>) {
+    const auto *held = std::get_if<T>(&v);
+    return held ? *held : T{};
   } else {
     return std::get<T>(v);
   }
@@ -196,7 +200,12 @@ void register_config(ConfigRegistry &reg, std::string_view prefix, T &cfg) {
 
     if constexpr (is_rfl_default_val_v<ValType>) {
       using Inner = typename ValType::Type;
-      if constexpr (RflTraversable<Inner>) {
+      if constexpr (std::is_same_v<Inner, position_bounds>) {
+        reg.register_field(
+            path,
+            {[ptr]() -> ConfigValue { return to_config_value(ptr->value()); },
+             [ptr](ConfigValue v) { ptr->set(from_config_value<Inner>(v)); }});
+      } else if constexpr (RflTraversable<Inner>) {
         register_config(reg, path, ptr->value());
       } else if constexpr (ConfigValueCompatible<Inner>) {
         reg.register_field(
@@ -205,6 +214,11 @@ void register_config(ConfigRegistry &reg, std::string_view prefix, T &cfg) {
              [ptr](ConfigValue v) { ptr->set(from_config_value<Inner>(v)); }});
       }
       // else: vector, variant, etc. inside DefaultVal — skip
+    } else if constexpr (std::is_same_v<ValType, position_bounds>) {
+      reg.register_field(
+          path,
+          {[ptr]() -> ConfigValue { return to_config_value(*ptr); },
+           [ptr](ConfigValue v) { *ptr = from_config_value<ValType>(v); }});
     } else if constexpr (RflTraversable<ValType>) {
       register_config(reg, path, *ptr);
     } else if constexpr (ConfigValueCompatible<ValType>) {

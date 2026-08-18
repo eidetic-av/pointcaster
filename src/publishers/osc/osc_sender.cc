@@ -182,6 +182,16 @@ void osc_sender_thread_worker(std::stop_token stop_token,
                                   [&](lo::Message &out, std::size_t i) {
                                     push_back_position(out, v->positions[i]);
                                   });
+            } else if constexpr (std::same_as<VariantType, position_bounds>) {
+              // a bounds is one box: its min followed by its max, the same
+              // message a single element of an aabb list sends
+              lo::Message out;
+              {
+                ProfilingZone osc_encode_zone("OscSender::encode");
+                push_back_position(out, v.min);
+                push_back_position(out, v.max);
+              }
+              send(osc_address_from(path), out);
             } else {
               lo::Message out;
               {

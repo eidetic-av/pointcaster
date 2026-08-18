@@ -235,6 +235,41 @@ void mqtt_client_thread_worker(std::stop_token stop_token,
                 msg = mqtt::make_message(path, send_buffer.data(),
                                          send_buffer.size());
               }
+            } else if constexpr (std::same_as<VariantType, position_bounds>) {
+              // a bounds is one box, so it goes out in the shape a single
+              // element of an aabb list would
+              const std::array<int16_t, 3> min{value.min.x, value.min.y,
+                                               value.min.z};
+              const std::array<int16_t, 3> max{value.max.x, value.max.y,
+                                               value.max.z};
+              payload_empty = false;
+
+              if (serialize_as_structures) {
+                const StructuredAabb bounds{
+                    .min = min, .max = max, .id = "bounds"};
+                if (serialization_format == SerializationFormat::JSON) {
+                  ProfilingZone json_zone("serialize::json");
+                  msg = mqtt::make_message(path, rfl::json::write(bounds));
+                } else { // SerializationFormat::MessagePack
+                  ProfilingZone msgpack_zone("serialize::msgpack");
+                  msgpack::sbuffer send_buffer;
+                  msgpack::pack(send_buffer, bounds);
+                  msg = mqtt::make_message(path, send_buffer.data(),
+                                           send_buffer.size());
+                }
+              } else {
+                const std::array<std::array<int16_t, 3>, 2> bounds{min, max};
+                if (serialization_format == SerializationFormat::JSON) {
+                  ProfilingZone json_zone("serialize::json");
+                  msg = mqtt::make_message(path, rfl::json::write(bounds));
+                } else { // SerializationFormat::MessagePack
+                  ProfilingZone msgpack_zone("serialize::msgpack");
+                  msgpack::sbuffer send_buffer;
+                  msgpack::pack(send_buffer, bounds);
+                  msg = mqtt::make_message(path, send_buffer.data(),
+                                           send_buffer.size());
+                }
+              }
             } else {
               const auto msg_str = std::format("{}", value);
               payload_empty = msg_str.empty();

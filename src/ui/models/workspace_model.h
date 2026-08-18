@@ -291,6 +291,9 @@ public:
 
   Q_INVOKABLE StreamSource *streamSourceFor(const QString &path);
 
+  // the world transform of the space the value at a rendered path sits in
+  Q_INVOKABLE QMatrix4x4 renderPathParentWorld(const QString &path) const;
+
 public slots:
   void syncAdapters();
   void syncSessionAdapters();
@@ -355,7 +358,7 @@ private:
   std::optional<PreviewSession<pc::devices::DeviceGroupConfiguration>>
       _groupPreview;
 
-  // a gizmo bound to an operator's field previews through these
+  // a gizmo or a drag on an operator's field previews through these
   std::optional<PreviewSession<pc::operators::OperatorConfigurationVariant>>
       _deviceOperatorPreview;
   std::optional<PreviewSession<pc::SessionConfiguration>>
@@ -455,6 +458,11 @@ private:
 
   void refreshOperatorConfigAdapters();
   void notifyOperatorConfigAdapters(const QList<OperatorAdapter *> &ops);
+
+  // keeps whatever the scene draws from an adapter's paths in step with edits
+  // to them
+  void watchStreamSourcesFor(ConfigAdapter *adapter);
+
   void initPointStreamerAdapter();
   void initPublishersConfigAdapter();
 };

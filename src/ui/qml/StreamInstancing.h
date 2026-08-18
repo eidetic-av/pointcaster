@@ -8,9 +8,8 @@
 
 namespace pc::ui::qml {
 
-// places one instance of a model per element of an operator's output stream:
-// one per aabb, or one per occupied voxel, each sized to the element it came
-// from. whichever mesh the scene gives the model is what gets drawn
+// instances for a model per element in an output stream...
+// voxel, aabb, etc. outputs to visualise
 class StreamInstancing : public QQuick3DInstancing {
   Q_OBJECT
 
@@ -26,9 +25,12 @@ class StreamInstancing : public QQuick3DInstancing {
   Q_PROPERTY(
       int instanceCount READ instanceCount NOTIFY instanceCountChanged)
 
-  Q_PROPERTY(bool voxelised READ voxelised NOTIFY voxelisedChanged)
+  Q_PROPERTY(Kind kind READ kind NOTIFY kindChanged)
 
 public:
+  enum Kind { Nothing, Aabbs, Voxels, Bounds };
+  Q_ENUM(Kind)
+
   explicit StreamInstancing(QQuick3DObject *parent = nullptr)
       : QQuick3DInstancing(parent) {}
 
@@ -40,7 +42,7 @@ public:
 
   int instanceCount() const { return _instanceCount; }
 
-  bool voxelised() const { return _voxelised; }
+  Kind kind() const { return _kind; }
 
   // re-reads the stream and redraws it... the scene calls this every time the
   // session it sits in produces a frame
@@ -50,7 +52,7 @@ signals:
   void streamAdapterChanged();
   void colorChanged();
   void instanceCountChanged();
-  void voxelisedChanged();
+  void kindChanged();
 
 protected:
   QByteArray getInstanceBuffer(int *instanceCount) override;
@@ -61,7 +63,7 @@ private:
 
   QByteArray _instanceData;
   int _instanceCount = 0;
-  bool _voxelised = false;
+  Kind _kind = Nothing;
 };
 
 } // namespace pc::ui::qml

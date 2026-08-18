@@ -5,10 +5,11 @@
 #include <QObject>
 #include <QString>
 #include <config/config_registry.h>
+#include <optional>
 #include <string>
 #include <variant>
 
-// reads whatever an operator last wrote to one config registry path
+// reads whatever was last written into a config registry path 
 class StreamSource : public QObject, public StreamAdapter {
   Q_OBJECT
 
@@ -29,6 +30,18 @@ public:
   pc::VoxelisedCloudPtr voxelised_cloud() override {
     return read<pc::VoxelisedCloudPtr>();
   }
+  std::optional<pc::position_bounds> bounds() override {
+    const auto value = _registry.get(_path);
+    if (!value) return std::nullopt;
+    const auto *bounds = std::get_if<pc::position_bounds>(&value.value());
+    if (!bounds) return std::nullopt;
+    return *bounds;
+  }
+
+  void notifyChanged() { emit contentChanged(); }
+
+signals:
+  void contentChanged();
 
 private:
   pc::ConfigRegistry &_registry;
