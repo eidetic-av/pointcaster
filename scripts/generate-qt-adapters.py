@@ -121,7 +121,7 @@ class GeneratorArgs:
 
 KINDS = (
     "nested", "variant", "enum", "string", "bool", "int", "float", "float3",
-    "quaternion", "stream", "opaque",
+    "quaternion", "position", "position_bounds", "length", "stream", "opaque",
 )
 
 
@@ -257,6 +257,18 @@ def is_quaternion_type(type_name: str) -> bool:
     return type_name.strip() in ("pc::quaternion", "quaternion")
 
 
+def is_position_type(type_name: str) -> bool:
+    return type_name.strip() in ("pc::position", "position")
+
+
+def is_position_bounds_type(type_name: str) -> bool:
+    return type_name.strip() in ("pc::position_bounds", "position_bounds")
+
+
+def is_length_type(type_name: str) -> bool:
+    return type_name.strip() in ("pc::length", "length")
+
+
 def is_simple_comparable_type(type_name: str) -> bool:
     t = type_name.strip()
 
@@ -264,6 +276,9 @@ def is_simple_comparable_type(type_name: str) -> bool:
         return True
 
     if is_float3_type(t) or is_quaternion_type(t):
+        return True
+
+    if is_position_type(t) or is_position_bounds_type(t) or is_length_type(t):
         return True
 
     if INTLIKE_RE.fullmatch(t):
@@ -352,6 +367,12 @@ def classify(cpp_type: str, is_enum: bool, is_variant: bool) -> tuple[str, str]:
         return "float3", "QVector3D"
     if is_quaternion_type(cpp_type):
         return "quaternion", "QQuaternion"
+    if is_position_type(cpp_type):
+        return "position", "QVector3D"
+    if is_position_bounds_type(cpp_type):
+        return "position_bounds", "QVariantMap"
+    if is_length_type(cpp_type):
+        return "length", "double"
     if cpp_type in ("std::string", "QString"):
         return "string", "QString"
     if cpp_type == "bool":
@@ -692,6 +713,12 @@ def _parse_members(
         if kind == "quaternion":
             needs_qquaternion = True
             default_components = _parse_vector_components(init_raw, 4)
+        if kind in ("position", "position_bounds"):
+            needs_qvector3d = True
+        if kind == "length":
+            components = _parse_vector_components(init_raw, 1)
+            if components:
+                default_value = components[0]
 
         ref = f"{ref_prefix}{raw_name}"
         member = Member(
@@ -950,8 +977,6 @@ def process_cpp_header(
                     m.kind in ("enum", "variant", "nested") or m.options
                     for m in members
                 ),
-                "any_float3": any(m.kind == "float3" for m in members),
-                "any_quaternion": any(m.kind == "quaternion" for m in members),
                 "nested_adapter_includes": nested_adapter_includes,
                 "paths": paths,
                 "groups": groups,

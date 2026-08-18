@@ -35,6 +35,12 @@
 {% elif m.kind == "quaternion" %}
             const auto &v = {{ m.read }};
             return QVariant::fromValue(QQuaternion(v.scalar, v.x, v.y, v.z));
+{% elif m.kind == "position" %}
+            return QVariant::fromValue(positionToMetres({{ m.read }}));
+{% elif m.kind == "length" %}
+            return QVariant(double({{ m.read }}.metres()));
+{% elif m.kind == "position_bounds" %}
+            return boundsToMetresMap({{ m.read }});
 {% elif m.kind == "stream" %}
             const auto stream = {{ m.read }};
             return QVariant(stream ? int(stream->size()) : -1);
@@ -72,6 +78,12 @@
 {% elif m.kind == "quaternion" %}
             const QQuaternion v = toQQuaternionLoose(value);
             const {{ m.cpp_type }} newValue{ v.scalar(), v.x(), v.y(), v.z() };
+{% elif m.kind == "position" %}
+            const pc::position newValue = positionFromMetres(toQVector3DLoose(value));
+{% elif m.kind == "length" %}
+            const pc::length newValue = pc::length::from_metres(value.toFloat());
+{% elif m.kind == "position_bounds" %}
+            const pc::position_bounds newValue = toPositionBoundsLoose(value);
 {% else %}
             const auto newValue = qvariant_cast<{{ m.cpp_type }}>(value);
 {% endif %}
@@ -108,6 +120,12 @@ QVariant({{ m.enum_default if m.enum_default is not none else 0 }})
 QVariant::fromValue(QVector3D({{ (m.default_components or [0.0, 0.0, 0.0]) | join('f, ') }}f))
 {%- elif m.kind == "quaternion" %}
 QVariant::fromValue(QQuaternion({{ (m.default_components or [1.0, 0.0, 0.0, 0.0]) | join('f, ') }}f))
+{%- elif m.kind == "length" %}
+QVariant({{ (m.default_value or 0) / 1000 }})
+{#- a bounds default is written as a named constant rather than a literal, so
+    it goes out as the C++ expression it already is -#}
+{%- elif m.kind == "position_bounds" %}
+{% if m.default_value %}QVariant(boundsToMetresMap({{ m.default_value }})){% else %}QVariant(){% endif %}
 {%- elif m.kind == "stream" %}
 QVariant()
 {%- elif m.default_value is none %}
@@ -374,6 +392,18 @@ public:
     Q_INVOKABLE void set_{{ m.name }}(float scalar, float x, float y, float z) {
         emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(QQuaternion(scalar, x, y, z)));
     }
+{% elif m.kind == "position" %}
+    Q_INVOKABLE QVector3D {{ m.name }}() const { return positionToMetres({{ m.read }}); }
+    Q_INVOKABLE void set_{{ m.name }}(const QVector3D &value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(value)); }
+    Q_INVOKABLE void set_{{ m.name }}(float x, float y, float z) {
+        emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(QVector3D(x, y, z)));
+    }
+{% elif m.kind == "position_bounds" %}
+    Q_INVOKABLE QVariantMap {{ m.name }}() const { return boundsToMetresMap({{ m.read }}); }
+    Q_INVOKABLE void set_{{ m.name }}(const QVariantMap &value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(value)); }
+{% elif m.kind == "length" %}
+    Q_INVOKABLE double {{ m.name }}() const { return {{ m.read }}.metres(); }
+    Q_INVOKABLE void set_{{ m.name }}(double value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant(value)); }
 {% elif m.qt_type %}
     Q_INVOKABLE {{ m.qt_type }} {{ m.name }}() const { return {{ m.read }}; }
     Q_INVOKABLE void set_{{ m.name }}({{ m.qt_type }} value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(value)); }
@@ -392,8 +422,16 @@ signals:
     void {{ m.name }}Changed();
 {% endfor %}
 
-{% if s.any_float3 %}
+{#- Which private conversion helpers this struct needs... -#}
+
+{% set kinds = s.members | map(attribute="kind") | list %}
+{% set want_position = "position" in kinds or "position_bounds" in kinds %}
+{% set want_vector3d = want_position or "float3" in kinds %}
+{% set want_quaternion = "quaternion" in kinds %}
+{% if want_vector3d or want_quaternion %}
 private:
+{% endif %}
+{% if want_vector3d %}
     static QVector3D toQVector3DLoose(const QVariant &value) {
         if (value.canConvert<QVector3D>())
             return value.value<QVector3D>();
@@ -412,7 +450,7 @@ private:
         return QVector3D();
     }
 {% endif %}
-{% if s.any_quaternion %}
+{% if want_quaternion %}
     static QQuaternion toQQuaternionLoose(const QVariant &value) {
         if (value.canConvert<QQuaternion>())
             return value.value<QQuaternion>();
@@ -430,6 +468,34 @@ private:
                 return QQuaternion(l[0].toFloat(), l[1].toFloat(), l[2].toFloat(), l[3].toFloat());
         }
         return QQuaternion();
+    }
+{% endif %}
+{% if want_position %}
+    // internal position types are int16 millimetres, and QML works in metres
+    // throughout -- pc::length carries the conversion and its clamping
+    static QVector3D positionToMetres(const pc::position &p) {
+        return QVector3D(pc::length{p.x}.metres(), pc::length{p.y}.metres(),
+                         pc::length{p.z}.metres());
+    }
+
+    static pc::position positionFromMetres(const QVector3D &v) {
+        return pc::position{pc::length::from_metres(v.x()).mm,
+                            pc::length::from_metres(v.y()).mm,
+                            pc::length::from_metres(v.z()).mm};
+    }
+
+    static QVariantMap boundsToMetresMap(const pc::position_bounds &bounds) {
+        QVariantMap map;
+        map.insert(QStringLiteral("min"), QVariant::fromValue(positionToMetres(bounds.min)));
+        map.insert(QStringLiteral("max"), QVariant::fromValue(positionToMetres(bounds.max)));
+        return map;
+    }
+
+    static pc::position_bounds toPositionBoundsLoose(const QVariant &value) {
+        const auto map = value.toMap();
+        return pc::position_bounds{
+            positionFromMetres(toQVector3DLoose(map.value(QStringLiteral("min")))),
+            positionFromMetres(toQVector3DLoose(map.value(QStringLiteral("max"))))};
     }
 {% endif %}
 
@@ -509,6 +575,10 @@ public:
 {% for m in s.members %}
 {% if m.kind == "nested" %}
 {{ forward_case(m, "minMax", "") }}
+{% elif m.min_max and m.kind == "length" %}
+{#- a length's bounds are written in millimetres, like the member itself #}
+        if (path == QStringLiteral("{{ m.path }}"))
+            return QVariantList{ QVariant({{ m.min_max[0] | float / 1000 }}), QVariant({{ m.min_max[1] | float / 1000 }}) };
 {% elif m.min_max %}
         if (path == QStringLiteral("{{ m.path }}"))
             return QVariantList{ QVariant({{ m.min_max[0] }}), QVariant({{ m.min_max[1] }}) };
