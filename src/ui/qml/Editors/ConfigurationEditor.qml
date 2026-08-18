@@ -160,8 +160,10 @@ Column {
 
                         readonly property real textOpacity: readOnly ? 0.66 : 1.0
 
+                        readonly property int rowSpan: Math.max(1, Math.ceil((valueContainer.implicitHeight - 1) / nodeRoot.fieldHeight))
+
                         visible: nodeRoot.fieldsVisible
-                        height: visible ? nodeRoot.fieldHeight : 0
+                        height: visible ? nodeRoot.fieldHeight * fieldRow.rowSpan : 0
                         width: contentColumn.width
 
                         RowLayout {
@@ -265,7 +267,13 @@ Column {
                                             return intEditor;
                                         if (typeName === "float" || typeName === "float32" || typeName === "float32_t" || typeName === "double" || typeName === "real" || typeName === "number")
                                             return floatEditor;
+                                        if (typeName.includes("length"))
+                                            return floatEditor;
                                         if (typeName.includes("pc::float3") || typeName.includes("float3"))
+                                            return float3Editor;
+                                        if (typeName.includes("position_bounds"))
+                                            return positionBoundsEditor;
+                                        if (typeName.includes("position"))
                                             return float3Editor;
                                         if (typeName === "bool")
                                             return boolEditor;
@@ -588,8 +596,8 @@ Column {
                 return isNaN(n) ? 0 : Math.trunc(n);
             }
 
-            onCommitValue: function (v) {
-                root.configAdapter.set(path, v);
+            onCommitValue: function (value) {
+                root.configAdapter.set(path, value);
             }
 
             Connections {
@@ -621,8 +629,8 @@ Column {
                 return isNaN(n) ? 0.0 : n;
             }
 
-            onCommitValue: function (v) {
-                root.configAdapter.set(path, v);
+            onCommitValue: function (value) {
+                root.configAdapter.set(path, value);
             }
 
             Connections {
@@ -653,14 +661,14 @@ Column {
             boundValue: {
                 if (!root.configAdapter)
                     return Qt.vector3d(0, 0, 0);
-                const v = root.configAdapter.value(path);
-                return Qt.vector3d(Number(v.x) || 0, Number(v.y) || 0, Number(v.z) || 0);
+                const value = root.configAdapter.value(path);
+                return Qt.vector3d(Number(value.x) || 0, Number(value.y) || 0, Number(value.z) || 0);
             }
 
-            onCommitValue: function (v3) {
+            onCommitValue: function (vector) {
                 if (!root.configAdapter)
                     return;
-                root.configAdapter.set(path, v3);
+                root.configAdapter.set(path, vector);
             }
 
             Connections {
@@ -668,8 +676,38 @@ Column {
                 function onFieldChanged(changedPath) {
                     if (String(changedPath) !== path)
                         return;
-                    const v = root.configAdapter.value(path);
-                    float3.boundValue = Qt.vector3d(Number(v.x) || 0, Number(v.y) || 0, Number(v.z) || 0);
+                    const value = root.configAdapter.value(path);
+                    float3.boundValue = Qt.vector3d(Number(value.x) || 0, Number(value.y) || 0, Number(value.z) || 0);
+                }
+            }
+        }
+    }
+
+    Component {
+        id: positionBoundsEditor
+        PositionBoundsEditor {
+            id: positionBounds
+            font: Scaling.uiFont
+            axisFont: Scaling.uiSmallFont
+
+            defaultValue: root.configAdapter ? root.configAdapter.defaultValue(path) : undefined
+
+            enabled: root.configAdapter ? !root.configAdapter.isDisabled(path) : true
+
+            boundValue: root.configAdapter ? root.configAdapter.value(path) : undefined
+
+            onCommitValue: function (b) {
+                if (!root.configAdapter)
+                    return;
+                root.configAdapter.set(path, b);
+            }
+
+            Connections {
+                target: root.configAdapter
+                function onFieldChanged(changedPath) {
+                    if (String(changedPath) !== path)
+                        return;
+                    positionBounds.boundValue = root.configAdapter.value(path);
                 }
             }
         }
@@ -689,8 +727,8 @@ Column {
                 return isNaN(n) ? 0 : Math.trunc(n);
             }
 
-            onCommitValue: function (v) {
-                root.configAdapter.set(path, v);
+            onCommitValue: function (value) {
+                root.configAdapter.set(path, value);
             }
 
             Connections {

@@ -26,29 +26,29 @@ Row {
     property int labelLeftRadius: Math.round(3 * Scaling.uiScale)
     property color labelBackgroundColor: ThemeColors.almostdark
 
-    signal commitValue(var v3)
+    signal commitValue(var value)
 
-    function _axisValue(v3, axisIndex) {
+    function _axisValue(vector, axisIndex) {
         if (axisIndex === 0)
-            return Number(v3.x) || 0;
+            return Number(vector.x) || 0;
         if (axisIndex === 1)
-            return Number(v3.y) || 0;
-        return Number(v3.z) || 0;
+            return Number(vector.y) || 0;
+        return Number(vector.z) || 0;
     }
 
     function _axisDefault(axisIndex) {
-        const d = root.defaultValue;
-        if (d === undefined || d === null)
+        const defaultValue = root.defaultValue;
+        if (defaultValue === undefined || defaultValue === null)
             return undefined;
-        if (typeof d === "object")
-            return (d.x === undefined) ? undefined : root._axisValue(d, axisIndex);
-        return d; // a scalar default applies to every axis
+        if (typeof defaultValue === "object")
+            return (defaultValue.x === undefined) ? undefined : root._axisValue(defaultValue, axisIndex);
+        return defaultValue; // a scalar default applies to every axis
     }
 
-    function _withAxis(v3, axisIndex, newComponentValue) {
-        const x = (axisIndex === 0) ? newComponentValue : (Number(v3.x) || 0);
-        const y = (axisIndex === 1) ? newComponentValue : (Number(v3.y) || 0);
-        const z = (axisIndex === 2) ? newComponentValue : (Number(v3.z) || 0);
+    function _withAxis(vector, axisIndex, newComponentValue) {
+        const x = (axisIndex === 0) ? newComponentValue : (Number(vector.x) || 0);
+        const y = (axisIndex === 1) ? newComponentValue : (Number(vector.y) || 0);
+        const z = (axisIndex === 2) ? newComponentValue : (Number(vector.z) || 0);
         return Qt.vector3d(x, y, z);
     }
 
@@ -172,8 +172,8 @@ Row {
 
                     boundValue: 0.0
 
-                    onCommitValue: function (v) {
-                        const next = root._withAxis(root.boundValue, axisIndex, v);
+                    onCommitValue: function (componentValue) {
+                        const next = root._withAxis(root.boundValue, axisIndex, componentValue);
                         if (next.x === root.boundValue.x && next.y === root.boundValue.y && next.z === root.boundValue.z)
                             return;
 

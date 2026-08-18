@@ -47,8 +47,6 @@ Item {
         return Qt.vector3d(v.x * 100, v.y * 100, v.z * 100);
     }
 
-    // True when the selected thing (the device, the operator etc)
-    // has something to display as a gizmo
     readonly property bool _selectionHasGizmoTarget: {
         if (selectedOperatorAdapter) {
             var pc = selectedOperatorAdapter.value("camera/position");
@@ -61,7 +59,22 @@ Item {
         return false;
     }
 
-    // True when the selected operator exposes camera/look_at_position
+    property bool selectionHasBounds: selectionHasBoundsOrDefault()
+    function selectionHasBoundsOrDefault() {
+        if (selectedOperatorAdapter) {
+            if (!selectedOperatorAdapter.value("active"))
+                return false;
+            var ob = selectedOperatorAdapter.value("bounds");
+            return ob !== undefined && ob !== null && ob.min !== undefined;
+        }
+        if (!selectedTransformAdapter)
+            return false;
+        if (!selectedTransformAdapter.value("transform/crop_to_bounds"))
+            return false;
+        var b = selectedTransformAdapter.value("transform/bounds");
+        return b !== undefined && b !== null && b.min !== undefined;
+    }
+
     readonly property bool _selectionHasLookAt: {
         if (!selectedOperatorAdapter)
             return false;
@@ -93,11 +106,14 @@ Item {
 
     signal selectionTransformUpdate
 
+    onSelectedTransformAdapterChanged: root.selectionTransformUpdate()
+
     onSelectionTransformUpdate: {
         updateSelectionParentWorld();
         selectionPosition = selectionPositionOrDefault();
         selectionLookAtPosition = selectionLookAtPositionOrDefault();
         selectionRotation = selectionRotationOrDefault();
+        selectionHasBounds = selectionHasBoundsOrDefault();
     }
 
     Connections {
@@ -122,6 +138,17 @@ Item {
             if (path.includes("transform")) {
                 root.selectionTransformUpdate();
             }
+        }
+    }
+
+    // deactivating an operator takes its box away, the same way clearing
+    // crop_to_bounds does for a device
+    Connections {
+        target: root.selectedOperatorAdapter
+        ignoreUnknownSignals: true
+        function onFieldChanged(path) {
+            if (path === "active")
+                root.selectionHasBounds = root.selectionHasBoundsOrDefault();
         }
     }
 
@@ -769,6 +796,21 @@ Item {
         targetAdapter: root.selectedOperatorAdapter
         cameraTarget: true
         cameraPositionPath: "camera/look_at_position"
+        z: 99
+    }
+
+    readonly property bool _boundsGizmoActive: root.selectionHasBounds && !sessionControls.viewLocked && sessionControls.gizmoEnabled
+
+    // Bounds gizmo: push/pull box for an operator's bounds, or a device's crop
+    // bounds. Operators see the cloud already world-transformed, so their box
+    // needs no parent transform.
+    SelectionBoundsGizmo {
+        id: boundsGizmo
+        visible: root._boundsGizmoActive
+        view3d: view
+        targetAdapter: root.selectedOperatorAdapter || root.selectedTransformAdapter
+        boundsPath: root.selectedOperatorAdapter ? "bounds" : "transform/bounds"
+        parentWorldTransform: root.selectedOperatorAdapter ? Qt.matrix4x4() : root.selectionParentWorld
         z: 99
     }
 

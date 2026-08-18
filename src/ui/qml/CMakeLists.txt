@@ -23,6 +23,7 @@ qt_add_qml_module(PointcasterQml
         Controls/DragInt.qml
         Controls/DragFloat.qml
         Controls/DragFloat3.qml
+        Controls/PositionBoundsEditor.qml
         Controls/EnumSelector.qml
         Controls/FocusReleaser.qml
         Controls/IconButton.qml
@@ -34,6 +35,8 @@ qt_add_qml_module(PointcasterQml
         Controls/OriginGizmo.qml
         Controls/OrbitViewController.qml
         Controls/Gizmos/SelectionGizmo.qml
+        Controls/Gizmos/BoundsGizmo.qml
+        Controls/Gizmos/SelectionBoundsGizmo.qml
         Controls/Timeline.qml
         Editors/ConfigurationEditor.qml
         Editors/OperatorPipelineEditor.qml
