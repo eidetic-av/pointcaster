@@ -24,14 +24,12 @@ void CudaBackend::project_transform_frame_data(
     std::shared_ptr<PointCloud> output_cloud,
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
-    const ColorTransformConfiguration &color_transform,
-    const pc::float4x4 &,
+    const ColorTransformConfiguration &color_transform, const pc::float4x4 &,
     std::span<std::byte> render_output) const {
   try {
-    cuda::project_transform_frame_data(this, input_depth_frame, input_rgb_frame,
-                                       output_cloud, color_intrinsics,
-                                       transform, color_transform,
-                                       render_output);
+    cuda::project_transform_frame_data(
+        this, input_depth_frame, input_rgb_frame, output_cloud,
+        color_intrinsics, transform, color_transform, render_output);
   } catch (const std::exception &e) {
     pc::logger()->error("CUDA backend error: {}", e.what());
   } catch (...) {
@@ -52,6 +50,21 @@ void CudaBackend::transform_point_cloud(
   } catch (...) {
     pc::logger()->error("CUDA backend error: Unknown exception");
   }
+}
+
+BoundsFilterResult CudaBackend::filter_to_bounds(
+    const PointCloud &input_cloud, PointCloud &output_cloud,
+    const position_bounds &bounds, BoundsFilterOptions options) const {
+  try {
+    return cuda::filter_to_bounds(this, input_cloud, output_cloud, bounds,
+                                  options);
+  } catch (const std::exception &e) {
+    pc::logger()->error("CUDA backend error: {}", e.what());
+  } catch (...) {
+    pc::logger()->error("CUDA backend error: Unknown exception");
+  }
+  // failed pass
+  return {.input_count = input_cloud.size()};
 }
 
 void CudaBackend::pack_render_buffer(const PointCloud &,

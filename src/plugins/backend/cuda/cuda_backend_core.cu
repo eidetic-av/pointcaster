@@ -153,9 +153,11 @@ struct TransformCloudPoint {
   filter::TransformFilterParameters params;
   bool sample_cloud;
 
-  explicit TransformCloudPoint(const TransformConfiguration &transform,
-                               const ColorTransformConfiguration &color_transform) {
-    params = filter::TransformFilterParameters::from_config(transform, color_transform);
+  explicit TransformCloudPoint(
+      const TransformConfiguration &transform,
+      const ColorTransformConfiguration &color_transform) {
+    params = filter::TransformFilterParameters::from_config(transform,
+                                                            color_transform);
     sample_cloud = params.sample > 1;
   }
 
@@ -187,6 +189,43 @@ struct ApplyWorldTransform {
         static_cast<int16_t>(lroundf(w[4] * x + w[5] * y + w[6] * z + w[7])),
         static_cast<int16_t>(lroundf(w[8] * x + w[9] * y + w[10] * z + w[11])),
     };
+  }
+};
+
+// the same box test both backends share, wrapped so thrust can carry it
+struct InBoundsCheck {
+  position_bounds bounds;
+  bool invert;
+
+  __host__ __device__ bool operator()(const position &p) const {
+    return filter::in_bounds(p, bounds) != invert;
+  }
+};
+
+struct InBoundsPointCheck {
+  InBoundsCheck keeps_point;
+
+  __host__ __device__ bool
+  operator()(thrust::tuple<position, color> point) const {
+    return keeps_point(thrust::get<0>(point));
+  }
+};
+
+struct PositionAsMeasurementIfKept {
+  InBoundsCheck keeps_point;
+
+  __host__ __device__ filter::bounds_measurement
+  operator()(const position &p) const {
+    return keeps_point(p) ? filter::as_measurement(p)
+                          : filter::empty_measurement();
+  }
+};
+
+struct MergeMeasurements {
+  __host__ __device__ filter::bounds_measurement
+  operator()(const filter::bounds_measurement &a,
+             const filter::bounds_measurement &b) const {
+    return filter::merge_measurements(a, b);
   }
 };
 
@@ -314,6 +353,100 @@ void project_transform_frame_data(
   output_cloud->resize(new_point_count);
 }
 
+BoundsFilterResult filter_to_bounds(const void *owner,
+                                    const PointCloud &input_cloud,
+                                    PointCloud &output_cloud,
+                                    const position_bounds &bounds,
+                                    BoundsFilterOptions options) {
+
+  DeviceTransformMemory *device_memory;
+  {
+    std::lock_guard lock(device_memory_access);
+    auto it = instance_device_memory.find(owner);
+    if (it == instance_device_memory.end())
+      throw std::runtime_error("device memory is not initialised");
+    device_memory = &it->second;
+  }
+
+  using namespace pc::profiling;
+
+  const size_t input_count = input_cloud.size();
+  BoundsFilterResult result{.input_count = input_count};
+  if (input_count == 0) return result;
+
+  device_memory->ensure_capacity(input_count);
+
+  const bool write_output = !options.analyse_only;
+  const InBoundsCheck keeps_point{bounds, options.invert};
+
+  {
+    ProfilingZone copy_zone("CudaBackend::copy_to_device");
+    thrust::copy(input_cloud.positions.begin(),
+                 input_cloud.positions.begin() + input_count,
+                 device_memory->input_positions.begin());
+    if (write_output) {
+      thrust::copy(input_cloud.colors.begin(),
+                   input_cloud.colors.begin() + input_count,
+                   device_memory->input_colors.begin());
+    }
+  }
+
+  if (!write_output) {
+    ProfilingZone measure_zone("CudaBackend::measure_in_bounds");
+    const auto measured = thrust::transform_reduce(
+        thrust::cuda::par, device_memory->input_positions.begin(),
+        device_memory->input_positions.begin() + input_count,
+        PositionAsMeasurementIfKept{keeps_point}, filter::empty_measurement(),
+        MergeMeasurements{});
+    result.point_count = measured.point_count;
+    result.bounds = measured.bounds;
+    return result;
+  }
+
+  size_t kept_count;
+
+  {
+    ProfilingZone filter_zone("CudaBackend::filter_to_bounds");
+
+    auto input_points_begin = thrust::make_zip_iterator(
+        thrust::make_tuple(device_memory->input_positions.begin(),
+                           device_memory->input_colors.begin()));
+    auto output_points_begin = thrust::make_zip_iterator(
+        thrust::make_tuple(device_memory->output_positions.begin(),
+                           device_memory->output_colors.begin()));
+
+    auto new_end = thrust::copy_if(
+        thrust::cuda::par, input_points_begin, input_points_begin + input_count,
+        output_points_begin, InBoundsPointCheck{keeps_point});
+    kept_count = static_cast<size_t>(new_end - output_points_begin);
+  }
+
+  result.point_count = kept_count;
+  if (kept_count == 0) return result;
+
+  {
+    ProfilingZone bounds_zone("CudaBackend::measure_bounds");
+    result.bounds = thrust::transform_reduce(
+        thrust::cuda::par, device_memory->output_positions.begin(),
+        device_memory->output_positions.begin() + kept_count,
+        PositionAsBounds{}, filter::empty_bounds(), MergeBounds{});
+  }
+
+  {
+    ProfilingZone output_zone("CudaBackend::copy_back_to_host");
+    output_cloud.resize(kept_count);
+    thrust::copy(device_memory->output_positions.begin(),
+                 device_memory->output_positions.begin() + kept_count,
+                 output_cloud.positions.begin());
+    thrust::copy(device_memory->output_colors.begin(),
+                 device_memory->output_colors.begin() + kept_count,
+                 output_cloud.colors.begin());
+    output_cloud.bounds = result.bounds;
+  }
+
+  return result;
+}
+
 void transform_point_cloud(const void *owner, const PointCloud &input_cloud,
                            std::shared_ptr<PointCloud> output_cloud,
                            const TransformConfiguration &transform,
@@ -335,7 +468,8 @@ void transform_point_cloud(const void *owner, const PointCloud &input_cloud,
   using namespace pc::profiling;
 
   const auto transform_parameters =
-      filter::TransformFilterParameters::from_config(transform, color_transform);
+      filter::TransformFilterParameters::from_config(transform,
+                                                     color_transform);
 
   {
     ProfilingZone copy_zone("CudaBackend::copy_to_device");
@@ -348,12 +482,12 @@ void transform_point_cloud(const void *owner, const PointCloud &input_cloud,
   }
 
   auto input_points_begin = thrust::make_zip_iterator(thrust::make_tuple(
-      device_memory->input_positions.begin(), device_memory->input_colors.begin(),
-      device_memory->indices.begin()));
+      device_memory->input_positions.begin(),
+      device_memory->input_colors.begin(), device_memory->indices.begin()));
 
-  auto output_points_begin = thrust::make_zip_iterator(thrust::make_tuple(
-      device_memory->output_positions.begin(),
-      device_memory->output_colors.begin()));
+  auto output_points_begin = thrust::make_zip_iterator(
+      thrust::make_tuple(device_memory->output_positions.begin(),
+                         device_memory->output_colors.begin()));
 
   size_t new_point_count;
   position_bounds new_cloud_bounds;
@@ -366,18 +500,18 @@ void transform_point_cloud(const void *owner, const PointCloud &input_cloud,
                       TransformCloudPoint{transform, color_transform});
 
     auto output_points_end = output_points_begin + point_count;
-    auto new_end = thrust::partition(thrust::cuda::par, output_points_begin,
-                                     output_points_end,
-                                     BoundsCheck{transform_parameters});
+    auto new_end =
+        thrust::partition(thrust::cuda::par, output_points_begin,
+                          output_points_end, BoundsCheck{transform_parameters});
     new_point_count = new_end - output_points_begin;
 
     const bool has_world_transform = !(world_transform == pc::float4x4{});
     if (has_world_transform) {
-      thrust::transform(thrust::cuda::par,
-                        device_memory->output_positions.begin(),
-                        device_memory->output_positions.begin() + new_point_count,
-                        device_memory->output_positions.begin(),
-                        ApplyWorldTransform{world_transform});
+      thrust::transform(
+          thrust::cuda::par, device_memory->output_positions.begin(),
+          device_memory->output_positions.begin() + new_point_count,
+          device_memory->output_positions.begin(),
+          ApplyWorldTransform{world_transform});
     }
 
     new_cloud_bounds = thrust::transform_reduce(

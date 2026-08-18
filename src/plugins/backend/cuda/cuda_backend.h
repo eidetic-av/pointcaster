@@ -25,6 +25,11 @@ public:
       const ColorTransformConfiguration &color_transform,
       const pc::float4x4 &world_transform = {}) const override;
 
+  BoundsFilterResult
+  filter_to_bounds(const PointCloud &input_cloud, PointCloud &output_cloud,
+                   const position_bounds &bounds,
+                   BoundsFilterOptions options) const override;
+
   void project_transform_frame_data(
       std::span<const uint16_t> input_depth_frame,
       std::span<const color_rgb> input_rgb_frame,

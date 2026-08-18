@@ -12,10 +12,14 @@
 #include <logger/logger.h>
 #include <numeric>
 #include <pointcaster/core_types.h>
+#include <profiling/profiling_zone.h>
 #include <ranges>
+#include <vector>
 
 // TODO ensure TBB is linked and loaded
+#include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/parallel_reduce.h>
 
 namespace pc::backend {
 
@@ -145,6 +149,102 @@ void CpuBackend::transform_point_cloud(
       },
       output_cloud->size(), output_cloud, transform, color_transform,
       world_transform);
+}
+
+BoundsFilterResult CpuBackend::filter_to_bounds(
+    const PointCloud &input_cloud, PointCloud &output_cloud,
+    const position_bounds &bounds, BoundsFilterOptions options) const {
+  using namespace pc::profiling;
+  ProfilingZone filter_zone("CpuBackend::filter_to_bounds");
+
+  const auto &input_positions = input_cloud.positions;
+  const auto &input_colors = input_cloud.colors;
+  const auto input_count = input_positions.size();
+
+  BoundsFilterResult result{.input_count = input_count};
+  if (input_count == 0) return result;
+
+  const bool invert = options.invert;
+  const auto filter_point = [&bounds, invert](const position &p) {
+    return filter::in_bounds(p, bounds) != invert;
+  };
+
+  // analysing on its own never gathers anything, so it has no use for the
+  // index list a write needs: one reduction counts what falls in the box and
+  // measures it on the way past
+  if (options.analyse_only) {
+    ProfilingZone measure_zone("CpuBackend::measure_in_bounds");
+    const auto measured = tbb::parallel_reduce(
+        tbb::blocked_range<size_t>(0, input_count), filter::empty_measurement(),
+        [&](const tbb::blocked_range<size_t> &range,
+            filter::bounds_measurement running) {
+          for (size_t i = range.begin(); i != range.end(); ++i) {
+            const auto &point = input_positions[i];
+            if (!filter_point(point)) continue;
+            running.point_count++;
+            running.bounds =
+                filter::merge_bounds(running.bounds, filter::as_bounds(point));
+          }
+          return running;
+        },
+        filter::merge_measurements);
+
+    result.point_count = measured.point_count;
+    result.bounds = measured.bounds;
+    return result;
+  }
+
+  // the kept points are gathered as indices first, so that only one pass runs
+  // over the whole input however many of them the box ends up holding
+  std::vector<uint32_t> kept_indices(input_count);
+  {
+    ProfilingZone select_zone("CpuBackend::select");
+    auto index_sequence =
+        std::views::iota(uint32_t{0}, static_cast<uint32_t>(input_count));
+    auto kept_end = std::copy_if(
+        std::execution::par_unseq, index_sequence.begin(), index_sequence.end(),
+        kept_indices.begin(),
+        [&](uint32_t i) { return filter_point(input_positions[i]); });
+    kept_indices.resize(
+        static_cast<size_t>(std::distance(kept_indices.begin(), kept_end)));
+  }
+
+  result.point_count = kept_indices.size();
+  if (kept_indices.empty()) return result;
+
+  {
+    ProfilingZone write_zone("CpuBackend::write_output");
+
+    const bool writing_in_place = &output_cloud == &input_cloud;
+    const std::vector<position> source_positions =
+        writing_in_place ? input_positions : std::vector<position>{};
+    const std::vector<color> source_colors =
+        writing_in_place ? input_colors : std::vector<color>{};
+    const auto &read_positions =
+        writing_in_place ? source_positions : input_positions;
+    const auto &read_colors = writing_in_place ? source_colors : input_colors;
+
+    output_cloud.resize(result.point_count);
+
+    result.bounds = tbb::parallel_reduce(
+        tbb::blocked_range<size_t>(0, result.point_count),
+        filter::empty_bounds(),
+        [&](const tbb::blocked_range<size_t> &range, position_bounds running) {
+          for (size_t i = range.begin(); i != range.end(); ++i) {
+            const auto source_index = kept_indices[i];
+            const auto &point = read_positions[source_index];
+            output_cloud.positions[i] = point;
+            output_cloud.colors[i] = read_colors[source_index];
+            running = filter::merge_bounds(running, filter::as_bounds(point));
+          }
+          return running;
+        },
+        filter::merge_bounds);
+
+    output_cloud.bounds = result.bounds;
+  }
+
+  return result;
 }
 
 void CpuBackend::project_transform_frame_data(

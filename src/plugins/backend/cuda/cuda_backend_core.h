@@ -21,6 +21,12 @@ void project_transform_frame_data(
     const ColorTransformConfiguration &color_transform,
     std::span<std::byte> render_output = {});
 
+BoundsFilterResult filter_to_bounds(const void *owner,
+                                    const PointCloud &input_cloud,
+                                    PointCloud &output_cloud,
+                                    const position_bounds &bounds,
+                                    BoundsFilterOptions options);
+
 void transform_point_cloud(const void *owner, const PointCloud &input_cloud,
                            std::shared_ptr<PointCloud> output_cloud,
                            const TransformConfiguration &transform,

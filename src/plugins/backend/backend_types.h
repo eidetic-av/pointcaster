@@ -24,6 +24,17 @@ struct Extrinsics {
 
 using PointType = std::tuple<position, color>;
 
+struct BoundsFilterOptions {
+  bool invert = false;
+  bool analyse_only = false;
+};
+
+struct BoundsFilterResult {
+  size_t point_count = 0;
+  size_t input_count = 0;
+  position_bounds bounds{};
+};
+
 // return an internal point type given pixel data from a depth frame
 using PointTransformer =
     std::function<PointType(const int, const uint16_t, const color_rgb &)>;

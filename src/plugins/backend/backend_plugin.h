@@ -89,6 +89,8 @@ public:
   // allocate memory up front
   virtual void init([[maybe_unused]] const size_t point_count = 0) {};
 
+  // TODO i'm pretty sure the shared_ptr is unecessary and we should 
+  // just be using a mutable reference instead...
   virtual void
   transform_point_cloud(const PointCloud &input_cloud,
                         std::shared_ptr<PointCloud> output_cloud,
@@ -96,6 +98,14 @@ public:
                         const ColorTransformConfiguration &color_transform,
                         const pc::float4x4 &world_transform = {}) const = 0;
 
+  // crop a cloud to an aabb and/or measure what falls inside it
+  virtual BoundsFilterResult
+  filter_to_bounds(const PointCloud &input_cloud, PointCloud &output_cloud,
+                   const position_bounds &bounds,
+                   BoundsFilterOptions options = {}) const = 0;
+
+  // TODO i'm pretty sure the shared_ptr is unecessary and we should 
+  // just be using a mutable reference instead...
   virtual void project_transform_frame_data(
       std::span<const uint16_t> input_depth_frame,
       std::span<const color_rgb> input_rgb_frame,

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "backend_types.h"
+
 #include <cmath>
 #include <config/color_transform_config.h>
 #include <config/transform_config.h>
@@ -132,6 +134,18 @@ PC_DEVICE_FUNC inline bool is_valid(position p) {
          p.z != invalid_position_value.z;
 }
 
+PC_DEVICE_FUNC inline bool in_bounds(const position &p,
+                                     const position_bounds &bounds) {
+  return p.x >= bounds.min.x && p.x <= bounds.max.x && p.y >= bounds.min.y &&
+         p.y <= bounds.max.y && p.z >= bounds.min.z && p.z <= bounds.max.z;
+}
+
+PC_DEVICE_FUNC inline position_bounds empty_bounds() {
+  constexpr int16_t lowest = -32768;
+  constexpr int16_t highest = 32767;
+  return {{highest, highest, highest}, {lowest, lowest, lowest}};
+}
+
 PC_DEVICE_FUNC inline position_bounds as_bounds(const position &p) {
   return {p, p};
 }
@@ -144,6 +158,26 @@ PC_DEVICE_FUNC inline position_bounds merge_bounds(const position_bounds &a,
           {a.max.x < b.max.x ? b.max.x : a.max.x,
            a.max.y < b.max.y ? b.max.y : a.max.y,
            a.max.z < b.max.z ? b.max.z : a.max.z}};
+}
+
+// how many points passed a test and the box they fill, so a single reduction
+// answers both instead of one pass counting and another measuring
+struct bounds_measurement {
+  size_t point_count;
+  position_bounds bounds;
+};
+
+PC_DEVICE_FUNC inline bounds_measurement empty_measurement() {
+  return {0, empty_bounds()};
+}
+
+PC_DEVICE_FUNC inline bounds_measurement as_measurement(const position &p) {
+  return {1, as_bounds(p)};
+}
+
+PC_DEVICE_FUNC inline bounds_measurement
+merge_measurements(const bounds_measurement &a, const bounds_measurement &b) {
+  return {a.point_count + b.point_count, merge_bounds(a.bounds, b.bounds)};
 }
 
 } // namespace pc::backend::filter
