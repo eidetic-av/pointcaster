@@ -116,6 +116,8 @@ public:
     return {};
   }
 
+  Q_INVOKABLE virtual QStringList radiusPaths() const { return {}; }
+
   Q_INVOKABLE virtual bool isFoldedByDefault(const QString &path) const {
     Q_UNUSED(path);
     return false;
@@ -165,7 +167,9 @@ public:
          findChildren<ConfigAdapter *>(Qt::FindDirectChildrenOnly)) {
       nested->notifyAllFieldsChanged();
     }
-    for (const QString &path : fieldPaths()) { notifyFieldChanged(path); }
+    for (const QString &path : fieldPaths()) {
+      notifyFieldChanged(path);
+    }
     notifyAllPropertiesChanged();
     _refreshingAllFields = false;
   }

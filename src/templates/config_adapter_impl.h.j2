@@ -37,10 +37,14 @@
             return QVariant::fromValue(QQuaternion(v.scalar, v.x, v.y, v.z));
 {% elif m.kind == "position" %}
             return QVariant::fromValue(positionToMetres({{ m.read }}));
-{% elif m.kind == "length" %}
+{% elif m.kind == "length" or m.kind == "radius" %}
             return QVariant(double({{ m.read }}.metres()));
 {% elif m.kind == "position_bounds" %}
             return boundsToMetresMap({{ m.read }});
+{% elif m.kind == "toggleable_bounds" %}
+            return toggleableBoundsToMap({{ m.read }});
+{% elif m.kind == "toggleable_radius" %}
+            return toggleableRadiusToMap({{ m.read }});
 {% elif m.kind == "stream" %}
             const auto stream = {{ m.read }};
             return QVariant(stream ? int(stream->size()) : -1);
@@ -82,6 +86,15 @@
             const pc::position newValue = positionFromMetres(toQVector3DLoose(value));
 {% elif m.kind == "length" %}
             const pc::length newValue = pc::length::from_metres(value.toFloat());
+{% elif m.kind == "radius" %}
+            const pc::radius newValue = pc::radius::from_metres(value.toFloat());
+{#- a write naming only some of a toggleable's parts leaves the rest alone, so
+    the gizmo can move the value without touching the switch, and the switch
+    can flick without disturbing the value the user dialled in -#}
+{% elif m.kind == "toggleable_bounds" %}
+            const auto newValue = toggleableBoundsLoose(value, {{ m.read }});
+{% elif m.kind == "toggleable_radius" %}
+            const auto newValue = toggleableRadiusLoose(value, {{ m.read }});
 {% elif m.kind == "position_bounds" %}
             const pc::position_bounds newValue = toPositionBoundsLoose(value);
 {% else %}
@@ -120,12 +133,12 @@ QVariant({{ m.enum_default if m.enum_default is not none else 0 }})
 QVariant::fromValue(QVector3D({{ (m.default_components or [0.0, 0.0, 0.0]) | join('f, ') }}f))
 {%- elif m.kind == "quaternion" %}
 QVariant::fromValue(QQuaternion({{ (m.default_components or [1.0, 0.0, 0.0, 0.0]) | join('f, ') }}f))
-{%- elif m.kind == "length" %}
+{%- elif m.kind == "length" or m.kind == "radius" %}
 QVariant({{ (m.default_value or 0) / 1000 }})
-{#- a bounds default is written as a named constant rather than a literal, so
-    it goes out as the C++ expression it already is -#}
+{%- elif m.is_toggleable %}
+{% if m.default_expr %}QVariant({{ "toggleableBoundsToMap" if m.kind == "toggleable_bounds" else "toggleableRadiusToMap" }}({{ m.default_expr }})){% else %}QVariant(){% endif %}
 {%- elif m.kind == "position_bounds" %}
-{% if m.default_value %}QVariant(boundsToMetresMap({{ m.default_value }})){% else %}QVariant(){% endif %}
+{% if m.default_expr %}QVariant(boundsToMetresMap({{ m.default_expr }})){% else %}QVariant(){% endif %}
 {%- elif m.kind == "stream" %}
 QVariant()
 {%- elif m.default_value is none %}
@@ -343,6 +356,20 @@ public:
         return parentConfigurationNames.value(path);
     }
 
+    Q_INVOKABLE QStringList radiusPaths() const override {
+        QStringList paths;
+{% for m in s.members %}
+{% if m.kind == "nested" %}
+        for (const QString &sub : m_{{ m.name }}Adapter.radiusPaths())
+            paths.append(QStringLiteral("{{ m.path }}/") + sub);
+{% elif m.kind == "radius" or m.kind == "toggleable_radius" %}
+        if (!isHidden(QStringLiteral("{{ m.path }}")))
+            paths.append(QStringLiteral("{{ m.path }}"));
+{% endif %}
+{% endfor %}
+        return paths;
+    }
+
     Q_INVOKABLE bool isFoldedByDefault(const QString &path) const override {
 {% if s.folded_paths %}
         static const QSet<QString> foldedPaths {
@@ -401,9 +428,17 @@ public:
 {% elif m.kind == "position_bounds" %}
     Q_INVOKABLE QVariantMap {{ m.name }}() const { return boundsToMetresMap({{ m.read }}); }
     Q_INVOKABLE void set_{{ m.name }}(const QVariantMap &value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(value)); }
-{% elif m.kind == "length" %}
+{% elif m.kind == "length" or m.kind == "radius" %}
     Q_INVOKABLE double {{ m.name }}() const { return {{ m.read }}.metres(); }
     Q_INVOKABLE void set_{{ m.name }}(double value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant(value)); }
+{% elif m.is_toggleable %}
+    Q_INVOKABLE QVariantMap {{ m.name }}() const { return {{ "toggleableBoundsToMap" if m.kind == "toggleable_bounds" else "toggleableRadiusToMap" }}({{ m.read }}); }
+    Q_INVOKABLE void set_{{ m.name }}(const QVariantMap &value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(value)); }
+    Q_INVOKABLE void set_{{ m.name }}_active(bool active) {
+        QVariantMap payload;
+        payload.insert(QStringLiteral("active"), active);
+        emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(payload));
+    }
 {% elif m.qt_type %}
     Q_INVOKABLE {{ m.qt_type }} {{ m.name }}() const { return {{ m.read }}; }
     Q_INVOKABLE void set_{{ m.name }}({{ m.qt_type }} value) { emit editRequested(QStringLiteral("{{ m.path }}"), QVariant::fromValue(value)); }
@@ -425,10 +460,12 @@ signals:
 {#- Which private conversion helpers this struct needs... -#}
 
 {% set kinds = s.members | map(attribute="kind") | list %}
-{% set want_position = "position" in kinds or "position_bounds" in kinds %}
+{% set want_bounds = "position_bounds" in kinds or "toggleable_bounds" in kinds %}
+{% set want_position = "position" in kinds or want_bounds %}
 {% set want_vector3d = want_position or "float3" in kinds %}
 {% set want_quaternion = "quaternion" in kinds %}
-{% if want_vector3d or want_quaternion %}
+{% set want_toggleable_radius = "toggleable_radius" in kinds %}
+{% if want_vector3d or want_quaternion or want_toggleable_radius %}
 private:
 {% endif %}
 {% if want_vector3d %}
@@ -496,6 +533,55 @@ private:
         return pc::position_bounds{
             positionFromMetres(toQVector3DLoose(map.value(QStringLiteral("min")))),
             positionFromMetres(toQVector3DLoose(map.value(QStringLiteral("max"))))};
+    }
+{% endif %}
+{% if "toggleable_bounds" in kinds %}
+    static QVariantMap toggleableBoundsToMap(const pc::Toggleable<pc::position_bounds> &bounds) {
+        QVariantMap map = boundsToMetresMap(bounds.value);
+        map.insert(QStringLiteral("active"), bounds.active);
+        return map;
+    }
+
+    static pc::Toggleable<pc::position_bounds>
+    toggleableBoundsLoose(const QVariant &value,
+                          const pc::Toggleable<pc::position_bounds> &current) {
+        const auto map = value.toMap();
+        auto next = current;
+        if (map.contains(QStringLiteral("active")))
+            next.active = map.value(QStringLiteral("active")).toBool();
+        if (map.contains(QStringLiteral("min")))
+            next.value.min = positionFromMetres(toQVector3DLoose(map.value(QStringLiteral("min"))));
+        if (map.contains(QStringLiteral("max")))
+            next.value.max = positionFromMetres(toQVector3DLoose(map.value(QStringLiteral("max"))));
+        return next;
+    }
+{% endif %}
+{% if want_toggleable_radius %}
+    static QVariantMap toggleableRadiusToMap(const pc::Toggleable<pc::radius> &r) {
+        QVariantMap map;
+        map.insert(QStringLiteral("active"), r.active);
+        map.insert(QStringLiteral("value"), double(r.value.metres()));
+        return map;
+    }
+
+    static pc::Toggleable<pc::radius>
+    toggleableRadiusLoose(const QVariant &value,
+                          const pc::Toggleable<pc::radius> &current) {
+        auto next = current;
+        // an object written from QML does not arrive as a QVariantMap, it
+        // arrives as something toMap() knows how to open, so the shape is read
+        // off what came out rather than off the metatype that went in
+        const auto map = value.toMap();
+        if (map.isEmpty()) {
+            // a bare number is the distance on its own, switch untouched
+            next.value = pc::radius::from_metres(value.toFloat());
+            return next;
+        }
+        if (map.contains(QStringLiteral("active")))
+            next.active = map.value(QStringLiteral("active")).toBool();
+        if (map.contains(QStringLiteral("value")))
+            next.value = pc::radius::from_metres(map.value(QStringLiteral("value")).toFloat());
+        return next;
     }
 {% endif %}
 
@@ -575,8 +661,8 @@ public:
 {% for m in s.members %}
 {% if m.kind == "nested" %}
 {{ forward_case(m, "minMax", "") }}
-{% elif m.min_max and m.kind == "length" %}
-{#- a length's bounds are written in millimetres, like the member itself #}
+{% elif m.min_max and (m.kind in ("length", "radius", "toggleable_radius")) %}
+{#- a distance's bounds are written in millimetres, like the member itself #}
         if (path == QStringLiteral("{{ m.path }}"))
             return QVariantList{ QVariant({{ m.min_max[0] | float / 1000 }}), QVariant({{ m.min_max[1] | float / 1000 }}) };
 {% elif m.min_max %}

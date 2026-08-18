@@ -63,6 +63,8 @@ class Member:
     stream_label: str = ""
     # nested config members embed an adapter of this type
     adapter_type: str = ""
+    # the initialiser verbatim to use as a default value when its type isn't specialised
+    default_expr: str = ""
     # variant members
     alternatives: list[Alternative] = field(default_factory=list)
     variant_default_index: int = 0
@@ -88,6 +90,11 @@ class Member:
     def choices(self) -> list[EnumEntry]:
         """The values a dropdown offers: an enum's own, or a numeric @options."""
         return self.enum_entries or self.options
+
+    @property
+    def is_toggleable(self) -> bool:
+        """True for the kinds carrying a switch alongside their value."""
+        return self.kind in ("toggleable_bounds", "toggleable_radius")
 
 
 @dataclass
@@ -121,7 +128,8 @@ class GeneratorArgs:
 
 KINDS = (
     "nested", "variant", "enum", "string", "bool", "int", "float", "float3",
-    "quaternion", "position", "position_bounds", "length", "stream", "opaque",
+    "quaternion", "position", "position_bounds", "length", "radius",
+    "toggleable_bounds", "toggleable_radius", "stream", "opaque",
 )
 
 
@@ -269,6 +277,19 @@ def is_length_type(type_name: str) -> bool:
     return type_name.strip() in ("pc::length", "length")
 
 
+def is_radius_type(type_name: str) -> bool:
+    return type_name.strip() in ("pc::radius", "radius")
+
+
+TOGGLEABLE_RE = re.compile(r"^(?:pc::)?Toggleable<\s*(.+?)\s*>$")
+
+
+def toggleable_inner_type(type_name: str) -> str | None:
+    """The type a `Toggleable<T>` puts a switch on, or None if it is not one."""
+    match = TOGGLEABLE_RE.match(type_name.strip())
+    return match.group(1).strip() if match else None
+
+
 def is_simple_comparable_type(type_name: str) -> bool:
     t = type_name.strip()
 
@@ -280,6 +301,13 @@ def is_simple_comparable_type(type_name: str) -> bool:
 
     if is_position_type(t) or is_position_bounds_type(t) or is_length_type(t):
         return True
+
+    if is_radius_type(t):
+        return True
+
+    inner = toggleable_inner_type(t)
+    if inner:
+        return is_simple_comparable_type(inner)
 
     if INTLIKE_RE.fullmatch(t):
         return True
@@ -373,6 +401,15 @@ def classify(cpp_type: str, is_enum: bool, is_variant: bool) -> tuple[str, str]:
         return "position_bounds", "QVariantMap"
     if is_length_type(cpp_type):
         return "length", "double"
+    if is_radius_type(cpp_type):
+        return "radius", "double"
+    inner = toggleable_inner_type(cpp_type)
+    if inner:
+        if is_position_bounds_type(inner):
+            return "toggleable_bounds", "QVariantMap"
+        if is_radius_type(inner):
+            return "toggleable_radius", "QVariantMap"
+        return "opaque", ""
     if cpp_type in ("std::string", "QString"):
         return "string", "QString"
     if cpp_type == "bool":
@@ -713,9 +750,9 @@ def _parse_members(
         if kind == "quaternion":
             needs_qquaternion = True
             default_components = _parse_vector_components(init_raw, 4)
-        if kind in ("position", "position_bounds"):
+        if kind in ("position", "position_bounds", "toggleable_bounds"):
             needs_qvector3d = True
-        if kind == "length":
+        if kind in ("length", "radius"):
             components = _parse_vector_components(init_raw, 1)
             if components:
                 default_value = components[0]
@@ -731,6 +768,7 @@ def _parse_members(
             is_rfl=is_rfl,
             comment=comment,
             default_value=default_value,
+            default_expr=" ".join(init_raw.split()),
             default_components=default_components,
             enum_default=_enum_default_to_int(default_value, enum_entries)
             if enum_entries else None,
