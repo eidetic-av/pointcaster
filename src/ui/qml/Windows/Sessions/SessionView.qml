@@ -781,6 +781,7 @@ Item {
         cameraTarget: root.selectedOperatorAdapter !== null
         cameraPositionPath: "camera/position"
         parentWorldTransform: root.selectedOperatorAdapter ? Qt.matrix4x4() : root.selectionParentWorld
+        cameraProjection: camera.projection
         z: 99
     }
 
@@ -796,6 +797,7 @@ Item {
         targetAdapter: root.selectedOperatorAdapter
         cameraTarget: true
         cameraPositionPath: "camera/look_at_position"
+        cameraProjection: camera.projection
         z: 99
     }
 

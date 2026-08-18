@@ -48,6 +48,10 @@ Item {
         anchors.fill: parent
     }
 
+    property matrix4x4 cameraProjection
+
+    onCameraProjectionChanged: gizmo._lastTransformMode = -1
+
     // ── Helpers ──
 
     function _vec3(val, fallback) {
