@@ -11,7 +11,7 @@ Row {
     Layout.minimumWidth: Math.round(260 * Scaling.uiScale)
 
     property font font: Scaling.uiFont
-    property font axisFont: Scaling.uiSmallFont
+    property font axisFont: Scaling.axisLabelFont
 
     property real componentSpacing: Math.round(6 * Scaling.uiScale)
 
@@ -21,12 +21,14 @@ Row {
 
     property var boundValue: Qt.vector3d(0, 0, 0)
 
-    property int labelWidth: Math.round(16 * Scaling.uiScale)
+    property int labelWidth: Math.round(14 * Scaling.uiScale)
     property int labelHeight: Math.round(16 * Scaling.uiScale)
     property int labelLeftRadius: Math.round(3 * Scaling.uiScale)
     property color labelBackgroundColor: ThemeColors.almostdark
 
     signal commitValue(var value)
+    // mid-drag value, live but not yet on the undo stack
+    signal previewValue(var value)
 
     function _axisValue(vector, axisIndex) {
         if (axisIndex === 0)
@@ -43,6 +45,14 @@ Row {
         if (typeof defaultValue === "object")
             return (defaultValue.x === undefined) ? undefined : root._axisValue(defaultValue, axisIndex);
         return defaultValue; // a scalar default applies to every axis
+    }
+
+    // returns the vector an axis edit produces, or null if nothing moved
+    function _movedVector(axisIndex, componentValue) {
+        const next = root._withAxis(root.boundValue, axisIndex, componentValue);
+        if (next.x === root.boundValue.x && next.y === root.boundValue.y && next.z === root.boundValue.z)
+            return null;
+        return next;
     }
 
     function _withAxis(vector, axisIndex, newComponentValue) {
@@ -166,19 +176,36 @@ Row {
                     width: parent.width - axisLabel.width
                     font: root.font
 
+                    backgroundRadius: root.labelLeftRadius
+                    backgroundLeftRadius: 0
+
+                    // a vector component is dragged rather than clicked, and at
+                    // these widths the arrows are a two pixel target that would
+                    // cost the number 12px of padding to show
+                    showArrowButtons: false
+
                     minValue: root.minValue
                     maxValue: root.maxValue
                     defaultValue: axisRow.axisDefault
 
                     boundValue: 0.0
 
-                    onCommitValue: function (componentValue) {
-                        const next = root._withAxis(root.boundValue, axisIndex, componentValue);
-                        if (next.x === root.boundValue.x && next.y === root.boundValue.y && next.z === root.boundValue.z)
+                    onPreviewValue: function (componentValue) {
+                        const next = root._movedVector(axisIndex, componentValue);
+                        if (!next)
                             return;
 
                         root.boundValue = next;
-                        root.commitValue(next);
+                        root.previewValue(next);
+                    }
+
+                    // the previews during a drag have already carried
+                    // boundValue to where this lands, so a commit matching it
+                    // is the normal case -- it still has to be emitted to close
+                    // the gesture and put it on the undo stack
+                    onCommitValue: function (componentValue) {
+                        root.boundValue = root._withAxis(root.boundValue, axisIndex, componentValue);
+                        root.commitValue(root.boundValue);
                     }
                 }
             }

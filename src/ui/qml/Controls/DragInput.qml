@@ -218,7 +218,12 @@ Item {
             mouse.accepted = true;
         }
 
-        onCanceled: root.dragModeActive = false
+        onCanceled: {
+            const wasDragging = root.dragModeActive;
+            root.dragModeActive = false;
+            if (wasDragging)
+                root.committed();
+        }
 
         onWheel: wheel => {
             var hasFocus = root.focusTarget ? root.focusTarget.activeFocus : root.activeFocus;

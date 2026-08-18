@@ -25,6 +25,19 @@ QtObject {
         return q.normalized().toEulerAngles();
     }
 
+    function positionFromMatrix(m) {
+        return Qt.vector3d(m.m14, m.m24, m.m34);
+    }
+
+    function scaleFromMatrix(m) {
+        return Qt.vector3d(_columnLength(m.m11, m.m21, m.m31), _columnLength(m.m12, m.m22, m.m32), _columnLength(m.m13, m.m23, m.m33));
+    }
+
+    function _columnLength(x, y, z) {
+        const len = Math.sqrt(x * x + y * y + z * z);
+        return len < 1e-9 ? 1 : len;
+    }
+
     function rotationFromMatrix(m) {
         const cx = _normalizedOrDefault(Qt.vector3d(m.m11, m.m21, m.m31), Qt.vector3d(1, 0, 0));
         const cy = _normalizedOrDefault(Qt.vector3d(m.m12, m.m22, m.m32), Qt.vector3d(0, 1, 0));

@@ -21,10 +21,9 @@ Item {
             max: Qt.vector3d(0, 0, 0)
         })
 
-    property int tagWidth: Math.round(26 * Scaling.uiScale)
-    property int tagSpacing: Math.round(4 * Scaling.uiScale)
-
     signal commitValue(var bounds)
+    // mid-drag bounds, live but not yet on the undo stack
+    signal previewValue(var bounds)
 
     implicitHeight: Math.round(60 * Scaling.uiScale)
 
@@ -38,8 +37,6 @@ Item {
     readonly property vector3d maxPosition: root._toVector3d(root.boundValue ? root.boundValue.max : null)
 
     readonly property real halfHeight: root.height / 2
-    readonly property real fieldX: root.tagWidth + root.tagSpacing
-    readonly property real fieldWidth: Math.max(0, root.width - root.fieldX)
 
     function syncFields() {
         minField.boundValue = root.minPosition;
@@ -51,7 +48,7 @@ Item {
 
     // Keeps the box from inverting: a face pushed past its opposite stops there
     // rather than producing an empty volume that silently discards every point.
-    function _commit(isMax, position) {
+    function _applyFace(isMax, position) {
         var low = root.minPosition;
         var high = root.maxPosition;
 
@@ -65,7 +62,15 @@ Item {
             min: low,
             max: high
         };
-        root.commitValue(root.boundValue);
+        return root.boundValue;
+    }
+
+    function _commit(isMax, position) {
+        root.commitValue(root._applyFace(isMax, position));
+    }
+
+    function _preview(isMax, position) {
+        root.previewValue(root._applyFace(isMax, position));
     }
 
     Item {
@@ -75,20 +80,10 @@ Item {
         width: root.width
         height: root.halfHeight
 
-        Text {
-            width: root.tagWidth
-            anchors.verticalCenter: parent.verticalCenter
-            horizontalAlignment: Text.AlignRight
-            text: qsTr("min")
-            font: root.axisFont
-            color: ThemeColors.readOnlyText
-        }
-
         DragFloat3 {
             id: minField
 
-            x: root.fieldX
-            width: root.fieldWidth
+            width: root.width
             anchors.verticalCenter: parent.verticalCenter
 
             font: root.font
@@ -97,6 +92,7 @@ Item {
             maxValue: root.maxValue
             defaultValue: root.defaultValue ? root.defaultValue.min : undefined
 
+            onPreviewValue: position => root._preview(false, position)
             onCommitValue: position => root._commit(false, position)
         }
     }
@@ -108,20 +104,10 @@ Item {
         width: root.width
         height: root.halfHeight
 
-        Text {
-            width: root.tagWidth
-            anchors.verticalCenter: parent.verticalCenter
-            horizontalAlignment: Text.AlignRight
-            text: qsTr("max")
-            font: root.axisFont
-            color: ThemeColors.readOnlyText
-        }
-
         DragFloat3 {
             id: maxField
 
-            x: root.fieldX
-            width: root.fieldWidth
+            width: root.width
             anchors.verticalCenter: parent.verticalCenter
 
             font: root.font
@@ -130,6 +116,7 @@ Item {
             maxValue: root.maxValue
             defaultValue: root.defaultValue ? root.defaultValue.max : undefined
 
+            onPreviewValue: position => root._preview(true, position)
             onCommitValue: position => root._commit(true, position)
         }
     }

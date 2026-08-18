@@ -6,6 +6,8 @@ DoubleSpinBox {
 
     property real boundValue: 0.0
     signal commitValue(real value)
+    // mid-drag value, live but not yet on the undo stack
+    signal previewValue(real value)
 
     property var minValue: undefined
     property var maxValue: undefined
@@ -15,10 +17,13 @@ DoubleSpinBox {
     property color unfocusBorderColor: "transparent"
     property color backgroundColor: (root.activeFocus || hover.hovered) ? ThemeColors.almostdark : "transparent"
 
+    property real backgroundRadius: Math.round(3 * Scaling.uiScale)
+    property real backgroundLeftRadius: root.backgroundRadius
+
     editable: true
     decimals: width >= 58 ? 3 : 2
 
-    readonly property bool showArrowButtons: width >= 48
+    property bool showArrowButtons: width >= 48
     rightPadding: showArrowButtons ? 12 : 0
     up.indicator.visible: showArrowButtons
     down.indicator.visible: showArrowButtons
@@ -153,7 +158,9 @@ DoubleSpinBox {
         color: root.backgroundColor
         border.color: root.activeFocus ? root.focusBorderColor : root.unfocusBorderColor
         border.width: 1
-        radius: 0
+        radius: root.backgroundRadius
+        topLeftRadius: root.backgroundLeftRadius
+        bottomLeftRadius: root.backgroundLeftRadius
     }
 
     contentItem: TextInput {
@@ -165,7 +172,7 @@ DoubleSpinBox {
         color: ThemeColors.text
         selectionColor: ThemeColors.highlight
         selectedTextColor: ThemeColors.highlightedText
-        horizontalAlignment: Qt.AlignHLeft
+        horizontalAlignment: Qt.AlignLeft
         verticalAlignment: Qt.AlignVCenter
 
         readOnly: !root.editable
@@ -237,6 +244,7 @@ DoubleSpinBox {
 
             onEdited: {
                 root.boundValue = root.value;
+                root.previewValue(root.value);
             }
             onCommitted: {
                 root.boundValue = root.value;

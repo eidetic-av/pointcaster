@@ -24,6 +24,8 @@ Column {
 
     property int fieldIndent: Math.round(8 * Scaling.uiScale)
 
+    readonly property int boundsTagWidth: Math.round(26 * Scaling.uiScale)
+
     readonly property string configPath: configAdapter.configPath
 
     spacing: groupSpacing
@@ -157,6 +159,8 @@ Column {
                         readonly property bool readOnly: root.configAdapter ? root.configAdapter.isDisabled(modelData) : false
                         readonly property bool isOutput: root.configAdapter ? root.configAdapter.isOutput(modelData) : false
                         readonly property bool isStream: root.configAdapter ? root.configAdapter.isStream(modelData) : false
+                        readonly property string typeName: root.configAdapter ? root.configAdapter.typeName(modelData).toLowerCase() : ""
+                        readonly property bool isBounds: fieldRow.typeName.includes("position_bounds")
 
                         readonly property real textOpacity: readOnly ? 0.66 : 1.0
 
@@ -176,6 +180,8 @@ Column {
                                 color: ThemeColors.text
                                 font: Scaling.fieldLabelFont
                                 opacity: fieldRow.textOpacity
+
+                                rightPadding: fieldRow.isBounds ? root.boundsTagWidth : 0
 
                                 Layout.preferredWidth: root.labelColumnWidth
                                 Layout.minimumWidth: root.minLabelColumnWidth
@@ -215,13 +221,14 @@ Column {
                                     }
                                 }
 
-                                // every stream carries its own toggle for
-                                // drawing it in the 3d scene, at the tail of
-                                // the row, the same eye the device list uses
+                                // every stream and every bounds box carries
+                                // its own toggle for drawing it in the 3d
+                                // scene, at the tail of the row, the same eye
+                                // the device list uses
                                 ListToggleButton {
                                     id: renderToggle
 
-                                    visible: fieldRow.isStream
+                                    visible: fieldRow.isStream || fieldRow.isBounds
                                     width: Math.round(iconSize * 0.9)
                                     height: Math.round(iconSize * 0.9)
 
@@ -249,7 +256,7 @@ Column {
                                     id: valueContainer
 
                                     property string path: modelData
-                                    readonly property string typeName: root.configAdapter.typeName(modelData).toLowerCase()
+                                    readonly property string typeName: fieldRow.typeName
 
                                     anchors.fill: parent
                                     anchors.leftMargin: outputDot.visible ? outputDot.inset * 2 + outputDot.width : outputDot.inset
@@ -288,6 +295,38 @@ Column {
                                     color: ThemeColors.withAlpha(stateColor, 0.07)
                                     border.width: Math.max(1, Math.round(1 * Scaling.uiScale))
                                     border.color: ThemeColors.withAlpha(stateColor, 0.55)
+                                }
+                            }
+                        }
+
+                        Column {
+                            visible: fieldRow.isBounds
+                            x: label.x + label.width - width
+                            y: nodeRoot.fieldHeight - Math.round(15 * Scaling.uiScale)
+                            width: root.boundsTagWidth
+
+                            Repeater {
+                                model: [qsTr("min"), qsTr("max")]
+
+                                Item {
+                                    width: root.boundsTagWidth
+                                    height: nodeRoot.fieldHeight
+
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        width: parent.width
+                                        height: Math.round(15 * Scaling.uiScale)
+                                        radius: Math.round(3 * Scaling.uiScale)
+                                        color: ThemeColors.withAlpha(ThemeColors.almostdark, 0.6)
+                                        opacity: fieldRow.textOpacity
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modelData
+                                            font: Scaling.fieldTagFont
+                                            color: ThemeColors.readOnlyText
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -596,6 +635,10 @@ Column {
                 return isNaN(n) ? 0 : Math.trunc(n);
             }
 
+            onPreviewValue: function (value) {
+                root.configAdapter.setPreview(path, value);
+            }
+
             onCommitValue: function (value) {
                 root.configAdapter.set(path, value);
             }
@@ -627,6 +670,10 @@ Column {
             boundValue: {
                 var n = root.configAdapter ? Number(root.configAdapter.value(path)) : 0.0;
                 return isNaN(n) ? 0.0 : n;
+            }
+
+            onPreviewValue: function (value) {
+                root.configAdapter.setPreview(path, value);
             }
 
             onCommitValue: function (value) {
@@ -665,6 +712,12 @@ Column {
                 return Qt.vector3d(Number(value.x) || 0, Number(value.y) || 0, Number(value.z) || 0);
             }
 
+            onPreviewValue: function (vector) {
+                if (!root.configAdapter)
+                    return;
+                root.configAdapter.setPreview(path, vector);
+            }
+
             onCommitValue: function (vector) {
                 if (!root.configAdapter)
                     return;
@@ -695,6 +748,12 @@ Column {
             enabled: root.configAdapter ? !root.configAdapter.isDisabled(path) : true
 
             boundValue: root.configAdapter ? root.configAdapter.value(path) : undefined
+
+            onPreviewValue: function (b) {
+                if (!root.configAdapter)
+                    return;
+                root.configAdapter.setPreview(path, b);
+            }
 
             onCommitValue: function (b) {
                 if (!root.configAdapter)

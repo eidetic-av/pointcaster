@@ -7,6 +7,8 @@ SpinBox {
     property int boundValue: 0
     property bool boundEnabled: true
     signal commitValue(int value)
+    // mid-drag value, live but not yet on the undo stack
+    signal previewValue(int value)
 
     property var minValue: undefined
     property var maxValue: undefined
@@ -17,6 +19,9 @@ SpinBox {
     property color unfocusBorderColor: "transparent"
     property color backgroundColor: (root.activeFocus || hover.hovered) ? ThemeColors.almostdark : "transparent"
 
+    property real backgroundRadius: Math.round(3 * Scaling.uiScale)
+    property real backgroundLeftRadius: root.backgroundRadius
+
     property real dragThresholdPx: 6.0
     property real pixelsPerStep: 6.0
     property real accelerateAfterPx: 120.0
@@ -25,14 +30,17 @@ SpinBox {
     enabled: boundEnabled
     stepSize: stepSizeValue
 
-    readonly property int effectiveFrom: {
+    readonly property bool hasMinValue: {
         var n = Number(minValue);
-        return (minValue === undefined || minValue === null || isNaN(n)) ? -2147483648 : Math.trunc(n);
+        return !(minValue === undefined || minValue === null || isNaN(n));
     }
-    readonly property int effectiveTo: {
+    readonly property bool hasMaxValue: {
         var n = Number(maxValue);
-        return (maxValue === undefined || maxValue === null || isNaN(n)) ? 2147483647 : Math.trunc(n);
+        return !(maxValue === undefined || maxValue === null || isNaN(n));
     }
+
+    readonly property int effectiveFrom: hasMinValue ? Math.trunc(Number(minValue)) : -2147483648
+    readonly property int effectiveTo: hasMaxValue ? Math.trunc(Number(maxValue)) : 2147483647
 
     from: effectiveFrom
     to: effectiveTo
@@ -45,8 +53,11 @@ SpinBox {
     }
 
     readonly property real boundedRange: {
+        if (!hasMinValue || !hasMaxValue)
+            return NaN;
+
         var r = Number(root.to) - Number(root.from);
-        return (Number.isFinite(r) && r > 0 && r < 4.0e9) ? r : NaN;
+        return (Number.isFinite(r) && r > 0) ? r : NaN;
     }
 
     readonly property real dragTargetPixels: {
@@ -62,8 +73,7 @@ SpinBox {
         var unitsPerPixel = root.boundedRange / root.dragTargetPixels;
         var step = unitsPerPixel * root.pixelsPerStep;
 
-        // ensure at least 1 unit step after quantisation for reasonable drags
-        return Math.max(step, 1e-6);
+        return Math.max(step, 1.0);
     }
 
     function hasValidDefault() {
@@ -131,7 +141,9 @@ SpinBox {
         color: root.backgroundColor
         border.color: root.activeFocus ? root.focusBorderColor : root.unfocusBorderColor
         border.width: 1
-        radius: 0
+        radius: root.backgroundRadius
+        topLeftRadius: root.backgroundLeftRadius
+        bottomLeftRadius: root.backgroundLeftRadius
     }
 
     contentItem: TextInput {
@@ -143,7 +155,7 @@ SpinBox {
         color: ThemeColors.text
         selectionColor: ThemeColors.highlight
         selectedTextColor: ThemeColors.highlightedText
-        horizontalAlignment: Qt.AlignHLeft
+        horizontalAlignment: Qt.AlignLeft
         verticalAlignment: Qt.AlignVCenter
 
         readOnly: !root.editable
@@ -215,6 +227,7 @@ SpinBox {
 
             onEdited: {
                 root.boundValue = root.value;
+                root.previewValue(root.value);
             }
             onCommitted: {
                 root.boundValue = root.value;

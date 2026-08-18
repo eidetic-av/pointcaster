@@ -31,6 +31,15 @@ QtObject {
     readonly property font fieldLabelFont: Qt.font({
         pointSize: 10 * uiScale
     })
+    readonly property font axisLabelFont: Qt.font({
+        pointSize: basePointSize * 0.78 * uiScale,
+        weight: Font.DemiBold
+    })
+    readonly property font fieldTagFont: Qt.font({
+        pointSize: basePointSize * 0.72 * uiScale,
+        weight: Font.Medium,
+        letterSpacing: 0.4
+    })
     readonly property font uiHeaderFont: Qt.font({
         pointSize: headerPointSize,
         weight: Font.Medium
