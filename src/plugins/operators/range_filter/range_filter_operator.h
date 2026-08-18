@@ -9,6 +9,7 @@
 #include <Corrade/PluginManager/AbstractManager.h>
 #include <Corrade/PluginManager/AbstractPlugin.h>
 #include <plugins/backend/backend_plugin.h>
+#include <plugins/backend/backend_types.h>
 #include <plugins/operators/operator_plugin.h>
 
 namespace pc::operators {
