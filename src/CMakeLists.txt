@@ -27,7 +27,6 @@ qt_add_executable(pointcaster
   workspace/workspace_config.cc
   workspace/workspace_socket.cc
   session/session.cc
-  config/config_registry.cc
   camera/look_at_camera.cc
   camera/camera_frame.cc
   recorder/session_recorder.cc

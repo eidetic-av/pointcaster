@@ -1,6 +1,7 @@
 #pragma once
 
 #include <config/output_value.h>
+#include <pointcaster/core.h>
 #include <pointcaster/core_types.h>
 #include <pointcaster/point_cloud.h>
 #include <rfl/DefaultVal.hpp>
@@ -33,29 +34,32 @@ public:
 
   using ChangeCallback = std::function<void(std::string_view path)>;
 
-  void register_field(std::string path, Field field);
+  POINTCASTER_CORE_EXPORT void register_field(std::string path, Field field);
 
   // Remove all registered paths that begin with prefix
-  void unregister(std::string_view prefix);
+  POINTCASTER_CORE_EXPORT void unregister(std::string_view prefix);
 
-  void clear();
+  POINTCASTER_CORE_EXPORT void clear();
 
   // returns false if path not found, or if the field is read-only
-  [[maybe_unused]] bool set(std::string_view path, ConfigValue value);
+  [[maybe_unused]] POINTCASTER_CORE_EXPORT bool set(std::string_view path,
+                                                    ConfigValue value);
 
-  bool is_readonly(std::string_view path) const;
+  POINTCASTER_CORE_EXPORT bool is_readonly(std::string_view path) const;
 
-  void notify(std::string_view path);
+  POINTCASTER_CORE_EXPORT void notify(std::string_view path);
 
-  std::optional<ConfigValue> get(std::string_view path) const;
+  POINTCASTER_CORE_EXPORT std::optional<ConfigValue>
+  get(std::string_view path) const;
 
   // batch reads a whole set of paths in one pass, returning a snapshot
   template <typename StringCollection>
   void snapshot(const StringCollection &paths, StringMap<ConfigValue> &out);
 
-  void on_change(std::string_view prefix, ChangeCallback cb);
+  POINTCASTER_CORE_EXPORT void on_change(std::string_view prefix,
+                                         ChangeCallback cb);
 
-  void remove_subscriptions(std::string_view prefix);
+  POINTCASTER_CORE_EXPORT void remove_subscriptions(std::string_view prefix);
 
 private:
   mutable std::shared_mutex _mutex;

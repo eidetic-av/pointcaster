@@ -66,7 +66,7 @@ void ConfigRegistry::snapshot(const StringCollection &paths,
   }
 }
 
-template void ConfigRegistry::snapshot<std::set<std::string>>(
+template POINTCASTER_CORE_EXPORT void ConfigRegistry::snapshot<std::set<std::string>>(
     const std::set<std::string> &paths, StringMap<ConfigValue> &out);
 
 void ConfigRegistry::on_change(std::string_view prefix, ChangeCallback cb) {

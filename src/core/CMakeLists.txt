@@ -16,6 +16,7 @@ add_library(pointcaster_core SHARED
     util/string_utils.cc
     util/geometry_utils.cc
     ../config/transform_config.cc
+    ../config/config_registry.cc
 )
 
 add_library(pointcaster::core ALIAS pointcaster_core)
