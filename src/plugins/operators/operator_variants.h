@@ -1,7 +1,13 @@
 #pragma once
 
 #include <concepts>
+#include <config/config_labels.h>
+#include <core/util/string_utils.h>
+#include <core/uuid/uuid.h>
+#include <optional>
+#include <ranges>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -53,6 +59,28 @@ inline std::string operator_address(const OperatorConfigurationVariant &v) {
         return !label.empty() ? label : config.id;
       },
       v);
+}
+
+inline std::string operator_label(const OperatorConfigurationVariant &v) {
+  return std::visit([](const auto &config) { return config.label.value(); }, v);
+}
+
+// creates the configuration for the named operator plugin with a fresh id and a
+// label that doesn't clash with existing_labels, or nullopt if no operator
+// plugin goes by that name
+template <std::ranges::input_range Labels>
+std::optional<OperatorConfigurationVariant>
+make_operator_config(std::string_view plugin_name, Labels &&existing_labels) {
+  std::optional<OperatorConfigurationVariant> result;
+  for_each_operator_config_type([&]<typename OperatorConfigType>() {
+    if (result.has_value() || plugin_name != OperatorConfigType::PluginName)
+      return;
+    OperatorConfigType config{.id = pc::uuid::word()};
+    config.label = util::next_available_label(
+        config_label_prefix<OperatorConfigType>, existing_labels);
+    result = std::move(config);
+  });
+  return result;
 }
 
 constexpr bool check_active(const OperatorConfigurationVariant &v) {

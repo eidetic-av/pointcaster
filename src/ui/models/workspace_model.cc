@@ -7,6 +7,7 @@
 #include "models/session_recorder_model.h"
 #include "models/settings_page_registry.h"
 #include "plugins/devices/ply/ply_device_config.h"
+#include "plugins/operators/operator_variants.h"
 #include <QHash>
 #include <QMetaObject>
 #include <QObject>
@@ -20,9 +21,11 @@
 #include <QVector3D>
 #include <algorithm>
 #include <chrono>
+#include <config/config_labels.h>
 #include <config/transform_config.h>
 #include <core/logger/logger.h>
 #include <core/util/geometry_utils.h>
+#include <core/util/string_utils.h>
 #include <core/uuid/uuid.h>
 #include <filesystem>
 #include <functional>
@@ -1399,6 +1402,8 @@ void WorkspaceModel::addNewDevice(const QString &plugin_name,
                                   const QString &target_type_label) {
   // take a copy of current configuration to manipulate
   auto result_config = _workspace.config;
+  devices::DeviceConfigurationVariant new_device_config;
+  std::string_view plugin_prefix;
   // TODO this needs to be polymorphic runtime access
   if (plugin_name == OrbbecDeviceConfiguration::PluginName) {
 
@@ -1419,11 +1424,33 @@ void WorkspaceModel::addNewDevice(const QString &plugin_name,
     if (!target_ip.isEmpty()) {
       orbbec_config.network.set({.ip_address = target_ip.toStdString()});
     }
-    result_config.devices.push_back(std::move(orbbec_config));
+
+    new_device_config = std::move(orbbec_config);
+    plugin_prefix = config_label_prefix<OrbbecDeviceConfiguration>;
+
   } else if (plugin_name == PlyDeviceConfiguration::PluginName) {
-    result_config.devices.push_back(
-        PlyDeviceConfiguration{.id = pc::uuid::word()});
+
+    new_device_config = PlyDeviceConfiguration{.id = pc::uuid::word()};
+    plugin_prefix = config_label_prefix<PlyDeviceConfiguration>;
+
+  } else {
+    pc::logger()->error("Unknown device plugin name '{}'",
+                        plugin_name.toStdString());
+    return;
   }
+
+  // label the new device after its device type, using the first available
+  // number that doesn't clash with other devices in the workspace
+  std::visit(
+      [&](auto &config) {
+        config.label = util::next_available_label(
+            plugin_prefix, result_config.devices |
+                               std::views::transform(devices::device_label));
+      },
+      new_device_config);
+
+  result_config.devices.push_back(std::move(new_device_config));
+
   applyWorkspaceConfigAndRebuild(std::move(result_config),
                                  RebuildScope::Devices);
   emit deviceAdded();
@@ -1860,27 +1887,26 @@ void WorkspaceModel::addOperatorToDevice(int deviceIndex,
 
   const auto op_name = operatorPluginName.toStdString();
 
-  // add the operator config variant to the device's operator list
-  bool found_type = false;
-  operators::for_each_operator_config_type([&]<typename OperatorConfigType>() {
-    if (found_type) return;
-    if (op_name == OperatorConfigType::PluginName) {
-      std::visit(
-          [&](auto &device_config) {
-            if constexpr (requires { device_config.operators; }) {
-              device_config.operators.push_back(
-                  OperatorConfigType{.id = pc::uuid::word()});
-            }
-          },
-          new_config.devices[size_t(idx)]);
-      found_type = true;
-    }
-  });
+  auto *device_operators =
+      devices::device_operators(new_config.devices[size_t(idx)]);
+  if (!device_operators) {
+    pc::logger()->error("Device '{}' cannot host operators",
+                        device_id.toStdString());
+    return;
+  }
 
-  if (!found_type) {
+  // the new operator is labelled after its operator type, using the first
+  // available number that doesn't clash with other operators on the device
+  auto new_operator_config = operators::make_operator_config(
+      op_name,
+      *device_operators | std::views::transform(operators::operator_label));
+
+  if (!new_operator_config.has_value()) {
     pc::logger()->error("Unknown operator plugin name '{}'", op_name);
     return;
   }
+
+  device_operators->push_back(std::move(*new_operator_config));
 
   // sync workspace config
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::None);
@@ -1973,22 +1999,21 @@ void WorkspaceModel::addOperatorToSession(const QString &sessionId,
   auto new_config = _workspace.config;
   const int idx = find_session_index_by_id(new_config, sessionId.toStdString());
   if (idx < 0 || idx >= int(new_config.sessions.size())) return;
-
+  auto &session_config = new_config.sessions[size_t(idx)];
   const auto op_name = operatorPluginName.toStdString();
-  bool found_type = false;
-  operators::for_each_operator_config_type([&]<typename OperatorConfigType>() {
-    if (found_type) return;
-    if (op_name == OperatorConfigType::PluginName) {
-      new_config.sessions[size_t(idx)].operators.push_back(
-          OperatorConfigType{.id = pc::uuid::word()});
-      found_type = true;
-    }
-  });
 
-  if (!found_type) {
+  // the new operator is labelled after its operator type, using the first
+  // available number that doesn't clash with other operators on the session
+  auto new_operator_config = operators::make_operator_config(
+      op_name, session_config.operators |
+                   std::views::transform(operators::operator_label));
+
+  if (!new_operator_config.has_value()) {
     pc::logger()->error("Unknown operator plugin name '{}'", op_name);
     return;
   }
+
+  session_config.operators.push_back(std::move(*new_operator_config));
 
   applyWorkspaceConfigAndRebuild(std::move(new_config), RebuildScope::Sessions);
 }
@@ -2246,7 +2271,8 @@ void WorkspaceModel::initSessionOperatorAdapter(OperatorAdapter *opAdapter,
   auto *innerAdapter = opAdapter->configAdapter();
   if (!innerAdapter) return;
 
-  // a gizmo or a ui input component drag previews continuously and commits once on release
+  // a gizmo or a ui input component drag previews continuously and commits once
+  // on release
   QObject::connect(
       innerAdapter, &ConfigAdapter::previewRequested, this,
       [this, opAdapter, sessionId](const QString &path, const QVariant &value) {

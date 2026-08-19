@@ -6,9 +6,11 @@
 #include <concepts>
 #include <config/config_variant.h>
 #include <optional>
+#include <plugins/operators/operator_variants.h>
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace pc::devices {
 
@@ -37,6 +39,25 @@ constexpr void for_each_device_config_type(Callback cb) {
 constexpr auto device_id_from_variant(const DeviceConfigurationVariant &v) {
   return std::visit([](const auto &cfg) { return std::string_view(cfg.id); },
                     v);
+}
+
+constexpr auto device_label(const DeviceConfigurationVariant &v) {
+  return std::visit(
+      [](const auto &cfg) { return std::string_view(cfg.label.value()); }, v);
+}
+
+// the operator list a device hosts, or nullptr for device types that can't
+// host operators
+inline std::vector<operators::OperatorConfigurationVariant> *
+device_operators(DeviceConfigurationVariant &v) {
+  return std::visit(
+      [](auto &cfg) -> std::vector<operators::OperatorConfigurationVariant> * {
+        if constexpr (requires { cfg.operators; })
+          return &cfg.operators;
+        else
+          return nullptr;
+      },
+      v);
 }
 
 constexpr auto device_info_from_variant(const DeviceConfigurationVariant &v) {
