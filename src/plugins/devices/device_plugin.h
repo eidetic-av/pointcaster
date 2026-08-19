@@ -19,6 +19,9 @@
 #include <metrics/metrics.h>
 #include <pipeline/concurrent_operator_pipeline.h>
 #include <pipeline/pipeline_frame.h>
+#include <plugins/backend/backend_plugin.h>
+#include <plugins/backend/backend_set.h>
+#include <plugins/backend/backend_types.h>
 #include <plugins/operators/operator_host.h>
 #include <plugins/operators/operator_plugin.h>
 #include <plugins/operators/operator_variants.h>
@@ -97,12 +100,7 @@ public:
 
   virtual ~DevicePlugin() = default;
 
-  void init(Workspace &workspace) {
-    OperatorHost::init(workspace);
-    pc::logger()->debug("DevicePlugin::init this={}", fmt::ptr(this));
-    // the parameterless init is what implementations override
-    init();
-  }
+  POINTCASTER_API void init(Workspace &workspace);
 
   void set_is_discovery_instance(bool v) { _is_discovery_instance = v; }
   bool is_discovery_instance() { return _is_discovery_instance; };
@@ -125,6 +123,13 @@ public:
 
   POINTCASTER_API bool active();
   POINTCASTER_API bool rendering();
+
+  POINTCASTER_API BackendType current_backend_type() const;
+  POINTCASTER_API backend::BackendPlugin *current_backend() const;
+  POINTCASTER_API backend::BackendPlugin *backend_for(BackendType) const;
+
+  // the cpu backend is always available
+  POINTCASTER_API backend::BackendPlugin *cpu_backend() const;
 
   virtual void add_discovery_change_callback(std::function<void()>){};
   virtual bool has_discovery_change_callback() const { return false; };
@@ -256,6 +261,8 @@ public:
 
 protected:
   DeviceConfigurationVariant _config;
+
+  backend::BackendSet _backends;
   std::function<void(DeviceStatus)> _status_callback;
   std::function<void()> _point_cloud_updated_callback;
   bool _is_discovery_instance = false;

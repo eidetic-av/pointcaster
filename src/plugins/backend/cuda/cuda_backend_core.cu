@@ -66,7 +66,9 @@ void create_device_memory(const void *owner, const size_t point_count) {
                    new_device_memory.indices.end());
 
   std::lock_guard lock(device_memory_access);
-  instance_device_memory.emplace(owner, std::move(new_device_memory));
+  auto [entry, inserted] =
+      instance_device_memory.try_emplace(owner, std::move(new_device_memory));
+  if (!inserted) entry->second.ensure_capacity(point_count);
 }
 
 } // namespace
@@ -262,6 +264,9 @@ void project_transform_frame_data(
 
   using namespace pc::profiling;
 
+  const size_t point_count = input_depth_frame.size();
+  device_memory->ensure_capacity(point_count);
+
   const auto transform_parameters =
       filter::TransformFilterParameters::from_config(transform,
                                                      color_transform);
@@ -281,8 +286,7 @@ void project_transform_frame_data(
   auto frame_data_input_begin = thrust::make_zip_iterator(thrust::make_tuple(
       device_memory->input_depth_data.begin(),
       device_memory->input_rgb_data.begin(), device_memory->indices.begin()));
-  auto frame_data_input_end =
-      frame_data_input_begin + device_memory->point_count;
+  auto frame_data_input_end = frame_data_input_begin + point_count;
 
   // similarly zip together our output destination memory so the SoA output is
   // available in the single kernel
@@ -301,7 +305,7 @@ void project_transform_frame_data(
         output_points_begin,
         ProjectAndTransform{color_intrinsics, transform, color_transform});
 
-    auto output_points_end = output_points_begin + device_memory->point_count;
+    auto output_points_end = output_points_begin + point_count;
 
     auto new_end =
         thrust::partition(thrust::cuda::par, output_points_begin,

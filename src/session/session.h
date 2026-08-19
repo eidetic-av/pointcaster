@@ -12,6 +12,7 @@
 #include <memory>
 #include <mutex>
 #include <plugins/backend/backend_plugin.h>
+#include <plugins/backend/backend_set.h>
 #include <plugins/operators/operator_host.h>
 #include <pointcaster/point_cloud.h>
 #include <thread>
@@ -116,7 +117,7 @@ private:
   SessionConfiguration _config;
   std::jthread _update_thread;
 
-  Corrade::Containers::Pointer<backend::BackendPlugin> _cpu_backend;
+  backend::BackendSet _backends;
 
   std::atomic<std::shared_ptr<PointCloud>> _current_point_cloud{nullptr};
   std::atomic<std::shared_ptr<std::vector<std::byte>>> _latest_render_data{
