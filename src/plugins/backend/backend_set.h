@@ -9,7 +9,9 @@
 #include <Corrade/PluginManager/Manager.h>
 #include <cstddef>
 #include <logger/logger.h>
+#include <mutex>
 #include <optional>
+#include <pointcaster/plugin_manager_lock.h>
 #include <string_view>
 #include <unordered_map>
 
@@ -30,6 +32,19 @@ backend_type_from_plugin_name(std::string_view plugin_name) {
 // holds one instance of every loaded backend plugin
 class BackendSet {
 public:
+  BackendSet() = default;
+
+  ~BackendSet() {
+    if (_backends.empty()) return;
+    std::scoped_lock plugin_lock(pc::plugin_manager_access());
+    _backends.clear();
+  }
+
+  BackendSet(const BackendSet &) = delete;
+  BackendSet &operator=(const BackendSet &) = delete;
+  BackendSet(BackendSet &&) = delete;
+  BackendSet &operator=(BackendSet &&) = delete;
+
   // instantiates every backend plugin the manager has loaded
   void
   instantiate(Corrade::PluginManager::Manager<BackendPlugin> &plugin_manager,
@@ -49,7 +64,11 @@ public:
       }
       if (_backends.contains(*backend_type)) continue;
 
-      auto backend = plugin_manager.instantiate(plugin_name);
+      Corrade::Containers::Pointer<BackendPlugin> backend;
+      {
+        std::scoped_lock plugin_lock(pc::plugin_manager_access());
+        backend = plugin_manager.instantiate(plugin_name);
+      }
       if (!backend) {
         pc::logger()->error("{} failed to instantiate {} backend", owner_name,
                             backend_name(*backend_type));

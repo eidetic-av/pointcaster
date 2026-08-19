@@ -14,6 +14,7 @@
 #include <cpplocate/cpplocate.h>
 #include <filesystem>
 #include <mutex>
+#include <pointcaster/plugin_manager_lock.h>
 #include <pointcaster/task_pool.h>
 #include <print>
 #include <string>
@@ -213,6 +214,7 @@ load_device_plugins(pc::Workspace &workspace) {
                             std::string(plugin_name));
         Corrade::Containers::Pointer<devices::DevicePlugin> discovery_instance;
         try {
+          std::scoped_lock plugin_lock(pc::plugin_manager_access());
           discovery_instance = device_plugin_manager->instantiate(plugin_name);
         } catch (...) {
           pc::logger()->error(

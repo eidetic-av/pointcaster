@@ -24,6 +24,7 @@
 #include <plugins/devices/device_tree.h>
 #include <plugins/devices/device_variants.h>
 #include <plugins/plugin_loader.h>
+#include <pointcaster/plugin_manager_lock.h>
 
 #include <memory>
 #include <mutex>
@@ -285,6 +286,7 @@ void Workspace::sync_sessions() {
       sessions_to_erase.emplace_back(session_id);
   }
   for (auto &session_id : sessions_to_erase) {
+    std::scoped_lock plugin_lock(plugin_manager_access());
     sessions.erase(session_id);
   }
 }
@@ -379,13 +381,16 @@ void Workspace::sync_devices() {
           existing_ptr = nullptr;
           bool new_device_instance = false;
 
-          if (plugin_loaded) {
-            device_plugin =
-                device_plugin_manager->instantiate(device_plugin_name);
-            new_device_instance = true;
-          } else {
-            device_plugin = device_plugin_manager->instantiate("NullDevice");
-            new_device_instance = true;
+          {
+            std::scoped_lock plugin_lock(plugin_manager_access());
+            if (plugin_loaded) {
+              device_plugin =
+                  device_plugin_manager->instantiate(device_plugin_name);
+              new_device_instance = true;
+            } else {
+              device_plugin = device_plugin_manager->instantiate("NullDevice");
+              new_device_instance = true;
+            }
           }
           device_plugin->set_is_discovery_instance(false);
           if (new_device_instance) device_plugin->init(*this);
@@ -395,6 +400,7 @@ void Workspace::sync_devices() {
     } else {
       if (plugin_loaded) {
         pc::logger()->trace("Instantiating a new device plugin instance");
+        std::scoped_lock plugin_lock(plugin_manager_access());
         device_plugin = device_plugin_manager->instantiate(device_plugin_name);
       }
       if (device_plugin) {

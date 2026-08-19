@@ -2,6 +2,7 @@
 #include "plugins/operators/operator_variants.h"
 #include <logger/logger.h>
 #include <memory>
+#include <pointcaster/plugin_manager_lock.h>
 #include <profiling/profiling_zone.h>
 #include <workspace/workspace.h>
 
@@ -25,7 +26,11 @@ std::vector<OperatorPipelineWorkerChain> build_worker_chains(
                             plugin_name, operator_id);
         continue;
       }
-      auto op = workspace.operator_plugin_manager->instantiate(plugin_name);
+      Corrade::Containers::Pointer<operators::OperatorPlugin> op;
+      {
+        std::scoped_lock plugin_lock(pc::plugin_manager_access());
+        op = workspace.operator_plugin_manager->instantiate(plugin_name);
+      }
       op->update_config(variant);
       op->init(&owner, *workspace.backend_plugin_manager);
       chain.push_back(std::unique_ptr<operators::OperatorPlugin>(op.release()));
