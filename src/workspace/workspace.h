@@ -95,6 +95,9 @@ public:
 
   void rebuild_config_registry();
 
+  void
+  dispose_device(Corrade::Containers::Pointer<devices::DevicePlugin> device);
+
 private:
   void metrics_thread_work(std::stop_token stop_token);
   std::jthread _metrics_thread;

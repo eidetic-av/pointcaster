@@ -17,6 +17,7 @@
 #include <logger/logger.h>
 #include <memory>
 #include <metrics/metrics.h>
+#include <mutex>
 #include <pipeline/concurrent_operator_pipeline.h>
 #include <pipeline/pipeline_frame.h>
 #include <plugins/backend/backend_plugin.h>
@@ -137,11 +138,24 @@ public:
   virtual DeviceStatus status() const = 0;
 
   void set_status_callback(std::function<void(DeviceStatus)> cb) {
-    _status_callback = cb;
+    std::scoped_lock lock(_callback_access);
+    _status_callback = std::move(cb);
   }
 
   void set_point_cloud_updated_callback(std::function<void()> cb) {
-    _point_cloud_updated_callback = cb;
+    std::scoped_lock lock(_callback_access);
+    _point_cloud_updated_callback = std::move(cb);
+  }
+
+  void detach_callbacks() {
+    _callbacks_detached.store(true, std::memory_order_release);
+    std::scoped_lock lock(_callback_access);
+    _status_callback = nullptr;
+    _point_cloud_updated_callback = nullptr;
+  }
+
+  bool callbacks_detached() const {
+    return _callbacks_detached.load(std::memory_order_acquire);
   }
 
   DeviceConfigurationVariant &config() { return _config; }
@@ -164,17 +178,23 @@ public:
   virtual void stop() = 0;
   virtual void restart() = 0;
 
+  virtual void shutdown() {}
+
   void reprocess() override {}
 
   virtual bool is_sequence() const { return false; }
   virtual size_t frame_count() const { return 1; }
 
   void notify_status_changed(DeviceStatus new_status) {
+    if (callbacks_detached()) return;
+    std::scoped_lock lock(_callback_access);
     if (_status_callback) _status_callback(new_status);
   }
   void notify_status_changed() { notify_status_changed(status()); }
 
   void notify_point_cloud_updated() {
+    if (callbacks_detached()) return;
+    std::scoped_lock lock(_callback_access);
     if (_point_cloud_updated_callback) _point_cloud_updated_callback();
   }
 
@@ -263,8 +283,10 @@ protected:
   DeviceConfigurationVariant _config;
 
   backend::BackendSet _backends;
+  std::mutex _callback_access;
   std::function<void(DeviceStatus)> _status_callback;
   std::function<void()> _point_cloud_updated_callback;
+  std::atomic_bool _callbacks_detached{false};
   bool _is_discovery_instance = false;
 
   std::atomic<size_t> _process_tasks_in_flight{0};

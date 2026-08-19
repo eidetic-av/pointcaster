@@ -51,6 +51,7 @@ public:
   void start() override;
   void stop() override;
   void restart() override;
+  void shutdown() override;
 
   void on_config_field_changed(std::string_view path = "") override;
 
@@ -80,6 +81,8 @@ private:
   // PC_PROFILING_MUTEX(_process_current_cloud_access);
   std::mutex _process_current_cloud_access;
   std::uint64_t _last_processed_frame_index{0};
+
+  std::atomic_bool _shutdown_complete{false};
 
   std::jthread _initialisation_thread;
   std::jthread _pipeline_thread;

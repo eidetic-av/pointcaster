@@ -25,6 +25,7 @@
 #include <plugins/devices/device_variants.h>
 #include <plugins/plugin_loader.h>
 #include <pointcaster/plugin_manager_lock.h>
+#include <pointcaster/task_pool.h>
 
 #include <memory>
 #include <mutex>
@@ -94,7 +95,29 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
       [this](std::stop_token stop_token) { metrics_thread_work(stop_token); });
 }
 
-Workspace::~Workspace() = default;
+namespace {
+// for teardown tasks that would otherwise block the UI
+BS::thread_pool<> &teardown_pool() {
+  static BS::thread_pool<> pool{1};
+  return pool;
+}
+} // namespace
+
+Workspace::~Workspace() {
+  teardown_pool().wait();
+}
+
+// remove devices from the workspace asynchronously
+void Workspace::dispose_device(
+    Corrade::Containers::Pointer<devices::DevicePlugin> device) {
+  if (!device) return;
+  device->detach_callbacks();
+  teardown_pool().detach_task([device = std::move(device)]() mutable {
+    device->shutdown();
+    std::scoped_lock plugin_lock(plugin_manager_access());
+    device = nullptr;
+  });
+}
 
 void Workspace::apply_new_config(const WorkspaceConfiguration &new_config,
                                  bool should_sync_devices) {
@@ -320,15 +343,6 @@ void Workspace::sync_devices() {
   std::vector<Pointer<pc::devices::DevicePlugin>> new_devices;
   new_devices.reserve(device_configs.size());
 
-  auto stop_plugin_best_effort = [](pc::devices::DevicePlugin *plugin) {
-    if (!plugin) return;
-    try {
-      plugin->stop();
-    } catch (...) {
-      // avoid throwing during teardown paths
-    }
-  };
-
   for (auto &device_variant : device_configs) {
 
     auto [device_id, device_plugin_name] =
@@ -377,8 +391,7 @@ void Workspace::sync_devices() {
                              device_id, existing_plugin_name,
                              device_plugin_name);
 
-          stop_plugin_best_effort(existing_plugin);
-          existing_ptr = nullptr;
+          dispose_device(std::move(existing_ptr));
           bool new_device_instance = false;
 
           {
@@ -418,15 +431,11 @@ void Workspace::sync_devices() {
     new_devices.push_back(std::move(device_plugin));
   }
 
-  // Remaining entries in existing_index_by_id are deletions.
-  // We own them in `devices` (until we overwrite below), so stop best-effort
-  // now.
   for (const auto &[id, idx] : existing_index_by_id) {
     if (idx >= devices.size()) continue;
     if (!devices[idx]) continue;
     pc::logger()->trace("Removing device plugin id='{}'", id);
-    stop_plugin_best_effort(devices[idx].get());
-    devices[idx] = nullptr;
+    dispose_device(std::move(devices[idx]));
   }
 
   devices = std::move(new_devices);

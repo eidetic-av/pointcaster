@@ -10,6 +10,7 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <core/logger/logger.h>
 #include <core/profiling/profiling_zone.h>
 #include <cstdint>
@@ -82,13 +83,27 @@ OrbbecDevice::OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
 }
 
 OrbbecDevice::~OrbbecDevice() {
-  pc::logger()->trace("Destroying OrbbecDevice{}",
-                      _is_discovery_instance ? " discovery instance" : "");
-  stop_sync();
-  _timeout_thread.request_stop();
-  orbbec_context().release_user();
+  shutdown();
   pc::logger()->trace("Destroyed OrbbecDevice{}",
                       _is_discovery_instance ? " discovery instance" : "");
+}
+
+void OrbbecDevice::shutdown() {
+  if (_shutdown_complete.exchange(true)) return;
+  pc::logger()->trace("Destroying OrbbecDevice{}",
+                      _is_discovery_instance ? " discovery instance" : "");
+  _initialisation_thread.request_stop();
+  if (_initialisation_thread.joinable()) _initialisation_thread.join();
+  try {
+    stop_sync();
+  } catch (const std::exception &e) {
+    pc::logger()->error("Exception closing OrbbecDevice: {}", e.what());
+  } catch (...) {
+    pc::logger()->error("Unknown exception closing OrbbecDevice");
+  }
+  _timeout_thread.request_stop();
+  if (_timeout_thread.joinable()) _timeout_thread.join();
+  orbbec_context().release_user();
 }
 
 std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
@@ -305,6 +320,7 @@ void OrbbecDevice::stop_sync() {
   if (!_running_pipeline) return;
   auto config = std::get<OrbbecDeviceConfiguration>(this->config_variant());
   std::lock_guard lock(orbbec_context().device_api_access);
+  if (!_pipeline_thread.joinable()) return;
   pc::logger()->info("Closing OrbbecDevice {}",
                      config.network.value().ip_address.value());
   pc::logger()->trace("Joining pipeline thread");
@@ -955,6 +971,14 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
     return {};
   };
 
+  std::mutex sleep_access;
+  std::condition_variable_any sleep_wake;
+  auto sleep_until_stopped = [&](auto duration) {
+    std::unique_lock lock(sleep_access);
+    sleep_wake.wait_for(lock, stop_token, duration,
+                        [&] { return stop_token.stop_requested(); });
+  };
+
   while (!stop_token.stop_requested()) {
 
     const auto now = steady_clock::now();
@@ -969,7 +993,7 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
 
     if (_running_pipeline && !_in_error_state) {
       if (!has_seen_a_frame) {
-        std::this_thread::sleep_for(check_interval);
+        sleep_until_stopped(check_interval);
         continue;
       }
       if (now - last_frame_time >= error_timeout) {
@@ -984,7 +1008,7 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
         set_error_state(false);
       }
     }
-    std::this_thread::sleep_for(check_interval);
+    sleep_until_stopped(check_interval);
   }
 }
 
