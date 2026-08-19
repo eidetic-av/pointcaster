@@ -60,6 +60,7 @@ public:
   void rebuildOperatorAdapters() {
     qDeleteAll(_operatorAdapters);
     _operatorAdapters.clear();
+    if (!_plugin) return;
     for (auto &op : _plugin->operators) {
       auto *adapter = new OperatorAdapter(op.get(), _plugin, this);
       _operatorAdapters.append(adapter);
@@ -131,6 +132,16 @@ public:
   int deviceIndex() const { return _deviceIndex; }
   void setDeviceIndex(int index) { _deviceIndex = index; }
 
+  QString deviceId() const { return _deviceId; }
+  void setDeviceId(const QString &id) { _deviceId = id; }
+
+  void invalidatePlugin() {
+    _plugin = nullptr;
+    for (auto *op : _operatorAdapters) {
+      if (op) op->invalidatePlugin();
+    }
+  }
+
   bool pluginNullState() const {
     if (!_plugin) return false;
     return _plugin->plugin_null_state();
@@ -165,10 +176,12 @@ public:
   }
 
   Q_INVOKABLE std::shared_ptr<pc::PointCloud> point_cloud() override {
+    if (!_plugin) return {};
     return _plugin->point_cloud();
   };
 
   Q_INVOKABLE std::shared_ptr<std::vector<std::byte>> render_data() override {
+    if (!_plugin) return {};
     return _plugin->render_data();
   }
 
@@ -185,6 +198,7 @@ public:
   void notifyPointCloudUpdated() {
     emit pointCloudUpdated();
     syncCameraFrames();
+    if (!_plugin) return;
 
     int frame = 0;
     std::visit(
@@ -206,6 +220,7 @@ public:
   int currentFrame() const { return _currentFrame; }
 
   void updateSequenceState(int frame) {
+    if (!_plugin) return;
     bool playing = false;
     std::visit(
         [&](const auto &config) {
@@ -247,6 +262,7 @@ protected:
       pc::ui::WorkspaceDeviceStatus::Unloaded;
 
   int _deviceIndex = -1;
+  QString _deviceId;
 
   QList<OperatorAdapter *> _operatorAdapters;
 
@@ -261,6 +277,7 @@ protected:
 
 private:
   QString deviceKeyPrefix() const {
+    if (!_deviceId.isEmpty()) return _deviceId + "/";
     if (!_plugin) return {};
     QString id;
     std::visit(

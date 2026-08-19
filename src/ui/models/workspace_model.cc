@@ -46,6 +46,7 @@
 #include <thread>
 #include <ui/layout_saver.h>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <workspace/workspace.h>
 
@@ -773,6 +774,8 @@ QString WorkspaceModel::adapterStableId(ConfigAdapter *adapter) {
 
 QString WorkspaceModel::adapterStableId(DeviceAdapter *adapter) {
   if (!adapter) return {};
+  const QString cached_id = adapter->deviceId();
+  if (!cached_id.isEmpty()) return cached_id;
   const QVariant v = adapter->value(QStringLiteral("id"));
   if (v.isValid()) return v.toString();
   return {};
@@ -2961,6 +2964,18 @@ void WorkspaceModel::syncDeviceAdapters() {
   pc::logger()->trace("syncDeviceAdapters: begin, workspace device count={}",
                       _workspace.devices.size());
 
+  std::unordered_set<const void *> live_plugins;
+  live_plugins.reserve(_workspace.devices.size());
+  for (auto &device_plugin : _workspace.devices) {
+    if (device_plugin) live_plugins.insert(device_plugin.get());
+  }
+  for (QObject *obj : _deviceAdapters) {
+    auto *a = qobject_cast<DeviceAdapter *>(obj);
+    if (!a || !a->plugin()) continue;
+    // invalidate device plugins that have been removed
+    if (!live_plugins.contains(a->plugin())) a->invalidatePlugin();
+  }
+
   QHash<QString, DeviceAdapter *> existing_by_id;
   existing_by_id.reserve(_deviceAdapters.size());
   for (QObject *obj : _deviceAdapters) {
@@ -3033,6 +3048,7 @@ void WorkspaceModel::syncDeviceAdapters() {
       }
 
       if (adapter) {
+        adapter->setDeviceId(id);
         pc::logger()->trace("syncDeviceAdapters: hooking callbacks for id='{}'",
                             device_id);
         auto adapterPtr = QPointer<DeviceAdapter>(adapter);
