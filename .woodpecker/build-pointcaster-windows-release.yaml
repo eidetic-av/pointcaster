@@ -33,16 +33,16 @@ steps:
     image: pwsh
     environment: *container_env
     commands:
-      - docker run -v ./:C:\pointcaster -v ${env:POINTCASTER_BUILD_VOLUME}:C:\pointcaster\build $env:POINTCASTER_DEV_IMAGE cmake --preset windows-release
+      - docker run -v ./:C:\pointcaster -v "$env:POINTCASTER_BUILD_VOLUME":"C:\pointcaster\build" $env:POINTCASTER_DEV_IMAGE cmake --preset windows-release
 
   - name: build
     image: pwsh
     environment: *container_env
     commands:
-      - docker run -v ./:C:\pointcaster -v $env:POINTCASTER_BUILD_VOLUME:C:\pointcaster\build $env:POINTCASTER_DEV_IMAGE cmake --build build/windows-release --target package
+      - docker run -v ./:C:\pointcaster -v "$env:POINTCASTER_BUILD_VOLUME":"C:\pointcaster\build" $env:POINTCASTER_DEV_IMAGE cmake --build build/windows-release --target package
 
   - name: deploy
     image: pwsh
     environment: *container_env
     commands:
-      - docker run -v ./:C:\pointcaster -v $env:POINTCASTER_BUILD_VOLUME:C:\pointcaster\build $env:POINTCASTER_DEV_IMAGE cmake --build build/windows-release --target deploy
+      - docker run -v ./:C:\pointcaster -v "$env:POINTCASTER_BUILD_VOLUME":"C:\pointcaster\build" $env:POINTCASTER_DEV_IMAGE cmake --build build/windows-release --target deploy
