@@ -27,4 +27,8 @@ docker save "${IMAGE}:${TAG}" -o "${TAR}"
 echo "==> push"
 crane push --insecure "${TAR}" "${IMAGE}:${TAG}"
 
+# move the rolling linux tag
+echo "==> tag ${IMAGE}:latest-linux"
+crane tag --insecure "${IMAGE}:${TAG}" latest-linux
+
 echo "==> done: ${IMAGE}:${TAG}"
