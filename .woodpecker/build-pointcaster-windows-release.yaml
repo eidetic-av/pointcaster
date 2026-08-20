@@ -1,0 +1,38 @@
+when:
+  - event: tag
+  - event: manual
+
+labels:
+  platform: windows/amd64
+
+variables:
+  - &container_env
+    DOCKER_HOST: npipe:////./pipe/dockerDesktopWindowsEngine
+    POINTCASTER_BUILD_VOLUME: pointcaster-ci-build
+    DOCKER_RUN: 'docker run --rm -v "$($pwd.Path):C:\pointcaster" -v "$($env:POINTCASTER_BUILD_VOLUME):C:\pointcaster\build" cr.pointcaster.net/pointcaster-dev:latest'
+
+steps:
+  - name: prepare
+    image: pwsh
+    environment: *container_env
+    commands:
+      - docker pull cr.pointcaster.net/pointcaster-dev:latest
+      - docker volume rm --force $env:POINTCASTER_BUILD_VOLUME
+
+  - name: configure
+    image: pwsh
+    environment: *container_env
+    commands:
+      - Invoke-Expression "$env:DOCKER_RUN cmake --preset windows-release"
+
+  - name: build
+    image: pwsh
+    environment: *container_env
+    commands:
+      - Invoke-Expression "$env:DOCKER_RUN cmake --build build/windows-release --target package"
+
+  - name: deploy
+    image: pwsh
+    environment: *container_env
+    commands:
+      - Invoke-Expression "$env:DOCKER_RUN cmake --build build/windows-release --target deploy"

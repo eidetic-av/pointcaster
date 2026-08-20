@@ -11,7 +11,7 @@ $Tag   = "$Date-windows"
 Set-Location (Join-Path $PSScriptRoot '..')
 
 Write-Host "==> build ${Image}:${Tag}"
-docker build --isolation=hyperv -f scripts/windows.Dockerfile -t "${Image}:${Tag}" `
+docker build --isolation=process -f scripts/windows.Dockerfile -t "${Image}:${Tag}" `
   --label "org.opencontainers.image.version=$Date" `
   --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" `
   --label "org.opencontainers.image.created=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))" `
@@ -29,5 +29,9 @@ try {
 } finally {
   Remove-Item $Tar -ErrorAction SilentlyContinue
 }
+
+# move the rolling windows tag
+Write-Host "==> tag ${Image}:latest-windows"
+crane tag --insecure "${Image}:${Tag}" latest-windows
 
 Write-Host "==> done: ${Image}:${Tag}"
