@@ -16,9 +16,7 @@ Session::Session(Workspace &workspace, const SessionConfiguration &config)
   _workspace = &workspace;
 
   if (_workspace->backend_plugin_manager) {
-    _cpu_backend =
-        _workspace->backend_plugin_manager->instantiate("CpuBackend");
-    if (_cpu_backend) _cpu_backend->init();
+    _backends.instantiate(*_workspace->backend_plugin_manager, "Session");
   }
 
   update_config(config);
@@ -61,9 +59,9 @@ std::vector<camera::CameraFrame> Session::latest_camera_frames() const {
 void Session::on_pipeline_output(operators::PipelineFramePtr output_frame) {
   if (!output_frame) return;
   auto cloud = output_frame->cloud;
-  if (cloud && !cloud->empty() && _cpu_backend) {
+  if (auto *cpu = _backends.cpu(); cloud && !cloud->empty() && cpu) {
     auto buf = std::make_shared<std::vector<std::byte>>(cloud->size() * 16);
-    _cpu_backend->pack_render_buffer(*cloud, *buf);
+    cpu->pack_render_buffer(*cloud, *buf);
     _latest_render_data.store(std::move(buf), std::memory_order_release);
   }
   _current_point_cloud.store(cloud, std::memory_order_release);

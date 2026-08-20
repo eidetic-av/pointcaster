@@ -64,6 +64,11 @@ public:
 
   pc::operators::OperatorHost *host() const { return _host; }
 
+  void invalidatePlugin() {
+    _plugin = nullptr;
+    _host = nullptr;
+  }
+
 signals:
   void configAdapterChanged();
 

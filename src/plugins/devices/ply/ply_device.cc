@@ -18,23 +18,6 @@ namespace pc::devices {
 
 // using pc::profiling::ProfilingZone;
 
-void PlyDevice::init() {
-  auto &backend_manager = _workspace->backend_plugin_manager;
-  _cpu_backend = backend_manager->instantiate("CpuBackend");
-
-  pc::logger()->trace("PlyDevice created CPU backend");
-
-  using Corrade::PluginManager::LoadState;
-
-  for (const auto &plugin : backend_manager->pluginList()) {
-    if (backend_manager->loadState(plugin) & LoadState::NotLoaded) continue;
-    if (plugin == "CudaBackend") {
-      _cuda_backend = backend_manager->instantiate(plugin);
-      pc::logger()->trace("PlyDevice created CUDA backend");
-    }
-  }
-}
-
 PlyDevice::~PlyDevice() {
   _tick_thread.request_stop();
   if (_tick_thread.joinable()) _tick_thread.join();
@@ -124,7 +107,6 @@ bool PlyDevice::load(std::string_view url) {
 
   _input_cloud = std::move(input_cloud);
   _loaded_file_path = std::string(url);
-  if (_cuda_backend) _cuda_backend->init(_input_cloud->size());
   apply_transform();
   pc::logger()->trace("PlyDevice::load: done");
   return true;
@@ -155,7 +137,6 @@ bool PlyDevice::load_directory(const std::filesystem::path &dir) {
   // _status = DeviceStatus::Loaded;
 
   _input_cloud = _sequence_loader->get_frame(0);
-  if (_cuda_backend && _input_cloud) _cuda_backend->init(_input_cloud->size());
   apply_transform();
   return true;
 }
@@ -356,10 +337,7 @@ void PlyDevice::apply_transform() {
   const auto config = std::get<PlyDeviceConfiguration>(_config);
   const auto point_count = _input_cloud->size();
 
-  const bool use_cuda =
-      (config.transform.value().backend.value() == BackendType::CUDA &&
-       _cuda_backend);
-  auto *backend = use_cuda ? _cuda_backend.get() : _cpu_backend.get();
+  auto *backend = current_backend();
   if (!backend) {
     pc::logger()->error("PlyDevice::apply_transform: uninitialised backend");
     return;
@@ -396,9 +374,9 @@ void PlyDevice::on_pipeline_output(
   auto cloud = output_frame->cloud;
   if (rendering()) {
     if (!cloud) return;
-    if (_cpu_backend) {
+    if (auto *cpu = cpu_backend()) {
       auto buf = std::make_shared<std::vector<std::byte>>(cloud->size() * 16);
-      _cpu_backend->pack_render_buffer(*cloud, *buf);
+      cpu->pack_render_buffer(*cloud, *buf);
       _latest_render_data.store(std::move(buf), std::memory_order_release);
     }
   } else {

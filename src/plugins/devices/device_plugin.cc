@@ -1,5 +1,6 @@
 #include "device_plugin.h"
 
+#include <Corrade/Containers/StringStlView.h>
 #include <logger/logger.h>
 #include <memory>
 #include <pipeline/concurrent_operator_pipeline.h>
@@ -11,6 +12,64 @@
 #include <workspace/workspace.h>
 
 namespace pc::devices {
+
+void DevicePlugin::init(Workspace &workspace) {
+  OperatorHost::init(workspace);
+  pc::logger()->debug("DevicePlugin::init this={}", fmt::ptr(this));
+
+  if (workspace.backend_plugin_manager) {
+    _backends.instantiate(*workspace.backend_plugin_manager,
+                          std::string_view{plugin()});
+  } else {
+    pc::logger()->error("{} initialised without any backend plugins",
+                        std::string_view{plugin()});
+  }
+
+  // the parameterless init is what implementations override
+  init();
+}
+
+BackendType DevicePlugin::current_backend_type() const {
+
+  // TODO
+  // device plugin current backend stuff is kinda weird,
+  // because the selected backend type lives inside its transform config...
+
+  const auto requested_backend = std::visit(
+      [](const auto &device_config) {
+        if constexpr (requires { device_config.transform; }) {
+          return device_config.transform.value().backend.value();
+        } else {
+          return BackendType::CPU;
+        }
+      },
+      _config);
+
+  const auto resolved_backend = _backends.resolve(requested_backend);
+  if (!resolved_backend) return requested_backend;
+
+  if (*resolved_backend != requested_backend) {
+    pc::logger()->warn("{} backend is not loaded for device '{}', using {}",
+                       backend::backend_name(requested_backend),
+                       device_id_from_variant(_config),
+                       backend::backend_name(*resolved_backend));
+  }
+
+  return *resolved_backend;
+}
+
+backend::BackendPlugin *DevicePlugin::current_backend() const {
+  return _backends.get(current_backend_type());
+}
+
+backend::BackendPlugin *
+DevicePlugin::backend_for(BackendType backend_type) const {
+  return _backends.get(backend_type);
+}
+
+backend::BackendPlugin *DevicePlugin::cpu_backend() const {
+  return _backends.cpu();
+}
 
 bool DevicePlugin::active() {
   return std::visit(

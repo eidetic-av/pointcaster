@@ -10,6 +10,7 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <core/logger/logger.h>
 #include <core/profiling/profiling_zone.h>
 #include <cstdint>
@@ -82,11 +83,27 @@ OrbbecDevice::OrbbecDevice(Corrade::PluginManager::AbstractManager &manager,
 }
 
 OrbbecDevice::~OrbbecDevice() {
-  stop_sync();
-  _timeout_thread.request_stop();
-  orbbec_context().release_user();
+  shutdown();
   pc::logger()->trace("Destroyed OrbbecDevice{}",
                       _is_discovery_instance ? " discovery instance" : "");
+}
+
+void OrbbecDevice::shutdown() {
+  if (_shutdown_complete.exchange(true)) return;
+  pc::logger()->trace("Destroying OrbbecDevice{}",
+                      _is_discovery_instance ? " discovery instance" : "");
+  _initialisation_thread.request_stop();
+  if (_initialisation_thread.joinable()) _initialisation_thread.join();
+  try {
+    stop_sync();
+  } catch (const std::exception &e) {
+    pc::logger()->error("Exception closing OrbbecDevice: {}", e.what());
+  } catch (...) {
+    pc::logger()->error("Unknown exception closing OrbbecDevice");
+  }
+  _timeout_thread.request_stop();
+  if (_timeout_thread.joinable()) _timeout_thread.join();
+  orbbec_context().release_user();
 }
 
 std::vector<DiscoveredDevice> OrbbecDevice::discovered_devices() const {
@@ -303,6 +320,7 @@ void OrbbecDevice::stop_sync() {
   if (!_running_pipeline) return;
   auto config = std::get<OrbbecDeviceConfiguration>(this->config_variant());
   std::lock_guard lock(orbbec_context().device_api_access);
+  if (!_pipeline_thread.joinable()) return;
   pc::logger()->info("Closing OrbbecDevice {}",
                      config.network.value().ip_address.value());
   pc::logger()->trace("Joining pipeline thread");
@@ -364,9 +382,6 @@ void OrbbecDevice::pipeline_thread_work(std::stop_token stop_token,
                                       OrbbecDeviceConfiguration::
                                           LidarSensorConfiguration>) {
       lidar_pipeline_thread_work(std::move(stop_token), std::move(ob_device));
-    } else {
-      static_assert(!sizeof(SensorConfiguration *),
-                    "Unhandled Orbbec sensor configuration type");
     }
   });
 }
@@ -526,36 +541,6 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
 
     ob_device_api_access.unlock();
 
-    // create instances to the available backend plugins to transform our
-    // point-cloud with
-
-    // TODO check if creating the CUDA instance here allocates GPU memory even
-    // if we're only using the CPU backend
-
-    using Corrade::Containers::Pointer;
-    using Corrade::PluginManager::LoadState;
-
-    Pointer<backend::BackendPlugin> cpu_backend;
-    Pointer<backend::BackendPlugin> cuda_backend;
-
-    auto &backend_manager = _workspace->backend_plugin_manager;
-
-    for (const auto &plugin : backend_manager->pluginList()) {
-      if (backend_manager->loadState(plugin) & LoadState::NotLoaded) continue;
-      if (plugin == "CpuBackend") {
-        cpu_backend = backend_manager->instantiate(plugin);
-        cpu_backend->init(max_point_count);
-        pc::logger()->trace("OrbbecDevice created CPU backend");
-        continue;
-      }
-      if (plugin == "CudaBackend") {
-        cuda_backend = backend_manager->instantiate(plugin);
-        cuda_backend->init(max_point_count);
-        pc::logger()->trace("OrbbecDevice created CUDA backend");
-        continue;
-      }
-    }
-
     pc::logger()->trace("Starting process loop for OrbbecDevice {}",
                         device_config.id);
 
@@ -595,9 +580,9 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
       // like this. I think im increasing latency? idk
 
       pc::task_pool().detach_task(
-          [this, &color_intrinsics, &cuda_backend, &cpu_backend,
-           frame_set = std::move(frame_set), device_config = device_config,
-           max_point_count = max_point_count, world = world]() {
+          [this, &color_intrinsics, frame_set = std::move(frame_set),
+           device_config = device_config, max_point_count = max_point_count,
+           world = world]() {
             FrameTaskSlot frame_task_slot(*this);
 
             auto colour_frame = frame_set->colorFrame();
@@ -622,14 +607,9 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
             std::span ob_depth_data{ob_depth_frame_ptr, point_count};
             std::span ob_color_data{ob_color_frame_ptr, point_count};
 
-            // TODO backend instances should be inside the device plugin class
-            // more like operators
-            const bool using_cuda =
-                (device_config.transform.value().backend.value() ==
-                     BackendType::CUDA &&
-                 cuda_backend);
-            backend::BackendPlugin *backend =
-                using_cuda ? cuda_backend.get() : cpu_backend.get();
+            const auto backend_type = current_backend_type();
+            const bool using_cuda = backend_type == BackendType::CUDA;
+            backend::BackendPlugin *backend = backend_for(backend_type);
 
             // snapshot rendering state once so both the allocation and the
             // store decision use a consistent value
@@ -658,14 +638,14 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
 
             feed_operator_pipeline(point_cloud);
 
-            if (should_render && backend) {
+            if (auto *cpu = cpu_backend(); should_render && backend && cpu) {
               if (using_cuda && cuda_render_buffer) {
                 _latest_render_data.store(std::move(cuda_render_buffer),
                                           std::memory_order_release);
               } else if (auto processed = _pipeline->latest_cloud()) {
                 auto render_buffer = std::make_shared<std::vector<std::byte>>(
                     processed->size() * 16);
-                cpu_backend->pack_render_buffer(*processed, *render_buffer);
+                cpu->pack_render_buffer(*processed, *render_buffer);
                 _latest_render_data.store(std::move(render_buffer),
                                           std::memory_order_release);
               }
@@ -738,6 +718,7 @@ void OrbbecDevice::lidar_pipeline_thread_work(
       }
     }
 
+    // the only scan rates available to the pulsar sl450
     static const std::map<OBLiDARScanRate, uint32_t> available_scan_rates = {
         {OB_LIDAR_SCAN_15HZ, 15},
         {OB_LIDAR_SCAN_20HZ, 20},
@@ -786,36 +767,6 @@ void OrbbecDevice::lidar_pipeline_thread_work(
 
     ob_device_api_access.unlock();
 
-    // create instances to the available backend plugins to transform our
-    // point-cloud with. a single scan frame tops out at 3600 points (the
-    // slowest scan rate gives 200 points across 18 data blocks), so this
-    // allocates far less than the rgbd path
-    constexpr size_t max_point_count = 3600;
-
-    using Corrade::Containers::Pointer;
-    using Corrade::PluginManager::LoadState;
-
-    Pointer<backend::BackendPlugin> cpu_backend;
-    Pointer<backend::BackendPlugin> cuda_backend;
-
-    auto &backend_manager = _workspace->backend_plugin_manager;
-
-    for (const auto &plugin : backend_manager->pluginList()) {
-      if (backend_manager->loadState(plugin) & LoadState::NotLoaded) continue;
-      if (plugin == "CpuBackend") {
-        cpu_backend = backend_manager->instantiate(plugin);
-        cpu_backend->init(max_point_count);
-        pc::logger()->trace("OrbbecDevice created CPU backend");
-        continue;
-      }
-      if (plugin == "CudaBackend") {
-        cuda_backend = backend_manager->instantiate(plugin);
-        cuda_backend->init(max_point_count);
-        pc::logger()->trace("OrbbecDevice created CUDA backend");
-        continue;
-      }
-    }
-
     // scan samples are polar: an angle in degrees and a distance in mm.
     // no return at that angle
     std::optional<pc::float4x4> last_world;
@@ -863,8 +814,8 @@ void OrbbecDevice::lidar_pipeline_thread_work(
       }
 
       const auto &process_frame_task = [this, frame_set = std::move(frame_set),
-                                        device_config, world = std::move(world),
-                                        &cpu_backend, &cuda_backend] {
+                                        device_config,
+                                        world = std::move(world)] {
         // frame_task_slot occupies a frame processing thread for its
         // lifetime... it's what tells try_begin_frame_task() to fail if too
         // many exist per device
@@ -955,12 +906,7 @@ void OrbbecDevice::lidar_pipeline_thread_work(
         }
         if (scan_cloud->empty()) return;
 
-        const bool using_cuda =
-            (device_config.transform.value().backend.value() ==
-                 BackendType::CUDA &&
-             cuda_backend);
-        backend::BackendPlugin *backend =
-            using_cuda ? cuda_backend.get() : cpu_backend.get();
+        backend::BackendPlugin *backend = current_backend();
         if (!backend) return;
 
         auto point_cloud = std::make_shared<PointCloud>();
@@ -976,11 +922,11 @@ void OrbbecDevice::lidar_pipeline_thread_work(
 
         feed_operator_pipeline(point_cloud);
 
-        if (rendering() && cpu_backend) {
+        if (auto *cpu = cpu_backend(); rendering() && cpu) {
           if (auto processed = _pipeline->latest_cloud()) {
             auto render_buffer = std::make_shared<std::vector<std::byte>>(
                 processed->size() * 16);
-            cpu_backend->pack_render_buffer(*processed, *render_buffer);
+            cpu->pack_render_buffer(*processed, *render_buffer);
             _latest_render_data.store(std::move(render_buffer),
                                       std::memory_order_release);
           }
@@ -1025,6 +971,14 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
     return {};
   };
 
+  std::mutex sleep_access;
+  std::condition_variable_any sleep_wake;
+  auto sleep_until_stopped = [&](auto duration) {
+    std::unique_lock lock(sleep_access);
+    sleep_wake.wait_for(lock, stop_token, duration,
+                        [&] { return stop_token.stop_requested(); });
+  };
+
   while (!stop_token.stop_requested()) {
 
     const auto now = steady_clock::now();
@@ -1039,7 +993,7 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
 
     if (_running_pipeline && !_in_error_state) {
       if (!has_seen_a_frame) {
-        std::this_thread::sleep_for(check_interval);
+        sleep_until_stopped(check_interval);
         continue;
       }
       if (now - last_frame_time >= error_timeout) {
@@ -1054,7 +1008,7 @@ void OrbbecDevice::timeout_thread_work(std::stop_token stop_token) {
         set_error_state(false);
       }
     }
-    std::this_thread::sleep_for(check_interval);
+    sleep_until_stopped(check_interval);
   }
 }
 

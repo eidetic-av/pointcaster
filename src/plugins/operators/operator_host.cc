@@ -3,6 +3,7 @@
 #include <logger/logger.h>
 #include <mutex>
 #include <pipeline/concurrent_operator_pipeline.h>
+#include <pointcaster/plugin_manager_lock.h>
 #include <plugins/operators/operator_plugin.h>
 #include <plugins/operators/operator_variants.h>
 #include <string>
@@ -73,12 +74,14 @@ void OperatorHost::sync_operators(
       } else {
         pc::logger()->info("Operator id='{}' type '{}' -> '{}'", operator_id,
                            existing_plugin_name, operator_plugin_name);
+        std::scoped_lock plugin_lock(pc::plugin_manager_access());
         existing_ptr = nullptr;
         op_plugin = _workspace->operator_plugin_manager->instantiate(
             std::string(operator_plugin_name));
         new_instance = true;
       }
     } else {
+      std::scoped_lock plugin_lock(pc::plugin_manager_access());
       op_plugin = _workspace->operator_plugin_manager->instantiate(
           std::string(operator_plugin_name));
       new_instance = true;
@@ -103,7 +106,10 @@ void OperatorHost::sync_operators(
   }
 
   // remaining entries in existing_index_by_id are deletions; just drop
-  operators = std::move(new_operators);
+  {
+    std::scoped_lock plugin_lock(pc::plugin_manager_access());
+    operators = std::move(new_operators);
+  }
 
   bool need_rebuild = changed;
   {
@@ -128,6 +134,7 @@ void OperatorHost::rebuild_pipeline(
   std::scoped_lock lock(_pipeline_mutex);
   if (_pipeline) {
     _pipeline->stop();
+    std::scoped_lock plugin_lock(pc::plugin_manager_access());
     _pipeline.reset();
   }
 

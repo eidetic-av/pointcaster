@@ -7,6 +7,7 @@ add_library(pointcaster_core SHARED
     point_cloud.cc
     core_types.cc
     task_pool.cc
+    plugin_manager_lock.cc
     codec/draco.cc
     uuid/uuid.cc
     uuid/wtf/wtf.cc

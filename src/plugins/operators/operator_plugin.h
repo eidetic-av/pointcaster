@@ -18,6 +18,7 @@
 #include <pipeline/concurrent_container.h>
 #include <pipeline/pipeline_frame.h>
 #include <plugins/backend/backend_plugin.h>
+#include <plugins/backend/backend_set.h>
 #include <plugins/backend/backend_types.h>
 #include <pointcaster/point_cloud.h>
 #include <span>
@@ -104,37 +105,12 @@ public:
                         &backend_plugin_manager) {
     _host = host;
 
-    // initialise backends depending on what plugins are available
-    using Corrade::PluginManager::LoadState;
-
     const std::string operator_name{plugin()};
 
     pc::logger()->trace("Initialising operator plugin: {}", operator_name);
 
-    for (const auto &plugin_name : backend_plugin_manager.pluginList()) {
-      const std::string plugin_name_str(plugin_name);
-      pc::logger()->debug(plugin_name_str);
-
-      if (backend_plugin_manager.loadState(plugin_name) &
-          LoadState::NotLoaded) {
-        pc::logger()->debug("{} not loaded!", plugin_name_str);
-        continue;
-      }
-      pc::logger()->debug("{} is loaded", plugin_name_str);
-      if (plugin_name == "CpuBackend") {
-        _backends[BackendType::CPU] =
-            backend_plugin_manager.instantiate(plugin_name);
-        _backends[BackendType::CPU]->init();
-        pc::logger()->trace("{} created CPU backend", operator_name);
-        continue;
-      }
-      if (plugin_name == "CudaBackend") {
-        _backends[BackendType::CUDA] =
-            backend_plugin_manager.instantiate(plugin_name);
-        _backends[BackendType::CUDA]->init();
-        pc::logger()->trace("{} created CUDA backend", operator_name);
-      }
-    }
+    // initialise backends depending on what plugins are available
+    _backends.instantiate(backend_plugin_manager, operator_name);
 
     std::visit(
         [this](const auto &c) { set_current_backend(c.backend.value()); },
@@ -174,24 +150,22 @@ public:
 
   // switches to a backend and reports the one actually in use
   BackendType set_current_backend(BackendType requested_backend) {
-    auto it = _backends.find(requested_backend);
-    if (it != _backends.end()) {
-      _current_backend = it->second.get();
-      _current_backend_type = requested_backend;
+    const auto resolved_backend = _backends.resolve(requested_backend);
+    if (!resolved_backend) {
+      pc::logger()->error("{} has no backends loaded",
+                          std::string_view{plugin()});
+      _current_backend = nullptr;
       return _current_backend_type;
     }
 
-    pc::logger()->warn("{} backend is not loaded, staying on {}",
-                       backend_name(requested_backend),
-                       backend_name(_current_backend_type));
-
-    if (!_current_backend && !_backends.empty()) {
-      // default to first backend
-      auto first_loaded = _backends.begin();
-      _current_backend = first_loaded->second.get();
-      _current_backend_type = first_loaded->first;
+    if (*resolved_backend != requested_backend) {
+      pc::logger()->warn("{} backend is not loaded, using {}",
+                         backend_name(requested_backend),
+                         backend_name(*resolved_backend));
     }
 
+    _current_backend = _backends.get(*resolved_backend);
+    _current_backend_type = *resolved_backend;
     return _current_backend_type;
   }
 
@@ -199,8 +173,11 @@ public:
 
   bool has_backend() const { return _current_backend != nullptr; }
 
+  // the cpu backend is always available, whatever the operator is set to
+  backend::BackendPlugin *cpu_backend() const { return _backends.cpu(); }
+
   static constexpr std::string_view backend_name(BackendType backend_type) {
-    return backend_type == BackendType::CUDA ? "CUDA" : "CPU";
+    return backend::backend_name(backend_type);
   }
 
 protected:
@@ -212,9 +189,7 @@ protected:
     return _config.load();
   }
 
-  std::unordered_map<BackendType,
-                     Corrade::Containers::Pointer<backend::BackendPlugin>>
-      _backends;
+  backend::BackendSet _backends;
 
   backend::BackendPlugin *_current_backend = nullptr;
   BackendType _current_backend_type = BackendType::CPU;
