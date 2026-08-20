@@ -8,6 +8,7 @@
 
 when:
   - event: tag
+  - event: manual
 
 labels:
   platform: windows/amd64
