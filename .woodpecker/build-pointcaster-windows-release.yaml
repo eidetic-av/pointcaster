@@ -15,9 +15,8 @@ labels:
 
 variables:
   - &container_env
-    POINTCASTER_DEV_IMAGE: cr.pointcaster.net/pointcaster-dev
-    POINTCASTER_BUILD_VOLUME: pointcaster-ci-build
     DOCKER_HOST: npipe:////./pipe/dockerDesktopWindowsEngine
+  - &docker_run 'docker run -v ./:C:\pointcaster -v pointcaster-ci-build:"C:\pointcaster\build" cr.pointcaster.net/pointcaster-dev:latest'
 
 steps:
   - name: prepare
@@ -25,7 +24,7 @@ steps:
     environment: *container_env
     commands:
       - |
-        docker pull $env:POINTCASTER_DEV_IMAGE
+        docker pull cr.pointcaster.net/pointcaster-dev:latest
       - |
         docker volume rm --force $env:POINTCASTER_BUILD_VOLUME
 
@@ -33,17 +32,16 @@ steps:
     image: pwsh
     environment: *container_env
     commands:
-      - echo docker run -v ./:C:\pointcaster -v "$env:POINTCASTER_BUILD_VOLUME":"C:\pointcaster\build" $env:POINTCASTER_DEV_IMAGE cmake --preset windows-release
-      - docker run -v ./:C:\pointcaster -v "$env:POINTCASTER_BUILD_VOLUME":"C:\pointcaster\build" $env:POINTCASTER_DEV_IMAGE cmake --preset windows-release
+      - *docker_run cmake --preset windows-release
 
   - name: build
     image: pwsh
     environment: *container_env
     commands:
-      - docker run -v ./:C:\pointcaster -v "$env:POINTCASTER_BUILD_VOLUME":"C:\pointcaster\build" $env:POINTCASTER_DEV_IMAGE cmake --build build/windows-release --target package
+      - *docker_run cmake --build build/windows-release --target package
 
   - name: deploy
     image: pwsh
     environment: *container_env
     commands:
-      - docker run -v ./:C:\pointcaster -v "$env:POINTCASTER_BUILD_VOLUME":"C:\pointcaster\build" $env:POINTCASTER_DEV_IMAGE cmake --build build/windows-release --target deploy
+      - *docker_run cmake --build build/windows-release --target deploy
