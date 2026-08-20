@@ -12,8 +12,10 @@ ApplicationWindow {
     visible: true
     title: "Pointcaster"
 
-    minimumWidth: 1200
-    minimumHeight: 800
+    minimumWidth: 1024
+    minimumHeight: 600
+    width: 1600
+    height: 1066
 
     palette: ThemeColors.palette
 
@@ -83,9 +85,6 @@ ApplicationWindow {
         function onStreamChannelListHeightChanged() {
             workspaceModel.setUiStateValue("streamChannelListHeight", Workspace.streamChannelListHeight);
         }
-        function onSelectedSessionIndexChanged() {
-            workspaceModel.setUiStateValue("selectedSessionIndex", Workspace.selectedSessionIndex);
-        }
     }
 
     function toggleWindow(target) {
@@ -108,7 +107,7 @@ ApplicationWindow {
         uniqueName: "MainDockingArea"
 
         affinities: ["edit", "view"]
-        options: KDDW.KDDockWidgets.MainWindowOption_HasCentralGroup
+        options: KDDW.KDDockWidgets.MainWindowOption_HasCentralGroup | KDDW.KDDockWidgets.MainWindowOption_CentralWidgetGetsAllExtraSpace
 
         Component {
             id: sessionWindowComponent
@@ -131,12 +130,16 @@ ApplicationWindow {
                     deviceAdapters: workspaceModel ? workspaceModel.deviceAdapters : []
 
                     Component.onCompleted: Workspace.addSessionView(this)
-                    // TODO
-                    // Component.onDestroyed: Workspace.eraseSessionView(this)
+                    Component.onDestruction: Workspace.eraseSessionView(this)
                 }
 
                 onIsFocusedChanged: {
                     if (isFocused && sessionAdapter)
+                        workspaceModel.selectedSessionId = String(sessionAdapter.id);
+                }
+
+                onIsOpenChanged: {
+                    if (isOpen && isFocused && sessionAdapter)
                         workspaceModel.selectedSessionId = String(sessionAdapter.id);
                 }
             }
@@ -150,7 +153,8 @@ ApplicationWindow {
             onNodeSelected: {
                 // update session view UIs when a new device is selected
                 Workspace.sessionViews.forEach(sessionView => {
-                    sessionView.selectionTransformUpdate();
+                    if (sessionView)
+                        sessionView.selectionTransformUpdate();
                 });
             }
         }
@@ -187,6 +191,19 @@ ApplicationWindow {
 
         // id(string) -> KDDW.DockWidget
         property var sessionDockById: ({})
+
+        property bool initialSessionSyncDone: false
+
+        function focusSession(sessionId) {
+            const dock = sessionDockById[sessionId];
+            if (!dock)
+                return;
+            if (!dock.isOpen)
+                dock.open();
+            dock.setAsCurrentTab();
+            dock.raise();
+            workspaceModel.selectedSessionId = sessionId;
+        }
 
         function syncSessionWindows() {
             const sessionAdapters = workspaceModel.sessionAdapters;
@@ -235,6 +252,9 @@ ApplicationWindow {
 
                 // Place it (tab with central group)
                 addDockWidgetAsTab(newDock);
+
+                if (mainDockingArea.initialSessionSyncDone)
+                    newDock.setAsCurrentTab();
             }
 
             // Remove docks whose sessions no longer exist
@@ -245,40 +265,45 @@ ApplicationWindow {
                 const dock = sessionDockById[id];
                 console.log(`Removing dock for deleted session id=${id}`);
 
-                // Close/remove from layout first
-                try {
-                    if (dock && dock.isOpen)
-                        dock.forceClose();
-                } catch (e) {}
-
                 if (dock)
-                    dock.destroy();
+                    dock.deleteDockWidgetLater();
 
                 delete sessionDockById[id];
             }
         }
 
-        Component.onCompleted: {
-            addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(350, 350));
+        readonly property int sideColumnWidth: Math.round(350 * Scaling.uiScale)
 
-            // TODO unecessary?
+        Component.onCompleted: {
+            // initial layout
+
+            const sideColumnSize = Qt.size(mainDockingArea.sideColumnWidth, 0);
+
+            // -- right
+            addDockWidget(sessionPropertiesWindow, KDDW.KDDockWidgets.Location_OnRight, null, sideColumnSize);
+            sessionPropertiesWindow.addDockWidgetAsTab(publishersWindow);
+            sessionPropertiesWindow.addDockWidgetAsTab(streamingWindow);
+            sessionPropertiesWindow.setAsCurrentTab();
+
+            // -- left
+            addDockWidget(devicesWindow, KDDW.KDDockWidgets.Location_OnLeft, null, sideColumnSize);
+
             devicesWindow.addDockWidgetAsTab(recordingWindow);
             recordingWindow.close();
 
             devicesWindow.setAsCurrentTab();
 
-            addDockWidget(sessionPropertiesWindow, KDDW.KDDockWidgets.Location_OnRight, null, Qt.size(350, 350));
-            sessionPropertiesWindow.addDockWidgetAsTab(publishersWindow);
-            sessionPropertiesWindow.addDockWidgetAsTab(streamingWindow);
-            sessionPropertiesWindow.setAsCurrentTab();
-
             mainDockingArea.syncSessionWindows();
+            mainDockingArea.initialSessionSyncDone = true;
         }
 
         Connections {
             target: workspaceModel
             function onSessionAdaptersChanged() {
                 mainDockingArea.syncSessionWindows();
+            }
+            function onSessionAdded(sessionId) {
+                mainDockingArea.focusSession(sessionId);
             }
         }
     }

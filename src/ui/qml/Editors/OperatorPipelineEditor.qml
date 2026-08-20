@@ -33,14 +33,6 @@ Column {
 
     readonly property int operatorCount: operators.length
 
-    ConfigurationEditor {
-        id: pipelineConfigEditor
-        configAdapter: root.pipelineAdapter
-        workspace: root.workspace
-        flattenFields: true
-        width: parent.width
-    }
-
     Rectangle {
         id: sectionHeader
 

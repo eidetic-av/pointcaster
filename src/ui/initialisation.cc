@@ -61,6 +61,9 @@ initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
       Config::Flag_HideTitleBarWhenTabsVisible | Config::Flag_AlwaysShowTabs |
       Config::Flag_AllowReorderTabs | Config::Flag_DisableDoubleClick);
 
+  KDDockWidgets::InitialOption::s_defaultNeighbourSqueezeStrategy =
+      KDDockWidgets::NeighbourSqueezeStrategy::ImmediateNeighboursFirst;
+
   // initialise our font awesome singleton
   static fa::QtAwesome awesome(app);
   awesome.initFontAwesome();
