@@ -33,6 +33,7 @@ steps:
     image: pwsh
     environment: *container_env
     commands:
+      - echo docker run -v ./:C:\pointcaster -v "$env:POINTCASTER_BUILD_VOLUME":"C:\pointcaster\build" $env:POINTCASTER_DEV_IMAGE cmake --preset windows-release
       - docker run -v ./:C:\pointcaster -v "$env:POINTCASTER_BUILD_VOLUME":"C:\pointcaster\build" $env:POINTCASTER_DEV_IMAGE cmake --preset windows-release
 
   - name: build
