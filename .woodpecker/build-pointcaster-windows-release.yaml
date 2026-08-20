@@ -1,11 +1,3 @@
-# Windows release build, triggered by pushing a version tag e.g.:
-#
-#   git tag v0.2.2 && git push origin v0.2.2
-#
-# !! we are actually using straight up 'docker' commands here because
-# our windows agent is a 'local' agent. I couldn't get this to
-# work otherwise with windows containers...
-
 when:
   - event: tag
   - event: manual
@@ -16,32 +8,31 @@ labels:
 variables:
   - &container_env
     DOCKER_HOST: npipe:////./pipe/dockerDesktopWindowsEngine
-  - &docker_run 'docker run -v ./:C:\pointcaster -v pointcaster-ci-build:"C:\pointcaster\build" cr.pointcaster.net/pointcaster-dev:latest'
+    POINTCASTER_BUILD_VOLUME: pointcaster-ci-build
+    DOCKER_RUN: 'docker run --rm -v "$($pwd.Path):C:\pointcaster" -v "$($env:POINTCASTER_BUILD_VOLUME):C:\pointcaster\build" cr.pointcaster.net/pointcaster-dev:latest'
 
 steps:
   - name: prepare
     image: pwsh
     environment: *container_env
     commands:
-      - |
-        docker pull cr.pointcaster.net/pointcaster-dev:latest
-      - |
-        docker volume rm --force $env:POINTCASTER_BUILD_VOLUME
+      - docker pull cr.pointcaster.net/pointcaster-dev:latest
+      - docker volume rm --force $env:POINTCASTER_BUILD_VOLUME
 
   - name: configure
     image: pwsh
     environment: *container_env
     commands:
-      - *docker_run cmake --preset windows-release
+      - Invoke-Expression "$env:DOCKER_RUN cmake --preset windows-release"
 
   - name: build
     image: pwsh
     environment: *container_env
     commands:
-      - *docker_run cmake --build build/windows-release --target package
+      - Invoke-Expression "$env:DOCKER_RUN cmake --build build/windows-release --target package"
 
   - name: deploy
     image: pwsh
     environment: *container_env
     commands:
-      - *docker_run cmake --build build/windows-release --target deploy
+      - Invoke-Expression "$env:DOCKER_RUN cmake --build build/windows-release --target deploy"
