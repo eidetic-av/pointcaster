@@ -1,0 +1,14 @@
+services:
+  dev-win:
+    image: cr.pointcaster.net/pointcaster-dev:latest
+    stdin_open: true
+    tty: true
+    working_dir: C:\pointcaster
+    volumes: 
+      - .:C:\pointcaster
+      - pointcaster-windows-build-vol:C:\pointcaster\build
+      - .\build\windows-release\install:C:\pointcaster\build\install
+    entrypoint: ["powershell"]
+
+volumes:
+  pointcaster-windows-build-vol:
