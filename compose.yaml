@@ -2,7 +2,7 @@ services:
   dev:
     platform: "linux/amd64"
     image: cr.pointcaster.net/pointcaster-dev:latest-linux
-    entrypoint: ["fish"]
+    command: fish
     stdin_open: true
     tty: true
     working_dir: /pointcaster
@@ -11,7 +11,7 @@ services:
   dev-win:
     platform: "windows/amd64"
     image: cr.pointcaster.net/pointcaster-dev:latest-windows
-    entrypoint: ["powershell"]
+    command: powershell
     stdin_open: true
     tty: true
     working_dir: C:\pointcaster
