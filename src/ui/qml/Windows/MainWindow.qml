@@ -14,8 +14,8 @@ ApplicationWindow {
 
     minimumWidth: 1024
     minimumHeight: 600
-    width: 1600
-    height: 1066
+    width: 1440
+    height: 900
 
     palette: ThemeColors.palette
 

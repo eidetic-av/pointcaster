@@ -39,6 +39,11 @@ KDDW.DockWidget {
             }
             spacing: Math.round(10 * Scaling.uiScale)
 
+            SelectedSessionLabel {
+                workspace: root.workspace
+                Layout.fillWidth: true
+            }
+
             PaddedScrollView {
                 id: scrollView
                 Layout.fillWidth: true
@@ -48,25 +53,58 @@ KDDW.DockWidget {
 
                 Column {
                     width: scrollView.availableWidth
-                    spacing: sessionConfigEditor.groupSpacing
 
-                    ConfigurationEditor {
-                        id: sessionConfigEditor
-                        configAdapter: root.sessionAdapter
-                        workspace: root.workspace
-                        flattenFields: false
-                        width: parent.width
-                    }
+                    // render the editors for all sessions,
+                    // just flick between which are visible or not
+                    Repeater {
+                        model: root.workspace ? root.workspace.sessionAdapters : []
 
-                    OperatorPipelineEditor {
-                        workspace: root.workspace
-                        operators: root.operators
-                        pipelineAdapter: root.operator_pipelineAdapter
-                        hostPath: root.sessionAdapter ? String(root.sessionAdapter.configPath) : ""
-                        width: parent.width
+                        Column {
+                            id: sessionEditor
 
-                        onAddOperatorRequested: operatorType => root.workspace.addOperatorToSession(root.sessionId, operatorType)
-                        onRemoveOperatorRequested: operatorIndex => root.workspace.removeOperatorFromSession(root.sessionId, operatorIndex)
+                            required property var modelData
+
+                            readonly property string editorSessionId: modelData ? String(modelData.id) : ""
+
+                            property var sessionOperators: []
+
+                            function refreshOperators() {
+                                sessionOperators = root.workspace ? root.workspace.sessionOperatorAdaptersFor(sessionEditor.editorSessionId) : [];
+                            }
+
+                            Component.onCompleted: refreshOperators()
+
+                            Connections {
+                                target: root.workspace
+                                function onSessionOperatorsChanged(sessionId) {
+                                    if (sessionId === sessionEditor.editorSessionId)
+                                        sessionEditor.refreshOperators();
+                                }
+                            }
+
+                            width: scrollView.availableWidth
+                            visible: modelData !== null && modelData === root.sessionAdapter
+                            spacing: sessionConfigEditor.groupSpacing
+
+                            ConfigurationEditor {
+                                id: sessionConfigEditor
+                                configAdapter: sessionEditor.modelData
+                                workspace: root.workspace
+                                flattenFields: false
+                                width: parent.width
+                            }
+
+                            OperatorPipelineEditor {
+                                workspace: root.workspace
+                                operators: sessionEditor.sessionOperators
+                                pipelineAdapter: sessionEditor.modelData && sessionEditor.modelData.operator_pipelineAdapter ? sessionEditor.modelData.operator_pipelineAdapter : null
+                                hostPath: sessionEditor.modelData ? String(sessionEditor.modelData.configPath) : ""
+                                width: parent.width
+
+                                onAddOperatorRequested: operatorType => root.workspace.addOperatorToSession(sessionEditor.editorSessionId, operatorType)
+                                onRemoveOperatorRequested: operatorIndex => root.workspace.removeOperatorFromSession(sessionEditor.editorSessionId, operatorIndex)
+                            }
+                        }
                     }
                 }
             }

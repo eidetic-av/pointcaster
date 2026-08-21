@@ -73,6 +73,8 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   // instantiate session operator pipelines
   sync_sessions();
 
+  refresh_device_session_membership();
+
   rebuild_config_registry();
 
   // initialise workspace instances
@@ -127,6 +129,7 @@ void Workspace::apply_new_config(const WorkspaceConfiguration &new_config,
   }
   if (should_sync_devices) sync_devices();
   sync_sessions();
+  refresh_device_session_membership();
   rebuild_config_registry();
   if (osc_receiver) osc_receiver->reconfigure();
 }
@@ -288,29 +291,60 @@ void Workspace::sync_sessions() {
     session_configs = config.sessions;
   }
 
-  // create any new sessions, and push updated config into existing ones so
-  // their operator set / pipeline reflects the latest configuration
-  for (auto &session_config : session_configs) {
-    auto it = sessions.find(session_config.id);
-    if (it == sessions.end()) {
-      sessions.emplace(session_config.id,
-                       std::make_unique<Session>(*this, session_config));
-    } else if (it->second) {
-      it->second->update_config(session_config);
+  std::vector<std::unique_ptr<Session>> deleted_sessions;
+  {
+    std::scoped_lock lock(sessions_access);
+
+    for (auto &session_config : session_configs) {
+      auto it = sessions.find(session_config.id);
+      if (it == sessions.end()) {
+        // create any new sessions
+        sessions.emplace(session_config.id,
+                         std::make_unique<Session>(*this, session_config));
+      } else if (it->second) {
+        // push updated config into existing sessions
+        it->second->update_config(session_config);
+      }
+    }
+
+    for (auto it = sessions.begin(); it != sessions.end();) {
+      const auto session_config = std::ranges::find(session_configs, it->first,
+                                                    &SessionConfiguration::id);
+      if (it->second && session_config != session_configs.end()) {
+        it++;
+        continue;
+      }
+      // extra sessions that aren't in the config must have been deleted
+      deleted_sessions.push_back(std::move(it->second));
+      it = sessions.erase(it);
     }
   }
 
-  // erase any removed sessions
-  std::vector<std::string> sessions_to_erase;
-  for (auto &[session_id, session] : sessions) {
-    auto it = std::ranges::find(session_configs, session_id,
-                                &SessionConfiguration::id);
-    if (!session || it == session_configs.end())
-      sessions_to_erase.emplace_back(session_id);
-  }
-  for (auto &session_id : sessions_to_erase) {
+  for (auto &session : deleted_sessions) {
     std::scoped_lock plugin_lock(plugin_manager_access());
-    sessions.erase(session_id);
+    session.reset();
+  }
+}
+
+void Workspace::refresh_device_session_membership() {
+  std::vector<std::pair<devices::DevicePlugin *, bool>> changed_devices;
+  {
+    std::scoped_lock lock(config_access);
+    for (auto &device : devices) {
+      if (!device) continue;
+      bool in_any_session = false;
+      std::visit(
+          [&](auto &device_config) {
+            in_any_session = devices::in_any_session(config, device_config.id);
+          },
+          device->config_variant());
+      if (in_any_session == device->in_any_session()) continue;
+      device->set_in_any_session(in_any_session);
+      changed_devices.emplace_back(device.get(), in_any_session);
+    }
+  }
+  for (auto &[device, included] : changed_devices) {
+    device->on_session_membership_changed(included);
   }
 }
 

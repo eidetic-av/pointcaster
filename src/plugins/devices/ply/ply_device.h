@@ -58,6 +58,8 @@ public:
   bool load(std::string_view url);
   void reload();
 
+  void on_session_membership_changed(bool in_any_session) override;
+
   void tick(float delta_time);
   bool is_sequence() const override { return _sequence_loader.has_value(); }
   size_t frame_count() const override;

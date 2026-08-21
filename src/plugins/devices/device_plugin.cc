@@ -71,22 +71,6 @@ backend::BackendPlugin *DevicePlugin::cpu_backend() const {
   return _backends.cpu();
 }
 
-bool DevicePlugin::active() {
-  return std::visit(
-      [this](auto &device_config) {
-        return effective_active(_workspace->config, device_config.id);
-      },
-      _config);
-}
-
-bool DevicePlugin::rendering() {
-  return std::visit(
-      [this](auto &device_config) {
-        return effective_render(_workspace->config, device_config.id);
-      },
-      _config);
-}
-
 void DevicePlugin::update_config(const DeviceConfigurationVariant &config) {
   _config = config;
   std::visit(

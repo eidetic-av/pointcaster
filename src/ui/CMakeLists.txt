@@ -16,6 +16,9 @@ add_library(pointcaster_ui
     models/stream_source.h
     models/stream_source.cc
     window/view_factory.cc
+    window/tab_bar_view.cc
+    window/tab_drop.cc
+    window/tab_drop_indicators.cc
 )
 add_library(pointcaster::ui ALIAS pointcaster_ui)
 

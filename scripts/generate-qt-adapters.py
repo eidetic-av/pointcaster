@@ -173,6 +173,8 @@ VERBATIM_RE = re.compile(
     re.MULTILINE,
 )
 
+STANDALONE_COMMENT_RE = re.compile(r"^[ \t]*//[^\n]*$", re.MULTILINE)
+
 # for matching `using X = Y;'
 USING_ALIAS_RE = re.compile(r"[ \t]*using\s+(\w+)\s*=\s*([^;]+);[ \t]*\n?")
 
@@ -696,7 +698,7 @@ def build_context(
         inner_context.tag = inner_tags.get(inner_name, "")
         context.inner[inner_name] = (inner_qualified, inner_context)
 
-    context.body = VERBATIM_RE.sub("", body)
+    context.body = STANDALONE_COMMENT_RE.sub("", VERBATIM_RE.sub("", body))
     return context
 
 

@@ -19,7 +19,7 @@ namespace pc {
 // simulation state for the running application.
 struct WorkspaceConfiguration {
   std::string id;
-  rfl::DefaultVal<int> selectedSessionIndex = 0;
+  rfl::DefaultVal<std::string> selectedSessionId;
   rfl::DefaultVal<int> selectedDeviceIndex = 0;
   std::vector<SessionConfiguration> sessions{};
   std::vector<devices::DeviceConfigurationVariant> devices{};

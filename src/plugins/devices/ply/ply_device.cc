@@ -141,6 +141,22 @@ bool PlyDevice::load_directory(const std::filesystem::path &dir) {
   return true;
 }
 
+void PlyDevice::on_session_membership_changed(bool in_any_session) {
+  if (!in_any_session) return;
+
+  std::string path_to_load;
+  {
+    std::lock_guard lock(_device_mutex);
+    if (!std::holds_alternative<PlyDeviceConfiguration>(_config)) return;
+    const auto &file_config =
+        std::get<PlyDeviceConfiguration>(_config).file.value();
+    if (file_config.path.empty() || file_config.path == _loaded_file_path)
+      return;
+    path_to_load = file_config.path;
+  }
+  load(path_to_load);
+}
+
 void PlyDevice::reload() {
   const auto &config = std::get<PlyDeviceConfiguration>(_config);
   load(config.file.value().path);
@@ -266,8 +282,7 @@ void PlyDevice::on_config_field_changed(std::string_view path) {
   // transform / color / operator changes... trigger re-transform current frame
   if (path.empty() || path.find("transform") != std::string_view::npos ||
       path.find("color") != std::string_view::npos ||
-      path.find("operator") != std::string_view::npos ||
-      path.find("render") != std::string_view::npos) {
+      path.find("operator") != std::string_view::npos) {
     apply_transform();
   }
 }
@@ -288,10 +303,10 @@ void PlyDevice::update_config(
     }
     const auto &cfg = std::get<PlyDeviceConfiguration>(_config);
     const auto &file_config = cfg.file.value();
-    pc::logger()->trace(
-        "PlyDevice::update_config: id='{}' active={} path='{}' loaded='{}'",
-        cfg.id, active(), file_config.path, _loaded_file_path);
-    if (active() && !file_config.path.empty() &&
+    pc::logger()->trace("PlyDevice::update_config: id='{}' path='{}' "
+                        "loaded='{}'",
+                        cfg.id, file_config.path, _loaded_file_path);
+    if (in_any_session() && !file_config.path.empty() &&
         file_config.path != _loaded_file_path) {
       path_to_load = file_config.path;
     }
@@ -314,7 +329,7 @@ void PlyDevice::update_config(
         auto now = steady_clock::now();
         float dt = duration<float>(now - last).count();
         last = now;
-        tick(dt);
+        if (in_any_session()) tick(dt);
       }
     });
   }
@@ -372,15 +387,12 @@ void PlyDevice::on_pipeline_output(
     operators::PipelineFramePtr output_frame) {
   if (!output_frame) return;
   auto cloud = output_frame->cloud;
-  if (rendering()) {
-    if (!cloud) return;
-    if (auto *cpu = cpu_backend()) {
-      auto buf = std::make_shared<std::vector<std::byte>>(cloud->size() * 16);
-      cpu->pack_render_buffer(*cloud, *buf);
-      _latest_render_data.store(std::move(buf), std::memory_order_release);
-    }
-  } else {
-    _latest_render_data.store(nullptr, std::memory_order_release);
+  if (!cloud) return;
+  // TODO maybe we need conditional rendering?
+  if (auto *cpu = cpu_backend()) {
+    auto buf = std::make_shared<std::vector<std::byte>>(cloud->size() * 16);
+    cpu->pack_render_buffer(*cloud, *buf);
+    _latest_render_data.store(std::move(buf), std::memory_order_release);
   }
   _current_point_cloud.store(std::move(cloud), std::memory_order_release);
   notify_point_cloud_updated();

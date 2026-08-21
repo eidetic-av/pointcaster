@@ -9,8 +9,6 @@ namespace pc::devices {
 struct DeviceGroupConfiguration {
   std::string id;                          // @hidden
   rfl::DefaultVal<std::string> label;      // @hidden
-  rfl::DefaultVal<bool> active = true;     // @hidden
-  rfl::DefaultVal<bool> render = true;     // @hidden
   rfl::DefaultVal<bool> collapsed = false; // @hidden
   rfl::DefaultVal<std::string> parent_id;  // @hidden
   rfl::DefaultVal<int> order = 0;          // @hidden

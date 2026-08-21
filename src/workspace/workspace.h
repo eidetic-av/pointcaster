@@ -41,8 +41,7 @@ namespace receivers {
 class OscReceiver;
 }
 
-// Workspace is the application, which can read and write the
-// WorkspaceConfiguration.
+// the Workspace is what hosts devices and runs sessions
 class Workspace {
 public:
   WorkspaceConfiguration config;
@@ -69,6 +68,9 @@ public:
       operator_plugin_manager;
   std::vector<std::string> loaded_operator_plugin_names{};
 
+  std::unordered_map<std::string, std::unique_ptr<Session>> sessions;
+  std::mutex sessions_access;
+
   std::unique_ptr<recorder::SessionRecorder> session_recorder;
   std::unique_ptr<networking::PointStreamer> point_streamer;
 
@@ -78,20 +80,23 @@ public:
 
   std::unique_ptr<receivers::OscReceiver> osc_receiver;
 
-  std::unordered_map<std::string, std::unique_ptr<Session>> sessions;
-
   explicit Workspace(const WorkspaceConfiguration &initial);
-  // defined in workspace.cc, where the forward-declared members are complete
   ~Workspace();
 
-  // updates config and syncs (creates/destroys) device plugin instances
+  Workspace(const Workspace &) = delete;
+  Workspace &operator=(const Workspace &) = delete;
+  Workspace(Workspace &&) = delete;
+  Workspace &operator=(Workspace &&) = delete;
+
+  // updates config and syncs (creates/destroys) plugin instances
   void apply_new_config(const WorkspaceConfiguration &new_config,
                         bool sync_devices = true);
 
-  // sync device plugin instances to match config.devices
+  // sync instances to match config
   void sync_devices();
-
   void sync_sessions();
+
+  void refresh_device_session_membership();
 
   void rebuild_config_registry();
 
