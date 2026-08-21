@@ -1,14 +1,23 @@
 services:
+  dev:
+    platform: "linux/amd64"
+    image: cr.pointcaster.net/pointcaster-dev:latest-linux
+    entrypoint: ["fish"]
+    stdin_open: true
+    tty: true
+    working_dir: /pointcaster
+    volumes: 
+      - .:/pointcaster
   dev-win:
-    image: cr.pointcaster.net/pointcaster-dev:latest
+    platform: "windows/amd64"
+    image: cr.pointcaster.net/pointcaster-dev:latest-windows
+    entrypoint: ["powershell"]
     stdin_open: true
     tty: true
     working_dir: C:\pointcaster
     volumes: 
       - .:C:\pointcaster
       - pointcaster-windows-build-vol:C:\pointcaster\build
-      - .\build\windows-release\install:C:\pointcaster\build\install
-    entrypoint: ["powershell"]
-
+      - .\build\windows-release\install:C:\pointcaster\build\windows-release\install
 volumes:
   pointcaster-windows-build-vol:
