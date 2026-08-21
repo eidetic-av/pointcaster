@@ -143,8 +143,9 @@ public:
                                 const QString &target_id = "",
                                 const QString &target_type_label = "");
   Q_INVOKABLE void deleteDevice(const QString &target_id);
-  Q_INVOKABLE void deleteSelectedDevice();
+  Q_INVOKABLE void deleteSelectedDeviceNode();
   Q_INVOKABLE void duplicateDeviceNode(const QString &node_id);
+  Q_INVOKABLE void duplicateSelectedDeviceNode();
   Q_INVOKABLE void setDeviceLabel(const QString &device_id,
                                   const QString &new_label);
 
@@ -167,6 +168,25 @@ public:
 
   Q_INVOKABLE SessionAdapter *
   sessionPointCloudAdapterFor(const QString &sessionId) const;
+
+  Q_INVOKABLE QList<OperatorAdapter *>
+  sessionOperatorAdaptersFor(const QString &sessionId) const;
+
+  Q_INVOKABLE QString addSession();
+  Q_INVOKABLE void removeSession(const QString &sessionId);
+  Q_INVOKABLE void duplicateSession(const QString &sessionId);
+  Q_INVOKABLE void setSessionLabel(const QString &sessionId,
+                                   const QString &label);
+  Q_INVOKABLE QString sessionIdForLabel(const QString &label) const;
+
+  // whether a device or group node is switched on for the selected session
+  Q_INVOKABLE bool sessionDeviceEnabled(const QString &node_id) const;
+  Q_INVOKABLE void setSessionDeviceEnabled(const QString &node_id,
+                                           bool enabled);
+
+  // whether one session's view draws a rendered output path
+  Q_INVOKABLE bool sessionDrawsRenderPath(const QString &sessionId,
+                                          const QString &path) const;
 
   QVariant deviceAdapters() const;
 
@@ -200,11 +220,8 @@ public:
                                   const QString &new_parent_id,
                                   const QString &before_node_id = "");
 
-  Q_INVOKABLE void createDeviceGroup(const QString &label,
-                                     const QString &parent_id = "");
-  Q_INVOKABLE void deleteDeviceGroup(const QString &group_id);
-  Q_INVOKABLE void setDeviceGroupActive(const QString &group_id, bool active);
-  Q_INVOKABLE void setDeviceGroupRender(const QString &group_id, bool render);
+  Q_INVOKABLE void createDeviceGroup(const QString &parent_id = "");
+  Q_INVOKABLE bool deleteDeviceGroup(const QString &group_id);
   Q_INVOKABLE void setDeviceGroupCollapsed(const QString &group_id,
                                            bool collapsed);
   Q_INVOKABLE void setDeviceGroupLabel(const QString &group_id,
@@ -312,6 +329,8 @@ signals:
 
   void sessionAdaptersChanged();
   void selectedSessionChanged();
+  void sessionAdded(const QString &sessionId);
+  void sessionOperatorsChanged(const QString &sessionId);
 
   void deviceAdaptersChanged();
   void deviceVariantNamesChanged();
@@ -404,6 +423,9 @@ private:
   // Tracks whether an existing SessionConfigurationAdapter is still bound to
   // a valid underlying SessionConfiguration object address.
   QHash<QString, const pc::SessionConfiguration *> _sessionConfigPtrById;
+
+  QHash<QString, QPointer<pc::SessionConfigurationAdapter>> _sessionAdapterById;
+  QHash<QString, QString> _sessionLabelById;
 
   // Currently selected (focused) session, and the per-session operator
   // adapters wrapping each session's live OperatorPlugin instances.

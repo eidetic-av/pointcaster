@@ -24,9 +24,6 @@ struct OrbbecDeviceConfiguration {
   rfl::DefaultVal<std::string> parent_id; // @hidden
   rfl::DefaultVal<int> order = 0;         // @hidden
 
-  rfl::DefaultVal<bool> active = true; // @hidden
-  rfl::DefaultVal<bool> render = true; // @hidden
-
   // enumerations shared among sensor configuration types
 
   enum class DepthMode { Narrow, Wide };
@@ -87,12 +84,11 @@ struct OrbbecDeviceConfiguration {
   rfl::DefaultVal<SensorConfigurationVariant> sensor = {
       RgbdSensorConfiguration{}};
 
-  rfl::DefaultVal<NetworkConfiguration> network;
+  rfl::DefaultVal<NetworkConfiguration> network; // @folded
   rfl::DefaultVal<TransformConfiguration> transform;
-  rfl::DefaultVal<ColorTransformConfiguration> color;
+  rfl::DefaultVal<ColorTransformConfiguration> color; // @folded
 
-  rfl::DefaultVal<operators::ConcurrentOperatorPipelineConfiguration>
-      operator_pipeline;                                          // @hidden
+  rfl::DefaultVal<operators::ConcurrentOperatorPipelineConfiguration> operator_pipeline; // @hidden
   std::vector<operators::OperatorConfigurationVariant> operators; // @hidden
 
   using DeviceType = OrbbecDevice;

@@ -6,6 +6,7 @@
 #include <memory>
 #include <pipeline/concurrent_operator_pipeline.h>
 #include <plugins/devices/device_plugin.h>
+#include <plugins/devices/device_tree.h>
 #include <stop_token>
 #include <workspace/workspace.h>
 
@@ -49,6 +50,22 @@ void Session::update_config(const SessionConfiguration &config) {
   }
 
   _force_reprocess.store(true, std::memory_order_release);
+}
+
+bool Session::includes_device(const WorkspaceConfiguration &workspace_config,
+                              const SessionConfiguration &session_config,
+                              devices::DevicePlugin &device) {
+  return devices::effective_session_enabled(
+      workspace_config, session_config,
+      std::string(devices::device_id_from_variant(device.config())));
+}
+
+bool Session::includes_device(devices::DevicePlugin &device) const {
+  const auto &session_configs = _workspace->config.sessions;
+  auto session_config =
+      std::ranges::find(session_configs, id, &SessionConfiguration::id);
+  if (session_config == session_configs.end()) return false;
+  return includes_device(_workspace->config, *session_config, device);
 }
 
 std::vector<camera::CameraFrame> Session::latest_camera_frames() const {
@@ -147,9 +164,11 @@ void Session::scrub_devices(int session_frame) {
   std::vector<devices::DevicePlugin *> device_ptrs;
   {
     std::lock_guard lock(_workspace->config_access);
-    for (auto &device : _workspace->devices)
-      if (device && !device->is_discovery_instance())
-        device_ptrs.push_back(device.get());
+    for (auto &device : _workspace->devices) {
+      if (!device || device->is_discovery_instance()) continue;
+      if (!includes_device(*device)) continue;
+      device_ptrs.push_back(device.get());
+    }
   }
 
   // Use the absolute session frame as the offset into each device's loop, so
@@ -158,7 +177,7 @@ void Session::scrub_devices(int session_frame) {
   const int session_offset = std::max(0, session_frame);
 
   for (auto *device : device_ptrs) {
-    if (!device->active() || !device->is_sequence()) continue;
+    if (!device->is_sequence()) continue;
     const int sequence_frame_count = static_cast<int>(device->frame_count());
     if (sequence_frame_count <= 0) continue;
 
@@ -280,13 +299,17 @@ void Session::update_loop(std::stop_token stop_token) {
     bool has_sequence = false;
     {
       std::lock_guard lock(_workspace->config_access);
-      auto &sessions = _workspace->config.sessions;
-      auto it = std::ranges::find(sessions, id, &SessionConfiguration::id);
-      if (it == sessions.end()) break; // session removed: exit loop
-      update_hz = it->operator_pipeline.value().update_hz.value();
+      auto &session_configs = _workspace->config.sessions;
+      auto session_config =
+          std::ranges::find(session_configs, id, &SessionConfiguration::id);
+      // session removed: exit loop
+      if (session_config == session_configs.end()) break;
+      update_hz = session_config->operator_pipeline.value().update_hz.value();
 
       for (auto &device : _workspace->devices) {
         if (!device || device->is_discovery_instance()) continue;
+        if (!includes_device(_workspace->config, *session_config, *device))
+          continue;
         device_ptrs.push_back(device.get());
         if (device->is_sequence()) {
           has_sequence = true;
@@ -320,11 +343,7 @@ void Session::update_loop(std::stop_token stop_token) {
     // actually changed (or a config edit forced a reprocess).
     std::vector<std::shared_ptr<PointCloud>> clouds;
     clouds.reserve(device_ptrs.size());
-    for (auto *device : device_ptrs) {
-      if (device->active()) {
-        clouds.push_back(device->point_cloud());
-      }
-    }
+    for (auto *device : device_ptrs) clouds.push_back(device->point_cloud());
     bool changed = clouds.size() != last_clouds.size();
     if (!changed) {
       for (size_t i = 0; i < clouds.size(); ++i) {
@@ -348,7 +367,14 @@ void Session::update_loop(std::stop_token stop_token) {
         aggregated->colors.insert(aggregated->colors.end(),
                                   cloud->colors.begin(), cloud->colors.end());
       }
-      if (!aggregated->empty()) feed_operator_pipeline(std::move(aggregated));
+      if (!aggregated->empty()) {
+        feed_operator_pipeline(std::move(aggregated));
+      } else if (_current_point_cloud.load(std::memory_order_acquire)) {
+        // nothing feeds this session, so clear its cloud
+        _current_point_cloud.store(nullptr, std::memory_order_release);
+        _latest_render_data.store(nullptr, std::memory_order_release);
+        notify_point_cloud_updated();
+      }
     }
 
     // advance the playback master clock (scrubs all sequence devices).

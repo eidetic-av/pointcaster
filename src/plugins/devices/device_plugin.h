@@ -122,8 +122,14 @@ public:
         .parent_path();
   }
 
-  POINTCASTER_API bool active();
-  POINTCASTER_API bool rendering();
+  bool in_any_session() const {
+    return _in_any_session.load(std::memory_order_acquire);
+  }
+  void set_in_any_session(bool value) {
+    _in_any_session.store(value, std::memory_order_release);
+  }
+
+  virtual void on_session_membership_changed(bool /*in_any_session*/) {}
 
   POINTCASTER_API BackendType current_backend_type() const;
   POINTCASTER_API backend::BackendPlugin *current_backend() const;
@@ -287,6 +293,7 @@ protected:
   std::function<void(DeviceStatus)> _status_callback;
   std::function<void()> _point_cloud_updated_callback;
   std::atomic_bool _callbacks_detached{false};
+  std::atomic_bool _in_any_session{true};
   bool _is_discovery_instance = false;
 
   std::atomic<size_t> _process_tasks_in_flight{0};

@@ -3,6 +3,7 @@
 #include <config/transform_config.h>
 #include <pointcaster_api.h>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -11,11 +12,17 @@
 
 namespace pc::devices {
 
-POINTCASTER_API bool effective_render(const pc::WorkspaceConfiguration &config,
-                                      const std::string &node_id);
+// whether a node is switched on for a given session
+POINTCASTER_API bool
+effective_session_enabled(const pc::WorkspaceConfiguration &config,
+                          const pc::SessionConfiguration &session_config,
+                          const std::string &node_id);
 
-POINTCASTER_API bool effective_active(const pc::WorkspaceConfiguration &config,
-                                      const std::string &node_id);
+POINTCASTER_API bool in_any_session(const pc::WorkspaceConfiguration &config,
+                                    const std::string &node_id);
+
+POINTCASTER_API std::vector<std::string>
+all_node_ids(const pc::WorkspaceConfiguration &config);
 
 // this takes a device or group id and will give the accumulated transform for
 // its ancestors... that is what to offset its own local transform by...

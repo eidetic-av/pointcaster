@@ -29,46 +29,16 @@ ToolBar {
     contentItem: RowLayout {
         spacing: Math.round(6 * Scaling.uiScale)
 
-        Item {
+        SelectedSessionLabel {
+            id: sessionLabel
+            workspace: root.workspace
             Layout.fillWidth: true
             Layout.minimumWidth: 0
+        }
 
-            implicitHeight: label.implicitHeight + underline.height
-
-            TextMetrics {
-                id: textMetrics
-                font: label.font
-                text: label.text
-            }
-
-            Label {
-                id: label
-                text: "session_1"
-
-                font: root.font
-                color: ThemeColors.text
-                opacity: 0.9
-
-                elide: Text.ElideRight
-                verticalAlignment: Text.AlignVCenter
-                topPadding: Math.round(3 * Scaling.uiScale)
-
-                anchors.left: parent.left
-                anchors.right: parent.right
-            }
-
-            Rectangle {
-                id: underline
-                height: 1
-                width: Math.min(textMetrics.width, label.width)   // respects eliding
-                color: ThemeColors.highlight
-
-                anchors {
-                    left: label.left
-                    top: label.bottom
-                    topMargin: Math.round(1 * Scaling.uiScale)
-                }
-            }
+        Item {
+            visible: !sessionLabel.visible
+            Layout.fillWidth: true
         }
 
         ToolButton {
@@ -102,6 +72,50 @@ ToolBar {
         }
 
         ToolButton {
+            id: addGroupButton
+
+            Layout.preferredWidth: Math.round(25 * Scaling.uiScale)
+            Layout.preferredHeight: Math.round(25 * Scaling.uiScale)
+
+            icon.source: FontAwesome.icon("solid/folder-plus")
+            icon.width: Math.round(22 * Scaling.uiScale)
+            icon.height: Math.round(22 * Scaling.uiScale)
+
+            onClicked: {
+                if (root.workspace) root.workspace.createDeviceGroup();
+            }
+
+            InfoToolTip {
+                visible: parent.hovered
+                textValue: "Add new device group"
+            }
+        }
+
+        ToolButton {
+            id: duplicateButton
+
+            Layout.preferredWidth: Math.round(25 * Scaling.uiScale)
+            Layout.preferredHeight: Math.round(25 * Scaling.uiScale)
+
+            icon.source: FontAwesome.icon("solid/clone")
+            icon.width: Math.round(20 * Scaling.uiScale)
+            icon.height: Math.round(20 * Scaling.uiScale)
+
+            enabled: root.workspace && root.workspace.selectedNodeId != ""
+            opacity: enabled ? 1.0 : 0.4
+
+            onClicked: {
+                if (!root.workspace) return;
+                root.workspace.duplicateSelectedDeviceNode();
+            }
+
+            InfoToolTip {
+                visible: parent.hovered
+                textValue: "Duplicate selected device"
+            }
+        }
+
+        ToolButton {
             Layout.preferredWidth: Math.round(25 * Scaling.uiScale)
             Layout.preferredHeight: Math.round(25 * Scaling.uiScale)
 
@@ -109,12 +123,12 @@ ToolBar {
             icon.width: Math.round(17 * Scaling.uiScale)
             icon.height: Math.round(17 * Scaling.uiScale)
 
-            enabled: root.workspace && root.workspace.deviceAdapters.length > 0
+            enabled: root.workspace && root.workspace.selectedNodeId != ""
             opacity: enabled ? 1.0 : 0.4
 
             onClicked: {
                 if (root.workspace)
-                    root.workspace.deleteSelectedDevice();
+                    root.workspace.deleteSelectedDeviceNode();
             }
 
             InfoToolTip {

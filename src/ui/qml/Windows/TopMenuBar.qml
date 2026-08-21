@@ -37,6 +37,7 @@ MenuBar {
         Action {
             text: qsTr("New &Session")
             shortcut: StandardKey.AddTab
+            onTriggered: workspaceModel.addSession()
         }
 
         MenuSeparator {}

@@ -20,9 +20,14 @@
 namespace pc {
 
 class Workspace;
+struct WorkspaceConfiguration;
 
 namespace operators {
 class OperatorPlugin;
+}
+
+namespace devices {
+class DevicePlugin;
 }
 
 class Session : public operators::OperatorHost {
@@ -152,6 +157,11 @@ private:
   void notify_playback_changed() {
     if (_playback_changed_callback) _playback_changed_callback();
   }
+
+  static bool includes_device(const WorkspaceConfiguration &workspace_config,
+                              const SessionConfiguration &session_config,
+                              devices::DevicePlugin &device);
+  bool includes_device(devices::DevicePlugin &device) const;
 
   void update_loop(std::stop_token stop_token);
   void advance_playback(double dt_seconds);

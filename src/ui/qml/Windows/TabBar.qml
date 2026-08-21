@@ -23,15 +23,42 @@ KDDW.TabBarBase {
     //   - tabCount means the "+" button
     property int keyboardFocusIndex: 0
 
-    // TODO: wire these later to real behaviour
+    // the tab being renamed in place, or -1
+    property int renamingIndex: -1
+
+    // set from while a tab is dragged along the strip
+    property int reorderTabIndex: -1
+    property int reorderInsertIndex: -1
+
+    // tabs in the central group are sessions, addressed by the label they show
+    function sessionIdAtIndex(index) {
+        const item = tabItemAt(index);
+        if (!item || !workspaceModel)
+            return "";
+        return workspaceModel.sessionIdForLabel(String(item.tabTitle));
+    }
+
     function requestRenameTab(index) {
-        console.log("rename tab", index);
+        root.renamingIndex = index;
     }
     function requestDuplicateTab(index) {
-        console.log("duplicate tab", index);
+        const sessionId = sessionIdAtIndex(index);
+        if (sessionId.length > 0)
+            workspaceModel.duplicateSession(sessionId);
     }
     function requestDeleteTab(index) {
-        console.log("delete tab", index);
+        const sessionId = sessionIdAtIndex(index);
+        if (sessionId.length > 0)
+            workspaceModel.removeSession(sessionId);
+    }
+    function commitRename(index, text) {
+        // losing focus and pressing return both land here
+        if (root.renamingIndex !== index)
+            return;
+        root.renamingIndex = -1;
+        const sessionId = sessionIdAtIndex(index);
+        if (sessionId.length > 0)
+            workspaceModel.setSessionLabel(sessionId, text);
     }
 
     Menu {
@@ -54,7 +81,8 @@ KDDW.TabBarBase {
 
         Action {
             text: qsTr("Delete")
-            enabled: root.contextTabIndex >= 0
+            // a workspace always keeps one session
+            enabled: root.contextTabIndex >= 0 && root.tabCount() > 1
             onTriggered: root.requestDeleteTab(root.contextTabIndex)
         }
 
@@ -89,20 +117,8 @@ KDDW.TabBarBase {
     }
 
     function activateAddButton() {
-        if (!tabBarCpp)
-            return;
-        var uniqueName = Date.now();
-        var code = `import com.kdab.dockwidgets 2.0 as KDDW;
-                    import QtQuick 2.6;
-                    KDDW.DockWidget {
-                        uniqueName: "${uniqueName}";
-                        title: "dynamic";
-                        affinities: ["view"]
-                        Rectangle { color: "#85baa1"; anchors.fill: parent; }
-                    }`;
-
-        var newDW = Qt.createQmlObject(code, root);
-        tabBarCpp.addDockWidgetAsTab(newDW);
+        if (workspaceModel)
+            workspaceModel.addSession();
     }
 
     function tabItemAt(index) {
@@ -164,7 +180,7 @@ KDDW.TabBarBase {
         id: tabBarRow
 
         // keep our visuals above the built-in mouse layer, but dont steal left click/drag
-        z: root.mouseAreaZ ? (root.mouseAreaZ.z + 1) : 1
+        z: root.mouseAreaZ + 1
         anchors.fill: parent
         spacing: 0
 
@@ -189,6 +205,10 @@ KDDW.TabBarBase {
                 // -----------------------------------
 
                 readonly property int tabIndex: index
+                readonly property string tabTitle: title
+                readonly property bool isRenaming: root.renamingIndex === tabIndex
+
+                opacity: root.reorderTabIndex === tabIndex ? 0.4 : 1
 
                 readonly property bool isCurrent: tabIndex === root.groupCpp.currentIndex
                 readonly property bool isHovered: tabIndex === tabBarRow.hoveredIndex
@@ -262,11 +282,39 @@ KDDW.TabBarBase {
                         anchors.centerIn: parent
                         width: textSlot.width
                         horizontalAlignment: Text.AlignHCenter
+                        visible: !tab.isRenaming
 
-                        text: title
+                        text: tab.tabTitle
                         font: Scaling.uiFont
                         color: ThemeColors.text
                         elide: Text.ElideRight
+                    }
+
+                    TextInput {
+                        id: titleEditor
+                        anchors.fill: parent
+                        visible: tab.isRenaming
+                        enabled: tab.isRenaming
+                        verticalAlignment: TextInput.AlignVCenter
+                        horizontalAlignment: TextInput.AlignHCenter
+                        font: Scaling.uiFont
+                        color: ThemeColors.text
+                        selectionColor: ThemeColors.highlight
+                        selectedTextColor: ThemeColors.highlightedText
+                        selectByMouse: true
+
+                        onVisibleChanged: {
+                            if (!visible)
+                                return;
+                            text = tab.tabTitle;
+                            forceActiveFocus();
+                            selectAll();
+                        }
+
+                        Keys.onEscapePressed: root.renamingIndex = -1
+                        onEditingFinished: root.commitRename(tab.tabIndex, text)
+                        onActiveFocusChanged: if (!activeFocus && tab.isRenaming)
+                            root.commitRename(tab.tabIndex, text)
                     }
                 }
 
@@ -279,15 +327,16 @@ KDDW.TabBarBase {
                     z: 30
                 }
 
-                // mouse area for a right click context menu on the tabs
+                // mouse area for click actions on tabs
+
                 MouseArea {
                     // only for session tabs though... since the right click context actions
                     // are all session related for now
                     enabled: root.groupCpp.isCentralGroup
                     anchors.fill: parent
                     hoverEnabled: true
-                    acceptedButtons: Qt.RightButton
-                    z: root.mouseAreaZ ? (root.mouseAreaZ.z + 2) : 100
+                    acceptedButtons: Qt.RightButton | Qt.LeftButton
+                    z: root.mouseAreaZ + 2
 
                     onEntered: tabBarRow.hoveredIndex = tab.tabIndex
                     onExited: {
@@ -296,12 +345,20 @@ KDDW.TabBarBase {
                     }
 
                     onClicked: mouse => {
-                        root.keyboardFocusIndex = tab.tabIndex;
-                        tab.forceActiveFocus();
-
+                        if (mouse.button == Qt.LeftButton) {
+                            root.selectTab(tab.tabIndex);
+                            return;
+                        }
+                        // handle right clicks
                         root.contextTabIndex = tab.tabIndex;
                         var p = tab.mapToItem(root, mouse.x, mouse.y);
                         tabContextMenu.popup(Qt.point(p.x, p.y));
+                    }
+
+                    onDoubleClicked: mouse => {
+                        if (mouse.button == Qt.RightButton) return;
+                        // handle double clicks for rename of session tabs
+                        root.requestRenameTab(tab.tabIndex)
                     }
                 }
             }
@@ -400,6 +457,32 @@ KDDW.TabBarBase {
             function onHoveredTabIndexChanged(index) {
                 tabBarRow.hoveredIndex = index;
             }
+        }
+    }
+
+    TabDropIndicator {
+        id: reorderIndicator
+
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        x: 0
+        width: root.width
+        z: root.mouseAreaZ + 10
+
+        visible: root.reorderInsertIndex >= 0
+        showBackground: false
+        accent: ThemeColors.highlight
+
+        dropLineX: {
+            const tabsInBar = root.tabCount();
+            if (root.reorderInsertIndex <= 0)
+                return 0;
+            if (root.reorderInsertIndex >= tabsInBar) {
+                const lastTab = root.tabItemAt(tabsInBar - 1);
+                return lastTab ? lastTab.x + lastTab.width : 0;
+            }
+            const nextTab = root.tabItemAt(root.reorderInsertIndex);
+            return nextTab ? nextTab.x : 0;
         }
     }
 

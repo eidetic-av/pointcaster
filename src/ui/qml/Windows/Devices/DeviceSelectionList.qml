@@ -315,7 +315,7 @@ Item {
 
         MenuItem {
             text: "New group"
-            onTriggered: root.workspace.createDeviceGroup("Group", contextMenu.targetGroupId)
+            onTriggered: root.workspace.createDeviceGroup(contextMenu.targetGroupId)
         }
     }
 
@@ -498,20 +498,12 @@ Item {
                     ListToggleButton {
                         iconOn: FontAwesome.icon("solid/toggle-on")
                         iconOff: FontAwesome.icon("solid/toggle-off")
-                        checked: groupArea.row.active === true
-                        gated: !groupArea.row.effectiveActive
-                        tip: "Toggle group active"
-                        onToggled: root.workspace.setDeviceGroupActive(groupArea.nodeId, checked)
+                        checked: groupArea.row.sessionEnabled === true
+                        gated: !groupArea.row.effectiveSessionEnabled
+                        tip: "Toggle group in this session"
+                        onToggled: root.workspace.setSessionDeviceEnabled(groupArea.nodeId, checked)
                     }
 
-                    ListToggleButton {
-                        iconOn: FontAwesome.icon("solid/eye")
-                        iconOff: FontAwesome.icon("solid/eye-slash")
-                        checked: groupArea.row.render === true
-                        gated: !groupArea.row.effectiveRender
-                        tip: "Toggle group rendering"
-                        onToggled: root.workspace.setDeviceGroupRender(groupArea.nodeId, checked)
-                    }
                 }
             }
         }
@@ -698,23 +690,10 @@ Item {
                         iconOff: FontAwesome.icon("solid/toggle-off")
                         baseOpacity: 0.5
                         hoverOpacity: 0.7
-                        checked: dragArea.modelData ? dragArea.modelData.active : false
-                        gated: checked && !dragArea.row.effectiveActive
-                        tip: "Toggle device active"
-                        onToggled: if (dragArea.modelData)
-                            dragArea.modelData.active = checked
-                    }
-
-                    ListToggleButton {
-                        iconOn: FontAwesome.icon("solid/eye")
-                        iconOff: FontAwesome.icon("solid/eye-slash")
-                        baseOpacity: 0.5
-                        hoverOpacity: 0.7
-                        checked: dragArea.modelData ? dragArea.modelData.render : false
-                        gated: checked && !dragArea.row.effectiveRender
-                        tip: "Toggle device rendering"
-                        onToggled: if (dragArea.modelData)
-                            dragArea.modelData.render = checked
+                        checked: dragArea.row.sessionEnabled === true
+                        gated: checked && !dragArea.row.effectiveSessionEnabled
+                        tip: "Toggle device in this session"
+                        onToggled: root.workspace.setSessionDeviceEnabled(dragArea.nodeId, checked)
                     }
                 }
             }

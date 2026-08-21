@@ -109,20 +109,17 @@ void Workspace::metrics_thread_work(std::stop_token stop_token) {
       }
     }
 
-    metrics::set_gauge("pointcaster_sessions", sessions.size());
+    {
+      std::scoped_lock lock(sessions_access);
+      metrics::set_gauge("pointcaster_sessions", sessions.size());
 
-    for (const auto &[session_id, session] : sessions) {
-      if (!session) continue;
-      const auto cloud = session->point_cloud();
-      metrics::set_gauge("pointcaster_session_points",
-                         cloud ? cloud->size() : 0,
-                         {{"session_id", session_id}});
-      metrics::set_gauge("pointcaster_session_playing",
-                         session->playback_is_playing() ? 1 : 0,
-                         {{"session_id", session_id}});
-      metrics::set_gauge("pointcaster_session_playback_frame",
-                         session->playback_current_frame(),
-                         {{"session_id", session_id}});
+      for (const auto &[session_id, session] : sessions) {
+        if (!session) continue;
+        const auto cloud = session->point_cloud();
+        metrics::set_gauge("pointcaster_session_points",
+                           cloud ? cloud->size() : 0,
+                           {{"session_id", session_id}});
+      }
     }
 
     if (session_recorder) {

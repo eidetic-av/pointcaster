@@ -5,19 +5,16 @@ import QtQuick
 import Pointcaster 1.0
 
 QtObject {
-    property int labelColumnWidth: 150
+    property int labelColumnWidth: 125
     property int deviceListHeight: 160
     property int streamChannelListHeight: 90
-
-    property int selectedSessionIndex: 0
 
     property real inputDragSpeed: 0.5
 
     property list<SessionView> sessionViews: []
 
     readonly property var persistentPropertyNames: [
-        "labelColumnWidth", "deviceListHeight", "streamChannelListHeight",
-        "selectedSessionIndex"
+        "labelColumnWidth", "deviceListHeight", "streamChannelListHeight"
     ]
 
     function applyPersistentState(state) {
@@ -36,11 +33,13 @@ QtObject {
         sessionViews.push(sessionView);
     }
 
+    // deleting a session destroys its view, and a destroyed one reads as null
     function eraseSessionView(sessionView) {
         var remainingSessionViews = [];
         for (var i = 0; i < sessionViews.length; i++) {
-            if (sessionViews[i] !== this)
-                remainingSessionViews.push(sessionViews[i]);
+            var view = sessionViews[i];
+            if (view && view !== sessionView)
+                remainingSessionViews.push(view);
         }
         sessionViews = remainingSessionViews;
     }

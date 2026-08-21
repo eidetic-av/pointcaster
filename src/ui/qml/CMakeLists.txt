@@ -28,6 +28,7 @@ qt_add_qml_module(PointcasterQml
         Controls/FocusReleaser.qml
         Controls/IconButton.qml
         Controls/ListToggleButton.qml
+        Controls/SelectedSessionLabel.qml
         Controls/InfoToolTip.qml
         Controls/PaddedScrollBar.qml
         Controls/PaddedScrollView.qml
@@ -47,6 +48,8 @@ qt_add_qml_module(PointcasterQml
         PointCloud/PointSolidMaterial.qml
         Windows/TabBar.qml
         Windows/TabBarBase.qml
+        Windows/TabDropIndicator.qml
+        Windows/DropIndicatorTile.qml
         Windows/Separator.qml
         Windows/FloatingWindow.qml
         Windows/Group.qml

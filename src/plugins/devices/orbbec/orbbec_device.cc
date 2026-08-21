@@ -555,6 +555,8 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
       }
       if (!frame_set) continue;
 
+      if (!in_any_session()) continue;
+
       ProfilingZone new_frame_zone("OrbbecDevice::new_frame");
       new_frame_zone.text(device_config.id);
 
@@ -611,15 +613,11 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
             const bool using_cuda = backend_type == BackendType::CUDA;
             backend::BackendPlugin *backend = backend_for(backend_type);
 
-            // snapshot rendering state once so both the allocation and the
-            // store decision use a consistent value
-            const bool should_render = rendering();
-
             // for CUDA, pre-allocate render buffer so it can be packed in the
             // same kernel pass as projection
             std::shared_ptr<std::vector<std::byte>> cuda_render_buffer;
             std::span<std::byte> render_output;
-            if (using_cuda && should_render) {
+            if (using_cuda) {
               cuda_render_buffer = std::make_shared<std::vector<std::byte>>(
                   max_point_count * 16);
               render_output = *cuda_render_buffer;
@@ -638,7 +636,7 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
 
             feed_operator_pipeline(point_cloud);
 
-            if (auto *cpu = cpu_backend(); should_render && backend && cpu) {
+            if (auto *cpu = cpu_backend(); backend && cpu) {
               if (using_cuda && cuda_render_buffer) {
                 _latest_render_data.store(std::move(cuda_render_buffer),
                                           std::memory_order_release);
@@ -781,6 +779,8 @@ void OrbbecDevice::lidar_pipeline_thread_work(
       }
       if (!frame_set) continue;
 
+      if (!in_any_session()) continue;
+
       ProfilingZone new_frame_zone("OrbbecDevice::new_frame");
       new_frame_zone.text(device_config.id);
 
@@ -922,7 +922,7 @@ void OrbbecDevice::lidar_pipeline_thread_work(
 
         feed_operator_pipeline(point_cloud);
 
-        if (auto *cpu = cpu_backend(); rendering() && cpu) {
+        if (auto *cpu = cpu_backend(); cpu) {
           if (auto processed = _pipeline->latest_cloud()) {
             auto render_buffer = std::make_shared<std::vector<std::byte>>(
                 processed->size() * 16);

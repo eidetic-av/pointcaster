@@ -15,6 +15,13 @@ Item {
     required property var deviceAdapters
     property var cameraAdapter: null
 
+    readonly property bool isSelectedSession: (workspace && sessionAdapter) ? String(workspace.selectedSessionId) === String(sessionAdapter.id) : false
+
+    function requestSelection() {
+        if (workspace && sessionAdapter && !root.isSelectedSession)
+            workspace.selectedSessionId = String(sessionAdapter.id);
+    }
+
     property var selectedDeviceAdapter: (root.workspace && deviceAdapters && root.workspace.selectedNodeKind === "device" && deviceAdapters.length > 0) ? root.deviceAdapters[root.workspace.selectedDeviceIndex] : null
     property var selectedGroupAdapter: (root.workspace && root.workspace.selectedNodeKind === "group") ? root.workspace.selectedDeviceGroupAdapter : null
     property var selectedTransformAdapter: selectedDeviceAdapter || selectedGroupAdapter
@@ -184,10 +191,31 @@ Item {
         }
     }
 
-    // this view draws the rendered streams that belong to its own session,
-    // plus any belonging to a device
-    readonly property string sessionPathPrefix: sessionAdapter ? String(sessionAdapter.configPath) + "/" : ""
-    readonly property var renderPathsForSession: (workspace && sessionPathPrefix) ? workspace.renderPaths.filter(path => path.startsWith(sessionPathPrefix) || !path.startsWith("session/")) : []
+    // this view draws the rendered streams belonging to its own session and devices
+    property var renderPathsForSession: []
+
+    function refreshRenderPathsForSession() {
+        if (!workspace || !sessionAdapter) {
+            root.renderPathsForSession = [];
+            return;
+        }
+        const sessionId = String(sessionAdapter.id);
+        root.renderPathsForSession = workspace.renderPaths.filter(path => workspace.sessionDrawsRenderPath(sessionId, path));
+    }
+
+    Connections {
+        target: root.workspace
+        function onRenderPathsChanged() {
+            root.refreshRenderPathsForSession();
+        }
+        // a device switching in or out of a session changes what it draws
+        function onSessionAdaptersChanged() {
+            root.refreshRenderPathsForSession();
+        }
+        function onDeviceAdaptersChanged() {
+            root.refreshRenderPathsForSession();
+        }
+    }
 
     // one unit circle, scaled to whatever distance each radius disc draws
     readonly property int discSegments: 96
@@ -226,7 +254,7 @@ Item {
         return qYaw.times(qPitch);
     }
 
-    property bool showBorder: false
+    property bool showBorder: root.isSelectedSession && workspace && workspace.sessionAdapters.length > 1
     property color borderColor: ThemeColors.highlight
 
     // guards to prevent config<->UI updates from immediately re-committing (causing undo/redo feedback loops)
@@ -305,8 +333,14 @@ Item {
     }
 
     anchors.fill: parent
-    Component.onCompleted: refreshFromAdapter()
-    onSessionAdapterChanged: refreshFromAdapter()
+    Component.onCompleted: {
+        refreshFromAdapter();
+        refreshRenderPathsForSession();
+    }
+    onSessionAdapterChanged: {
+        refreshFromAdapter();
+        refreshRenderPathsForSession();
+    }
 
     // config -> UI
     Connections {
@@ -745,22 +779,29 @@ Item {
             origin: orbitOrigin
             enabled: !sessionControls.orbitRotationRunning && !sessionControls.viewLocked
             onMouseHeldChanged: {
-                if (mouseHeld || sessionControls.orbitRotationRunning)
+                if (mouseHeld) {
+                    root.requestSelection();
+                    return;
+                }
+                if (sessionControls.orbitRotationRunning)
                     return;
 
                 // on release:
                 root.commitCameraTransformToConfig();
             }
             onScrollingChanged: {
+                // scrolling reads as navigation, not as picking a session
                 if (scrolling || sessionControls.orbitRotationRunning)
                     return;
                 root.commitCameraTransformToConfig();
             }
             onDragActiveChanged: {
-                if (!dragActive) {
-                    // Commit once when the interaction finishes.
-                    root.commitCameraTransformToConfig();
+                if (dragActive) {
+                    root.requestSelection();
+                    return;
                 }
+                // Commit once when the interaction finishes.
+                root.commitCameraTransformToConfig();
             }
         }
 
@@ -780,6 +821,7 @@ Item {
             target: view
             acceptedButtons: Qt.LeftButton
             onTapped: (p, b) => {
+                root.requestSelection();
                 const hit = view.pick(p.position.x, p.position.y).objectHit;
                 view.selectedObject = hit || null;
             }
@@ -890,7 +932,7 @@ Item {
     // (camera/position) for operators.
     SelectionGizmo {
         id: selectionGizmo
-        visible: root._selectionHasGizmoTarget && !sessionControls.viewLocked && sessionControls.gizmoEnabled
+        visible: root.isSelectedSession && root._selectionHasGizmoTarget && !sessionControls.viewLocked && sessionControls.gizmoEnabled
         view3d: view
         targetNode: selectionProxy
         mode: GizmoEnums.Mode.Both
@@ -907,7 +949,7 @@ Item {
     // Verify GizmoEnums.Mode.Translate matches your GizmoEnums enum value name.
     SelectionGizmo {
         id: lookAtGizmo
-        visible: root._selectionHasLookAt && !sessionControls.viewLocked && sessionControls.gizmoEnabled
+        visible: root.isSelectedSession && root._selectionHasLookAt && !sessionControls.viewLocked && sessionControls.gizmoEnabled
         view3d: view
         targetNode: lookAtProxy
         mode: GizmoEnums.Mode.Translate
@@ -918,7 +960,7 @@ Item {
         z: 99
     }
 
-    readonly property bool _boundsGizmoActive: root.selectionHasBounds && !sessionControls.viewLocked && sessionControls.gizmoEnabled
+    readonly property bool _boundsGizmoActive: root.isSelectedSession && root.selectionHasBounds && !sessionControls.viewLocked && sessionControls.gizmoEnabled
 
     // Bounds gizmo: push/pull box for an operator's bounds, or a device's crop
     // bounds. Operators see the cloud already world-transformed, so their box
@@ -935,7 +977,7 @@ Item {
 
     SelectionRadiusGizmo {
         id: radiusGizmo
-        visible: root.selectionHasRadius && !sessionControls.viewLocked && sessionControls.gizmoEnabled
+        visible: root.isSelectedSession && root.selectionHasRadius && !sessionControls.viewLocked && sessionControls.gizmoEnabled
         view3d: view
         targetAdapter: root.selectedOperatorAdapter || root.selectedTransformAdapter
         radiusPath: root.selectionRadiusPath

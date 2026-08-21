@@ -65,7 +65,7 @@ void ObContext::init_async() {
       local->enableDeviceClockSync(3600000);
       auto on_device_changed = [self](std::shared_ptr<ob::DeviceList>,
                                       std::shared_ptr<ob::DeviceList>) {
-        pc::logger()->info("Orbbec device change detected ");
+        pc::logger()->trace("Orbbec device change detected ");
         self->discover_devices_async();
       };
 #if POINTCASTER_ORBBEC_SDK_VERSION >= 2
@@ -261,7 +261,7 @@ void ObContext::discover_devices() {
     const auto &location = found_device.is_network()
                                ? found_device.ip
                                : found_device.connection_type;
-    pc::logger()->info("Discovered '{}' via {} (serial: {}, uid: {}, "
+    pc::logger()->trace("Discovered '{}' via {} (serial: {}, uid: {}, "
                        "vendor:product 0x{:04x}:0x{:04x})",
                        found_device.name, location, found_device.serial_num,
                        found_device.id, found_device.vendor_id,

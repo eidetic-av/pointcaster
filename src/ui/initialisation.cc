@@ -3,6 +3,7 @@
 #include "models/camera_image_provider.h"
 #include "models/registrations.h"
 #include "models/workspace_model.h"
+#include "window/tab_drop.h"
 #include "window/view_factory.h"
 #include <QCoreApplication>
 #include <QDir>
@@ -60,6 +61,20 @@ initialise(QGuiApplication *app, pc::ui::WorkspaceModel *workspace_model,
   docking_config.setFlags(
       Config::Flag_HideTitleBarWhenTabsVisible | Config::Flag_AlwaysShowTabs |
       Config::Flag_AllowReorderTabs | Config::Flag_DisableDoubleClick);
+
+  // drop points inside a tab strip: the first tracks what's being dragged,
+  // the second moves the dropped tabs to where they were released
+  docking_config.setDropIndicatorAllowedFunc(&pc::ui::tab_drop_indicator_allowed);
+  docking_config.setDragEndedFunc(&pc::ui::apply_pending_tab_drop);
+
+  // a press that stays inside a tab strip reorders tabs instead of tearing the
+  // window off, so hold the drag back until the cursor leaves the strip
+  docking_config.setDragAboutToStartFunc(&pc::ui::allow_drag_to_start);
+
+  docking_config.setDraggedWindowOpacity(0.8);
+
+  KDDockWidgets::InitialOption::s_defaultNeighbourSqueezeStrategy =
+      KDDockWidgets::NeighbourSqueezeStrategy::ImmediateNeighboursFirst;
 
   // initialise our font awesome singleton
   static fa::QtAwesome awesome(app);

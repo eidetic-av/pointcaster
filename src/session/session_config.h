@@ -4,6 +4,7 @@
 #include <pipeline/concurrent_operator_pipeline_config.h>
 #include <plugins/operators/operator_variants.h>
 #include <rfl/DefaultVal.hpp>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -22,10 +23,11 @@ struct SessionConfiguration {
   std::string id;                                         // @hidden
   rfl::DefaultVal<std::string> label;                     // @hidden
   rfl::DefaultVal<CameraConfiguration> camera;            // @folded
-  rfl::DefaultVal<SessionTimelineConfiguration> timeline; // @folded
+  rfl::DefaultVal<SessionTimelineConfiguration> timeline; // @hidden
   rfl::DefaultVal<operators::ConcurrentOperatorPipelineConfiguration>
       operator_pipeline;                                          // @folded
   std::vector<operators::OperatorConfigurationVariant> operators; // @hidden
+  rfl::DefaultVal<std::set<std::string>> disabled_devices;        // @hidden
 };
 
 inline std::string session_address(const SessionConfiguration &config) {
