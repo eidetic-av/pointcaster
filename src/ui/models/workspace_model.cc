@@ -2720,6 +2720,10 @@ void WorkspaceModel::initPublishersConfigAdapter() {
           after = _workspace.config.publishers.value();
         }
 
+        // apply() writes the config directly rather than going through
+        // config_registry.set(), so tell subscribers ourselves
+        _workspace.config_registry.notify("publishers/" + path.toStdString());
+
         QString command_text = QStringLiteral("Edit %1").arg(path);
         _undoStack->push(new SetPublishersConfigCommand(
             std::move(before), std::move(after), std::move(command_text),

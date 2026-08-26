@@ -22,11 +22,9 @@ WorkspaceSocket::WorkspaceSocket(const std::string_view filter) {
   _socket->connect("inproc://workspace");
 }
 
-std::optional<WorkspaceSocket::SocketUpdate> WorkspaceSocket::receive() {
-  zmq::message_t msg;
-  const auto received = _socket->recv(msg);
-  if (!received || msg.size() == 0) return std::nullopt;
-
+namespace {
+std::optional<WorkspaceSocket::SocketUpdate>
+deserialize_config_value(zmq::message_t &msg) {
   const std::span<const std::byte> bytes{
       static_cast<const std::byte *>(msg.data()), msg.size()};
   zpp::bits::in deserialize{bytes};
@@ -37,8 +35,22 @@ std::optional<WorkspaceSocket::SocketUpdate> WorkspaceSocket::receive() {
     pc::logger()->warn("Failed to deserialize a published value");
     return std::nullopt;
   }
-
   return kvp;
+}
+} // namespace
+
+std::optional<WorkspaceSocket::SocketUpdate> WorkspaceSocket::receive() {
+  zmq::message_t msg;
+  const auto received = _socket->recv(msg);
+  if (!received || msg.size() == 0) return std::nullopt;
+  return deserialize_config_value(msg);
+}
+
+std::optional<WorkspaceSocket::SocketUpdate> WorkspaceSocket::try_receive() {
+  zmq::message_t msg;
+  const auto received = _socket->recv(msg, zmq::recv_flags::dontwait);
+  if (!received || msg.size() == 0) return std::nullopt;
+  return deserialize_config_value(msg);
 }
 
 } // namespace pc

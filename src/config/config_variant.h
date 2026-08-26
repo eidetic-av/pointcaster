@@ -4,6 +4,7 @@
 #include "file_config.h"
 #include "group_sequence_config.h"
 #include "network_config.h"
+#include "publishers/message_streamer/message_streamer_config.h"
 #include "sequence_config.h"
 #include "transform_config.h"
 
@@ -19,7 +20,6 @@
 #include <plugins/operators/cluster_extraction/cluster_extraction_config.h>
 #include <plugins/operators/fringe_removal/fringe_removal_config.h>
 #include <plugins/operators/range_filter/range_filter_config.h>
-
 
 #include <camera/camera_config.h>
 #include <camera/look_at_camera_config.h>
@@ -41,6 +41,7 @@ using ConfigurationVariant = std::variant<
     operators::ConcurrentOperatorPipelineConfiguration,
     networking::PointStreamerConfiguration,
     networking::StreamChannelConfiguration, publishers::PublishersConfiguration,
+    publishers::MessageStreamerConfiguration,
     publishers::MqttClientConfiguration, publishers::OscSenderConfiguration,
     // TODO REMOVE AND ADD
     // specialised jinja with  setConfig overload like device

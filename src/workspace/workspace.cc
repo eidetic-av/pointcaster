@@ -3,6 +3,7 @@
 #include "camera/camera_config.h"
 #include "config/config_registry.h"
 #include "point_streamer/point_streamer.h"
+#include "publishers/message_streamer/message_streamer.h"
 #include "publishers/mqtt/mqtt_client.h"
 #include "publishers/osc/osc_sender.h"
 #include "publishers/workspace_publisher.h"
@@ -83,6 +84,7 @@ Workspace::Workspace(const WorkspaceConfiguration &initial) : config(initial) {
   point_streamer = std::make_unique<networking::PointStreamer>(*this);
 
   workspace_publisher = std::make_unique<publishers::WorkspacePublisher>(*this);
+  message_streamer = std::make_unique<publishers::MessageStreamer>(*this);
   mqtt_client = std::make_unique<publishers::MqttClient>(*this);
   osc_sender = std::make_unique<publishers::OscSender>(*this);
 

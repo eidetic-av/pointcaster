@@ -1,5 +1,6 @@
 #pragma once
 #include <rfl/DefaultVal.hpp>
+#include <rfl/Literal.hpp>
 #include <string>
 
 namespace pc::publishers {
@@ -19,6 +20,8 @@ struct OscSenderConfiguration {
   // so this caps how many of those go out for any single cloud...
   // (which shouldn't really be many when we're talking about OSC here)
   rfl::DefaultVal<int> max_cloud_points = 16; // @minmax(1, 256)
+
+  using Tag = rfl::Literal<"osc">;
 };
 
 } // namespace pc::publishers

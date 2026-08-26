@@ -35,6 +35,7 @@ qt_add_executable(pointcaster
   point_streamer/stream_channels.cc
   receivers/osc/osc_receiver.cc
   publishers/workspace_publisher.cc
+  publishers/message_streamer/message_streamer.cc
   publishers/mqtt/mqtt_client.cc
   publishers/osc/osc_sender.cc
   ${app_icon_resource}

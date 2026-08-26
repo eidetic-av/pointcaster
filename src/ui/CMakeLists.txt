@@ -71,6 +71,7 @@ set(CONFIG_ADAPTER_INPUTS
     pipeline/concurrent_operator_pipeline_config.h
     plugins/devices/device_group_config.h
     publishers/publishers_config.h
+    publishers/message_streamer/message_streamer_config.h
     publishers/mqtt/mqtt_client_config.h
     publishers/osc/osc_sender_config.h
     # TODO we need some faculty to create these adapters

@@ -1,5 +1,6 @@
 #pragma once
 #include <rfl/DefaultVal.hpp>
+#include <rfl/Literal.hpp>
 #include <string>
 
 namespace pc::publishers {
@@ -26,6 +27,7 @@ struct MqttClientConfiguration {
   rfl::DefaultVal<EmptyMessageHandling> empty_message_handling =
       EmptyMessageHandling::Ignore;
 
+  using Tag = rfl::Literal<"mqtt">;
 };
 
 } // namespace pc::publishers
