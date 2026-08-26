@@ -1,4 +1,5 @@
 #include "config_registry.h"
+#include "../workspace/workspace.h"
 
 #include <algorithm>
 #include <core/logger/logger.h>
@@ -66,29 +67,47 @@ void ConfigRegistry::snapshot(const StringCollection &paths,
   }
 }
 
-template POINTCASTER_CORE_EXPORT void ConfigRegistry::snapshot<std::set<std::string>>(
+template POINTCASTER_CORE_EXPORT void
+ConfigRegistry::snapshot<std::set<std::string>>(
     const std::set<std::string> &paths, StringMap<ConfigValue> &out);
 
-void ConfigRegistry::on_change(std::string_view prefix, ChangeCallback cb) {
+ConfigRegistry::SubscriptionId
+ConfigRegistry::on_change(std::string_view prefix, ChangeCallback cb) {
   std::scoped_lock lock(_mutex);
-  _subs.emplace_back(std::string(prefix), std::move(cb));
+  const auto id = _next_subscription_id++;
+  _subs.push_back(Subscription{id, std::string(prefix), std::move(cb)});
+  return id;
 }
 
-void ConfigRegistry::remove_subscriptions(std::string_view prefix) {
+void ConfigRegistry::remove_subscription(SubscriptionId id) {
   std::scoped_lock lock(_mutex);
-  std::erase_if(_subs,
-                [&](const auto &sub) { return sub.first.starts_with(prefix); });
+  std::erase_if(_subs, [&](const auto &sub) { return sub.id == id; });
 }
 
 void ConfigRegistry::notify(std::string_view path) {
   std::vector<ChangeCallback> matching;
   {
     std::shared_lock lock(_mutex);
-    for (const auto &[prefix, cb] : _subs) {
-      if (path.starts_with(prefix)) matching.push_back(cb);
+    for (const auto &sub : _subs) {
+      if (path.starts_with(sub.prefix)) matching.push_back(sub.callback);
     }
   }
   for (auto &cb : matching) cb(path);
 }
+
+namespace config {
+
+ConfigRegistry::SubscriptionId on_change(pc::Workspace &workspace,
+                                         std::string_view prefix,
+                                         ConfigRegistry::ChangeCallback cb) {
+  return workspace.config_registry.on_change(prefix, std::move(cb));
+}
+
+void remove_subscription(pc::Workspace &workspace,
+                         ConfigRegistry::SubscriptionId id) {
+  workspace.config_registry.remove_subscription(id);
+}
+
+} // namespace config
 
 } // namespace pc

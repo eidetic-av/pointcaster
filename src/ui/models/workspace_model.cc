@@ -104,13 +104,13 @@ static ConfigAdapter *make_operator_config_adapter(
   return adapter;
 }
 
-static void subscribe_adapter_to_registry(pc::ConfigRegistry &registry,
+static void subscribe_adapter_to_registry(WorkspaceModel &model,
                                           ConfigAdapter *adapter,
                                           const std::string &prefix) {
-  // TODO clearing subscriptions here correct?
-  registry.remove_subscriptions(prefix);
+  model.unsubscribeFromRegistry(prefix);
   auto adapterPtr = QPointer<ConfigAdapter>(adapter);
-  registry.on_change(prefix, [adapterPtr, prefix](std::string_view path) {
+  model.subscribeToRegistry(prefix, [adapterPtr,
+                                     prefix](std::string_view path) {
     if (!adapterPtr) return;
     if (path.size() < prefix.size()) return;
     const QString qpath =
@@ -124,7 +124,7 @@ static void subscribe_adapter_to_registry(pc::ConfigRegistry &registry,
   });
 }
 
-static void resubscribe_operator_adapters(pc::ConfigRegistry &registry,
+static void resubscribe_operator_adapters(WorkspaceModel &model,
                                           const QList<OperatorAdapter *> &ops) {
   for (auto *opAdapter : ops) {
     auto *opConfigAdapter = opAdapter ? opAdapter->configAdapter() : nullptr;
@@ -132,7 +132,7 @@ static void resubscribe_operator_adapters(pc::ConfigRegistry &registry,
     const std::string operator_prefix =
         opConfigAdapter->configPath().toStdString();
     if (operator_prefix.empty()) continue;
-    subscribe_adapter_to_registry(registry, opConfigAdapter,
+    subscribe_adapter_to_registry(model, opConfigAdapter,
                                   operator_prefix + "/");
   }
 }
@@ -875,6 +875,11 @@ WorkspaceModel::WorkspaceModel(pc::Workspace *workspace, QObject *parent)
   _streamChannelModel->refresh();
 
   _logModel = new LogModel(this);
+}
+
+WorkspaceModel::~WorkspaceModel() {
+  // every prefix starts with "", so this drops all of our subscriptions
+  unsubscribeFromRegistry("");
 }
 
 void WorkspaceModel::close() {
@@ -2430,8 +2435,7 @@ void WorkspaceModel::attachSessionOperatorConfigAdapters(
           operator_path_prefix(owner_prefix, *storage);
       adapter->setConfigPath(QString::fromStdString(operator_prefix));
       opAdapter->setConfigAdapter(adapter);
-      subscribe_adapter_to_registry(_workspace.config_registry, adapter,
-                                    operator_prefix + "/");
+      subscribe_adapter_to_registry(*this, adapter, operator_prefix + "/");
       watchStreamSourcesFor(adapter);
       initSessionOperatorAdapter(opAdapter, sessionId);
     }
@@ -2601,13 +2605,30 @@ void WorkspaceModel::initSessionOperatorAdapter(OperatorAdapter *opAdapter,
       });
 }
 
+pc::ConfigRegistry::SubscriptionId
+WorkspaceModel::subscribeToRegistry(std::string prefix,
+                                    pc::ConfigRegistry::ChangeCallback cb) {
+  const auto id = _workspace.config_registry.on_change(prefix, std::move(cb));
+  _registrySubscriptions.emplace_back(id, std::move(prefix));
+  return id;
+}
+
+void WorkspaceModel::unsubscribeFromRegistry(std::string_view area) {
+  std::erase_if(_registrySubscriptions, [&](const auto &sub) {
+    const auto &[id, prefix] = sub;
+    if (!prefix.starts_with(area)) return false;
+    _workspace.config_registry.remove_subscription(id);
+    return true;
+  });
+}
+
 void WorkspaceModel::initPointStreamerAdapter() {
   if (!_pointStreamerAdapter) return;
 
   // Subscribe to external (OSC/etc.) changes on the streamer config
-  _workspace.config_registry.remove_subscriptions("streaming/");
+  unsubscribeFromRegistry("streaming/");
   auto adapterPtr = QPointer<ConfigAdapter>(_pointStreamerAdapter.data());
-  _workspace.config_registry.on_change(
+  subscribeToRegistry(
       "streaming/", [adapterPtr](std::string_view path) {
         if (!adapterPtr) return;
         const std::string local(
@@ -2663,9 +2684,9 @@ void WorkspaceModel::initPublishersConfigAdapter() {
   if (!_publishersConfigAdapter) return;
 
   // Subscribe to external (OSC/etc.) changes on the publishers config
-  _workspace.config_registry.remove_subscriptions("publishers/");
+  unsubscribeFromRegistry("publishers/");
   auto adapterPtr = QPointer<ConfigAdapter>(_publishersConfigAdapter.data());
-  _workspace.config_registry.on_change(
+  subscribeToRegistry(
       "publishers/", [adapterPtr](std::string_view path) {
         if (!adapterPtr) return;
         const std::string local(
@@ -2841,8 +2862,7 @@ void WorkspaceModel::syncSessionOperatorAdapters() {
       attachSessionOperatorConfigAdapters(id, current);
     }
 
-    resubscribe_operator_adapters(_workspace.config_registry,
-                                  _sessionOperatorAdapters[id]);
+    resubscribe_operator_adapters(*this, _sessionOperatorAdapters[id]);
   }
 
   // drop operator adapters for sessions that no longer exist; they were
@@ -3175,7 +3195,7 @@ void WorkspaceModel::syncSessionAdapters() {
   }
 
   // Refresh registry subscriptions so OSC/external changes notify QML.
-  _workspace.config_registry.remove_subscriptions("session/");
+  unsubscribeFromRegistry("session/");
   for (QObject *obj : _sessionAdapters) {
     auto *adapter = qobject_cast<ConfigAdapter *>(obj);
     if (!adapter) continue;
@@ -3186,7 +3206,7 @@ void WorkspaceModel::syncSessionAdapters() {
     set_nested_config_path(adapter, node_prefix, "operator_pipeline");
     const std::string prefix = node_prefix + "/";
     auto adapterPtr = QPointer<ConfigAdapter>(adapter);
-    _workspace.config_registry.on_change(
+    subscribeToRegistry(
         prefix, [adapterPtr, prefix](std::string_view path) {
           if (!adapterPtr) return;
           std::string local(path.substr(prefix.size()));
@@ -3393,7 +3413,7 @@ void WorkspaceModel::syncDeviceAdapters() {
   pc::logger()->trace("syncDeviceAdapters: device adapters rebuilt, count={}",
                       _deviceAdapters.size());
 
-  _workspace.config_registry.remove_subscriptions("device/");
+  unsubscribeFromRegistry("device/");
   pc::logger()->trace(
       "syncDeviceAdapters: removed existing device/ registry subscriptions");
 
@@ -3410,7 +3430,7 @@ void WorkspaceModel::syncDeviceAdapters() {
     pc::logger()->trace(
         "syncDeviceAdapters: registering on_change for prefix='{}'", prefix);
     auto adapterPtr = QPointer<ConfigAdapter>(adapter);
-    _workspace.config_registry.on_change(
+    subscribeToRegistry(
         prefix, [adapterPtr, prefix, id,
                  &workspace = _workspace](std::string_view path) {
           if (!workspace.config_registry.is_readonly(path)) {
@@ -3459,11 +3479,10 @@ void WorkspaceModel::syncDeviceAdapters() {
               Qt::QueuedConnection);
         });
 
-    // this runs after remove_subscriptions("device/"), so each operator's own
-    // subscription has to be re-registered here
+    // this runs after unsubscribeFromRegistry("device/"), so each operator's
+    // own subscription has to be re-registered here
     if (auto *deviceAdapter = qobject_cast<DeviceAdapter *>(obj)) {
-      resubscribe_operator_adapters(_workspace.config_registry,
-                                    deviceAdapter->operatorAdapters());
+      resubscribe_operator_adapters(*this, deviceAdapter->operatorAdapters());
     }
   }
 

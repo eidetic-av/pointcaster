@@ -15,6 +15,7 @@
 #include <QUndoStack>
 #include <QUrl>
 #include <QVariant>
+#include <config/config_registry.h>
 #include <config/config_variant.h>
 #include <functional>
 #include <optional>
@@ -22,6 +23,9 @@
 #include <publishers/publishers_config_adapter.gen.h>
 #include <qtmetamacros.h>
 #include <session/session_config_adapter.gen.h>
+#include <string>
+#include <utility>
+#include <vector>
 #include <workspace/workspace_config.h>
 
 namespace pc {
@@ -126,6 +130,8 @@ class WorkspaceModel : public QObject {
 
 public:
   explicit WorkspaceModel(pc::Workspace *workspace, QObject *parent);
+  ~WorkspaceModel();
+  Q_DISABLE_COPY_MOVE(WorkspaceModel)
 
   Q_INVOKABLE void close();
   Q_INVOKABLE void loadFromFile(const QUrl &file);
@@ -136,6 +142,14 @@ public:
   Q_INVOKABLE void registerPluginSettingsPages();
 
   QUndoStack *undoStack() const { return _undoStack; }
+
+  // config registry subscriptions owned by this model. subscribeToRegistry
+  // records what we registered so unsubscribeFromRegistry can drop our own
+  // subscriptions under an area without touching anybody else's
+  pc::ConfigRegistry::SubscriptionId
+  subscribeToRegistry(std::string prefix,
+                      pc::ConfigRegistry::ChangeCallback cb);
+  void unsubscribeFromRegistry(std::string_view area);
 
   Q_INVOKABLE void triggerDeviceDiscovery();
   Q_INVOKABLE void addNewDevice(const QString &plugin_name,
@@ -394,6 +408,9 @@ private:
   CameraImageProvider *_imageProvider = nullptr;
 
   // TODO raw pointer and new? really?
+  std::vector<std::pair<pc::ConfigRegistry::SubscriptionId, std::string>>
+      _registrySubscriptions;
+
   QUndoStack *_undoStack = new QUndoStack(this);
 
   QList<QObject *> _sessionAdapters;

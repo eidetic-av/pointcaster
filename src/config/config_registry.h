@@ -1,6 +1,8 @@
 #pragma once
 
-#include <config/output_value.h>
+#include "config_value.h"
+#include "output_value.h"
+
 #include <pointcaster/core.h>
 #include <pointcaster/core_types.h>
 #include <pointcaster/point_cloud.h>
@@ -8,6 +10,7 @@
 #include <rfl/Skip.hpp>
 #include <rfl/internal/to_ptr_named_tuple.hpp>
 
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <shared_mutex>
@@ -20,10 +23,7 @@
 
 namespace pc {
 
-// all types representable inside configs...
-using ConfigValue =
-    std::variant<bool, int, float, double, std::string, position_bounds, radius,
-                 PointCloudPtr, VoxelisedCloudPtr, AabbListPtr>;
+class Workspace;
 
 class ConfigRegistry {
 public:
@@ -31,8 +31,6 @@ public:
     std::function<ConfigValue()> get;
     std::function<void(ConfigValue)> set;
   };
-
-  using ChangeCallback = std::function<void(std::string_view path)>;
 
   POINTCASTER_CORE_EXPORT void register_field(std::string path, Field field);
 
@@ -56,16 +54,43 @@ public:
   template <typename StringCollection>
   void snapshot(const StringCollection &paths, StringMap<ConfigValue> &out);
 
-  POINTCASTER_CORE_EXPORT void on_change(std::string_view prefix,
-                                         ChangeCallback cb);
+  using ChangeCallback = std::function<void(std::string_view path)>;
+  using SubscriptionId = std::uint64_t;
 
-  POINTCASTER_CORE_EXPORT void remove_subscriptions(std::string_view prefix);
+  POINTCASTER_CORE_EXPORT SubscriptionId on_change(std::string_view prefix,
+                                                   ChangeCallback cb);
+
+  // ids are never reused, so removing one that's already gone is a no-op
+  // rather than a match against some later subscription
+  POINTCASTER_CORE_EXPORT void remove_subscription(SubscriptionId id);
 
 private:
+  struct Subscription {
+    SubscriptionId id;
+    std::string prefix;
+    ChangeCallback callback;
+  };
+
   mutable std::shared_mutex _mutex;
   StringMap<Field> _fields;
-  std::vector<std::pair<std::string, ChangeCallback>> _subs;
+  std::vector<Subscription> _subs;
+  SubscriptionId _next_subscription_id = 1;
 };
+
+// ---- wrappers to use the workspace's config registry without its full type
+// ---
+
+namespace config {
+
+POINTCASTER_CORE_EXPORT ConfigRegistry::SubscriptionId
+on_change(pc::Workspace &workspace, std::string_view prefix,
+          ConfigRegistry::ChangeCallback cb);
+
+POINTCASTER_CORE_EXPORT void
+remove_subscription(pc::Workspace &workspace,
+                    ConfigRegistry::SubscriptionId id);
+
+} // namespace config
 
 // ---- rfl wrapper type traits ----
 
@@ -94,9 +119,9 @@ concept ConfigValueCompatible =
 // Types that sit at a registry path as one whole value, rather than being
 // walked into for the fields underneath them
 template <class T>
-concept RegistryLeaf = ConfigValueCompatible<T> ||
-                       std::is_same_v<T, position_bounds> ||
-                       std::is_same_v<T, radius>;
+concept RegistryLeaf =
+    ConfigValueCompatible<T> || std::is_same_v<T, position_bounds> ||
+    std::is_same_v<T, radius>;
 
 // Types rfl can traverse recursively (plain aggregates; excludes arrays,
 // std::string, std::vector, etc. which are not aggregates)
