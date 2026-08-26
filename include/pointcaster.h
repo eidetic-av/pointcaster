@@ -1,4 +1,4 @@
 #pragma once
 
-#include "pointcatser/core_types.h"
-#include "pointcatser/point_cloud.h"
+#include "pointcaster/core_types.h"
+#include "pointcaster/point_cloud.h"
