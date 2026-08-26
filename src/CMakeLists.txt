@@ -12,6 +12,8 @@ set(QT_QML_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml")
 add_subdirectory(core)
 add_subdirectory(pipeline)
 
+add_subdirectory(pointreceiver)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(app_icon_resource "${CMAKE_SOURCE_DIR}/packaging/icon.rc")
   # set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)

@@ -9,6 +9,7 @@
 namespace pc {
 
 using int2 = std::pair<int, int>;
+using float2 = std::pair<float, float>;
 
 struct float3 {
   float x = 0;

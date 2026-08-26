@@ -317,27 +317,26 @@ struct ConnectionState {
 
       char address_buffer[256];
       pointreceiver_pointcloud_frame in_frame{};
-      if (!pointreceiver_dequeue_point_cloud(pointreceiver_ctx, address_buffer,
-                                             sizeof(address_buffer), &in_frame,
-                                             10)) {
+      if (pointreceiver_dequeue_point_cloud(pointreceiver_ctx, address_buffer,
+                                            sizeof(address_buffer), &in_frame,
+                                            10) != POINTRECEIVER_OK) {
         continue;
       }
 
-      const int n = in_frame.point_count;
-      if (n <= 0 || !in_frame.positions || !in_frame.colours) continue;
+      const std::size_t n = in_frame.point_count;
+      if (n == 0 || !in_frame.positions || !in_frame.colours) continue;
 
       const std::uint32_t cap = capacity_points; // global snapshot
-      const std::uint32_t num_points = std::min<std::uint32_t>(n, cap);
+      const std::uint32_t num_points =
+          std::min<std::uint32_t>(static_cast<std::uint32_t>(n), cap);
 
       ChannelState &channel = channel_for(address_buffer);
       channel.ensure_pool(cap, frame_pool_size);
       auto writable_frame = channel.acquire_writable();
       if (!writable_frame) continue;
 
-      const auto *packed_pos =
-          static_cast<const bob::types::position *>(in_frame.positions);
-      const auto *packed_col =
-          static_cast<const bob::types::color *>(in_frame.colours);
+      const auto *packed_pos = in_frame.positions;
+      const auto *packed_col = in_frame.colours;
       float *pos_out = writable_frame->positions_xyz.data();
       float *col_out = writable_frame->colours_rgba.data();
       std::uint32_t *idx_out = writable_frame->indices.data();
@@ -564,19 +563,18 @@ struct ConnectionState {
       const auto loop_start_time = clock::now();
 
       pointreceiver_sync_message msg{};
-      const bool got =
-          pointreceiver_dequeue_message(pointreceiver_ctx, &msg, 10);
-      if (!got) continue;
+      if (pointreceiver_dequeue_message(pointreceiver_ctx, &msg, 10) !=
+          POINTRECEIVER_OK)
+        continue;
 
       // Copy id now (msg.id is a fixed buffer, but we want stable storage per
       // entry).
       const std::string id =
           (msg.id[0] != '\0') ? std::string(msg.id) : std::string{};
 
+      // list payloads are borrowed from the context, so convert before the
+      // next dequeue invalidates them
       const PointreceiverMessageValue converted = convert_message(msg);
-
-      // Release any allocations inside msg (lists, contours, etc.)
-      pointreceiver_free_sync_message(pointreceiver_ctx, &msg);
 
       // If there is no id (signal-only), we still count it but we don’t store
       // it keyed.
@@ -732,13 +730,13 @@ PointreceiverConnectionHandle::known_point_cloud_addresses() const {
   if (!_state->pointreceiver_ctx) return result;
 
   const std::size_t count =
-      pointreceiver_known_address_count(_state->pointreceiver_ctx);
+      pointreceiver_known_stream_address_count(_state->pointreceiver_ctx);
   result.reserve(count);
 
   char buffer[256];
   for (std::size_t i = 0; i < count; ++i)
-    if (pointreceiver_get_known_address(_state->pointreceiver_ctx, i, buffer,
-                                        sizeof(buffer)))
+    if (pointreceiver_get_known_stream_address(_state->pointreceiver_ctx, i, buffer,
+                                        sizeof(buffer)) == POINTRECEIVER_OK)
       result.emplace_back(buffer);
 
   return result;
