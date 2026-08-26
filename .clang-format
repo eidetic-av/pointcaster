@@ -1,3 +1,4 @@
 AllowShortIfStatementsOnASingleLine: true
 AllowShortLoopsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: Inline
+BreakTemplateDeclarations: Leave
