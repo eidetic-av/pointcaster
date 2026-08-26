@@ -1,4 +1,5 @@
 #include "stream_channel_model.h"
+#include "point_streamer/point_streamer_config.h"
 
 #include <QTimer>
 #include <algorithm>
@@ -94,10 +95,10 @@ bool StreamChannelListModel::setChannelEnabled(int index, bool enabled) {
     if (it != channels.end()) {
       it->enabled.set(enabled);
     } else {
-      pc::networking::StreamChannelOverride entry;
-      entry.address = address;
-      entry.enabled.set(enabled);
-      channels.push_back(std::move(entry));
+      channels.push_back(pc::networking::StreamChannelConfiguration{
+          .address = address,
+          .enabled = {enabled},
+      });
     }
   }
 

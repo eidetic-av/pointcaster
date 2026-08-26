@@ -39,7 +39,8 @@ using ConfigurationVariant = std::variant<
     SessionTimelineConfiguration, SequenceConfiguration,
     GroupSequenceConfiguration,
     operators::ConcurrentOperatorPipelineConfiguration,
-    networking::PointStreamerConfiguration, publishers::PublishersConfiguration,
+    networking::PointStreamerConfiguration,
+    networking::StreamChannelConfiguration, publishers::PublishersConfiguration,
     publishers::MqttClientConfiguration, publishers::OscSenderConfiguration,
     // TODO REMOVE AND ADD
     // specialised jinja with  setConfig overload like device

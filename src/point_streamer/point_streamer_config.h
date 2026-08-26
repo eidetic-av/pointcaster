@@ -6,7 +6,7 @@
 
 namespace pc::networking {
 
-struct StreamChannelOverride {
+struct StreamChannelConfiguration {
   std::string address;
   rfl::DefaultVal<bool> enabled = true;
 };
@@ -14,9 +14,9 @@ struct StreamChannelOverride {
 struct PointStreamerConfiguration {
   rfl::DefaultVal<int> publish_hz = 60;
   rfl::DefaultVal<std::string> address = "*";
-  rfl::DefaultVal<int> port = 9992;
+  rfl::DefaultVal<int> port = 9992; // @minmax(1024, 49151)
   rfl::DefaultVal<bool> compress = false;
-  std::vector<StreamChannelOverride> channels{}; // @hidden
+  std::vector<StreamChannelConfiguration> channels{}; // @hidden
 };
 
 } // namespace pc::networking
