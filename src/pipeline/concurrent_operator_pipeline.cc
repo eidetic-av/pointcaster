@@ -1,7 +1,10 @@
 #include "concurrent_operator_pipeline.h"
+#include "pipeline/pipeline_frame.h"
 #include "plugins/operators/operator_variants.h"
+
 #include <logger/logger.h>
 #include <memory>
+#include <oneapi/tbb/concurrent_queue.h>
 #include <pointcaster/plugin_manager_lock.h>
 #include <profiling/profiling_zone.h>
 #include <workspace/workspace.h>
@@ -9,6 +12,23 @@
 namespace pc::operators {
 
 using namespace pc::profiling;
+
+struct ConcurrentOperatorPipeline::InputQueue {
+  tbb::concurrent_bounded_queue<PipelineFramePtr> queue;
+};
+
+ConcurrentOperatorPipeline::ConcurrentOperatorPipeline(
+    std::vector<OperatorPipelineWorkerChain> worker_chains,
+    size_t max_queue_size)
+    : _worker_chains(std::move(worker_chains)),
+      _input_queue(std::make_unique<InputQueue>()) {
+  const size_t cap = max_queue_size
+                         ? max_queue_size
+                         : std::max<size_t>(1, _worker_chains.size());
+  _input_queue->queue.set_capacity(cap);
+}
+
+ConcurrentOperatorPipeline::~ConcurrentOperatorPipeline() { stop(); }
 
 std::vector<OperatorPipelineWorkerChain> build_worker_chains(
     std::span<const operators::OperatorConfigurationVariant> configs,
@@ -48,9 +68,7 @@ void ConcurrentOperatorPipeline::start() {
   }
 }
 
-void ConcurrentOperatorPipeline::stop() {
-  _worker_threads.clear();
-}
+void ConcurrentOperatorPipeline::stop() { _worker_threads.clear(); }
 
 bool ConcurrentOperatorPipeline::submit(std::shared_ptr<PointCloud> raw) {
   if (!raw) return false;
@@ -58,9 +76,9 @@ bool ConcurrentOperatorPipeline::submit(std::shared_ptr<PointCloud> raw) {
       .seq = _input_seq.fetch_add(1, std::memory_order_relaxed) + 1,
       .cloud = std::move(raw),
       .additional_streams = {}});
-  while (!_input_queue.try_push(frame)) {
+  while (!_input_queue->queue.try_push(frame)) {
     PipelineFramePtr dropped;
-    _input_queue.try_pop(dropped); // evict oldest, then retry
+    _input_queue->queue.try_pop(dropped); // evict oldest, then retry
   }
   return true;
 }
@@ -68,11 +86,12 @@ bool ConcurrentOperatorPipeline::submit(std::shared_ptr<PointCloud> raw) {
 void ConcurrentOperatorPipeline::worker_loop(size_t worker_index,
                                              std::stop_token stop_token) {
   auto &chain = _worker_chains[worker_index];
-  std::stop_callback on_stop(stop_token, [this] { _input_queue.abort(); });
+  std::stop_callback on_stop(stop_token,
+                             [this] { _input_queue->queue.abort(); });
   try {
     while (!stop_token.stop_requested()) {
       PipelineFramePtr current;
-      _input_queue.pop(current);
+      _input_queue->queue.pop(current);
       if (stop_token.stop_requested()) break;
       if (!current) continue;
 

@@ -9,13 +9,6 @@
 #include <plugins/operators/operator_plugin.h>
 #include <vector>
 
-// when TBB is transitively included in Qt UI units, it really hates having
-// Qt's "emit" defined
-#pragma push_macro("emit")
-#undef emit
-#include <oneapi/tbb/concurrent_queue.h>
-#pragma pop_macro("emit")
-
 namespace pc::operators {
 
 using OperatorPipelineWorkerChain =
@@ -31,14 +24,9 @@ public:
   // Submitting a frame while the queue is full evicts the oldest queued frame
   ConcurrentOperatorPipeline(
       std::vector<OperatorPipelineWorkerChain> worker_chains,
-      size_t max_queue_size = 0)
-      : _worker_chains(std::move(worker_chains)) {
-    const size_t cap = max_queue_size
-                           ? max_queue_size
-                           : std::max<size_t>(1, _worker_chains.size());
-    _input_queue.set_capacity(cap);
-  }
-  ~ConcurrentOperatorPipeline() { stop(); }
+      size_t max_queue_size = 0);
+
+  ~ConcurrentOperatorPipeline();
   ConcurrentOperatorPipeline(const ConcurrentOperatorPipeline &) = delete;
   ConcurrentOperatorPipeline &
   operator=(const ConcurrentOperatorPipeline &) = delete;
@@ -79,7 +67,8 @@ private:
   std::vector<std::vector<std::unique_ptr<operators::OperatorPlugin>>>
       _worker_chains;
 
-  tbb::concurrent_bounded_queue<PipelineFramePtr> _input_queue;
+  struct InputQueue;
+  std::unique_ptr<InputQueue> _input_queue;
 
   std::atomic<PipelineFramePtr> _latest;
 
