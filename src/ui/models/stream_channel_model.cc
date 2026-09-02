@@ -64,7 +64,7 @@ void StreamChannelListModel::refresh() {
       enabled_overrides[channel.address] = channel.enabled.value();
 
     for (const auto &source :
-         pc::networking::collect_stream_channel_sources(*_workspace)) {
+         pc::networking::collect_point_streams(*_workspace)) {
       bool enabled = true;
       if (const auto it = enabled_overrides.find(source.address);
           it != enabled_overrides.end())

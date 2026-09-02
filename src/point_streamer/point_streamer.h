@@ -4,11 +4,11 @@
 #include <memory>
 #include <string>
 #include <thread>
-#include <unordered_map>
+#include <util/string_map.h>
 
 namespace pc {
 class Workspace;
-}
+} // namespace pc
 
 namespace pc::networking {
 
@@ -18,14 +18,10 @@ public:
 
   bool has_listeners(const std::string &channel_address) const;
 
-  std::shared_ptr<const std::unordered_map<std::string, int>>
-  subscriber_counts() const {
-    return _subscriber_counts.load(std::memory_order_acquire);
-  }
+  std::shared_ptr<const StringMap<int>> subscriber_counts() const;
 
 private:
-  std::atomic<std::shared_ptr<const std::unordered_map<std::string, int>>>
-      _subscriber_counts;
+  std::atomic<std::shared_ptr<const StringMap<int>>> _subscriber_counts;
   std::jthread _worker;
 };
 

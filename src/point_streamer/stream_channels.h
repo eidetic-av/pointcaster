@@ -9,14 +9,15 @@ namespace pc {
 class Workspace;
 }
 
+// TODO i feel like all this doesn't belong in this namespace or this filename
+
 namespace pc::networking {
 
-struct StreamChannelSource {
+struct PointStream {
   std::string address;
   std::shared_ptr<PointCloud> cloud;
 };
 
-std::vector<StreamChannelSource>
-collect_stream_channel_sources(Workspace &workspace);
+std::vector<PointStream> collect_point_streams(Workspace &workspace);
 
 } // namespace pc::networking

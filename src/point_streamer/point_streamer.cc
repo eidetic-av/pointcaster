@@ -18,7 +18,7 @@
 #include <span>
 #include <string>
 #include <thread>
-#include <unordered_map>
+#include <util/string_map.h>
 #include <vector>
 #include <workspace/workspace.h>
 #include <workspace/workspace_config.h>
@@ -55,14 +55,13 @@ bool channel_enabled(
 
 void streaming_thread_loop(
     std::stop_token stop_token, Workspace &workspace,
-    std::atomic<std::shared_ptr<const std::unordered_map<std::string, int>>>
-        &subscriber_counts_out) {
+    std::atomic<std::shared_ptr<const StringMap<int>>> &subscriber_counts_out) {
 
   std::string address;
   int port;
   int publish_hz = 30;
   bool compress = false;
-  std::vector<StreamChannelSource> channel_sources;
+  std::vector<PointStream> point_streams;
   std::vector<StreamChannelConfiguration> channel_configs;
 
   // syncing access... pattern here?
@@ -78,7 +77,7 @@ void streaming_thread_loop(
     compress = stream_config.compress.value();
     // TODO is this too heavy to do every frame? maybe we need a dirty marker
     channel_configs = stream_config.channels;
-    channel_sources = collect_stream_channel_sources(workspace);
+    point_streams = collect_point_streams(workspace);
   };
 
   sync_config_vars();
@@ -92,30 +91,28 @@ void streaming_thread_loop(
   pub_socket.set(zmq::sockopt::linger, 0);
   // adding the verboser with xpub ensures we get:
   // subscribe events, "unsubscribe" events for clients that drop off,
-  // and 
   pub_socket.set(zmq::sockopt::xpub_verboser, 1);
 
   try {
     pub_socket.bind(std::format("tcp://{}:{}", address, port));
   } catch (const zmq::error_t &e) {
-    pc::logger()->error("Point streamer failed to bind tcp://{}:{} - {}",
+    pc::logger()->error("Point streamer failed to bind tcp://{}:{} ({})",
                         address, port, e.what());
+    return;
+  } catch (...) {
+    pc::logger()->error(
+        "Point streamer failed to bind to {}:{} (Unknown exception)", address,
+        port);
     return;
   }
   pc::logger()->info("Point streamer bound to tcp://{}:{}", address, port);
 
-  // TODO can use socket monitoring here:
-  // https://deepwiki.com/zeromq/cppzmq/3.4-socket-monitoring
-  // to keep track of connected clients
-
-  // per-channel cached state, addressed by channel address
-  // the clouds themselves
-  std::unordered_map<std::string, std::shared_ptr<PointCloud>> last_clouds;
+  // per-stream cached state, key is the streams address
+  StringMap<std::shared_ptr<PointCloud>> last_clouds;
   // pre-serialized data: address + '\0' + serialized payload
-  std::unordered_map<std::string, std::shared_ptr<std::vector<std::byte>>>
-      last_data;
+  StringMap<std::shared_ptr<std::vector<std::byte>>> last_data;
 
-  std::unordered_map<std::string, int> subscriber_counts;
+  StringMap<int> subscriber_counts;
   bool subscriber_counts_dirty = true;
 
   const auto handle_subscriber_message = [&](auto &msg) {
@@ -134,9 +131,9 @@ void streaming_thread_loop(
     subscriber_counts_dirty = true;
   };
 
-  const auto has_subscriber = [&](const std::string_view channel_address) {
+  const auto has_subscriber = [&](const std::string_view stream_address) {
     return std::ranges::any_of(subscriber_counts, [&](const auto &entry) {
-      return entry.second > 0 && channel_address.starts_with(entry.first);
+      return entry.second > 0 && stream_address.starts_with(entry.first);
     });
   };
 
@@ -146,22 +143,19 @@ void streaming_thread_loop(
 
   while (!stop_token.stop_requested()) {
 
-    while (true) {
-      zmq::message_t msg;
-      const auto result = pub_socket.recv(msg, zmq::recv_flags::dontwait);
-      if (!result) break;
+    for (zmq::message_t msg; pub_socket.recv(msg, zmq::recv_flags::dontwait);) {
       handle_subscriber_message(msg);
     }
 
     sync_config_vars();
 
-    std::vector<StreamChannelSource> publishing_sources;
+    std::vector<PointStream> publishing_streams;
     {
-      ProfilingZone collect_sources_zone("point_stream::collect_sources");
-      publishing_sources =
-          channel_sources | std::views::filter([&](const auto &source) {
-            return has_subscriber(source.address) &&
-                   channel_enabled(channel_configs, source.address);
+      ProfilingZone collect_streams_zone("point_stream::collect_streams");
+      publishing_streams =
+          point_streams | std::views::filter([&](const auto &stream) {
+            return has_subscriber(stream.address) &&
+                   channel_enabled(channel_configs, stream.address);
           }) |
           std::ranges::to<std::vector>();
     }
@@ -169,8 +163,8 @@ void streaming_thread_loop(
     // drop cached state for channels that no longer publish
     {
       const auto still_publishing = [&](const std::string &channel_address) {
-        return std::ranges::any_of(publishing_sources, [&](const auto &source) {
-          return source.address == channel_address;
+        return std::ranges::any_of(publishing_streams, [&](const auto &stream) {
+          return stream.address == channel_address;
         });
       };
       std::erase_if(last_clouds, [&](const auto &entry) {
@@ -181,42 +175,42 @@ void streaming_thread_loop(
       });
     }
 
-    std::vector<StreamChannelSource> sources_to_serialize;
+    std::vector<PointStream> streams_to_serialize;
     {
       ProfilingZone collect_dirty_zone("point_stream::collect_dirty");
-      sources_to_serialize =
-          publishing_sources | std::views::filter([&](const auto &source) {
-            if (!source.cloud || source.cloud->empty()) return false;
-            const auto it = last_clouds.find(source.address);
-            return it == last_clouds.end() || it->second != source.cloud;
+      streams_to_serialize =
+          publishing_streams | std::views::filter([&](const auto &stream) {
+            if (!stream.cloud || stream.cloud->empty()) return false;
+            const auto it = last_clouds.find(stream.address);
+            return it == last_clouds.end() || it->second != stream.cloud;
           }) |
           std::ranges::to<std::vector>();
     }
 
     // serialize all changed channels in parallel, then merge results
     // sequentially before any sending happens
-    if (!sources_to_serialize.empty()) {
+    if (!streams_to_serialize.empty()) {
 
       ProfilingZone serialize_zone("point_stream::serialize");
 
       std::vector<std::shared_ptr<std::vector<std::byte>>> serialized_frames(
-          sources_to_serialize.size());
+          streams_to_serialize.size());
 
       {
         ProfilingZone parallel_serialize_zone("parallel_serialize");
         tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, sources_to_serialize.size()),
+            tbb::blocked_range<size_t>(0, streams_to_serialize.size()),
             [&](const tbb::blocked_range<size_t> &range) {
               for (size_t i = range.begin(); i < range.end(); i++) {
-                const auto &source = sources_to_serialize[i];
-                const auto payload = source.cloud->serialize(compress);
-                const auto prefix_size = source.address.size() + 1;
+                const auto &stream = streams_to_serialize[i];
+                const auto payload = stream.cloud->serialize(compress);
+                const auto prefix_size = stream.address.size() + 1;
 
                 auto framed = std::make_shared<std::vector<std::byte>>(
                     prefix_size + payload.size());
-                std::memcpy(framed->data(), source.address.data(),
-                            source.address.size());
-                (*framed)[source.address.size()] = std::byte{0};
+                std::memcpy(framed->data(), stream.address.data(),
+                            stream.address.size());
+                (*framed)[stream.address.size()] = std::byte{0};
                 std::memcpy(framed->data() + prefix_size, payload.data(),
                             payload.size());
 
@@ -226,10 +220,10 @@ void streaming_thread_loop(
       }
       {
         ProfilingZone cache_frames_zone("cache_frames");
-        for (size_t i = 0; i < sources_to_serialize.size(); i++) {
-          const auto &source = sources_to_serialize[i];
-          last_clouds[source.address] = source.cloud;
-          last_data[source.address] = std::move(serialized_frames[i]);
+        for (size_t i = 0; i < streams_to_serialize.size(); i++) {
+          const auto &stream = streams_to_serialize[i];
+          last_clouds[stream.address] = stream.cloud;
+          last_data[stream.address] = std::move(serialized_frames[i]);
         }
       }
     }
@@ -240,8 +234,8 @@ void streaming_thread_loop(
     // otherwise never get a frame until the next change.
     {
       ProfilingZone send_zone("point_stream::send");
-      for (const auto &source : publishing_sources) {
-        const auto it = last_data.find(source.address);
+      for (const auto &stream : publishing_streams) {
+        const auto it = last_data.find(stream.address);
         if (it == last_data.end() || !it->second || it->second->empty())
           continue;
 
@@ -258,15 +252,14 @@ void streaming_thread_loop(
           pub_socket.send(msg, zmq::send_flags::none);
         } catch (const zmq::error_t &e) {
           pc::logger()->warn("Point streamer send failed on '{}': {}",
-                             source.address, e.what());
+                             stream.address, e.what());
         }
       }
     }
 
     if (subscriber_counts_dirty) {
       subscriber_counts_out.store(
-          std::make_shared<const std::unordered_map<std::string, int>>(
-              subscriber_counts),
+          std::make_shared<const StringMap<int>>(subscriber_counts),
           std::memory_order_release);
       subscriber_counts_dirty = false;
     }
@@ -289,6 +282,10 @@ bool PointStreamer::has_listeners(const std::string &channel_address) const {
   if (subscribe_all != counts->end() && subscribe_all->second > 0) return true;
   const auto it = counts->find(channel_address);
   return it != counts->end() && it->second > 0;
+}
+
+std::shared_ptr<const StringMap<int>> PointStreamer::subscriber_counts() const {
+  return _subscriber_counts.load(std::memory_order_acquire);
 }
 
 } // namespace pc::networking

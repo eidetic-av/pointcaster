@@ -7,10 +7,17 @@
 
 namespace pc::networking {
 
-std::vector<StreamChannelSource>
-collect_stream_channel_sources(Workspace &workspace) {
-  std::vector<StreamChannelSource> sources;
-  sources.reserve(workspace.config.sessions.size() + workspace.devices.size());
+// return all possible PointCloud stream channels that are available for
+// use through the workspace
+std::vector<PointStream> collect_point_streams(Workspace &workspace) {
+  std::vector<PointStream> sources;
+  // TODO maybe this lock situation needs to be re thought through. we access
+  // workspace.config here without the lock, lock below, then access it later
+  // again for groups without the lock.
+  const auto sources_count = workspace.config.sessions.size() +
+                             workspace.devices.size() +
+                             workspace.config.device_groups.size();
+  sources.reserve(sources_count);
 
   {
     std::scoped_lock lock(workspace.sessions_access);
