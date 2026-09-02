@@ -21,7 +21,7 @@ public:
   OscSenderConfiguration config(Workspace &workspace) const;
 
   void handle_update(const std::string_view path, const ConfigValue &value,
-                     const OscSenderConfiguration &config_snapshot) const;
+                     const OscSenderConfiguration &config_snapshot);
 
   void handle_config_change(std::string_view path,
                             const OscSenderConfiguration &config_snapshot);

@@ -87,14 +87,14 @@ void publisher_thread_loop(std::stop_token stop_token, Workspace &workspace) {
         auto [data, serialize] = zpp::bits::data_out();
         const auto result = serialize(kvp);
         if (zpp::bits::failure(result)) {
-          pc::logger()->warn("Failure to serialize '{}'", path);
+          pc::logger()->error("Failure to serialize '{}'", path);
           continue;
         }
-        zmq::message_t msg(data);
+        zmq::message_t msg(std::move(data));
         try {
           pub_socket.send(msg, zmq::send_flags::none);
         } catch (const zmq::error_t &e) {
-          pc::logger()->warn("Failure to publish '{}' ({})", path, e.what());
+          pc::logger()->error("Failure to publish '{}' ({})", path, e.what());
           continue;
         }
       }

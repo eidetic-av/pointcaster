@@ -23,7 +23,7 @@ public:
   void tick();
 
   void handle_update(const std::string_view path, const ConfigValue &value,
-                     const MqttClientConfiguration &config_snapshot) const;
+                     const MqttClientConfiguration &config_snapshot);
 
   void handle_config_change(std::string_view path,
                             const MqttClientConfiguration &config_snapshot);

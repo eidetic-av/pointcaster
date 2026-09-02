@@ -133,9 +133,9 @@ void MqttClient::tick() {
   }
 }
 
-void MqttClient::handle_update(
-    const std::string_view path, const ConfigValue &value,
-    const MqttClientConfiguration &config_snapshot) const {
+void MqttClient::handle_update(const std::string_view path,
+                               const ConfigValue &value,
+                               const MqttClientConfiguration &config_snapshot) {
 
   if (!_connection || !_connection->connected()) return;
 

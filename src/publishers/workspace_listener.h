@@ -78,8 +78,7 @@ private:
     return std::format("publishers/{}", ConfigT::Tag::strings().at(0));
   }
 
-  void dispatch_config_changes() {
-
+  ConfigT dispatch_config_changes() {
     static_assert(
         !requires { &OwnerT::handle_config_change; } ||
             requires(std::string_view path, const ConfigT &config) {
@@ -88,33 +87,35 @@ private:
         "handle_config_change must take (std::string_view, const "
         "ConfigT&) to be dispatched");
 
+    auto config_snapshot = _owner.config(_workspace);
     std::vector<std::string> changed_paths;
     {
       std::scoped_lock lock(_changed_paths_access);
-      if (_changed_paths.empty()) return;
+      if (_changed_paths.empty()) return config_snapshot;
       changed_paths.swap(_changed_paths);
     }
     if constexpr (requires(std::string_view path, const ConfigT &config) {
                     _owner.handle_config_change(path, config);
                   }) {
-      const auto config_snapshot = _owner.config(_workspace);
       for (const auto &path : changed_paths) {
         _owner.handle_config_change(path, config_snapshot);
       }
     }
+    return config_snapshot;
   }
 
   static void listen(std::stop_token stop_token, WorkspaceListener *self) {
     auto socket = WorkspaceSocket::create_subscriber();
     while (!stop_token.stop_requested()) {
-      self->dispatch_config_changes();
-      if constexpr (requires { self->_owner.tick(); }) {
+      auto config_snapshot = self->dispatch_config_changes();
+      if constexpr (requires { self->_owner.tick(config_snapshot); }) {
+        self->_owner.tick(config_snapshot);
+      } else if constexpr (requires { self->_owner.tick(); }) {
         self->_owner.tick();
       }
       // receive blocks until we get an update (or timeout)
       auto update = socket.receive();
       if (update == std::nullopt) continue;
-      const auto config_snapshot = self->_owner.config(self->_workspace);
       self->_owner.handle_update(update->first, update->second,
                                  config_snapshot);
       // after we've handled the update that woke the thread,

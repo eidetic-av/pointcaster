@@ -98,9 +98,9 @@ void OscSender::handle_config_change(
   }
 }
 
-void OscSender::handle_update(
-    const std::string_view path, const ConfigValue &value,
-    const OscSenderConfiguration &config_snapshot) const {
+void OscSender::handle_update(const std::string_view path,
+                              const ConfigValue &value,
+                              const OscSenderConfiguration &config_snapshot) {
 
   if (!_connection) return;
 
