@@ -76,45 +76,29 @@ typedef enum {
 } pointreceiver_status;
 
 /**
- * @brief Enumerates the types of messages that can be received.
- */
-typedef enum {
-  POINTRECEIVER_MSG_TYPE_CONNECTED = 0,             /**< Connected message */
-  POINTRECEIVER_MSG_TYPE_CLIENT_HEARTBEAT,          /**< Client heartbeat */
-  POINTRECEIVER_MSG_TYPE_CLIENT_HEARTBEAT_RESPONSE, /**< Response to client
-                                                       heartbeat */
-  POINTRECEIVER_MSG_TYPE_PARAMETER_UPDATE,  /**< Parameter update message */
-  POINTRECEIVER_MSG_TYPE_PARAMETER_REQUEST, /**< Parameter request message */
-  POINTRECEIVER_MSG_TYPE_ENDPOINT_UPDATE,   /**< Pointcaster server endpoint
-                                               update message */
-  POINTRECEIVER_MSG_TYPE_UNKNOWN            /**< Unknown message type */
-} pointreceiver_message_type;
-
-/**
  * @brief Enumerates the possible types for parameter values.
  *
- * Selects the active member of pointreceiver_sync_message::value. Always set,
- * on every message: POINTRECEIVER_PARAM_VALUE_UNKNOWN means no member is live.
+ * Selects the active member of pointreceiver_message::value. Always set,
+ * on every message: POINTRECEIVER_MESSAGE_VALUE_UNKNOWN means no member is
+ * live.
  */
 typedef enum {
-  POINTRECEIVER_PARAM_VALUE_FLOAT = 0,  /**< Float value */
-  POINTRECEIVER_PARAM_VALUE_INT,        /**< Integer value */
-  POINTRECEIVER_PARAM_VALUE_FLOAT2,     /**< 2D float vector */
-  POINTRECEIVER_PARAM_VALUE_FLOAT3,     /**< 3D float vector */
-  POINTRECEIVER_PARAM_VALUE_FLOAT4,     /**< 4D float vector */
-  POINTRECEIVER_PARAM_VALUE_FLOAT2LIST, /**< List of 2D float vectors */
-  POINTRECEIVER_PARAM_VALUE_FLOAT3LIST, /**< List of 3D float vectors */
-  POINTRECEIVER_PARAM_VALUE_FLOAT4LIST, /**< List of 4D float vectors */
-  POINTRECEIVER_PARAM_VALUE_AABBLIST,   /**< List of Axis-aligned bounding boxes
+  POINTRECEIVER_MESSAGE_VALUE_FLOAT = 0,  /**< Float value */
+  POINTRECEIVER_MESSAGE_VALUE_INT,        /**< Integer value */
+  POINTRECEIVER_MESSAGE_VALUE_FLOAT2,     /**< 2D float vector */
+  POINTRECEIVER_MESSAGE_VALUE_FLOAT3,     /**< 3D float vector */
+  POINTRECEIVER_MESSAGE_VALUE_FLOAT4,     /**< 4D float vector */
+  POINTRECEIVER_MESSAGE_VALUE_FLOAT2LIST, /**< List of 2D float vectors */
+  POINTRECEIVER_MESSAGE_VALUE_FLOAT3LIST, /**< List of 3D float vectors */
+  POINTRECEIVER_MESSAGE_VALUE_FLOAT4LIST, /**< List of 4D float vectors */
+  POINTRECEIVER_MESSAGE_VALUE_AABBLIST, /**< List of Axis-aligned bounding boxes
                                          */
-  POINTRECEIVER_PARAM_VALUE_CONTOURSLIST,    /**< List of contours. 2D polygons
-                                                stored as a list of vertex
-                                                locations in pointcaster camera
-                                                space */
-  POINTRECEIVER_PARAM_VALUE_ENDPOINT_UPDATE, /**< Pointcaster server endpoint
-                                                update */
-  POINTRECEIVER_PARAM_VALUE_UNKNOWN          /**< No value */
-} pointreceiver_param_value_type;
+  POINTRECEIVER_MESSAGE_VALUE_CONTOURSLIST, /**< List of contours. 2D polygons
+                                             stored as a list of vertex
+                                             locations in pointcaster camera
+                                             space */
+  POINTRECEIVER_MESSAGE_VALUE_UNKNOWN       /**< No value */
+} pointreceiver_message_value_type;
 
 /**
  * @brief Structure representing a 2D float vector.
@@ -228,25 +212,14 @@ typedef struct {
 } pointreceiver_contours_list_t;
 
 /**
- * @brief Structure representing an endpoint update from a Pointcaster server.
- */
-typedef struct {
-  size_t port; /**< Ephemeral port of the endpoint */
-  bool active; /**< Whether the endpoint has become active or been disabled in
-                  this update */
-} pointreceiver_endpoint_update;
-
-/**
  * @brief A message received from a Pointcaster instance.
  *
- * @c value_type selects the live member of @c value on every message, including
- * endpoint updates. List payloads are borrowed from the context and stay valid
- * until the next pointreceiver_dequeue_message on that context.
+ * @c value_type selects the live member of @c value on every message, List
+ * payloads are borrowed from the context and stay valid until the next
+ * pointreceiver_dequeue_message on that context.
  */
 typedef struct {
-  pointreceiver_message_type message_type; /**< Type of the message */
-  char id[256];                            /**< Identifier string */
-  pointreceiver_param_value_type
+  pointreceiver_message_value_type
       value_type; /**< Type of the value contained in the union */
 
   union {
@@ -263,11 +236,9 @@ typedef struct {
         float4_list_val; /**< List of 4D float vector values */
     pointreceiver_aabb_list_t aabb_list_val;         /**< List of AABB values */
     pointreceiver_contours_list_t contours_list_val; /**< List of contours */
-    pointreceiver_endpoint_update
-        endpoint_update_val; /**< Endpoint Update value */
-  } value;                   /**< Union holding the message value */
+  } value; /**< Union holding the message value */
 
-} pointreceiver_sync_message;
+} pointreceiver_message;
 
 /**
  * @brief A point cloud frame received from a Pointcaster instance.
@@ -278,7 +249,7 @@ typedef struct {
   size_t point_count;                        /**< Number of points */
   const pointreceiver_position_t *positions; /**< Borrowed positions buffer */
   const pointreceiver_color_t *colours;      /**< Borrowed colours buffer */
-} pointreceiver_pointcloud_frame;
+} pointreceiver_point_cloud_frame;
 
 /**
  * @brief Returns a short human-readable description of a status code.
@@ -359,12 +330,46 @@ POINTRECEIVER_EXPORT bool
 pointreceiver_message_receiver_running(pointreceiver_context *ctx);
 
 /**
+ * @brief Subscribes to a message channel by address.
+ *
+ * Registers interest in the channel identified by @p address. The receiver
+ * thread applies the subscription to its SUB socket, which propagates upstream
+ * to the publisher. Matching is exact (a NUL separator is appended internally,
+ * so "foo" will not also match "foobar"). NULL or "" subscribes to all
+ * channels. Safe to call from any thread and before the receiver is started;
+ * pending subscriptions are applied once it is running, including after a
+ * stop/start cycle.
+ *
+ * @param ctx Pointer to the PointReceiver context.
+ * @param address Channel address, or NULL/"" for all channels.
+ * @return POINTRECEIVER_OK or POINTRECEIVER_ERROR_INVALID_ARGUMENT.
+ */
+POINTRECEIVER_EXPORT pointreceiver_status pointreceiver_subscribe_to_message(
+    pointreceiver_context *ctx, const char *address);
+
+/**
+ * @brief Unsubscribes from a message channel by address.
+ *
+ * Removes a previously registered subscription. NULL or "" removes the
+ * subscribe-all subscription. Unknown addresses are ignored.
+ *
+ * @param ctx Pointer to the PointReceiver context.
+ * @param address Channel address, or NULL/"" for all channels.
+ * @return POINTRECEIVER_OK or POINTRECEIVER_ERROR_INVALID_ARGUMENT.
+ */
+POINTRECEIVER_EXPORT pointreceiver_status
+pointreceiver_unsubscribe_from_message(pointreceiver_context *ctx,
+                                       const char *address);
+
+/**
  * @brief Dequeues a message, waiting up to @p timeout_ms for one to arrive.
  *
  * Any list payload in the returned message is borrowed from the context and
  * stays valid until the next call to this function on the same context.
  *
  * @param ctx Pointer to the PointReceiver context.
+ * @param[out] out_address Buffer receiving the NUL-terminated channel address.
+ * @param address_capacity Size in bytes of @p out_address.
  * @param[out] out_message Structure populated with the dequeued message.
  * @param timeout_ms Timeout in milliseconds; values below zero are treated as
  * zero.
@@ -372,8 +377,8 @@ pointreceiver_message_receiver_running(pointreceiver_context *ctx);
  * POINTRECEIVER_ERROR_TIMEOUT or POINTRECEIVER_ERROR_DECODE_FAILED.
  */
 POINTRECEIVER_EXPORT pointreceiver_status pointreceiver_dequeue_message(
-    pointreceiver_context *ctx, pointreceiver_sync_message *out_message,
-    int timeout_ms);
+    pointreceiver_context *ctx, char *out_address, size_t address_capacity,
+    pointreceiver_message *out_message, int timeout_ms);
 
 /**
  * @brief Starts the point cloud receiver thread.
@@ -464,7 +469,7 @@ pointreceiver_unsubscribe_from_point_cloud(pointreceiver_context *ctx,
  */
 POINTRECEIVER_EXPORT pointreceiver_status pointreceiver_dequeue_point_cloud(
     pointreceiver_context *ctx, char *out_address, size_t address_capacity,
-    pointreceiver_pointcloud_frame *out_frame, int timeout_ms);
+    pointreceiver_point_cloud_frame *out_frame, int timeout_ms);
 
 /**
  * @brief Returns the number of point cloud stream channel addresses observed so
@@ -474,13 +479,13 @@ POINTRECEIVER_EXPORT pointreceiver_status pointreceiver_dequeue_point_cloud(
  * @return Number of known channel addresses.
  */
 POINTRECEIVER_EXPORT size_t
-pointreceiver_known_stream_address_count(pointreceiver_context *ctx);
+pointreceiver_known_point_cloud_address_count(pointreceiver_context *ctx);
 
 /**
  * @brief Retrieves a known channel address by index.
  *
  * Addresses are returned in stable sorted order. @p index must be less than
- * pointreceiver_known_stream_address_count().
+ * pointreceiver_known_point_cloud_address_count().
  *
  * @param ctx Pointer to the PointReceiver context.
  * @param index Zero-based index of the address.
@@ -490,8 +495,9 @@ pointreceiver_known_stream_address_count(pointreceiver_context *ctx);
  * POINTRECEIVER_ERROR_OUT_OF_RANGE.
  */
 POINTRECEIVER_EXPORT pointreceiver_status
-pointreceiver_get_known_stream_address(pointreceiver_context *ctx, size_t index,
-                                       char *out, size_t out_capacity);
+pointreceiver_get_known_point_cloud_address(pointreceiver_context *ctx,
+                                            size_t index, char *out,
+                                            size_t out_capacity);
 
 #ifdef __cplusplus
 }
