@@ -83,16 +83,15 @@ typedef enum {
  * live.
  */
 typedef enum {
-  POINTRECEIVER_MESSAGE_VALUE_FLOAT = 0,  /**< Float value */
-  POINTRECEIVER_MESSAGE_VALUE_INT,        /**< Integer value */
-  POINTRECEIVER_MESSAGE_VALUE_FLOAT2,     /**< 2D float vector */
-  POINTRECEIVER_MESSAGE_VALUE_FLOAT3,     /**< 3D float vector */
-  POINTRECEIVER_MESSAGE_VALUE_FLOAT4,     /**< 4D float vector */
-  POINTRECEIVER_MESSAGE_VALUE_FLOAT2LIST, /**< List of 2D float vectors */
-  POINTRECEIVER_MESSAGE_VALUE_FLOAT3LIST, /**< List of 3D float vectors */
-  POINTRECEIVER_MESSAGE_VALUE_FLOAT4LIST, /**< List of 4D float vectors */
-  POINTRECEIVER_MESSAGE_VALUE_AABBLIST, /**< List of Axis-aligned bounding boxes
-                                         */
+  POINTRECEIVER_MESSAGE_VALUE_FLOAT = 0,
+  POINTRECEIVER_MESSAGE_VALUE_INT,
+  POINTRECEIVER_MESSAGE_VALUE_STRING,
+  POINTRECEIVER_MESSAGE_VALUE_BOOL,
+  POINTRECEIVER_MESSAGE_VALUE_BOUNDS, /**< min/max bounds */
+  POINTRECEIVER_MESSAGE_VALUE_POINTS, /**< xyzrgb point cloud */
+  POINTRECEIVER_MESSAGE_VALUE_VOXELS, /**< xyz point cloud with a voxel size*/
+  POINTRECEIVER_MESSAGE_VALUE_AABBS,  /**< List of Axis-aligned bounding boxes
+                                       */
   POINTRECEIVER_MESSAGE_VALUE_CONTOURSLIST, /**< List of contours. 2D polygons
                                              stored as a list of vertex
                                              locations in pointcaster camera
@@ -223,17 +222,16 @@ typedef struct {
       value_type; /**< Type of the value contained in the union */
 
   union {
-    float float_val;                   /**< Float value */
-    int int_val;                       /**< Integer value */
-    pointreceiver_float2_t float2_val; /**< 2D float vector value */
-    pointreceiver_float3_t float3_val; /**< 3D float vector value */
-    pointreceiver_float4_t float4_val; /**< 4D float vector value */
-    pointreceiver_float2_list_t
-        float2_list_val; /**< List of 2D float vector values */
-    pointreceiver_float3_list_t
-        float3_list_val; /**< List of 3D float vector values */
-    pointreceiver_float4_list_t
-        float4_list_val; /**< List of 4D float vector values */
+    float float_val;
+    int int_val;
+    bool bool_val;
+    pointreceiver_float2_t float2_val;
+    pointreceiver_float3_t float3_val;
+    pointreceiver_float4_t float4_val;
+    pointreceiver_float2_list_t float2_list_val;
+    pointreceiver_float3_list_t float3_list_val;
+    pointreceiver_float4_list_t float4_list_val;
+    pointreceiver_aabb_t aabb_val;
     pointreceiver_aabb_list_t aabb_list_val;         /**< List of AABB values */
     pointreceiver_contours_list_t contours_list_val; /**< List of contours */
   } value; /**< Union holding the message value */

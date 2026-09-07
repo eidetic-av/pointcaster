@@ -118,6 +118,7 @@ static_assert(offsetof(pointreceiver_color_t, r) == offsetof(pc::color, r));
 static_assert(offsetof(pointreceiver_color_t, a) == offsetof(pc::color, a));
 
 zmq::context_t &zmq_receiver_ctx() {
+  // TODO what's an appropriate zmq io thread count to use?
   constexpr auto zmq_io_thread_count = 1;
   static zmq::context_t ctx{zmq_io_thread_count};
   return ctx;
@@ -130,13 +131,13 @@ bool copy_to_buffer(char *destination, size_t capacity,
   return length == source.size();
 }
 
-// retrieve the latest subscriptions using the load_subscriptions_fn passed in,
-// and ensure the socket passed in has its subscriptions synchronised with that
-// list. returns the newly loaded list.
+// load the latest subscriptions using load_subscriptions_function,
+// and ensure socket has its subscriptions synchronised with them.
+// returns the newly loaded list of subscriptions.
 SubscriptionSnapshot
 sync_subscriptions(const SubscriptionSnapshot &current_subscriptions,
-                   zmq::socket_t &socket, auto &&load_subscriptions_fn) {
-  const auto latest_subscriptions = load_subscriptions_fn();
+                   zmq::socket_t &socket, auto &&load_subscriptions_function) {
+  const auto latest_subscriptions = load_subscriptions_function();
   if (latest_subscriptions == current_subscriptions) {
     return current_subscriptions;
   }
@@ -426,13 +427,15 @@ pointreceiver_status pointreceiver_dequeue_message(
     copy_to_buffer(out_address, address_capacity, address);
 
     // and pass out the message structure, filling the union
-    if (const auto *float_value = std::get_if<float>(&value_variant)) {
-      out_message->value_type = POINTRECEIVER_MESSAGE_VALUE_FLOAT;
-      out_message->value.float_val = *float_value;
+    if (const auto *bool_value = std::get_if<bool>(&value_variant)) {
+      out_message->value_type = POINTRECEIVER_MESSAGE_VALUE_BOOL;
+      out_message->value.bool_val = *bool_value;
     } else if (const auto *int_value = std::get_if<int>(&value_variant)) {
       out_message->value_type = POINTRECEIVER_MESSAGE_VALUE_INT;
       out_message->value.int_val = *int_value;
-      // TODO ALL OTHER VARIANTS
+    } else if (const auto *float_value = std::get_if<float>(&value_variant)) {
+      out_message->value_type = POINTRECEIVER_MESSAGE_VALUE_FLOAT;
+      out_message->value.float_val = *float_value;
     } else {
       out_message->value_type = POINTRECEIVER_MESSAGE_VALUE_UNKNOWN;
       return POINTRECEIVER_ERROR_DECODE_FAILED;
