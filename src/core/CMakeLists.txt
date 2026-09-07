@@ -32,6 +32,10 @@ endif()
 find_package(draco CONFIG REQUIRED)
 target_link_libraries(pointcaster_core PRIVATE draco::draco)
 
+# core_types.h needs meshoptimizer.h
+find_package(meshoptimizer CONFIG REQUIRED)
+target_link_libraries(pointcaster_core PUBLIC meshoptimizer::meshoptimizer)
+
 # shared configs need reflectcpp
 find_package(reflectcpp CONFIG REQUIRED)
 target_link_libraries(pointcaster_core PRIVATE reflectcpp::reflectcpp)

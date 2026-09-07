@@ -9,6 +9,7 @@
 		"draco",
 		"eigen3",
 		"fmt",
+		"meshoptimizer",
 		{
 			"name": "reflectcpp",
 			"features": [

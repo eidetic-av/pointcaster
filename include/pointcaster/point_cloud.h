@@ -7,51 +7,27 @@
 #include <memory>
 #include <pointcaster/core.h>
 #include <span>
+#include <string>
+#include <string_view>
 #include <type_traits>
+#include <util/string_map.h>
+#include <variant>
 #include <vector>
 
 namespace pc {
 
-  // TODO arbitrary particle attributes
-
-// enum class attribute_id : std::uint16_t {
-//   scale = 0, velocity, confidence, instance_id, normal,
-//   // stable values — never renumber
-// };
-
-// using attribute_storage = std::variant
-//   std::vector<float>,
-//   std::vector<vec2f>,
-//   std::vector<vec3f>,
-//   std::vector<std::uint16_t>,
-//   std::vector<std::uint32_t>,
-//   std::vector<std::int32_t>>;
-
-// struct attribute {
-//   attribute_id id;
-//   attribute_storage data;
-// };
-
-// struct PointCloud {
-//   std::vector<position> positions;
-//   std::vector<color> colors;
-//   std::vector<attribute> extras;   // small; linear scan is fine
-//   aabb position_bounds;
-
-//   template <typename T>
-//   [[nodiscard]] std::span<T> get(attribute_id id) noexcept {
-//     auto it = std::ranges::find(extras, id, &attribute::id);
-//     if (it == extras.end()) return {};
-//     auto* v = std::get_if<std::vector<T>>(&it->data);
-//     return v ? std::span<T>{*v} : std::span<T>{};
-//   }
-// };
+// Arbitrary per-point attributes, keyed by name.
 
 class PointCloud {
 public:
   std::vector<position> positions;
   std::vector<color> colors;
+
   position_bounds bounds;
+
+  using attribute_storage =
+      std::variant<std::vector<float>, std::vector<scale>>;
+  StringMap<attribute_storage> attributes;
 
   auto size() const { return positions.size(); }
   auto empty() const { return positions.empty(); }
@@ -59,11 +35,19 @@ public:
   void resize(std::size_t new_size) {
     positions.resize(new_size);
     colors.resize(new_size);
+    for (auto &[_, storage] : attributes) {
+      std::visit([new_size](auto &values) { values.resize(new_size); },
+                 storage);
+    }
   }
 
   void reserve(std::size_t new_capacity) {
     positions.reserve(new_capacity);
     colors.reserve(new_capacity);
+    for (auto &[_, storage] : attributes) {
+      std::visit([new_capacity](auto &values) { values.reserve(new_capacity); },
+                 storage);
+    }
   }
 
   POINTCASTER_CORE_EXPORT std::vector<std::byte>
@@ -71,6 +55,33 @@ public:
 
   POINTCASTER_CORE_EXPORT static PointCloud
   deserialize(std::span<const std::byte> buffer);
+
+  // Return an attribute by name
+  template <typename T>
+  [[nodiscard]] std::span<T> get(std::string_view name) noexcept {
+    auto it = attributes.find(name);
+    if (it == attributes.end()) return {};
+    auto *values = std::get_if<std::vector<T>>(&it->second);
+    return values ? std::span<T>{*values} : std::span<T>{};
+  }
+
+  template <typename T>
+  [[nodiscard]] std::span<const T> get(std::string_view name) const noexcept {
+    return const_cast<PointCloud *>(this)->get<T>(name);
+  }
+
+  // Creates or replaces an attribute with one entry per point and hands back
+  // the span to fill in.
+  template <typename T>
+  std::span<T> add(std::string_view name, std::size_t count) {
+    // emplace hands back a reference to the alternative it just built
+    auto &values = attributes[std::string{name}].emplace<std::vector<T>>(count);
+    return std::span<T>{values};
+  }
+
+  template <typename T> std::span<T> add(std::string_view name) {
+    return add<T>(name, size());
+  }
 
 private:
   std::vector<std::byte> compress() const;
