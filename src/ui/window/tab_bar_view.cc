@@ -130,6 +130,18 @@ void TabBarView::moveTabTo(int from, int to) {
   m_moving_tab = false;
 }
 
+void TabBarView::floatTabAt(int index) {
+  auto *const model = dockWidgetModel();
+  if (!model)
+    return;
+
+  auto *const dock_widget = model->dockWidgetAt(index);
+  if (!dock_widget)
+    return;
+
+  dock_widget->setFloating(true);
+}
+
 void TabBarView::setCurrentIndex(int index) {
   // between the remove and the insert the model is a row short, and the tab bar
   // qml echoes the controller's index back to us against that shorter model

@@ -18,6 +18,9 @@ public:
   void moveTabTo(int from, int to) override;
   void setCurrentIndex(int index) override;
 
+  // detach a tab into its own floating window
+  Q_INVOKABLE void floatTabAt(int index);
+
   // kddw consumes the mouse move that starts a drag, so the break-away has to
   // tell us to drop the reorder feedback rather than us noticing it ourselves
   void cancel_reorder();

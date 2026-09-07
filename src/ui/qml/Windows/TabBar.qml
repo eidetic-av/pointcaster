@@ -51,6 +51,10 @@ KDDW.TabBarBase {
         if (sessionId.length > 0)
             workspaceModel.removeSession(sessionId);
     }
+    function requestFloatTab(index) {
+        if (tabBarCpp)
+            tabBarCpp.floatTabAt(index);
+    }
     function commitRename(index, text) {
         // losing focus and pressing return both land here
         if (root.renamingIndex !== index)
@@ -65,6 +69,8 @@ KDDW.TabBarBase {
         id: tabContextMenu
         font: Scaling.uiFont
 
+        onAboutToHide: root.contextTabIndex = -1
+
         Action {
             text: qsTr("Rename")
             enabled: root.contextTabIndex >= 0
@@ -77,6 +83,12 @@ KDDW.TabBarBase {
             onTriggered: root.requestDuplicateTab(root.contextTabIndex)
         }
 
+        Action {
+            text: qsTr("Float")
+            enabled: root.contextTabIndex >= 0 && root.tabCount() > 1
+            onTriggered: root.requestFloatTab(root.contextTabIndex)
+        }
+
         MenuSeparator {}
 
         Action {
@@ -85,8 +97,6 @@ KDDW.TabBarBase {
             enabled: root.contextTabIndex >= 0 && root.tabCount() > 1
             onTriggered: root.requestDeleteTab(root.contextTabIndex)
         }
-
-        onAboutToHide: root.contextTabIndex = -1
     }
 
     Rectangle {
