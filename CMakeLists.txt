@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.30.5)
+cmake_minimum_required(VERSION 4.4)
 
 option(WITH_POINTCASTER "Build the pointcaster application" ON)
 option(WITH_RECEIVER_LIB "Build the pointreceiver client library" OFF)
