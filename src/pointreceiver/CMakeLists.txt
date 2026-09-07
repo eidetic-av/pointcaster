@@ -8,26 +8,13 @@ add_library(pointreceiver SHARED
     pointreceiver.cc
 )
 
-add_executable(pointreceiver_test
-    pointreceiver.cc
-)
-
 target_link_libraries(pointreceiver PRIVATE
     cppzmq-static
     concurrentqueue::concurrentqueue
     pointcaster::core
 )
 
-target_link_libraries(pointreceiver_test PRIVATE
-    cppzmq-static
-    concurrentqueue::concurrentqueue
-    pointcaster::core
-)
-
 target_include_directories(pointreceiver PRIVATE
-    ${ZPP_BITS_INCLUDE_DIRS}
-)
-target_include_directories(pointreceiver_test PRIVATE
     ${ZPP_BITS_INCLUDE_DIRS}
 )
 
@@ -50,14 +37,40 @@ target_include_directories(pointreceiver PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-# the test executable compiles the same sources directly, so the api symbols
-# are its own rather than imported from the shared library
-target_include_directories(pointreceiver_test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${PROJECT_BINARY_DIR}/include
+# ----- install
+
+# an integration gets handed one directory, so the installed library looks for
+# its dependencies beside itself rather than on a system path
+set_target_properties(pointreceiver PROPERTIES
+    INSTALL_RPATH "$ORIGIN"
 )
-target_compile_definitions(pointreceiver_test PRIVATE
-    POINTRECEIVER_STATIC_DEFINE
+
+install(TARGETS pointreceiver
+    RUNTIME_DEPENDENCY_SET pointreceiver_runtime_deps
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION lib
+    # the import lib is link-time only, keep it out of the runtime install
+    ARCHIVE DESTINATION lib EXCLUDE_FROM_ALL
+)
+
+install(FILES
+    "${CMAKE_SOURCE_DIR}/include/pointreceiver.h"
+    "${PROJECT_BINARY_DIR}/include/pointreceiver_export.h"
+    DESTINATION include
+)
+
+# pull in the shared libraries it was linked against, skipping anything the
+# host already provides
+install(RUNTIME_DEPENDENCY_SET pointreceiver_runtime_deps
+    PRE_EXCLUDE_REGEXES
+        "^api-ms-" "^ext-ms-"
+        "^(lib)?(c|m|dl|rt|pthread|gcc_s|stdc\\+\\+|mvec)\\.so"
+        "^ld-linux"
+    POST_EXCLUDE_REGEXES
+        "^/(usr/)?lib(32|64)?/"
+        "^[A-Za-z]:[\\\\/][Ww]indows[\\\\/]"
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION lib
 )
 
 # -----
@@ -85,8 +98,5 @@ set(pointreceiver_precompiled_headers
 )
 
 target_precompile_headers(pointreceiver PRIVATE
-    ${pointreceiver_precompiled_headers}
-)
-target_precompile_headers(pointreceiver_test PRIVATE
     ${pointreceiver_precompiled_headers}
 )
