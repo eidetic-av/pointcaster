@@ -77,21 +77,6 @@ private:
   SubscriptionId _next_subscription_id = 1;
 };
 
-// ---- wrappers to use the workspace's config registry without its full type
-// ---
-
-namespace config {
-
-POINTCASTER_CORE_EXPORT ConfigRegistry::SubscriptionId
-on_change(pc::Workspace &workspace, std::string_view prefix,
-          ConfigRegistry::ChangeCallback cb);
-
-POINTCASTER_CORE_EXPORT void
-remove_subscription(pc::Workspace &workspace,
-                    ConfigRegistry::SubscriptionId id);
-
-} // namespace config
-
 // ---- rfl wrapper type traits ----
 
 template <class T> struct is_rfl_default_val : std::false_type {};

@@ -105,7 +105,8 @@ private:
   steady_clock::time_point _next_connection_attempt;
 };
 
-MqttClient::MqttClient(Workspace &workspace) : _listener(*this, workspace) {}
+MqttClient::MqttClient(Workspace &workspace)
+    : _listener(*this, workspace, workspace.config_registry) {}
 
 MqttClient::~MqttClient() = default;
 

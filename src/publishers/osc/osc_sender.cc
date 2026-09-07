@@ -75,7 +75,8 @@ private:
   lo::Address _address;
 };
 
-OscSender::OscSender(Workspace &workspace) : _listener(*this, workspace) {}
+OscSender::OscSender(Workspace &workspace)
+    : _listener(*this, workspace, workspace.config_registry) {}
 
 OscSender::~OscSender() = default;
 

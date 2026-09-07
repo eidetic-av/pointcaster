@@ -1,5 +1,4 @@
 #include "config_registry.h"
-#include "../workspace/workspace.h"
 
 #include <algorithm>
 #include <core/logger/logger.h>
@@ -94,20 +93,5 @@ void ConfigRegistry::notify(std::string_view path) {
   }
   for (auto &cb : matching) cb(path);
 }
-
-namespace config {
-
-ConfigRegistry::SubscriptionId on_change(pc::Workspace &workspace,
-                                         std::string_view prefix,
-                                         ConfigRegistry::ChangeCallback cb) {
-  return workspace.config_registry.on_change(prefix, std::move(cb));
-}
-
-void remove_subscription(pc::Workspace &workspace,
-                         ConfigRegistry::SubscriptionId id) {
-  workspace.config_registry.remove_subscription(id);
-}
-
-} // namespace config
 
 } // namespace pc

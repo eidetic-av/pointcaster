@@ -36,10 +36,11 @@ namespace pc::publishers {
 
 template <typename OwnerT, typename ConfigT> class WorkspaceListener {
 public:
-  WorkspaceListener(OwnerT &owner, Workspace &workspace)
-      : _owner(owner), _workspace(workspace),
-        _config_subscription(pc::config::on_change(
-            workspace, config_prefix(),
+  WorkspaceListener(OwnerT &owner, Workspace &workspace,
+                    ConfigRegistry &config_registry)
+      : _owner(owner), _workspace(workspace), _config_registry(config_registry),
+        _config_subscription(_config_registry.on_change(
+            config_prefix(),
             [this](std::string_view path) {
               std::scoped_lock lock(_changed_paths_access);
               _changed_paths.emplace_back(path);
@@ -53,7 +54,7 @@ public:
   ~WorkspaceListener() {
     _listener_thread.request_stop();
     if (_listener_thread.joinable()) _listener_thread.join();
-    pc::config::remove_subscription(_workspace, _config_subscription);
+    _config_registry.remove_subscription(_config_subscription);
   }
 
   WorkspaceListener(const WorkspaceListener &) = delete;
@@ -64,6 +65,7 @@ public:
 private:
   OwnerT &_owner;
   Workspace &_workspace;
+  ConfigRegistry &_config_registry;
   ConfigRegistry::SubscriptionId _config_subscription;
 
   std::mutex _changed_paths_access;

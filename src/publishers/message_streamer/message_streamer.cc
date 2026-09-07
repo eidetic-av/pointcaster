@@ -84,7 +84,7 @@ void handle_subscriber_message(zmq::message_t &msg,
 } // namespace
 
 MessageStreamer::MessageStreamer(Workspace &workspace)
-    : _listener(*this, workspace) {
+    : _listener(*this, workspace, workspace.config_registry) {
   _socket = create_socket(config(workspace));
 }
 
