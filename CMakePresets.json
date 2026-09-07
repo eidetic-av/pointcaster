@@ -100,6 +100,30 @@
 				"CMAKE_PDB_OUTPUT_DIRECTORY": "${sourceDir}/build/${presetName}",
 				"CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "ProgramDatabase"
 			}
+		},
+		{
+			"name": "pointreceiver-windows-release",
+			"inherits": "windows-release",
+			"displayName": "Pointreceiver Release build for Windows x64",
+			"description": "Builds the Pointreceiver client library only",
+			"cacheVariables": {
+				"WITH_POINTCASTER": false,
+				"WITH_RECEIVER_LIB": true,
+				"CMAKE_INSTALL_PREFIX": "${sourceDir}/build/${presetName}/install",
+				"X_VCPKG_APPLOCAL_DEPS_INSTALL": false
+			}
+		},
+		{
+			"name": "pointreceiver-windows-debug",
+			"inherits": "windows-debug",
+			"displayName": "Pointreceiver Debug build for Windows x64",
+			"description": "Builds the Pointreceiver client library only",
+			"cacheVariables": {
+				"WITH_POINTCASTER": false,
+				"WITH_RECEIVER_LIB": true,
+				"CMAKE_INSTALL_PREFIX": "${sourceDir}/build/${presetName}/install",
+				"X_VCPKG_APPLOCAL_DEPS_INSTALL": false
+			}
 		}
 	]
 }

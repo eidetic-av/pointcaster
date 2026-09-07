@@ -19,5 +19,6 @@ services:
       - .:C:\pointcaster
       - pointcaster-windows-build-vol:C:\pointcaster\build
       - .\build\windows-release\install:C:\pointcaster\build\windows-release\install
+      - .\build\pointreceiver-windows-release\install:C:\pointcaster\build\pointreceiver-windows-release\install
 volumes:
   pointcaster-windows-build-vol:

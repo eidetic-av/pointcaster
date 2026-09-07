@@ -49,8 +49,7 @@ install(TARGETS pointreceiver
     RUNTIME_DEPENDENCY_SET pointreceiver_runtime_deps
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION lib
-    # the import lib is link-time only, keep it out of the runtime install
-    ARCHIVE DESTINATION lib EXCLUDE_FROM_ALL
+    ARCHIVE DESTINATION lib
 )
 
 install(FILES
@@ -62,6 +61,8 @@ install(FILES
 # pull in the shared libraries it was linked against, skipping anything the
 # host already provides
 install(RUNTIME_DEPENDENCY_SET pointreceiver_runtime_deps
+    DIRECTORIES
+        $<TARGET_FILE_DIR:pointcaster_core>
     PRE_EXCLUDE_REGEXES
         "^api-ms-" "^ext-ms-"
         "^(lib)?(c|m|dl|rt|pthread|gcc_s|stdc\\+\\+|mvec)\\.so"
