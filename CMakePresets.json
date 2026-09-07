@@ -47,6 +47,28 @@
 			}
 		},
 		{
+			"name": "pointreceiver-linux-release",
+			"inherits": "linux-release",
+			"displayName": "Pointreceiver Release build for Linux x64",
+			"description": "Builds the Pointreceiver client library only",
+			"cacheVariables": {
+				"WITH_POINTCASTER": false,
+				"WITH_RECEIVER_LIB": true,
+				"CMAKE_INSTALL_PREFIX": "${sourceDir}/build/${presetName}/install"
+			}
+		},
+		{
+			"name": "pointreceiver-linux-debug",
+			"inherits": "linux-debug",
+			"displayName": "Pointreceiver Debug build for Linux x64",
+			"description": "Builds the Pointreceiver client library only",
+			"cacheVariables": {
+				"WITH_POINTCASTER": false,
+				"WITH_RECEIVER_LIB": true,
+				"CMAKE_INSTALL_PREFIX": "${sourceDir}/build/${presetName}/install"
+			}
+		},
+		{
 			"name": "windows-default",
 			"inherits": "default-preset",
 			"environment": {

@@ -1,18 +1,27 @@
 include(GNUInstallDirs)
 
-qt_standard_project_setup(REQUIRES 6.11)
+if(WITH_POINTCASTER)
+  qt_standard_project_setup(REQUIRES 6.11)
+  set(CMAKE_INSTALL_QMLDIR "qml")
+  set(QT_QML_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml")
+  if (NOT WIN32)
+    set(CMAKE_INSTALL_PREFIX "/usr")
+  endif()
+endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-if(NOT WIN32)
-    set(CMAKE_INSTALL_PREFIX "/usr")
-endif()
-set(CMAKE_INSTALL_QMLDIR "qml")
-set(QT_QML_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml")
 
 add_subdirectory(core)
-add_subdirectory(pipeline)
 
-add_subdirectory(pointreceiver)
+if(WITH_RECEIVER_LIB)
+    add_subdirectory(pointreceiver)
+endif()
+
+if(NOT WITH_POINTCASTER)
+    return()
+endif()
+
+add_subdirectory(pipeline)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(app_icon_resource "${CMAKE_SOURCE_DIR}/packaging/icon.rc")

@@ -34,6 +34,10 @@ endif()
 find_package(draco CONFIG REQUIRED)
 target_link_libraries(pointcaster_core PRIVATE draco::draco)
 
+# shared configs need reflectcpp
+find_package(reflectcpp CONFIG REQUIRED)
+target_link_libraries(pointcaster_core PRIVATE reflectcpp::reflectcpp)
+
 find_path(BSHOSHANY_THREAD_POOL_INCLUDE_DIRS "BS_thread_pool.hpp")
 target_include_directories(pointcaster_core PUBLIC ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS})
 

@@ -1,5 +1,17 @@
 cmake_minimum_required(VERSION 3.30.5)
 
+option(WITH_POINTCASTER "Build the pointcaster application" ON)
+option(WITH_RECEIVER_LIB "Build the pointreceiver client library" OFF)
+
+# we can use cmake to set which vcpkg dependencies we need
+set(VCPKG_MANIFEST_NO_DEFAULT_FEATURES ON)
+if(WITH_POINTCASTER)
+    list(APPEND VCPKG_MANIFEST_FEATURES "pointcaster")
+endif()
+if(WITH_RECEIVER_LIB)
+    list(APPEND VCPKG_MANIFEST_FEATURES "pointreceiver")
+endif()
+
 project(pointcaster VERSION 0.2.6 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -7,8 +19,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-include(Qt)
-include(QmlAdapterGenerator)
+if(WITH_POINTCASTER)
+    include(Qt)
+    include(QmlAdapterGenerator)
+endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_custom_target(link_compile_commands ALL
@@ -23,4 +37,6 @@ endif()
 
 add_subdirectory(src)
 
-include(Packaging)
+if(WITH_POINTCASTER)
+    include(Packaging)
+endif()

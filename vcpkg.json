@@ -3,40 +3,12 @@
 	"version-string": "0.2.6",
 	"builtin-baseline": "4cf671c303551b27c6360c7c6e1ced5ec46d7258",
 	"dependencies": [
-		"boost-interprocess",
 		"bshoshany-thread-pool",
-		"corrade",
 		"concurrentqueue",
 		"cppzmq",
 		"draco",
 		"eigen3",
 		"fmt",
-		"gizmo3d",
-		"happly",
-		"kddockwidgets",
-		"liblo",
-		"libcpplocate",
-		"msgpack",
-		{
-			"name": "opencv4",
-			"default-features": false,
-			"features": [
-				"cuda",
-				"tbb"
-			]
-		},
-		"orbbecsdk-v1",
-		"orbbecsdk-v2",
-		{
-			"name": "pcl",
-			"default-features": false,
-			"features": [
-				"cuda"
-			]
-		},
-		"paho-mqttpp3",
-		"prometheus-cpp",
-		"qtawesome",
 		{
 			"name": "reflectcpp",
 			"features": [
@@ -49,12 +21,65 @@
 			"name": "tracy",
 			"features": [
 				"crash-handler",
-				"on-demand",
-				"gui-tools"
+				"on-demand"
 			]
 		},
-		"yaml-cpp",
-		"yyjson",
 		"zpp-bits"
-	]
+	],
+	"default-features": [
+		"pointcaster"
+	],
+	"features": {
+		"pointcaster": {
+			"description": "Build the pointcaster application",
+			"dependencies": [
+				"boost-interprocess",
+				"concurrentqueue",
+				"corrade",
+				"gizmo3d",
+				"happly",
+				"kddockwidgets",
+				"liblo",
+				"libcpplocate",
+				"msgpack",
+				{
+					"name": "opencv4",
+					"default-features": false,
+					"features": [
+						"cuda",
+						"tbb"
+					]
+				},
+				"orbbecsdk-v1",
+				"orbbecsdk-v2",
+				{
+					"name": "pcl",
+					"default-features": false,
+					"features": [
+						"cuda"
+					]
+				},
+				"paho-mqttpp3",
+				"prometheus-cpp",
+				"qtawesome",
+				{
+					"name": "tracy",
+					"features": [
+						"gui-tools"
+					]
+				},
+				"readerwriterqueue",
+				"yaml-cpp",
+				"yyjson"
+			]
+		},
+		"pointreceiver": {
+			"description": "Build the pointreceiver client library",
+			"$dependencies-note": [
+				"the receiver lib only uses common dependencies for now,",
+				"but lib-only deps can be added below..."
+			],
+			"dependencies": []
+		}
+	}
 }
