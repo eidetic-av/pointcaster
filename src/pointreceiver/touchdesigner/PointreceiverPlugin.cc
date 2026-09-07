@@ -412,16 +412,8 @@ struct ConnectionState {
   static PointreceiverMessageValue
   convert_message(const pointreceiver_sync_message &msg) {
     // Signal-only types (no payload)
-    if (msg.message_type != POINTRECEIVER_MSG_TYPE_PARAMETER_UPDATE &&
-        msg.message_type != POINTRECEIVER_MSG_TYPE_ENDPOINT_UPDATE) {
+    if (msg.message_type != POINTRECEIVER_MSG_TYPE_PARAMETER_UPDATE) {
       return PointreceiverMessageValue{to_signal(msg.message_type)};
-    }
-
-    if (msg.message_type == POINTRECEIVER_MSG_TYPE_ENDPOINT_UPDATE) {
-      PointreceiverEndpointUpdate u;
-      u.port = static_cast<std::size_t>(msg.value.endpoint_update_val.port);
-      u.active = msg.value.endpoint_update_val.active;
-      return PointreceiverMessageValue{u};
     }
 
     // Parameter update payload
@@ -735,8 +727,9 @@ PointreceiverConnectionHandle::known_point_cloud_addresses() const {
 
   char buffer[256];
   for (std::size_t i = 0; i < count; ++i)
-    if (pointreceiver_get_known_stream_address(_state->pointreceiver_ctx, i, buffer,
-                                        sizeof(buffer)) == POINTRECEIVER_OK)
+    if (pointreceiver_get_known_stream_address(_state->pointreceiver_ctx, i,
+                                               buffer, sizeof(buffer)) ==
+        POINTRECEIVER_OK)
       result.emplace_back(buffer);
 
   return result;
