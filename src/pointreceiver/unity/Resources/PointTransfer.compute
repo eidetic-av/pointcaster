@@ -1,0 +1,47 @@
+#pragma kernel PointTransfer
+
+RWStructuredBuffer<int> packedPositions;
+RWStructuredBuffer<int> packedColors;
+
+uint texWidth;
+RWTexture2D<float4> positions;
+RWTexture2D<float4> colors;
+
+float4 unpackPosition(int packedXY, int packedZ) 
+{
+    // grab the correct bits as int values
+    // (in millimeters)
+    int xy = asint(packedXY);
+    int x = (xy << 16) >> 16;
+    int y = (xy >> 16);
+    int zp = asint(packedZ);
+    int z = (zp << 16) >> 16;
+    // and convert them to metres as floats
+    float mm = 1000.0f;
+    return float4(x / mm, y / mm, z / mm, 0);
+}
+
+float4 unpackColor(int bgra)
+{
+    float b = (bgra & 0xff) / 255.0;
+    float g = ((bgra >> 8) & 0xff) / 255.0;
+    float r = ((bgra >> 16) & 0xff) / 255.0;
+    float a = ((bgra >> 24) & 0xff) / 255.0;
+    return float4(r, g, b, a);
+}
+
+[numthreads(8,8,1)]
+void PointTransfer (uint3 id : SV_DispatchThreadID)
+{
+    uint posIndex = (id.x + (texWidth * id.y)) * 2;
+
+    int packedXY = packedPositions[posIndex];
+    int packedZ = packedPositions[posIndex + 1];
+    float4 position = unpackPosition(packedXY, packedZ);
+    positions[id.xy] = position;
+
+    uint colIndex = id.x + (texWidth * id.y);
+    int packedColor = packedColors[colIndex];
+    float4 color = unpackColor(packedColor);
+    colors[id.xy] = color;
+}
