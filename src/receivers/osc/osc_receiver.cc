@@ -93,7 +93,7 @@ void OscReceiver::dispatch(const char *address, const char *types,
   } else if (std::strcmp(types, "i") == 0) {
     value = args[0]->i;
   } else if (std::strcmp(types, "d") == 0) {
-    value = static_cast<double>(args[0]->d);
+    value = static_cast<float>(args[0]->d);
   } else if (std::strcmp(types, "s") == 0) {
     value = std::string{&args[0]->s};
   } else if (std::strcmp(types, "T") == 0) {
