@@ -21,6 +21,7 @@ if(NOT WITH_POINTCASTER)
     return()
 endif()
 
+add_subdirectory(config)
 add_subdirectory(pipeline)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -87,6 +88,7 @@ find_package(PahoMqttCpp CONFIG REQUIRED)
 
 target_link_libraries(pointcaster PRIVATE
   pointcaster::core
+  pointcaster::config
   pointcaster::pipeline
   pointcaster::plugins
   pointcaster::metrics

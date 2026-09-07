@@ -2,7 +2,7 @@
 
 #include <config/core_types_reflection.h>
 #include <plugins/backend/backend_types.h>
-#include <pointcaster/core.h>
+#include <pointcaster/config.h>
 #include <pointcaster/core_types.h>
 #include <rfl/DefaultVal.hpp>
 
@@ -20,6 +20,6 @@ struct TransformConfiguration {
   rfl::DefaultVal<BackendType> backend = BackendType::CPU;
 };
 
-POINTCASTER_CORE_EXPORT float4x4 to_float4x4(const TransformConfiguration &t);
+POINTCASTER_CONFIG_EXPORT float4x4 to_float4x4(const TransformConfiguration &t);
 
 } // namespace pc

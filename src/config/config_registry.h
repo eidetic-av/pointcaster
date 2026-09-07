@@ -3,7 +3,7 @@
 #include "config_value.h"
 #include "output_value.h"
 
-#include <pointcaster/core.h>
+#include <pointcaster/config.h>
 #include <pointcaster/core_types.h>
 #include <pointcaster/point_cloud.h>
 #include <rfl/DefaultVal.hpp>
@@ -32,22 +32,22 @@ public:
     std::function<void(ConfigValue)> set;
   };
 
-  POINTCASTER_CORE_EXPORT void register_field(std::string path, Field field);
+  POINTCASTER_CONFIG_EXPORT void register_field(std::string path, Field field);
 
   // Remove all registered paths that begin with prefix
-  POINTCASTER_CORE_EXPORT void unregister(std::string_view prefix);
+  POINTCASTER_CONFIG_EXPORT void unregister(std::string_view prefix);
 
-  POINTCASTER_CORE_EXPORT void clear();
+  POINTCASTER_CONFIG_EXPORT void clear();
 
   // returns false if path not found, or if the field is read-only
-  [[maybe_unused]] POINTCASTER_CORE_EXPORT bool set(std::string_view path,
+  [[maybe_unused]] POINTCASTER_CONFIG_EXPORT bool set(std::string_view path,
                                                     ConfigValue value);
 
-  POINTCASTER_CORE_EXPORT bool is_readonly(std::string_view path) const;
+  POINTCASTER_CONFIG_EXPORT bool is_readonly(std::string_view path) const;
 
-  POINTCASTER_CORE_EXPORT void notify(std::string_view path);
+  POINTCASTER_CONFIG_EXPORT void notify(std::string_view path);
 
-  POINTCASTER_CORE_EXPORT std::optional<ConfigValue>
+  POINTCASTER_CONFIG_EXPORT std::optional<ConfigValue>
   get(std::string_view path) const;
 
   // batch reads a whole set of paths in one pass, returning a snapshot
@@ -57,12 +57,12 @@ public:
   using ChangeCallback = std::function<void(std::string_view path)>;
   using SubscriptionId = std::uint64_t;
 
-  POINTCASTER_CORE_EXPORT SubscriptionId on_change(std::string_view prefix,
+  POINTCASTER_CONFIG_EXPORT SubscriptionId on_change(std::string_view prefix,
                                                    ChangeCallback cb);
 
   // ids are never reused, so removing one that's already gone is a no-op
   // rather than a match against some later subscription
-  POINTCASTER_CORE_EXPORT void remove_subscription(SubscriptionId id);
+  POINTCASTER_CONFIG_EXPORT void remove_subscription(SubscriptionId id);
 
 private:
   struct Subscription {

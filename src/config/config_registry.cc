@@ -66,7 +66,7 @@ void ConfigRegistry::snapshot(const StringCollection &paths,
   }
 }
 
-template POINTCASTER_CORE_EXPORT void
+template POINTCASTER_CONFIG_EXPORT void
 ConfigRegistry::snapshot<std::set<std::string>>(
     const std::set<std::string> &paths, StringMap<ConfigValue> &out);
 
