@@ -12,6 +12,41 @@
 
 namespace pc {
 
+  // TODO arbitrary particle attributes
+
+// enum class attribute_id : std::uint16_t {
+//   scale = 0, velocity, confidence, instance_id, normal,
+//   // stable values — never renumber
+// };
+
+// using attribute_storage = std::variant
+//   std::vector<float>,
+//   std::vector<vec2f>,
+//   std::vector<vec3f>,
+//   std::vector<std::uint16_t>,
+//   std::vector<std::uint32_t>,
+//   std::vector<std::int32_t>>;
+
+// struct attribute {
+//   attribute_id id;
+//   attribute_storage data;
+// };
+
+// struct PointCloud {
+//   std::vector<position> positions;
+//   std::vector<color> colors;
+//   std::vector<attribute> extras;   // small; linear scan is fine
+//   aabb position_bounds;
+
+//   template <typename T>
+//   [[nodiscard]] std::span<T> get(attribute_id id) noexcept {
+//     auto it = std::ranges::find(extras, id, &attribute::id);
+//     if (it == extras.end()) return {};
+//     auto* v = std::get_if<std::vector<T>>(&it->data);
+//     return v ? std::span<T>{*v} : std::span<T>{};
+//   }
+// };
+
 class PointCloud {
 public:
   std::vector<position> positions;
