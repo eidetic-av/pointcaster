@@ -274,6 +274,10 @@ POINTRECEIVER_EXPORT pointreceiver_context *pointreceiver_create_context(void);
  * context, invalidating every buffer previously handed out by it. Passing NULL
  * is a no-op.
  *
+ * Independent clients sharing one loaded copy of the library share a single
+ * transport underneath. It is torn down by whichever context is destroyed
+ * last, so this call is safe to make while another client is still receiving.
+ *
  * @param ctx Pointer to the context to be destroyed.
  */
 POINTRECEIVER_EXPORT void

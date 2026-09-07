@@ -76,7 +76,27 @@ struct PointCloudFrame {
 
 using MessageFrame = std::pair<std::string, ConfigValue>;
 
+namespace {
+
+// every receiver context in this process shares one zmq context
+std::shared_ptr<zmq::context_t> acquire_zmq_ctx() {
+  // TODO what's an appropriate zmq io thread count to use?
+  constexpr auto zmq_io_thread_count = 1;
+  static std::mutex zmq_ctx_mutex;
+  static std::weak_ptr<zmq::context_t> zmq_ctx;
+
+  std::lock_guard lock(zmq_ctx_mutex);
+  if (auto ctx = zmq_ctx.lock()) return ctx;
+  auto ctx = std::make_shared<zmq::context_t>(zmq_io_thread_count);
+  zmq_ctx = ctx;
+  return ctx;
+}
+
+} // namespace
+
 struct Context {
+  std::shared_ptr<zmq::context_t> zmq_ctx = acquire_zmq_ctx();
+
   std::optional<std::string> client_name;
 
   // TODO should this be bounded?
@@ -116,13 +136,6 @@ static_assert(sizeof(pointreceiver_color_t) == sizeof(pc::color));
 static_assert(alignof(pointreceiver_color_t) == alignof(pc::color));
 static_assert(offsetof(pointreceiver_color_t, r) == offsetof(pc::color, r));
 static_assert(offsetof(pointreceiver_color_t, a) == offsetof(pc::color, a));
-
-zmq::context_t &zmq_receiver_ctx() {
-  // TODO what's an appropriate zmq io thread count to use?
-  constexpr auto zmq_io_thread_count = 1;
-  static zmq::context_t ctx{zmq_io_thread_count};
-  return ctx;
-}
 
 bool copy_to_buffer(char *destination, size_t capacity,
                     std::string_view source) {
@@ -332,8 +345,7 @@ pointreceiver_start_message_receiver(pointreceiver_context *ctx,
 
   return exception_boundary("pointreceiver_start_message_receiver", [&] {
     const std::string endpoint(pointcaster_message_address);
-    zmq::socket_t socket(pc::receiver::zmq_receiver_ctx(),
-                         zmq::socket_type::sub);
+    zmq::socket_t socket(*ctx->zmq_ctx, zmq::socket_type::sub);
 
     try {
       // TODO why 32 msgs? what is an actually valid number here for the high
@@ -455,8 +467,7 @@ pointreceiver_status pointreceiver_start_point_receiver(
 
   return exception_boundary("pointreceiver_start_point_receiver", [&] {
     const std::string endpoint(pointcaster_point_cloud_address);
-    zmq::socket_t socket(pc::receiver::zmq_receiver_ctx(),
-                         zmq::socket_type::sub);
+    zmq::socket_t socket(*ctx->zmq_ctx, zmq::socket_type::sub);
 
     try {
       // TODO why 32 msgs? what is an actually valid number here for the
