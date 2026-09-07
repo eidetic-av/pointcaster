@@ -374,17 +374,16 @@ void PlyDevice::apply_transform() {
   auto transformed_cloud = std::make_shared<PointCloud>();
   transformed_cloud->resize(point_count);
 
-  backend->transform_point_cloud(*_input_cloud, transformed_cloud,
+  backend->transform_point_cloud(*_input_cloud, *transformed_cloud,
                                  config.transform.value(), config.color.value(),
                                  world);
 
   pc::logger()->trace("PlyDevice::apply_transform: feeding operator pipeline");
-  feed_operator_pipeline(transformed_cloud);
+  feed_operator_pipeline(std::move(transformed_cloud));
   pc::logger()->trace("PlyDevice::apply_transform: done");
 }
 
-void PlyDevice::on_pipeline_output(
-    operators::PipelineFramePtr output_frame) {
+void PlyDevice::on_pipeline_output(operators::PipelineFramePtr output_frame) {
   if (!output_frame) return;
   auto cloud = output_frame->cloud;
   if (!cloud) return;

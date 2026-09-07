@@ -14,8 +14,7 @@ void free_device_memory(const void *owner);
 
 void project_transform_frame_data(
     const void *owner, std::span<const uint16_t> input_depth_frame,
-    std::span<const color_rgb> input_rgb_frame,
-    std::shared_ptr<PointCloud> output_cloud,
+    std::span<const color_rgb> input_rgb_frame, PointCloud &output_cloud,
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
     const ColorTransformConfiguration &color_transform,
@@ -28,7 +27,7 @@ BoundsFilterResult filter_to_bounds(const void *owner,
                                     BoundsFilterOptions options);
 
 void transform_point_cloud(const void *owner, const PointCloud &input_cloud,
-                           std::shared_ptr<PointCloud> output_cloud,
+                           PointCloud &output_cloud,
                            const TransformConfiguration &transform,
                            const ColorTransformConfiguration &color_transform,
                            const pc::float4x4 &world_transform = {});

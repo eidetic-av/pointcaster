@@ -628,13 +628,13 @@ void OrbbecDevice::rgbd_pipeline_thread_work(
                   "OrbbecDevice::backend_transform");
               if (backend) {
                 backend->project_transform_frame_data(
-                    ob_depth_data, ob_color_data, point_cloud, color_intrinsics,
-                    device_config.transform.value(),
+                    ob_depth_data, ob_color_data, *point_cloud,
+                    color_intrinsics, device_config.transform.value(),
                     device_config.color.value(), world, render_output);
               }
             }
 
-            feed_operator_pipeline(point_cloud);
+            feed_operator_pipeline(std::move(point_cloud));
 
             if (auto *cpu = cpu_backend(); backend && cpu) {
               if (using_cuda && cuda_render_buffer) {
@@ -915,12 +915,12 @@ void OrbbecDevice::lidar_pipeline_thread_work(
         {
           ProfilingZone backend_transform_zone(
               "OrbbecDevice::backend_transform");
-          backend->transform_point_cloud(*scan_cloud, point_cloud,
+          backend->transform_point_cloud(*scan_cloud, *point_cloud,
                                          device_config.transform.value(),
                                          device_config.color.value(), world);
         }
 
-        feed_operator_pipeline(point_cloud);
+        feed_operator_pipeline(std::move(point_cloud));
 
         if (auto *cpu = cpu_backend(); cpu) {
           if (auto processed = _pipeline->latest_cloud()) {

@@ -35,8 +35,7 @@ concept PointSource =
     std::same_as<std::invoke_result_t<F, int>, std::pair<position, color>>;
 
 template <PointSource F>
-void transform_from(F &&get_point, size_t point_count,
-                    std::shared_ptr<PointCloud> output_cloud,
+void transform_from(F &&get_point, size_t point_count, PointCloud &output_cloud,
                     const TransformConfiguration &transform,
                     const ColorTransformConfiguration &color_transform,
                     const pc::float4x4 world_transform) {
@@ -54,13 +53,13 @@ void transform_from(F &&get_point, size_t point_count,
 
   const auto transform_point = [&](const auto i) {
     if (sample_cloud && !filter::sample(i, transform_parameters)) {
-      output_cloud->positions[i] = filter::invalid_position_value;
+      output_cloud.positions[i] = filter::invalid_position_value;
       return;
     }
     auto [position, color] = get_point(i);
-    output_cloud->positions[i] =
+    output_cloud.positions[i] =
         filter::transform(position, transform_parameters);
-    output_cloud->colors[i] =
+    output_cloud.colors[i] =
         filter::color_transform(color, transform_parameters);
   };
 
@@ -71,8 +70,8 @@ void transform_from(F &&get_point, size_t point_count,
   std::iota(output_indices.begin(), output_indices.end(), 0);
 
   const auto crop_point_to_bounds = [&](const auto i) {
-    return filter::is_valid(output_cloud->positions[i]) &&
-           filter::in_bounds(output_cloud->positions[i], transform_parameters);
+    return filter::is_valid(output_cloud.positions[i]) &&
+           filter::in_bounds(output_cloud.positions[i], transform_parameters);
   };
 
   auto new_end =
@@ -105,24 +104,24 @@ void transform_from(F &&get_point, size_t point_count,
 
   const auto copy_to_output_buffers = [&](const auto i) {
     const auto output_index = output_indices[i];
-    output_positions[i] = place(output_cloud->positions[output_index]);
-    output_colors[i] = output_cloud->colors[output_index];
+    output_positions[i] = place(output_cloud.positions[output_index]);
+    output_colors[i] = output_cloud.colors[output_index];
   };
 
   std::for_each(std::execution::par_unseq, output_range.begin(),
                 output_range.end(), copy_to_output_buffers);
 
-  output_cloud->bounds =
+  output_cloud.bounds =
       std::transform_reduce(std::execution::par_unseq, output_positions.begin(),
                             output_positions.end(), position_bounds{},
                             filter::merge_bounds, filter::as_bounds);
 
   std::copy(output_positions.begin(), output_positions.end(),
-            output_cloud->positions.begin());
+            output_cloud.positions.begin());
   std::copy(output_colors.begin(), output_colors.end(),
-            output_cloud->colors.begin());
+            output_cloud.colors.begin());
 
-  output_cloud->resize(new_point_count);
+  output_cloud.resize(new_point_count);
 }
 
 } // namespace
@@ -138,7 +137,7 @@ CpuBackend::~CpuBackend() {
 };
 
 void CpuBackend::transform_point_cloud(
-    const PointCloud &input_cloud, std::shared_ptr<PointCloud> output_cloud,
+    const PointCloud &input_cloud, PointCloud &output_cloud,
     const TransformConfiguration &transform,
     const ColorTransformConfiguration &color_transform,
     const pc::float4x4 &world_transform) const {
@@ -147,7 +146,7 @@ void CpuBackend::transform_point_cloud(
       [&](int i) -> std::pair<position, color> {
         return {input_cloud.positions[i], input_cloud.colors[i]};
       },
-      output_cloud->size(), output_cloud, transform, color_transform,
+      output_cloud.size(), output_cloud, transform, color_transform,
       world_transform);
 }
 
@@ -249,15 +248,14 @@ BoundsFilterResult CpuBackend::filter_to_bounds(
 
 void CpuBackend::project_transform_frame_data(
     std::span<const uint16_t> input_depth_frame,
-    std::span<const color_rgb> input_rgb_frame,
-    std::shared_ptr<PointCloud> output_cloud,
+    std::span<const color_rgb> input_rgb_frame, PointCloud &output_cloud,
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
     const ColorTransformConfiguration &color_transform,
     const pc::float4x4 &world_transform,
     [[maybe_unused]] std::span<std::byte> render_output) const {
 
-  const auto point_count = output_cloud->size();
+  const auto point_count = output_cloud.size();
   const auto frame_width = color_intrinsics.frame_width;
 
   const auto convert_point_data = [&](int i) -> std::pair<position, color> {

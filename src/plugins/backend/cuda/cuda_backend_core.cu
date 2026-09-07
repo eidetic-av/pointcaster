@@ -246,8 +246,7 @@ void free_device_memory(const void *owner) {
 
 void project_transform_frame_data(
     const void *owner, std::span<const uint16_t> input_depth_frame,
-    std::span<const color_rgb> input_rgb_frame,
-    std::shared_ptr<PointCloud> output_cloud,
+    std::span<const color_rgb> input_rgb_frame, PointCloud &output_cloud,
     const CameraIntrinsics &color_intrinsics,
     const TransformConfiguration &transform,
     const ColorTransformConfiguration &color_transform,
@@ -339,12 +338,12 @@ void project_transform_frame_data(
 
     thrust::copy(device_memory->output_positions.begin(),
                  device_memory->output_positions.begin() + new_point_count,
-                 output_cloud->positions.begin());
+                 output_cloud.positions.begin());
     thrust::copy(device_memory->output_colors.begin(),
                  device_memory->output_colors.begin() + new_point_count,
-                 output_cloud->colors.begin());
+                 output_cloud.colors.begin());
 
-    output_cloud->bounds = new_cloud_bounds;
+    output_cloud.bounds = new_cloud_bounds;
 
     if (output_render_buffer) {
       thrust::copy(device_memory->interleaved_render.begin(),
@@ -354,7 +353,7 @@ void project_transform_frame_data(
     }
   }
 
-  output_cloud->resize(new_point_count);
+  output_cloud.resize(new_point_count);
 }
 
 BoundsFilterResult filter_to_bounds(const void *owner,
@@ -452,7 +451,7 @@ BoundsFilterResult filter_to_bounds(const void *owner,
 }
 
 void transform_point_cloud(const void *owner, const PointCloud &input_cloud,
-                           std::shared_ptr<PointCloud> output_cloud,
+                           PointCloud &output_cloud,
                            const TransformConfiguration &transform,
                            const ColorTransformConfiguration &color_transform,
                            const pc::float4x4 &world_transform) {
@@ -528,14 +527,14 @@ void transform_point_cloud(const void *owner, const PointCloud &input_cloud,
     ProfilingZone output_zone("CudaBackend::copy_back_to_host");
     thrust::copy(device_memory->output_positions.begin(),
                  device_memory->output_positions.begin() + new_point_count,
-                 output_cloud->positions.begin());
+                 output_cloud.positions.begin());
     thrust::copy(device_memory->output_colors.begin(),
                  device_memory->output_colors.begin() + new_point_count,
-                 output_cloud->colors.begin());
-    output_cloud->bounds = new_cloud_bounds;
+                 output_cloud.colors.begin());
+    output_cloud.bounds = new_cloud_bounds;
   }
 
-  output_cloud->resize(new_point_count);
+  output_cloud.resize(new_point_count);
 }
 
 } // namespace pc::backend::cuda

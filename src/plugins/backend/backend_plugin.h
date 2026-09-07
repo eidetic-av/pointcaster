@@ -52,7 +52,8 @@ public:
       }
     }
 
-    // corrade requires at least one search path entry even when no plugins exist
+    // corrade requires at least one search path entry even when no plugins
+    // exist
     if (search_paths.empty()) {
       search_paths.emplace_back(plugin_dir.string());
     }
@@ -89,11 +90,8 @@ public:
   // allocate memory up front
   virtual void init([[maybe_unused]] const size_t point_count = 0) {};
 
-  // TODO i'm pretty sure the shared_ptr is unecessary and we should 
-  // just be using a mutable reference instead...
   virtual void
-  transform_point_cloud(const PointCloud &input_cloud,
-                        std::shared_ptr<PointCloud> output_cloud,
+  transform_point_cloud(const PointCloud &input_cloud, PointCloud &output_cloud,
                         const TransformConfiguration &transform,
                         const ColorTransformConfiguration &color_transform,
                         const pc::float4x4 &world_transform = {}) const = 0;
@@ -104,12 +102,9 @@ public:
                    const position_bounds &bounds,
                    BoundsFilterOptions options = {}) const = 0;
 
-  // TODO i'm pretty sure the shared_ptr is unecessary and we should 
-  // just be using a mutable reference instead...
   virtual void project_transform_frame_data(
       std::span<const uint16_t> input_depth_frame,
-      std::span<const color_rgb> input_rgb_frame,
-      std::shared_ptr<PointCloud> output_cloud,
+      std::span<const color_rgb> input_rgb_frame, PointCloud &output_cloud,
       const CameraIntrinsics &color_intrinsics,
       const TransformConfiguration &transform,
       const ColorTransformConfiguration &color_transform,
