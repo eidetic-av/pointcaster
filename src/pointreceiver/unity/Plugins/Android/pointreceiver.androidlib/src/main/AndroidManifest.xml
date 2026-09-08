@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  pointreceiver requires NET permission for its ZMQ sockets
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          package="net.pointcaster.pointreceiver">
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>

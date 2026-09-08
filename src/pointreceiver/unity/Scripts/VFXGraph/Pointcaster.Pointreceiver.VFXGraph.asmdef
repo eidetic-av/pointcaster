@@ -1,0 +1,17 @@
+{
+    "name": "Pointcaster.Pointreceiver.VFXGraph",
+    "references": [
+        "Pointcaster.Pointreceiver",
+        "Unity.VisualEffectGraph.Runtime"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.visualeffectgraph",
+            "expression": "0.0.0",
+            "define": "POINTRECEIVER_HAS_VFX_GRAPH"
+        }
+    ],
+    "defineConstraints": [
+        "POINTRECEIVER_HAS_VFX_GRAPH"
+    ]
+}

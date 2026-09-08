@@ -77,6 +77,21 @@ try {
         }
     }
 
+    # android library projects are package source rather than build output,
+    # so they ship on every publish no matter which platforms were staged
+    $androidlibs = Get-ChildItem (Join-Path $package 'Plugins/Android') -Directory `
+        -Filter '*.androidlib' -ErrorAction SilentlyContinue
+    foreach ($androidlib in $androidlibs) {
+        New-Item -ItemType Directory -Path (Join-Path $work 'Plugins/Android') -Force | Out-Null
+        foreach ($meta in 'Plugins.meta', 'Plugins/Android.meta') {
+            Copy-Item (Join-Path $package $meta) -Destination (Join-Path $work $meta) -Force
+        }
+        $dest = Join-Path $work "Plugins/Android/$($androidlib.Name)"
+        Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item $androidlib.FullName -Destination $dest -Recurse -Force
+        Copy-Item "$($androidlib.FullName).meta" -Destination "$dest.meta" -Force
+    }
+
     git -C $work add --all
     if (-not (git -C $work status --porcelain)) {
         Write-Host '==> nothing to publish'

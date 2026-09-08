@@ -146,7 +146,7 @@
 				"X_VCPKG_APPLOCAL_DEPS_INSTALL": false,
 				"CMAKE_SYSTEM_NAME": "Android",
 				"CMAKE_ANDROID_ARCH_ABI": "armeabi-v7a",
-				"CMAKE_ANDROID_API": "31",
+				"CMAKE_ANDROID_API": "28",
 				"CMAKE_ANDROID_STL_TYPE": "c++_static",
 				"CMAKE_ANDROID_NDK": "/opt/android/ndk/28.2.13676358",
 				"CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "/opt/android/ndk/28.2.13676358/toolchains/llvm/prebuilt/windows-x86_64/bin/clang-scan-deps.exe"

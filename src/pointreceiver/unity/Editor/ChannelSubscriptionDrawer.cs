@@ -1,28 +1,39 @@
 using UnityEditor;
-using UnityEditor.UIElements;
-using UnityEngine.UIElements;
+using UnityEngine;
 
 // Draws a ChannelSubscription as an "All Channels" toggle, revealing the
 // address field only when it is unticked.
+//
 [CustomPropertyDrawer(typeof(ChannelSubscription))]
 public class ChannelSubscriptionDrawer : PropertyDrawer
 {
-    public override VisualElement CreatePropertyGUI(SerializedProperty property)
+    public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
+    {
+        var line = EditorGUIUtility.singleLineHeight;
+        if (property.FindPropertyRelative("AllChannels").boolValue) return line;
+        return line * 2 + EditorGUIUtility.standardVerticalSpacing;
+    }
+
+    public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
     {
         var allChannels = property.FindPropertyRelative("AllChannels");
 
-        var root = new VisualElement();
-        root.Add(new PropertyField(allChannels, property.displayName));
+        EditorGUI.BeginProperty(position, label, property);
 
-        var address = new PropertyField(property.FindPropertyRelative("Address"), "Address");
-        root.Add(address);
+        var line = new Rect(position.x, position.y, position.width,
+                            EditorGUIUtility.singleLineHeight);
+        EditorGUI.PropertyField(line, allChannels, label);
 
-        void SyncAddressVisibility() => address.style.display =
-            allChannels.boolValue ? DisplayStyle.None : DisplayStyle.Flex;
+        if (!allChannels.boolValue)
+        {
+            line.y += EditorGUIUtility.singleLineHeight +
+                      EditorGUIUtility.standardVerticalSpacing;
+            EditorGUI.indentLevel++;
+            EditorGUI.PropertyField(line, property.FindPropertyRelative("Address"),
+                                    new GUIContent("Address"));
+            EditorGUI.indentLevel--;
+        }
 
-        SyncAddressVisibility();
-        root.TrackPropertyValue(allChannels, _ => SyncAddressVisibility());
-
-        return root;
+        EditorGUI.EndProperty();
     }
 }

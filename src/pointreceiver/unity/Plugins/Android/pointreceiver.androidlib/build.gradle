@@ -1,0 +1,19 @@
+plugins {
+    id 'com.android.library'
+}
+
+android {
+    // 2021.3 has no namespace property and takes the
+    // package out of the manifest instead. Newer AGP wants it here.
+    if (project.android.hasProperty("namespace")) {
+        namespace "net.pointcaster.pointreceiver"
+    }
+
+    def unityLib = project(':unityLibrary').extensions.getByName('android')
+    compileSdkVersion unityLib.compileSdkVersion
+    buildToolsVersion unityLib.buildToolsVersion
+
+    defaultConfig {
+        minSdkVersion 22
+    }
+}
