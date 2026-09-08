@@ -12,7 +12,7 @@ if(WITH_RECEIVER_LIB)
     list(APPEND VCPKG_MANIFEST_FEATURES "pointreceiver")
 endif()
 
-project(pointcaster VERSION 0.2.8 LANGUAGES CXX)
+project(pointcaster VERSION 0.2.9 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
