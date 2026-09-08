@@ -17,10 +17,17 @@ labels:
   platform: windows/amd64
 
 variables:
+  # force powershell to fail when a single command fails
+  - &strict_mode $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true
   - &unity_package_remote git@github.com:matth-av/pointcaster-unity.git
   - &container_env
     DOCKER_HOST: npipe:////./pipe/dockerDesktopWindowsEngine
     POINTRECEIVER_BUILD_VOLUME: pointreceiver-ci-build
+    # set the username and password for cr.pointcaster.net here
+    REGISTRY_USER:
+      from_secret: registry_user
+    REGISTRY_PASSWORD:
+      from_secret: registry_password
     # force process isolation over hyperv, because it fucking sucks
     DOCKER_RUN: 'docker run --rm --isolation=process -v "$($pwd.Path):C:\pointcaster" -v "$($env:POINTRECEIVER_BUILD_VOLUME):C:\pointcaster\build" cr.pointcaster.net/pointcaster-dev:latest'
 
@@ -29,6 +36,9 @@ steps:
     image: pwsh
     environment: *container_env
     commands:
+      - *strict_mode
+      # force pulls to be anonymous, that seems to work best with zot
+      - $env:REGISTRY_PASSWORD | docker login cr.pointcaster.net --username $env:REGISTRY_USER --password-stdin
       - docker pull cr.pointcaster.net/pointcaster-dev:latest
       - docker volume rm --force $env:POINTRECEIVER_BUILD_VOLUME
 
@@ -36,12 +46,14 @@ steps:
     image: pwsh
     environment: *container_env
     commands:
+      - *strict_mode
       - Invoke-Expression "$env:DOCKER_RUN cmake --preset pointreceiver-windows-release"
 
   - name: build
     image: pwsh
     environment: *container_env
     commands:
+      - *strict_mode
       - Invoke-Expression "$env:DOCKER_RUN cmake --build build/pointreceiver-windows-release"
 
   # build/ is a named volume, so the install has to land in the workspace itself
@@ -50,11 +62,13 @@ steps:
     image: pwsh
     environment: *container_env
     commands:
+      - *strict_mode
       - Invoke-Expression "$env:DOCKER_RUN cmake --install build/pointreceiver-windows-release --prefix C:/pointcaster/dist/pointreceiver-install"
 
   - name: stage-plugin
     image: pwsh
     commands:
+      - *strict_mode
       - ./scripts/stage-unity-package.ps1 -InstallDir dist/pointreceiver-install
 
   - name: publish-package
@@ -64,4 +78,5 @@ steps:
       UNITY_PACKAGE_DEPLOY_KEY:
         from_secret: unity_package_deploy_key
     commands:
+      - *strict_mode
       - ./scripts/publish-unity-package.ps1 -Remote $env:UNITY_PACKAGE_REMOTE
