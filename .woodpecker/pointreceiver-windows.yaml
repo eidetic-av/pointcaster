@@ -40,6 +40,8 @@ steps:
       # force pulls to be anonymous, that seems to work best with zot
       - $env:REGISTRY_PASSWORD | docker login cr.pointcaster.net --username $env:REGISTRY_USER --password-stdin
       - docker pull cr.pointcaster.net/pointcaster-dev:latest
+      # reap orphaned containers from prior builds first
+      - docker ps -aq --filter volume=$env:POINTRECEIVER_BUILD_VOLUME | ForEach-Object { docker rm --force $_ }
       - docker volume rm --force $env:POINTRECEIVER_BUILD_VOLUME
 
   - name: configure
