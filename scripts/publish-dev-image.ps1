@@ -25,7 +25,7 @@ try {
   docker save "${Image}:${Tag}" -o $Tar
 
   Write-Host '==> push'
-  crane push --insecure $Tar "${Image}:${Tag}"
+  crane -v push --insecure $Tar "${Image}:${Tag}"
 } finally {
   Remove-Item $Tar -ErrorAction SilentlyContinue
 }
