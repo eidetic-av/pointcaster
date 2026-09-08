@@ -124,6 +124,33 @@
 				"CMAKE_INSTALL_PREFIX": "${sourceDir}/build/${presetName}/install",
 				"X_VCPKG_APPLOCAL_DEPS_INSTALL": false
 			}
+		},
+		{
+			"name": "pointreceiver-android-armeabi-v7a",
+			"inherits": "default-preset",
+			"displayName": "Pointreceiver Release build for Android armeabi-v7a",
+			"description": "Builds the Pointreceiver client library only, cross-compiled for Android with the NDK",
+			"architecture": {
+				"value": "arm-v7a",
+				"strategy": "external"
+			},
+			"environment": {
+				"ANDROID_NDK_HOME": "/opt/android/ndk/28.2.13676358"
+			},
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release",
+				"VCPKG_TARGET_TRIPLET": "armeabi-v7a-android-custom-release",
+				"WITH_POINTCASTER": false,
+				"WITH_RECEIVER_LIB": true,
+				"CMAKE_INSTALL_PREFIX": "${sourceDir}/build/${presetName}/install",
+				"X_VCPKG_APPLOCAL_DEPS_INSTALL": false,
+				"CMAKE_SYSTEM_NAME": "Android",
+				"CMAKE_ANDROID_ARCH_ABI": "armeabi-v7a",
+				"CMAKE_ANDROID_API": "31",
+				"CMAKE_ANDROID_STL_TYPE": "c++_static",
+				"CMAKE_ANDROID_NDK": "/opt/android/ndk/28.2.13676358",
+				"CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "/opt/android/ndk/28.2.13676358/toolchains/llvm/prebuilt/windows-x86_64/bin/clang-scan-deps.exe"
+			}
 		}
 	]
 }

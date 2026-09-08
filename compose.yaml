@@ -23,5 +23,6 @@ services:
       - pointcaster-windows-build-vol:C:\pointcaster\build
       - .\build\windows-release\install:C:\pointcaster\build\windows-release\install
       - .\build\pointreceiver-windows-release\install:C:\pointcaster\build\pointreceiver-windows-release\install
+      - .\build\pointreceiver-android-armeabi-v7a\install:C:\pointcaster\build\pointreceiver-android-armeabi-v7a\install
 volumes:
   pointcaster-windows-build-vol:

@@ -23,7 +23,6 @@
 #include <span>
 #include <spdlog/common.h>
 #include <stdexcept>
-#include <stop_token>
 #include <string>
 #include <string_view>
 #include <sys/types.h>
@@ -102,14 +101,14 @@ struct Context {
   // TODO should this be bounded?
   moodycamel::BlockingReaderWriterQueue<MessageFrame> message_queue;
 
-  std::mutex message_subscription_write_mutex;
-  std::atomic<SubscriptionSnapshot> message_subscriptions{
-      std::make_shared<const SubscriptionSet>()};
+  std::mutex message_subscription_mutex;
+  SubscriptionSnapshot message_subscriptions =
+      std::make_shared<const SubscriptionSet>();
   std::set<std::string> known_message_addresses;
 
-  std::mutex point_cloud_subscription_write_mutex;
-  std::atomic<SubscriptionSnapshot> point_cloud_subscriptions{
-      std::make_shared<const SubscriptionSet>()};
+  std::mutex point_cloud_subscription_mutex;
+  SubscriptionSnapshot point_cloud_subscriptions =
+      std::make_shared<const SubscriptionSet>();
   std::set<std::string> known_point_cloud_addresses;
 
   std::mutex point_cloud_stream_mutex;
@@ -117,8 +116,26 @@ struct Context {
   pc::StringMap<pc::receiver::PointCloudFrame> point_cloud_frames;
   std::uint64_t point_cloud_stream_timestamp = 0;
 
-  std::jthread message_worker;
-  std::jthread point_cloud_worker;
+  std::atomic<bool> message_stopping{false};
+  std::thread message_worker;
+
+  std::atomic<bool> point_cloud_stopping{false};
+  std::thread point_cloud_worker;
+
+  void stop_message_worker() {
+    message_stopping.store(true, std::memory_order_release);
+    if (message_worker.joinable()) message_worker.join();
+  }
+
+  void stop_point_cloud_worker() {
+    point_cloud_stopping.store(true, std::memory_order_release);
+    if (point_cloud_worker.joinable()) point_cloud_worker.join();
+  }
+
+  ~Context() {
+    stop_point_cloud_worker();
+    stop_message_worker();
+  }
 };
 
 namespace {
@@ -173,18 +190,18 @@ sync_subscriptions(const SubscriptionSnapshot &current_subscriptions,
   return latest_subscriptions;
 }
 
-void message_receive_loop(std::stop_token stop_token,
-                          pc::receiver::Context &ctx, zmq::socket_t socket) {
+void message_receive_loop(pc::receiver::Context &ctx, zmq::socket_t socket) {
   pc::logger()->trace("Beginning message receive thread");
 
   // we keep a thread-local snapshot of our subscriptions collection
   // and sync it with the socket each loop
   SubscriptionSnapshot subscriptions;
 
-  while (!stop_token.stop_requested()) {
+  while (!ctx.message_stopping.load(std::memory_order_acquire)) {
 
     subscriptions = sync_subscriptions(subscriptions, socket, [&ctx] {
-      return ctx.message_subscriptions.load();
+      std::lock_guard lock(ctx.message_subscription_mutex);
+      return ctx.message_subscriptions;
     });
 
     // we receive multi-part messages, where the first is the message's
@@ -223,8 +240,7 @@ void message_receive_loop(std::stop_token stop_token,
   pc::logger()->trace("Message receive thread stopping");
 }
 
-void point_cloud_receive_loop(std::stop_token stop_token,
-                              pc::receiver::Context &ctx,
+void point_cloud_receive_loop(pc::receiver::Context &ctx,
                               zmq::socket_t socket) {
   pc::logger()->trace("Beginning point cloud receive thread");
 
@@ -232,10 +248,11 @@ void point_cloud_receive_loop(std::stop_token stop_token,
   // and sync it with the socket each loop
   SubscriptionSnapshot subscriptions;
 
-  while (!stop_token.stop_requested()) {
+  while (!ctx.point_cloud_stopping.load(std::memory_order_acquire)) {
 
     subscriptions = sync_subscriptions(subscriptions, socket, [&ctx] {
-      return ctx.point_cloud_subscriptions.load();
+      std::lock_guard lock(ctx.point_cloud_subscription_mutex);
+      return ctx.point_cloud_subscriptions;
     });
 
     // block for the first frame so an idle socket doesn't spin, then drain the
@@ -363,11 +380,11 @@ pointreceiver_start_message_receiver(pointreceiver_context *ctx,
 
     pc::logger()->info("Messaging socket open at {}", endpoint);
 
-    ctx->message_worker = std::jthread(
-        [ctx, socket = std::move(socket)](std::stop_token stop_token) mutable {
+    ctx->message_stopping.store(false, std::memory_order_release);
+    ctx->message_worker =
+        std::thread([ctx, socket = std::move(socket)]() mutable {
           exception_boundary("Message receive thread", [&] {
-            pc::receiver::message_receive_loop(std::move(stop_token), *ctx,
-                                               std::move(socket));
+            pc::receiver::message_receive_loop(*ctx, std::move(socket));
             return POINTRECEIVER_OK;
           });
         });
@@ -382,7 +399,7 @@ pointreceiver_stop_message_receiver(pointreceiver_context *ctx) {
 
   return exception_boundary("pointreceiver_stop_message_receiver", [&] {
     pc::logger()->trace("Stopping message receiver");
-    ctx->message_worker = {};
+    ctx->stop_message_worker();
     pc::logger()->info("Message receiver thread ended");
     return POINTRECEIVER_OK;
   });
@@ -397,11 +414,11 @@ pointreceiver_subscribe_to_message(pointreceiver_context *ctx,
                                    const char *address) {
   if (!ctx) return POINTRECEIVER_ERROR_INVALID_ARGUMENT;
   return exception_boundary("pointreceiver_subscribe_to_message", [&] {
-    std::lock_guard lock(ctx->message_subscription_write_mutex);
+    std::lock_guard lock(ctx->message_subscription_mutex);
     auto updated = std::make_shared<pc::receiver::SubscriptionSet>(
-        *ctx->message_subscriptions.load());
+        *ctx->message_subscriptions);
     updated->insert(address ? address : "");
-    ctx->message_subscriptions.store(std::move(updated));
+    ctx->message_subscriptions = std::move(updated);
     return POINTRECEIVER_OK;
   });
 }
@@ -411,11 +428,11 @@ pointreceiver_unsubscribe_from_message(pointreceiver_context *ctx,
                                        const char *address) {
   if (!ctx) return POINTRECEIVER_ERROR_INVALID_ARGUMENT;
   return exception_boundary("pointreceiver_unsubscribe_from_message", [&] {
-    std::lock_guard lock(ctx->point_cloud_subscription_write_mutex);
+    std::lock_guard lock(ctx->message_subscription_mutex);
     auto updated = std::make_shared<pc::receiver::SubscriptionSet>(
-        *ctx->message_subscriptions.load());
+        *ctx->message_subscriptions);
     updated->erase(address ? address : "");
-    ctx->message_subscriptions.store(std::move(updated));
+    ctx->message_subscriptions = std::move(updated);
     return POINTRECEIVER_OK;
   });
 }
@@ -485,11 +502,11 @@ pointreceiver_status pointreceiver_start_point_receiver(
 
     pc::logger()->info("Point receiver connected to {}", endpoint);
 
-    ctx->point_cloud_worker = std::jthread(
-        [ctx, socket = std::move(socket)](std::stop_token stop_token) mutable {
+    ctx->point_cloud_stopping.store(false, std::memory_order_release);
+    ctx->point_cloud_worker =
+        std::thread([ctx, socket = std::move(socket)]() mutable {
           exception_boundary("Point cloud receive thread", [&] {
-            pc::receiver::point_cloud_receive_loop(std::move(stop_token), *ctx,
-                                                   std::move(socket));
+            pc::receiver::point_cloud_receive_loop(*ctx, std::move(socket));
             return POINTRECEIVER_OK;
           });
         });
@@ -505,7 +522,7 @@ pointreceiver_stop_point_receiver(pointreceiver_context *ctx) {
   }
   return exception_boundary("pointreceiver_stop_point_receiver", [&] {
     pc::logger()->trace("Stopping point receiver");
-    ctx->point_cloud_worker = {};
+    ctx->stop_point_cloud_worker();
     {
       std::lock_guard lock(ctx->point_cloud_stream_mutex);
       ctx->point_cloud_frames.clear();
@@ -524,11 +541,11 @@ pointreceiver_subscribe_to_point_cloud(pointreceiver_context *ctx,
                                        const char *address) {
   if (!ctx) return POINTRECEIVER_ERROR_INVALID_ARGUMENT;
   return exception_boundary("pointreceiver_subscribe_to_point_cloud", [&] {
-    std::lock_guard lock(ctx->point_cloud_subscription_write_mutex);
+    std::lock_guard lock(ctx->point_cloud_subscription_mutex);
     auto updated = std::make_shared<pc::receiver::SubscriptionSet>(
-        *ctx->point_cloud_subscriptions.load());
+        *ctx->point_cloud_subscriptions);
     updated->insert(address ? address : "");
-    ctx->point_cloud_subscriptions.store(std::move(updated));
+    ctx->point_cloud_subscriptions = std::move(updated);
     return POINTRECEIVER_OK;
   });
 }
@@ -538,11 +555,11 @@ pointreceiver_unsubscribe_from_point_cloud(pointreceiver_context *ctx,
                                            const char *address) {
   if (!ctx) return POINTRECEIVER_ERROR_INVALID_ARGUMENT;
   return exception_boundary("pointreceiver_unsubscribe_from_point_cloud", [&] {
-    std::lock_guard lock(ctx->point_cloud_subscription_write_mutex);
+    std::lock_guard lock(ctx->point_cloud_subscription_mutex);
     auto updated = std::make_shared<pc::receiver::SubscriptionSet>(
-        *ctx->point_cloud_subscriptions.load());
+        *ctx->point_cloud_subscriptions);
     updated->erase(address ? address : "");
-    ctx->point_cloud_subscriptions.store(std::move(updated));
+    ctx->point_cloud_subscriptions = std::move(updated);
     return POINTRECEIVER_OK;
   });
 }

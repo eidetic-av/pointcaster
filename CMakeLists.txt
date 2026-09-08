@@ -3,6 +3,13 @@ cmake_minimum_required(VERSION 4.4)
 option(WITH_POINTCASTER "Build the pointcaster application" ON)
 option(WITH_RECEIVER_LIB "Build the pointreceiver client library" OFF)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    set(with_tracy_default OFF)
+else()
+    set(with_tracy_default ON)
+endif()
+option(WITH_TRACY "Build with the Tracy profiler client" ${with_tracy_default})
+
 # we can use cmake to set which vcpkg dependencies we need
 set(VCPKG_MANIFEST_NO_DEFAULT_FEATURES ON)
 if(WITH_POINTCASTER)

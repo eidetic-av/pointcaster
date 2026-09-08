@@ -115,7 +115,9 @@ RUN choco install -y ninja --version $Env:NinjaVersion
 
 # Build source-based project dependencies with vcpkg
 COPY vcpkg.json C:\\vcpkg-config\\
-COPY triplets C:\\vcpkg-config\\triplets
+# copy triplets for this host architecture
+# (cross build triplets can come later steps so they dont invalidate each other)
+COPY triplets/x64-*.cmake C:\\vcpkg-config\\triplets\\
 COPY ports C:\\vcpkg-config\\ports
 
 # bootstrap our own vcpkg checkout pinned to the manifest's builtin-baseline commit
@@ -127,7 +129,7 @@ RUN git clone https://github.com/microsoft/vcpkg.git $Env:VCPKG_ROOT; \
     git reset --hard $Baseline; \
     & .\\bootstrap-vcpkg.bat -disableMetrics
 
-ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR;CUDA_PATH;CUDA_PATH_V12_9;CUDAToolkit_ROOT;CUDACXX;Thrust_DIR"
+ENV VCPKG_KEEP_ENV_VARS="Qt6_DIR;QT_DIR;TBB_DIR;CUDA_PATH;CUDA_PATH_V12_9;CUDAToolkit_ROOT;CUDACXX;Thrust_DIR;ANDROID_NDK_HOME"
 
 # cap build parallelism... keeps memory low on some big nvcc TUs in particular
 ARG VcpkgMaxConcurrency=16
@@ -143,6 +145,26 @@ RUN & \"$Env:VsDevShell\" -Arch amd64 -HostArch amd64; \
       --overlay-ports=C:\vcpkg-config\ports \
       --triplet x64-windows-static-md-custom-release \
       --clean-after-build
+
+
+# ---- android cross-compilation target ----
+
+ARG AndroidNdkRelease=r28c
+ARG AndroidNdkVersion=28.2.13676358
+ARG AndroidNdkSha1="086BBA43FF2F5EB0E387B15C8278BB4E0D89BA1D"
+ENV ANDROID_NDK_HOME="C:\\opt\\android\\ndk\\$AndroidNdkVersion"
+
+RUN $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; \
+    Invoke-WebRequest -UseBasicParsing -OutFile C:\android-ndk.zip \
+      -Uri \"https://dl.google.com/android/repository/android-ndk-$($Env:AndroidNdkRelease)-windows.zip\"; \
+    $Hash = (Get-FileHash C:\android-ndk.zip -Algorithm SHA1).Hash; \
+    if ($Hash -ne $Env:AndroidNdkSha1) { throw \"android ndk checksum mismatch: expected $Env:AndroidNdkSha1 but got $Hash\" }; \
+    New-Item -ItemType Directory -Force -Path C:\opt\android\ndk | Out-Null; \
+    & 'C:\ProgramData\chocolatey\tools\7z.exe' x C:\android-ndk.zip '-oC:\opt\android\ndk' -y -bso0 -bsp0; \
+    if ($LASTEXITCODE -ne 0) { throw \"7z extract failed: $LASTEXITCODE\" }; \
+    Move-Item \"C:\opt\android\ndk\android-ndk-$($Env:AndroidNdkRelease)\" $Env:ANDROID_NDK_HOME; \
+    Remove-Item -Force C:\android-ndk.zip; \
+    & \"$Env:ANDROID_NDK_HOME\toolchains\llvm\prebuilt\windows-x86_64\bin\clang.exe\" --version
 
 WORKDIR C:\\pointcaster
 

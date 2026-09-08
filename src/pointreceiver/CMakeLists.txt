@@ -26,6 +26,14 @@ set_target_properties(pointreceiver
         VISIBILITY_INLINES_HIDDEN YES
 )
 
+if(ANDROID)
+    target_link_options(pointreceiver PRIVATE
+        -Wl,--gc-sections
+        -Wl,--exclude-libs,ALL
+        -Wl,--strip-all
+    )
+endif()
+
 generate_export_header(pointreceiver
     EXPORT_FILE_NAME
         ${PROJECT_BINARY_DIR}/include/pointreceiver_export.h
@@ -86,7 +94,6 @@ set(pointreceiver_precompiled_headers
   <ranges>
   <set>
   <span>
-  <stop_token>
   <string>
   <string_view>
   <thread>

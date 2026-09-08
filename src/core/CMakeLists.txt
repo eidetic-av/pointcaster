@@ -3,7 +3,15 @@ include(GenerateExportHeader)
 # the core library is a shared library so that singletons like 
 # the logger and  the profiler can be accessed from inside 
 # other shared libraries, like dynamically loaded device plugins
-add_library(pointcaster_core SHARED
+# except for android... its not loading plugins and it helps
+# to bundle stuff there
+if(ANDROID)
+    set(pointcaster_core_linkage STATIC)
+else()
+    set(pointcaster_core_linkage SHARED)
+endif()
+
+add_library(pointcaster_core ${pointcaster_core_linkage}
     point_cloud.cc
     core_types.cc
     task_pool.cc
@@ -22,8 +30,9 @@ add_library(pointcaster::core ALIAS pointcaster_core)
 
 find_path(ZPP_BITS_INCLUDE_DIRS "zpp_bits.h")
 target_include_directories(pointcaster_core PRIVATE ${ZPP_BITS_INCLUDE_DIRS})
-if (NOT WIN32)
-  # zpp-bits' inlined templates show up as string overflow warnings in gcc
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  # zpp-bits' inlined templates show up as string overflow warnings in gcc.
+  # clang does not have this diagnostic at all and warns that it is unknown
   set_source_files_properties(point_cloud.cc PROPERTIES
     COMPILE_OPTIONS "-Wno-stringop-overflow"
   )
@@ -36,10 +45,6 @@ target_link_libraries(pointcaster_core PRIVATE draco::draco)
 find_package(meshoptimizer CONFIG REQUIRED)
 target_link_libraries(pointcaster_core PUBLIC meshoptimizer::meshoptimizer)
 
-# shared configs need reflectcpp
-find_package(reflectcpp CONFIG REQUIRED)
-target_link_libraries(pointcaster_core PRIVATE reflectcpp::reflectcpp)
-
 find_path(BSHOSHANY_THREAD_POOL_INCLUDE_DIRS "BS_thread_pool.hpp")
 target_include_directories(pointcaster_core PUBLIC ${BSHOSHANY_THREAD_POOL_INCLUDE_DIRS})
 
@@ -47,8 +52,14 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 target_link_libraries(pointcaster_core PUBLIC spdlog::spdlog fmt::fmt)
 
-find_package(Tracy CONFIG REQUIRED)
-target_link_libraries(pointcaster_core PUBLIC Tracy::TracyClient)
+if(ANDROID)
+    target_link_libraries(pointcaster_core PUBLIC log)
+endif()
+
+if(WITH_TRACY)
+    find_package(Tracy CONFIG REQUIRED)
+    target_link_libraries(pointcaster_core PUBLIC Tracy::TracyClient)
+endif()
 
 find_package(Eigen3 CONFIG REQUIRED)
 target_link_libraries(pointcaster_core PUBLIC Eigen3::Eigen)
@@ -104,5 +115,8 @@ target_precompile_headers(pointcaster_core PRIVATE
   <cstdint>
   <ranges>
   <expected>
-  <tracy/Tracy.hpp>
 )
+
+if(WITH_TRACY)
+  target_precompile_headers(pointcaster_core PRIVATE <tracy/Tracy.hpp>)
+endif()

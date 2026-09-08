@@ -1,7 +1,9 @@
-# Pointreceiver Windows build, plus the Unity package publish.
+# Pointreceiver native builds, plus the Unity package publish.
 #
 # Runs when src/pointreceiver/unity/package.json changes, so bumping the package
 # version is what creates a new release.
+#
+# This builds for Windows and Android (cross-compiling).
 #
 # Needs secrets `registry_user`/`registry_password` to pull the dev image, and
 # `unity_package_deploy_key`: an ssh key that can push to the package repo.
@@ -21,7 +23,6 @@ variables:
   - &strict_mode $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true
   - &unity_package_remote git@github.com:matth-av/pointcaster-unity.git
   - &container_env
-    DOCKER_HOST: npipe:////./pipe/dockerDesktopWindowsEngine
     POINTRECEIVER_BUILD_VOLUME: pointreceiver-ci-build
     # set the username and password for cr.pointcaster.net here
     REGISTRY_USER:
@@ -44,14 +45,16 @@ steps:
       - docker ps -aq --filter volume=$env:POINTRECEIVER_BUILD_VOLUME | ForEach-Object { docker rm --force $_ }
       - docker volume rm --force $env:POINTRECEIVER_BUILD_VOLUME
 
-  - name: configure
+  # ----- windows x86_64
+
+  - name: configure-windows
     image: pwsh
     environment: *container_env
     commands:
       - *strict_mode
       - Invoke-Expression "$env:DOCKER_RUN cmake --preset pointreceiver-windows-release"
 
-  - name: build
+  - name: build-windows
     image: pwsh
     environment: *container_env
     commands:
@@ -60,18 +63,48 @@ steps:
 
   # build/ is a named volume, so the install has to land in the workspace itself
   # for the steps outside the container to see it
-  - name: install
+  - name: install-windows
     image: pwsh
     environment: *container_env
     commands:
       - *strict_mode
-      - Invoke-Expression "$env:DOCKER_RUN cmake --install build/pointreceiver-windows-release --prefix C:/pointcaster/dist/pointreceiver-install"
+      - Invoke-Expression "$env:DOCKER_RUN cmake --install build/pointreceiver-windows-release --prefix C:/pointcaster/dist/pointreceiver-windows-install"
 
-  - name: stage-plugin
+  - name: stage-windows
     image: pwsh
     commands:
       - *strict_mode
-      - ./scripts/stage-unity-package.ps1 -InstallDir dist/pointreceiver-install
+      - ./scripts/stage-unity-package.ps1 -InstallDir dist/pointreceiver-windows-install -Platform Windows -Arch x86_64
+
+  # ----- android armeabi-v7a
+
+  - name: configure-android
+    image: pwsh
+    environment: *container_env
+    commands:
+      - *strict_mode
+      - Invoke-Expression "$env:DOCKER_RUN cmake --preset pointreceiver-android-armeabi-v7a"
+
+  - name: build-android
+    image: pwsh
+    environment: *container_env
+    commands:
+      - *strict_mode
+      - Invoke-Expression "$env:DOCKER_RUN cmake --build build/pointreceiver-android-armeabi-v7a"
+
+  - name: install-android
+    image: pwsh
+    environment: *container_env
+    commands:
+      - *strict_mode
+      - Invoke-Expression "$env:DOCKER_RUN cmake --install build/pointreceiver-android-armeabi-v7a --prefix C:/pointcaster/dist/pointreceiver-android-install"
+
+  - name: stage-android
+    image: pwsh
+    commands:
+      - *strict_mode
+      - ./scripts/stage-unity-package.ps1 -InstallDir dist/pointreceiver-android-install -Platform Android -Arch armeabi-v7a
+
 
   - name: publish-package
     image: pwsh
@@ -81,4 +114,4 @@ steps:
         from_secret: unity_package_deploy_key
     commands:
       - *strict_mode
-      - ./scripts/publish-unity-package.ps1 -Remote $env:UNITY_PACKAGE_REMOTE
+      - ./scripts/publish-unity-package.ps1 -Remote $env:UNITY_PACKAGE_REMOTE -Plugins Windows/x86_64,Android/armeabi-v7a

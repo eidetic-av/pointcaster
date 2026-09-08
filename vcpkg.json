@@ -10,12 +10,6 @@
 		"eigen3",
 		"fmt",
 		"meshoptimizer",
-		{
-			"name": "reflectcpp",
-			"features": [
-				"yaml"
-			]
-		},
 		"readerwriterqueue",
 		"spdlog",
 		{
@@ -23,7 +17,8 @@
 			"features": [
 				"crash-handler",
 				"on-demand"
-			]
+			],
+			"platform": "!android"
 		},
 		"zpp-bits"
 	],
@@ -70,6 +65,12 @@
 					]
 				},
 				"readerwriterqueue",
+				{
+					"name": "reflectcpp",
+					"features": [
+						"yaml"
+					]
+				},
 				"yaml-cpp",
 				"yyjson"
 			]

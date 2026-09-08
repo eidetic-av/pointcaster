@@ -2,7 +2,10 @@
 
 #include <atomic>
 #include <core/logger/logger.h>
+
+#ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
+#endif
 
 namespace pc::profiling {
 

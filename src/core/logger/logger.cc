@@ -3,7 +3,11 @@
 #include <iterator>
 #include <mutex>
 #include <spdlog/sinks/base_sink.h>
+#if defined(__ANDROID__)
+#include <spdlog/sinks/android_sink.h>
+#else
 #include <spdlog/sinks/stdout_color_sinks.h>
+#endif
 
 namespace pc::log::detail {
 
@@ -55,8 +59,13 @@ static std::shared_ptr<buffer_sink> buffer_sink_instance;
 static std::shared_ptr<spdlog::logger> &get_logger_impl() {
   if (!instance) {
     buffer_sink_instance = std::make_shared<buffer_sink>();
-    auto stdout_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    std::vector<spdlog::sink_ptr> sinks{buffer_sink_instance, stdout_sink};
+#if defined(__ANDROID__)
+    auto console_sink =
+        std::make_shared<spdlog::sinks::android_sink_mt>("pointreceiver", true);
+#else
+    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+#endif
+    std::vector<spdlog::sink_ptr> sinks{buffer_sink_instance, console_sink};
     instance =
         std::make_shared<spdlog::logger>("pc", sinks.begin(), sinks.end());
     instance->set_level(spdlog::level::info);

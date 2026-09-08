@@ -8,8 +8,8 @@
 param(
     [Parameter(Mandatory)] [string] $Remote,
     [string] $Branch = 'main',
-    [string] $Platform = 'Windows',
-    [string] $Arch = 'x86_64',
+    # Plugins-relative platform paths, e.g. Windows/x86_64
+    [string[]] $Plugins = @('Windows/x86_64', 'Android/armeabi-v7a'),
     [switch] $DryRun
 )
 
@@ -18,8 +18,17 @@ $PSNativeCommandUseErrorActionPreference = $true
 
 $repo_root = Resolve-Path (Join-Path $PSScriptRoot '..')
 $package = Join-Path $repo_root 'src/pointreceiver/unity'
-$plugin_rel = "Plugins/$Platform/$Arch"
+$plugin_rels = $Plugins | ForEach-Object { "Plugins/$_" }
 $version = (Get-Content (Join-Path $package 'package.json') -Raw | ConvertFrom-Json).version
+
+# fail before touching the remote if any platform was not built and staged
+foreach ($plugin_rel in $plugin_rels) {
+    $staged = Get-ChildItem (Join-Path $package $plugin_rel) -File -ErrorAction SilentlyContinue |
+        Where-Object Extension -in '.dll', '.so'
+    if (-not $staged) {
+        throw "no staged binaries in $plugin_rel - run stage-unity-package.ps1 for that platform first"
+    }
+}
 
 $deploy_key = $env:UNITY_PACKAGE_DEPLOY_KEY
 if (-not $deploy_key) { throw 'UNITY_PACKAGE_DEPLOY_KEY is not set' }
@@ -53,16 +62,18 @@ try {
         Where-Object Name -notin 'Plugins', '.gitignore' |
         Copy-Item -Destination $work -Recurse -Force
 
-    Remove-Item (Join-Path $work $plugin_rel) -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory -Path (Join-Path $work $plugin_rel) -Force | Out-Null
-    Copy-Item (Join-Path $package "$plugin_rel/*") -Destination (Join-Path $work $plugin_rel) -Force
+    foreach ($plugin_rel in $plugin_rels) {
+        Remove-Item (Join-Path $work $plugin_rel) -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Path (Join-Path $work $plugin_rel) -Force | Out-Null
+        Copy-Item (Join-Path $package "$plugin_rel/*") -Destination (Join-Path $work $plugin_rel) -Force
 
-    # unity wants a .meta for every folder on the way down to the plugin
-    $segments = $plugin_rel -split '/'
-    for ($i = 0; $i -lt $segments.Count; $i++) {
-        $meta = ($segments[0..$i] -join '/') + '.meta'
-        if (Test-Path (Join-Path $package $meta)) {
-            Copy-Item (Join-Path $package $meta) -Destination (Join-Path $work $meta) -Force
+        # unity wants a .meta for every folder on the way down to the plugin
+        $segments = $plugin_rel -split '/'
+        for ($i = 0; $i -lt $segments.Count; $i++) {
+            $meta = ($segments[0..$i] -join '/') + '.meta'
+            if (Test-Path (Join-Path $package $meta)) {
+                Copy-Item (Join-Path $package $meta) -Destination (Join-Path $work $meta) -Force
+            }
         }
     }
 
@@ -79,11 +90,11 @@ try {
 
     $commit = git -C $repo_root rev-parse --short HEAD
     git -C $work -c user.name='pointcaster ci' -c user.email='ci@pointcaster.net' `
-        commit --quiet -m "pointreceiver $Platform/$Arch $version from $commit"
+        commit --quiet -m "pointreceiver $($Plugins -join ' ') $version from $commit"
     git -C $work push --quiet origin $Branch
     Write-Host "==> pushed $Branch to $Remote"
 
-    # bumping package.json is what cuts a release and the tag is what a unity
+    # bumping package.json is what creates a release and the tag is what a unity
     # project pins with #v<version>
     $tag = "v$version"
     if (git -C $work ls-remote --tags origin "refs/tags/$tag") {

@@ -17,8 +17,11 @@ $ErrorActionPreference = 'Stop'
 $repo_root = Resolve-Path (Join-Path $PSScriptRoot '..')
 
 # only the runtime libraries: the import library under lib/ and the C headers
-# under include/ are for native consumers, Unity has no use for them
-$binaries = Get-ChildItem (Join-Path $repo_root $InstallDir) -File |
+# under include/ are for native consumers, Unity has no use for them.
+# recursive because windows installs its dlls at the install root (the root
+# CMakeLists sets CMAKE_INSTALL_BINDIR "." on WIN32) while android puts
+# libpointreceiver.so under lib/
+$binaries = Get-ChildItem (Join-Path $repo_root $InstallDir) -File -Recurse |
     Where-Object Extension -in '.dll', '.so'
 if (-not $binaries) { throw "no runtime libraries in $InstallDir" }
 
