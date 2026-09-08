@@ -53,7 +53,7 @@ steps:
     image: *dev_image
     environment: *build_env
     commands:
-      - cmake --build build/linux-release --target package
+      - cmake --build build/linux-release
 
   - name: deploy
     image: *dev_image

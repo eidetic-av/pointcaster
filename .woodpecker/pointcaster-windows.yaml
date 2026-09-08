@@ -49,7 +49,7 @@ steps:
     environment: *container_env
     commands:
       - *strict_mode
-      - Invoke-Expression "$env:DOCKER_RUN cmake --build build/windows-release --target package"
+      - Invoke-Expression "$env:DOCKER_RUN cmake --build build/windows-release"
 
   - name: deploy
     image: pwsh
