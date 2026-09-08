@@ -14,7 +14,7 @@
 using namespace pc;
 
 int main(int argc, char *argv[]) {
-  std::println("This is pointcaster 0.2.7");
+  std::println("This is pointcaster 0.2.8");
 
   auto *app_settings = AppSettings::instance();
 
