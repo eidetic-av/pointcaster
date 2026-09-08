@@ -15,6 +15,9 @@ services:
     stdin_open: true
     tty: true
     working_dir: C:\pointcaster
+    isolation: process
+    # mem_limit: 14g
+    # cpu_count: 22
     volumes: 
       - .:C:\pointcaster
       - pointcaster-windows-build-vol:C:\pointcaster\build
