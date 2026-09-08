@@ -1,10 +1,10 @@
-# Pointreceiver Windows build and publish.
+# Pointreceiver Windows build, plus the Unity package publish.
 #
-# Runs when src/pointreceiver/unity/package.json changes so bumping the package
-# version is what triggers a release
+# Runs when src/pointreceiver/unity/package.json changes, so bumping the package
+# version is what creates a new release.
 #
-# Needs a secret `unity_package_deploy_key`: an ssh key that can push 
-# to the destination package repo
+# Needs secrets `registry_user`/`registry_password` to pull the dev image, and
+# `unity_package_deploy_key`: an ssh key that can push to the package repo.
 
 when:
   - event: push
