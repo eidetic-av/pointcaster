@@ -1,3 +1,8 @@
+# Pointcaster Windows release build and deploy.
+#
+# Needs secrets `registry_user`/`registry_password` to pull the dev image, and
+# `b2_application_key_id`/`b2_application_key` for the deploy upload.
+
 when:
   - event: tag
   - event: manual
@@ -6,16 +11,29 @@ labels:
   platform: windows/amd64
 
 variables:
+  # force powershell to fail when a single command fails
+  - &strict_mode $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true
   - &container_env
     DOCKER_HOST: npipe:////./pipe/dockerDesktopWindowsEngine
     POINTCASTER_BUILD_VOLUME: pointcaster-ci-build
-    DOCKER_RUN: 'docker run --rm -v "$($pwd.Path):C:\pointcaster" -v "$($env:POINTCASTER_BUILD_VOLUME):C:\pointcaster\build" cr.pointcaster.net/pointcaster-dev:latest'
+    # set the username and password for cr.pointcaster.net here
+    REGISTRY_USER:
+      from_secret: registry_user
+    REGISTRY_PASSWORD:
+      from_secret: registry_password
+    # force process isolation over hyperv, because it fucking sucks.
+    # the bare -e flags forward the deploy credentials from whichever step
+    # actually sets them, so only deploy carries them into the container
+    DOCKER_RUN: 'docker run --rm --isolation=process -e B2_APPLICATION_KEY_ID -e B2_APPLICATION_KEY -e DEPLOY_BRANCH -v "$($pwd.Path):C:\pointcaster" -v "$($env:POINTCASTER_BUILD_VOLUME):C:\pointcaster\build" cr.pointcaster.net/pointcaster-dev:latest'
 
 steps:
   - name: prepare
     image: pwsh
     environment: *container_env
     commands:
+      - *strict_mode
+      # zot needs us to supply credentials
+      - $env:REGISTRY_PASSWORD | docker login cr.pointcaster.net --username $env:REGISTRY_USER --password-stdin
       - docker pull cr.pointcaster.net/pointcaster-dev:latest
       - docker volume rm --force $env:POINTCASTER_BUILD_VOLUME
 
@@ -23,16 +41,25 @@ steps:
     image: pwsh
     environment: *container_env
     commands:
+      - *strict_mode
       - Invoke-Expression "$env:DOCKER_RUN cmake --preset windows-release"
 
   - name: build
     image: pwsh
     environment: *container_env
     commands:
+      - *strict_mode
       - Invoke-Expression "$env:DOCKER_RUN cmake --build build/windows-release --target package"
 
   - name: deploy
     image: pwsh
-    environment: *container_env
+    environment:
+      <<: *container_env
+      DEPLOY_BRANCH: qt
+      B2_APPLICATION_KEY_ID:
+        from_secret: b2_application_key_id
+      B2_APPLICATION_KEY:
+        from_secret: b2_application_key
     commands:
+      - *strict_mode
       - Invoke-Expression "$env:DOCKER_RUN cmake --build build/windows-release --target deploy"
