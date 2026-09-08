@@ -44,13 +44,15 @@ qt_generate_deploy_qml_app_script(
 # otherwise windeployqt --force fails replacing qml plugin dlls it still has open
 install(CODE "
     file(READ \"${pointcaster_deploy_script}\" _pointcaster_deploy_script_contents)
-    string(REPLACE
-        \"qt6_deploy_runtime_dependencies(\"
-        \"qt6_deploy_runtime_dependencies(\n    NO_OVERWRITE\"
-        _pointcaster_deploy_script_contents
-        \"\${_pointcaster_deploy_script_contents}\"
-    )
-    file(WRITE \"${pointcaster_deploy_script}\" \"\${_pointcaster_deploy_script_contents}\")
+    if(NOT _pointcaster_deploy_script_contents MATCHES \"NO_OVERWRITE\")
+        string(REPLACE
+            \"qt6_deploy_runtime_dependencies(\"
+            \"qt6_deploy_runtime_dependencies(\n    NO_OVERWRITE\"
+            _pointcaster_deploy_script_contents
+            \"\${_pointcaster_deploy_script_contents}\"
+        )
+        file(WRITE \"${pointcaster_deploy_script}\" \"\${_pointcaster_deploy_script_contents}\")
+    endif()
 ")
 # qt's deploy support hardcodes its bin dir to "bin",
 # override at install time to match our flat windows layout
