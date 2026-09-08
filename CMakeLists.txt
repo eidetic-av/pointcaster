@@ -17,6 +17,11 @@ project(pointcaster VERSION 0.2.7 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(MSVC)
+    # heavily templated TUs (reflectcpp, pcl, boost) need this
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/bigobj>)
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 if(WITH_POINTCASTER)
