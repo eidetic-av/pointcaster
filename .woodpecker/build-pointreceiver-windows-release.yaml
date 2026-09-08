@@ -1,0 +1,67 @@
+# Pointreceiver Windows build and publish.
+#
+# Runs when src/pointreceiver/unity/package.json changes so bumping the package
+# version is what triggers a release
+#
+# Needs a secret `unity_package_deploy_key`: an ssh key that can push 
+# to the destination package repo
+
+when:
+  - event: push
+    branch: qt
+    path:
+      include: ['src/pointreceiver/unity/package.json']
+  - event: manual
+
+labels:
+  platform: windows/amd64
+
+variables:
+  - &unity_package_remote git@github.com:matth-av/pointcaster-unity.git
+  - &container_env
+    DOCKER_HOST: npipe:////./pipe/dockerDesktopWindowsEngine
+    POINTRECEIVER_BUILD_VOLUME: pointreceiver-ci-build
+    # force process isolation over hyperv, because it fucking sucks
+    DOCKER_RUN: 'docker run --rm --isolation=process -v "$($pwd.Path):C:\pointcaster" -v "$($env:POINTRECEIVER_BUILD_VOLUME):C:\pointcaster\build" cr.pointcaster.net/pointcaster-dev:latest'
+
+steps:
+  - name: prepare
+    image: pwsh
+    environment: *container_env
+    commands:
+      - docker pull cr.pointcaster.net/pointcaster-dev:latest
+      - docker volume rm --force $env:POINTRECEIVER_BUILD_VOLUME
+
+  - name: configure
+    image: pwsh
+    environment: *container_env
+    commands:
+      - Invoke-Expression "$env:DOCKER_RUN cmake --preset pointreceiver-windows-release"
+
+  - name: build
+    image: pwsh
+    environment: *container_env
+    commands:
+      - Invoke-Expression "$env:DOCKER_RUN cmake --build build/pointreceiver-windows-release"
+
+  # build/ is a named volume, so the install has to land in the workspace itself
+  # for the steps outside the container to see it
+  - name: install
+    image: pwsh
+    environment: *container_env
+    commands:
+      - Invoke-Expression "$env:DOCKER_RUN cmake --install build/pointreceiver-windows-release --prefix C:/pointcaster/dist/pointreceiver-install"
+
+  - name: stage-plugin
+    image: pwsh
+    commands:
+      - ./scripts/stage-unity-package.ps1 -InstallDir dist/pointreceiver-install
+
+  - name: publish-package
+    image: pwsh
+    environment:
+      UNITY_PACKAGE_REMOTE: *unity_package_remote
+      UNITY_PACKAGE_DEPLOY_KEY:
+        from_secret: unity_package_deploy_key
+    commands:
+      - ./scripts/publish-unity-package.ps1 -Remote $env:UNITY_PACKAGE_REMOTE

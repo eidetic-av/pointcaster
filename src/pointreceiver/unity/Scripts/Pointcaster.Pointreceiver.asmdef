@@ -1,0 +1,15 @@
+{
+    "name": "Pointcaster.Pointreceiver",
+    "references": [
+        "Unity.Burst",
+        "Unity.VisualEffectGraph.Runtime",
+        "UnityEngine.UI"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.visualeffectgraph",
+            "expression": "",
+            "define": "POINTRECEIVER_HAS_VFX_GRAPH"
+        }
+    ]
+}

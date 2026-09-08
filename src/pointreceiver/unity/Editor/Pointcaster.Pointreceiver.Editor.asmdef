@@ -1,0 +1,9 @@
+{
+    "name": "Pointcaster.Pointreceiver.Editor",
+    "references": [
+        "Pointcaster.Pointreceiver"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ]
+}

@@ -1,11 +1,15 @@
 {
     "name": "net.pointcaster.pointreceiver",
     "version": "1.0.0",
-    "displayName": "Pointreceiver",
-    "description": "Unity integration for Pointcaster",
+    "displayName": "Pointcaster Unity Integration",
+    "description": "Unity integration for Pointcaster. This package includes integration scripts and resources, as well as the native pointreceiver library and its dependencies for multiple platforms.",
     "unity": "2022.3",
     "author": {
-	"name": "Matt Hughes",
-	"email": "matt@pointcaster.net"
+        "name": "Matt Hughes",
+        "email": "matt@pointcaster.net"
+    },
+    "dependencies": {
+        "com.unity.burst": "1.8.9",
+        "com.unity.ugui": "1.0.0"
     }
 }

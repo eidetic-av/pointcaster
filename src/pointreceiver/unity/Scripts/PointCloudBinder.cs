@@ -1,3 +1,4 @@
+#if POINTRECEIVER_HAS_VFX_GRAPH
 using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.VFX;
@@ -53,3 +54,4 @@ public class PointCloudBinder : VFXBinderBase
     public override bool IsValid(VisualEffect component) =>
         component.HasTexture(PositionsProperty) && component.HasTexture(ColorsProperty);
 }
+#endif

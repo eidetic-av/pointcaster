@@ -52,7 +52,14 @@ public class PointreceiverHost : MonoBehaviour
             Debug.Log("Failed to start Receiver threads");
             if (StatusText) StatusText.text = "Failed to start";
         }
-        RenderPipelineManager.endCameraRendering += DisposeFrameResources;
+        if (GraphicsSettings.currentRenderPipeline != null) {
+            // for SRP
+            RenderPipelineManager.endCameraRendering += DisposeAfterScriptableRender;
+        }
+        else {
+            // for Builtin
+            Camera.onPostRender += DisposeAfterBuiltInRender;
+        }
     }
 
     void OnDisable() 
@@ -72,7 +79,14 @@ public class PointreceiverHost : MonoBehaviour
             Debug.Log("Failed to stop Receiver threads");
             if (StatusText) StatusText.text = "Failed to stop";
         }
-        RenderPipelineManager.endCameraRendering -= DisposeFrameResources;
+        if (GraphicsSettings.currentRenderPipeline != null) {
+            // for SRP
+            RenderPipelineManager.endCameraRendering -= DisposeAfterScriptableRender;
+        }
+        else {
+            // for builtin
+            Camera.onPostRender -= DisposeAfterBuiltInRender;
+        }
     }
 
     void OnDestroy()
@@ -155,7 +169,12 @@ public class PointreceiverHost : MonoBehaviour
         if (StatusText) StatusText.text = $"{PointClouds.Count} channels";
     }
 
-    void DisposeFrameResources(ScriptableRenderContext context, Camera camera)
+    void DisposeAfterScriptableRender(ScriptableRenderContext context, Camera camera) =>
+        DisposeFrameResources();
+
+    void DisposeAfterBuiltInRender(Camera camera) => DisposeFrameResources();
+
+    void DisposeFrameResources()
     {
         foreach (var cloud in PointClouds.Values)
         {
