@@ -43,6 +43,12 @@ steps:
       - docker pull cr.pointcaster.net/pointcaster-dev:latest
       # reap orphaned containers from prior builds first
       - docker ps -aq --filter volume=$env:POINTRECEIVER_BUILD_VOLUME | ForEach-Object { docker rm --force $_ }
+      # clear ACLs for any build volumes created on previous runs
+      - docker run --rm --isolation=process --entrypoint powershell -v "$($env:POINTRECEIVER_BUILD_VOLUME):C:\vol" cr.pointcaster.net/pointcaster-dev:latest -NoProfile -Command 'icacls C:\vol /reset /T /C /Q > $null; exit 0'
+      # and clear the volume itself
+      # (we use volumes around the place not for caching, but because
+      # otherwise windows builds are painfully slow cause docker for 
+      # windows is terrible).
       - docker volume rm --force $env:POINTRECEIVER_BUILD_VOLUME
 
   # ----- windows x86_64
