@@ -956,7 +956,7 @@ std::shared_ptr<PointCloud> OrbbecDevice::point_cloud() {
     auto latest = _pipeline->latest_cloud();
     if (latest) return latest;
   }
-  static auto empty = std::make_shared<PointCloud>(PointCloud{{}, {}, {}});
+  static auto empty = std::make_shared<PointCloud>();
   return empty;
 }
 
