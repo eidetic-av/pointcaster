@@ -140,6 +140,8 @@
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": "Release",
 				"VCPKG_TARGET_TRIPLET": "armeabi-v7a-android-custom-release",
+				"VCPKG_INSTALLED_DIR": "C:/vcpkg-config/vcpkg_installed",
+				"VCPKG_MANIFEST_INSTALL": "OFF",
 				"WITH_POINTCASTER": false,
 				"WITH_RECEIVER_LIB": true,
 				"CMAKE_INSTALL_PREFIX": "${sourceDir}/build/${presetName}/install",

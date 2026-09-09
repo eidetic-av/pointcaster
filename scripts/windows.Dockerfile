@@ -166,6 +166,20 @@ RUN $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; \
     Remove-Item -Force C:\android-ndk.zip; \
     & \"$Env:ANDROID_NDK_HOME\toolchains\llvm\prebuilt\windows-x86_64\bin\clang.exe\" --version
 
+# copy the android cross-build triplet now that the ndk is in place
+COPY triplets/armeabi-v7a-*.cmake C:\\vcpkg-config\\triplets\\
+
+# install third-party dependencies for the android target
+RUN & \"$Env:VsDevShell\" -Arch amd64 -HostArch amd64; \
+    & \"$Env:VCPKG_ROOT\vcpkg.exe\" install \
+      --x-manifest-root=C:\vcpkg-config \
+      --overlay-triplets=C:\vcpkg-config\triplets \
+      --overlay-ports=C:\vcpkg-config\ports \
+      --triplet armeabi-v7a-android-custom-release \
+      --x-no-default-features \
+      --x-feature=pointreceiver \
+      --clean-after-build
+
 WORKDIR C:\\pointcaster
 
 # entry point to the docker container is our visual studio dev shell
