@@ -94,7 +94,11 @@ public class PointreceiverMeshHost : MonoBehaviour
         // borrowed and die on the next dequeue, so unpack before looping.
         while (Pointreceiver.TryDequeuePointCloud(0, out string address, out PointCloudFrame frame))
         {
-            if (frame.PointCount == 0) continue;
+            if (frame.PointCount == 0)
+            {
+                ClearChannelMesh(address);
+                continue;
+            }
             var mesh = EnsureOrCreateChannelMesh(address);
             UnpackPointCloudIntoMesh(frame, mesh);
         }
@@ -162,6 +166,15 @@ public class PointreceiverMeshHost : MonoBehaviour
         mesh.SetVertexBufferData(OutputColors, 0, 0, pointCount, 1, MeshUpdateFlags.DontRecalculateBounds);
         mesh.SetIndices(Indices, 0, pointCount, MeshTopology.Points, 0, calculateBounds: false);
         mesh.RecalculateBounds();
+    }
+
+    // only clears a channel we've already seen; a channel whose very first
+    // frame is empty has nothing to draw and gets no object
+    void ClearChannelMesh(string address)
+    {
+        var existing = PointCloudChannels.FirstOrDefault(channel => channel.Address == address);
+        if (existing.Address == null) return;
+        existing.Mesh.Clear();
     }
 
     Mesh EnsureOrCreateChannelMesh(string address)

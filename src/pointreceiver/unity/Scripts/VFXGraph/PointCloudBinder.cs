@@ -39,7 +39,11 @@ public class PointCloudBinder : VFXBinderBase
     {
         if (PointreceiverInstance == null) return;
         if (!PointreceiverInstance.PointClouds.TryGetValue(ChannelAddress, out var pointCloud)) return;
-        if (pointCloud.PointCount <= 1) return;
+        if (pointCloud.PointCount <= 1)
+        {
+            visualEffect.SetInt(PointCountProperty, 0);
+            return;
+        }
         if (pointCloud.Positions == null) return;
         if (pointCloud.Colors == null) return;
         visualEffect.SetTexture(PositionsProperty, pointCloud.Positions);

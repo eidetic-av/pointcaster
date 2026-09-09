@@ -112,6 +112,10 @@ void streaming_thread_loop(
   // pre-serialized data: address + '\0' + serialized payload
   StringMap<std::shared_ptr<std::vector<std::byte>>> last_data;
 
+  // an empty point cloud that is sent on the frame a channel transitions
+  // from publishing to not publishing
+  const auto stopped_cloud = std::make_shared<PointCloud>();
+
   StringMap<int> subscriber_counts;
   bool subscriber_counts_dirty = true;
 
@@ -167,12 +171,23 @@ void streaming_thread_loop(
           return stream.address == channel_address;
         });
       };
+      // erase the cache for no longer publishing channels and also
+      // collect which ones that were stopped on this frame
+      std::vector<PointStream> stopped_streams;
       std::erase_if(last_clouds, [&](const auto &entry) {
-        return !still_publishing(entry.first);
+        if (still_publishing(entry.first)) return false;
+        if (entry.second && !entry.second->empty()) {
+          stopped_streams.push_back({entry.first, stopped_cloud});
+        }
+        return true;
       });
       std::erase_if(last_data, [&](const auto &entry) {
         return !still_publishing(entry.first);
       });
+      // for each of the streams that stopped this frame, we send one last
+      // pointcloud that just has zero points on its channel
+      publishing_streams.insert(publishing_streams.end(),
+                                stopped_streams.begin(), stopped_streams.end());
     }
 
     std::vector<PointStream> streams_to_serialize;
@@ -180,7 +195,10 @@ void streaming_thread_loop(
       ProfilingZone collect_dirty_zone("point_stream::collect_dirty");
       streams_to_serialize =
           publishing_streams | std::views::filter([&](const auto &stream) {
-            if (!stream.cloud || stream.cloud->empty()) return false;
+            if (!stream.cloud) return false;
+            if (stream.cloud->empty() && stream.cloud != stopped_cloud) {
+              return false;
+            }
             const auto it = last_clouds.find(stream.address);
             return it == last_clouds.end() || it->second != stream.cloud;
           }) |
@@ -203,7 +221,8 @@ void streaming_thread_loop(
             [&](const tbb::blocked_range<size_t> &range) {
               for (size_t i = range.begin(); i < range.end(); i++) {
                 const auto &stream = streams_to_serialize[i];
-                const auto payload = stream.cloud->serialize(compress);
+                const auto payload =
+                    stream.cloud->serialize(compress && !stream.cloud->empty());
                 const auto prefix_size = stream.address.size() + 1;
 
                 auto framed = std::make_shared<std::vector<std::byte>>(
