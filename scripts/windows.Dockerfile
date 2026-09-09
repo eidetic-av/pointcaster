@@ -170,9 +170,11 @@ RUN $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; \
 COPY triplets/armeabi-v7a-*.cmake C:\\vcpkg-config\\triplets\\
 
 # install third-party dependencies for the android target
+# using vcpkg with its own android install root
 RUN & \"$Env:VsDevShell\" -Arch amd64 -HostArch amd64; \
     & \"$Env:VCPKG_ROOT\vcpkg.exe\" install \
       --x-manifest-root=C:\vcpkg-config \
+      --x-install-root=C:\vcpkg-config\vcpkg_installed_android \
       --overlay-triplets=C:\vcpkg-config\triplets \
       --overlay-ports=C:\vcpkg-config\ports \
       --triplet armeabi-v7a-android-custom-release \
