@@ -38,8 +38,11 @@ std::vector<PointStream> collect_point_streams(Workspace &workspace) {
     if (!device) continue;
     std::string id;
     std::visit([&](const auto &cfg) { id = cfg.id; }, device->config());
+    auto cloud = devices::in_any_session(workspace.config, id)
+                     ? device->point_cloud()
+                     : nullptr;
     sources.push_back(
-        {devices::device_address(workspace.config, id), device->point_cloud()});
+        {devices::device_address(workspace.config, id), std::move(cloud)});
   }
 
   for (const auto &group : workspace.config.device_groups) {

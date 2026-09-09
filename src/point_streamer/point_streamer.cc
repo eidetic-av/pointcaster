@@ -153,6 +153,7 @@ void streaming_thread_loop(
 
     sync_config_vars();
 
+    std::vector<PointStream> subscribed_streams;
     std::vector<PointStream> publishing_streams;
     {
       ProfilingZone collect_streams_zone("point_stream::collect_streams");
@@ -164,30 +165,34 @@ void streaming_thread_loop(
           std::ranges::to<std::vector>();
     }
 
-    // drop cached state for channels that no longer publish
+    // any channel that was publishing, but isn't publishing any more sends one
+    // last empty pointcloud on its channel to clear the clients
+    std::vector<PointStream> stopped_streams;
     {
-      const auto still_publishing = [&](const std::string &channel_address) {
-        return std::ranges::any_of(publishing_streams, [&](const auto &stream) {
-          return stream.address == channel_address;
-        });
+      const auto still_streaming = [&](const std::string &channel_address) {
+        const auto it = std::ranges::find(publishing_streams, channel_address,
+                                          &PointStream::address);
+        return it != publishing_streams.end() && it->cloud &&
+               !it->cloud->empty();
       };
-      // erase the cache for no longer publishing channels and also
-      // collect which ones that were stopped on this frame
-      std::vector<PointStream> stopped_streams;
-      std::erase_if(last_clouds, [&](const auto &entry) {
-        if (still_publishing(entry.first)) return false;
-        if (entry.second && !entry.second->empty()) {
-          stopped_streams.push_back({entry.first, stopped_cloud});
+      stopped_streams = last_clouds | std::views::keys |
+                        std::views::filter([&](const auto &channel_address) {
+                          return !still_streaming(channel_address);
+                        }) |
+                        std::views::transform([&](const auto &channel_address) {
+                          return PointStream{channel_address, stopped_cloud};
+                        }) |
+                        std::ranges::to<std::vector>();
+
+      for (const auto &stopped : stopped_streams) {
+        const auto it = std::ranges::find(publishing_streams, stopped.address,
+                                          &PointStream::address);
+        if (it != publishing_streams.end()) {
+          it->cloud = stopped_cloud;
+        } else {
+          publishing_streams.push_back(stopped);
         }
-        return true;
-      });
-      std::erase_if(last_data, [&](const auto &entry) {
-        return !still_publishing(entry.first);
-      });
-      // for each of the streams that stopped this frame, we send one last
-      // pointcloud that just has zero points on its channel
-      publishing_streams.insert(publishing_streams.end(),
-                                stopped_streams.begin(), stopped_streams.end());
+      }
     }
 
     std::vector<PointStream> streams_to_serialize;
@@ -274,6 +279,12 @@ void streaming_thread_loop(
                              stream.address, e.what());
         }
       }
+    }
+
+    // remove stopped streams from our cache
+    for (const auto &stream : stopped_streams) {
+      last_clouds.erase(stream.address);
+      last_data.erase(stream.address);
     }
 
     if (subscriber_counts_dirty) {
