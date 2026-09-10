@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Unity.Burst;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -15,12 +16,22 @@ public class PointreceiverMeshHost : MonoBehaviour
 
     public ChannelSubscription Subscription = new ChannelSubscription();
 
-    // instantiated once per incoming channel; needs a MeshFilter and a
-    // MeshRenderer
-    public GameObject PointCloudTemplate;
+    public enum PointShape { Square, Disk }
+    public enum PointSizeMode { WorldUnits, ScreenPixels }
+
+    [Header("Points")]
+    [Tooltip("Size in metres when Size Mode is World Units, otherwise pixels.")]
+    [Min(0f)] public float PointSize = 0.01f;
+
+    public PointSizeMode SizeMode = PointSizeMode.WorldUnits;
+
+    [Tooltip("Square is cheapest.")]
+    public PointShape Shape = PointShape.Square;
+
+    public Color Tint = new Color(0.5f, 0.5f, 0.5f, 1f);
 
     [Serializable]
-    public struct PointCloudChannel
+    public class PointCloudChannel
     {
         public string Address;
         public GameObject GameObject;
@@ -32,15 +43,50 @@ public class PointreceiverMeshHost : MonoBehaviour
     private Pointreceiver Pointreceiver;
     private string SubscribedAddress;
 
+    // every point becomes a camera facing quad, expanded in the vertex shader
+    private const int VerticesPerPoint = 4;
+    private const int IndicesPerPoint = 6;
+
+    // the receiver sends positions as signed millimetres in a 16 bit integer
+    private const float MillimetresToMetres = 0.001f;
+    private const float PositionScale = short.MaxValue * MillimetresToMetres;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PackedPosition
+    {
+        public short X, Y, Z, _Padding;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PointVertex
+    {
+        public short X, Y, Z;
+        public short _Padding;
+        public Color32 Color;
+    }
+
     private int CurrentCapacity = 0;
-    private int[] RawPositions, RawColors, Indices;
-    private NativeArray<int> NativePositions;
-    private NativeArray<int> NativeColors;
-    private NativeArray<Vector3> OutputPositions;
-    private NativeArray<Color32> OutputColors;
+    private int[] Indices;
+    private NativeArray<PointVertex> OutputVertices;
+    private NativeArray<Vector2> QuadCorners;
+    private NativeArray<Vector3> MinMax;
+
+    private const string PointShaderResource = "PointQuad";
+
+    private Material PointMaterial;
+
+    private float AppliedPointSize = float.NaN;
+    private PointSizeMode AppliedSizeMode;
+    private PointShape AppliedShape;
+    private Color AppliedTint;
 
     void OnEnable()
     {
+        if (!SystemInfo.SupportsVertexAttributeFormat(VertexAttributeFormat.SNorm16, 4)) 
+        {
+            Debug.LogError("Pointreceiver Mesh Host: this device reports no support for "
+                + "SNorm16 vertex positions, so point clouds will not draw");
+        }
         try
         {
             if (Pointreceiver == null)
@@ -76,10 +122,11 @@ public class PointreceiverMeshHost : MonoBehaviour
 
     void OnDestroy()
     {
-        if (NativePositions.IsCreated) NativePositions.Dispose();
-        if (NativeColors.IsCreated) NativeColors.Dispose();
-        if (OutputPositions.IsCreated) OutputPositions.Dispose();
-        if (OutputColors.IsCreated) OutputColors.Dispose();
+        if (PointMaterial != null) Destroy(PointMaterial);
+
+        if (OutputVertices.IsCreated) OutputVertices.Dispose();
+        if (QuadCorners.IsCreated) QuadCorners.Dispose();
+        if (MinMax.IsCreated) MinMax.Dispose();
 
         Pointreceiver?.Dispose();
         Pointreceiver = null;
@@ -99,8 +146,64 @@ public class PointreceiverMeshHost : MonoBehaviour
                 ClearChannelMesh(address);
                 continue;
             }
+            // grow first so a mesh created below is laid out only once
+            EnsureCapacity(frame.PointCount);
             var mesh = EnsureOrCreateChannelMesh(address);
             UnpackPointCloudIntoMesh(frame, mesh);
+        }
+
+        ApplyPointSettings();
+    }
+
+    Material EnsurePointMaterial()
+    {
+        if (PointMaterial != null) return PointMaterial;
+
+        var shader = Resources.Load<Shader>(PointShaderResource);
+        if (shader == null)
+        {
+            Debug.LogError("Pointreceiver Mesh Host: could not load the point "
+                + "shader, so point clouds will not draw");
+            return null;
+        }
+
+        PointMaterial = new Material(shader) { name = "Pointreceiver Points" };
+        // nothing has been pushed to a brand new material yet
+        AppliedPointSize = float.NaN;
+
+        return PointMaterial;
+    }
+
+    void ApplyPointSettings()
+    {
+        if (PointMaterial == null) return;
+        if (PointSize == AppliedPointSize && SizeMode == AppliedSizeMode
+            && Shape == AppliedShape && Tint == AppliedTint) return;
+
+        AppliedPointSize = PointSize;
+        AppliedSizeMode = SizeMode;
+        AppliedShape = Shape;
+        AppliedTint = Tint;
+
+        PointMaterial.SetFloat("_PointSize", PointSize);
+        PointMaterial.SetFloat("_PositionScale", PositionScale);
+        PointMaterial.SetColor("_Tint", Tint);
+
+        SetToggle("_Distance", "_DISTANCE_ON", SizeMode == PointSizeMode.WorldUnits);
+        SetToggle("_Disk", "_DISK_ON", Shape == PointShape.Disk);
+    }
+
+    void SetToggle(string property, string keyword, bool on)
+    {
+        if (on) 
+        {
+            PointMaterial.SetFloat(property, 1f);
+            PointMaterial.EnableKeyword(keyword);
+        }
+        else 
+        {
+            PointMaterial.SetFloat(property, 0f);
+            PointMaterial.DisableKeyword(keyword);
         }
     }
 
@@ -108,64 +211,114 @@ public class PointreceiverMeshHost : MonoBehaviour
     {
         if (CurrentCapacity >= pointCount) return;
 
-        CurrentCapacity = pointCount;
+        // points per step of buffer growth
+        const int CapacityBlock = 8192;
+        CurrentCapacity = (pointCount / CapacityBlock + 2) * CapacityBlock;
 
-        if (NativePositions.IsCreated) NativePositions.Dispose();
-        if (NativeColors.IsCreated) NativeColors.Dispose();
-        if (OutputPositions.IsCreated) OutputPositions.Dispose();
-        if (OutputColors.IsCreated) OutputColors.Dispose();
+        if (OutputVertices.IsCreated) OutputVertices.Dispose();
+        if (QuadCorners.IsCreated) QuadCorners.Dispose();
 
-        RawPositions = new int[CurrentCapacity * 2];
-        RawColors = new int[CurrentCapacity];
-        Indices = new int[CurrentCapacity];
+        int vertexCapacity = CurrentCapacity * VerticesPerPoint;
+
+        Indices = new int[CurrentCapacity * IndicesPerPoint];
+        QuadCorners = new NativeArray<Vector2>(vertexCapacity, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
         for (int i = 0; i < CurrentCapacity; i++)
-            Indices[i] = i;
+        {
+            int vertex = i * VerticesPerPoint;
+            int index = i * IndicesPerPoint;
 
-        NativePositions = new NativeArray<int>(CurrentCapacity * 2, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-        NativeColors = new NativeArray<int>(CurrentCapacity, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-        OutputPositions = new NativeArray<Vector3>(CurrentCapacity, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-        OutputColors = new NativeArray<Color32>(CurrentCapacity, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            Indices[index + 0] = vertex + 0;
+            Indices[index + 1] = vertex + 1;
+            Indices[index + 2] = vertex + 2;
+            Indices[index + 3] = vertex + 2;
+            Indices[index + 4] = vertex + 1;
+            Indices[index + 5] = vertex + 3;
+
+            QuadCorners[vertex + 0] = new Vector2(-1f, -1f);
+            QuadCorners[vertex + 1] = new Vector2(1f, -1f);
+            QuadCorners[vertex + 2] = new Vector2(-1f, 1f);
+            QuadCorners[vertex + 3] = new Vector2(1f, 1f);
+        }
+
+        OutputVertices = new NativeArray<PointVertex>(vertexCapacity, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+        if (!MinMax.IsCreated) 
+        {
+            MinMax = new NativeArray<Vector3>(2, Allocator.Persistent);
+        }
+
+        foreach (var channel in PointCloudChannels) 
+        {
+            ConfigureMesh(channel.Mesh);
+        }
     }
 
-    void UnpackPointCloudIntoMesh(PointCloudFrame frame, Mesh targetMesh)
+    unsafe void UnpackPointCloudIntoMesh(PointCloudFrame frame, Mesh targetMesh)
     {
         int pointCount = frame.PointCount;
         if (pointCount == 0) return;
 
-        EnsureCapacity(pointCount);
-
-        Marshal.Copy(frame.positions, RawPositions, 0, pointCount * 2);
-        Marshal.Copy(frame.colours, RawColors, 0, pointCount);
-
-        NativePositions.CopyFrom(RawPositions);
-        NativeColors.CopyFrom(RawColors);
-
         var unpackJob = new PointUnpackJob
         {
-            PackedPosition = NativePositions,
-            PackedColor = NativeColors,
-            OutPosition = OutputPositions,
-            OutColor = OutputColors,
-            Count = pointCount
+            Positions = (PackedPosition*)frame.positions.ToPointer(),
+            Colors = (uint*)frame.colours.ToPointer(),
+            OutVertex = OutputVertices
         };
-        var handle = unpackJob.Schedule(pointCount, 64);
+        var boundsJob = new PointBoundsJob
+        {
+            Vertex = OutputVertices,
+            Count = pointCount,
+            MinMax = MinMax
+        };
+        var handle = boundsJob.Schedule(unpackJob.Schedule(pointCount, 64));
         handle.Complete();
 
-        ApplyMeshData(targetMesh, pointCount);
+        // quads grow around the centrepoint
+        var extent = MinMax[1] - MinMax[0] + Vector3.one * PointSize;
+        var bounds = new Bounds((MinMax[0] + MinMax[1]) * 0.5f, extent);
+
+        ApplyMeshData(targetMesh, pointCount, bounds);
     }
 
-    void ApplyMeshData(Mesh mesh, int pointCount)
+    void ConfigureMesh(Mesh mesh)
     {
+        int vertexCapacity = CurrentCapacity * VerticesPerPoint;
+        int indexCapacity = CurrentCapacity * IndicesPerPoint;
+
         mesh.Clear();
         mesh.SetVertexBufferParams(
-            pointCount,
-            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0),
-            new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4, 1)
+            vertexCapacity,
+            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.SNorm16, 4, 0),
+            new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4, 0),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2, 1)
         );
-        mesh.SetVertexBufferData(OutputPositions, 0, 0, pointCount, 0, MeshUpdateFlags.DontRecalculateBounds);
-        mesh.SetVertexBufferData(OutputColors, 0, 0, pointCount, 1, MeshUpdateFlags.DontRecalculateBounds);
-        mesh.SetIndices(Indices, 0, pointCount, MeshTopology.Points, 0, calculateBounds: false);
-        mesh.RecalculateBounds();
+        mesh.SetVertexBufferData(QuadCorners, 0, 0, vertexCapacity, 1, MeshUpdateFlags.DontRecalculateBounds);
+
+        mesh.SetIndexBufferParams(indexCapacity, IndexFormat.UInt32);
+        mesh.SetIndexBufferData(Indices, 0, 0, indexCapacity,
+            MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices);
+
+        mesh.subMeshCount = 1;
+        SetDrawnPointCount(mesh, 0, new Bounds());
+    }
+
+    void SetDrawnPointCount(Mesh mesh, int pointCount, Bounds bounds)
+    {
+        mesh.SetSubMesh(0,
+            new SubMeshDescriptor(0, pointCount * IndicesPerPoint, MeshTopology.Triangles)
+            {
+                firstVertex = 0,
+                vertexCount = pointCount * VerticesPerPoint,
+                bounds = bounds
+            },
+            MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices);
+        mesh.bounds = bounds;
+    }
+
+    void ApplyMeshData(Mesh mesh, int pointCount, Bounds bounds)
+    {
+        int vertexCount = pointCount * VerticesPerPoint;
+        mesh.SetVertexBufferData(OutputVertices, 0, 0, vertexCount, 0, MeshUpdateFlags.DontRecalculateBounds);
+        SetDrawnPointCount(mesh, pointCount, bounds);
     }
 
     // only clears a channel we've already seen; a channel whose very first
@@ -173,29 +326,29 @@ public class PointreceiverMeshHost : MonoBehaviour
     void ClearChannelMesh(string address)
     {
         var existing = PointCloudChannels.FirstOrDefault(channel => channel.Address == address);
-        if (existing.Address == null) return;
-        existing.Mesh.Clear();
+        if (existing == null) return;
+        SetDrawnPointCount(existing.Mesh, 0, new Bounds());
     }
 
     Mesh EnsureOrCreateChannelMesh(string address)
     {
         var existing = PointCloudChannels.FirstOrDefault(channel => channel.Address == address);
-        if (existing.Address != null)
+        if (existing != null)
             return existing.Mesh;
 
-        var newCloudObject = Instantiate(
-            PointCloudTemplate,
-            parent: transform,
-            worldPositionStays: false
-        );
-        newCloudObject.name = address;
+        var newCloudObject = new GameObject(address);
+        newCloudObject.transform.SetParent(transform, worldPositionStays: false);
+        newCloudObject.layer = gameObject.layer;
 
         var newMesh = new Mesh { indexFormat = IndexFormat.UInt32 };
         newMesh.MarkDynamic();
-        newCloudObject.GetComponent<MeshFilter>().sharedMesh = newMesh;
+        ConfigureMesh(newMesh);
+        newCloudObject.AddComponent<MeshFilter>().sharedMesh = newMesh;
 
-        var meshRenderer = newCloudObject.GetComponent<MeshRenderer>();
-        meshRenderer.material = meshRenderer.sharedMaterial;
+        var meshRenderer = newCloudObject.AddComponent<MeshRenderer>();
+        meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
+        meshRenderer.receiveShadows = false;
+        meshRenderer.sharedMaterial = EnsurePointMaterial();
 
         PointCloudChannels.Add(new PointCloudChannel
         {
@@ -208,36 +361,64 @@ public class PointreceiverMeshHost : MonoBehaviour
     }
 
     [BurstCompile]
-    private struct PointUnpackJob : IJobParallelFor
+    private unsafe struct PointUnpackJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<int> PackedPosition;
-        [ReadOnly] public NativeArray<int> PackedColor;
+        [NativeDisableUnsafePtrRestriction] public PackedPosition* Positions;
+        [NativeDisableUnsafePtrRestriction] public uint* Colors;
 
-        public NativeArray<Vector3> OutPosition;
-        public NativeArray<Color32> OutColor;
-
-        public int Count;
+        // one point fills the four vertices of its quad
+        [NativeDisableParallelForRestriction] public NativeArray<PointVertex> OutVertex;
 
         public void Execute(int i)
         {
-            int posIndex = i * 2;
-            int packedXY = PackedPosition[posIndex];
-            int packedZ = PackedPosition[posIndex + 1];
+            var packed = Positions[i];
 
-            short xi = (short)(packedXY & 0xFFFF);
-            short yi = (short)((packedXY >> 16) & 0xFFFF);
-            short zi = (short)(packedZ & 0xFFFF);
+            var outVertex = new PointVertex
+            {
+                X = (short)-Mathf.Max(packed.X, short.MinValue + 1),
+                Y = packed.Y,
+                Z = packed.Z,
+                Color = *(Color32*)(Colors + i)
+            };
 
-            float mm = 1000.0f;
-            OutPosition[i] = new Vector3(-xi / mm, yi / mm, zi / mm);
+            int vertex = i * VerticesPerPoint;
+            for (int corner = 0; corner < VerticesPerPoint; corner++)
+            {
+                OutVertex[vertex + corner] = outVertex;
+            }
+        }
+    }
 
-            int bgra = PackedColor[i];
-            byte b = (byte)(bgra & 0xFF);
-            byte g = (byte)((bgra >> 8) & 0xFF);
-            byte r = (byte)((bgra >> 16) & 0xFF);
-            byte a = (byte)((bgra >> 24) & 0xFF);
+    [BurstCompile]
+    private struct PointBoundsJob : IJob
+    {
+        [ReadOnly] public NativeArray<PointVertex> Vertex;
+        public int Count;
 
-            OutColor[i] = new Color32(r, g, b, a);
+        [WriteOnly] public NativeArray<Vector3> MinMax;
+
+        public void Execute()
+        {
+            var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+            var max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+
+            for (int i = 0; i < Count; i++)
+            {
+                var v = Vertex[i * VerticesPerPoint];
+                var p = new Vector3(
+                    v.X * MillimetresToMetres,
+                    v.Y * MillimetresToMetres,
+                    v.Z * MillimetresToMetres);
+                min.x = Mathf.Min(min.x, p.x);
+                min.y = Mathf.Min(min.y, p.y);
+                min.z = Mathf.Min(min.z, p.z);
+                max.x = Mathf.Max(max.x, p.x);
+                max.y = Mathf.Max(max.y, p.y);
+                max.z = Mathf.Max(max.z, p.z);
+            }
+
+            MinMax[0] = min;
+            MinMax[1] = max;
         }
     }
 }

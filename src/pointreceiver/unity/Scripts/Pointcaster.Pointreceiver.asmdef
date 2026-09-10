@@ -3,5 +3,6 @@
     "references": [
         "Unity.Burst",
         "UnityEngine.UI"
-    ]
+    ],
+    "allowUnsafeCode": true
 }
