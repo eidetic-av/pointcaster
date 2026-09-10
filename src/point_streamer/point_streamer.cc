@@ -61,6 +61,7 @@ void streaming_thread_loop(
   int port;
   int publish_hz = 30;
   bool compress = false;
+  bool publish_every_frame = false;
   std::vector<PointStream> point_streams;
   std::vector<StreamChannelConfiguration> channel_configs;
 
@@ -75,6 +76,7 @@ void streaming_thread_loop(
     port = stream_config.port.value();
     publish_hz = stream_config.publish_hz.value();
     compress = stream_config.compress.value();
+    publish_every_frame = stream_config.publish_every_frame.value();
     // TODO is this too heavy to do every frame? maybe we need a dirty marker
     channel_configs = stream_config.channels;
     point_streams = collect_point_streams(workspace);
@@ -119,6 +121,8 @@ void streaming_thread_loop(
   StringMap<int> subscriber_counts;
   bool subscriber_counts_dirty = true;
 
+  std::vector<std::string> newly_subscribed_addresses;
+
   const auto handle_subscriber_message = [&](auto &msg) {
     if (msg.size() < 1) return;
     const auto *bytes = static_cast<const std::byte *>(msg.data());
@@ -129,6 +133,7 @@ void streaming_thread_loop(
     auto &count = subscriber_counts[topic];
     if (subscribe) {
       count++;
+      newly_subscribed_addresses.push_back(topic);
     } else if (count > 0) {
       count--;
     }
@@ -252,13 +257,25 @@ void streaming_thread_loop(
       }
     }
 
-    // TODO do we actually want a re-send? make this a param in a per-channel
-    // config maybe... re-send every enabled channel's last known frame. XPUB
-    // drops sends with no subscribers, so a late-joining subscriber would
-    // otherwise never get a frame until the next change.
+    // if publish_every_frame is true, every publishing channel re-sends its
+    // last frame. otherwise a channel only sends when its cloud changed, or
+    // when a client just subscribed and needs the last frame it missed
     {
       ProfilingZone send_zone("point_stream::send");
       for (const auto &stream : publishing_streams) {
+
+        if (!publish_every_frame) {
+          const auto frame_changed =
+              std::ranges::find(streams_to_serialize, stream.address,
+                                &PointStream::address) !=
+              streams_to_serialize.end();
+          const auto has_new_subscriber = std::ranges::any_of(
+              newly_subscribed_addresses, [&](const auto &topic) {
+                return stream.address.starts_with(topic);
+              });
+          if (!frame_changed && !has_new_subscriber) continue;
+        }
+
         const auto it = last_data.find(stream.address);
         if (it == last_data.end() || !it->second || it->second->empty())
           continue;
@@ -280,6 +297,8 @@ void streaming_thread_loop(
         }
       }
     }
+
+    newly_subscribed_addresses.clear();
 
     // remove stopped streams from our cache
     for (const auto &stream : stopped_streams) {

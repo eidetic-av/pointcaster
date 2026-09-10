@@ -12,10 +12,11 @@ struct StreamChannelConfiguration {
 };
 
 struct PointStreamerConfiguration {
-  rfl::DefaultVal<int> publish_hz = 60;
   rfl::DefaultVal<std::string> address = "*";
   rfl::DefaultVal<int> port = 9992; // @minmax(1024, 49151)
+  rfl::DefaultVal<int> publish_hz = 60;
   rfl::DefaultVal<bool> compress = false;
+  rfl::DefaultVal<bool> publish_every_frame = false;
   std::vector<StreamChannelConfiguration> channels{}; // @hidden
 };
 
