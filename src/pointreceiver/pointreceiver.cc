@@ -8,7 +8,6 @@
 #include <core/logger/logger.h>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <functional>
 #include <iterator>
 #include <memory>
@@ -67,10 +66,12 @@ using SubscriptionSet = std::unordered_set<std::string>;
 using SubscriptionSnapshot = std::shared_ptr<const SubscriptionSet>;
 
 struct PointCloudFrame {
-  zmq::message_t payload;
   std::uint64_t timestamp = 0;
   bool pending = false;
-  std::shared_ptr<PointCloud> cloud;
+  // the newest cloud coming from the receiver thread
+  std::shared_ptr<const PointCloud> incoming_cloud;
+  // the cloud being used by the caller that dequeues
+  std::shared_ptr<const PointCloud> current_cloud;
 };
 
 using MessageFrame = std::pair<std::string, ConfigValue>;
@@ -248,6 +249,8 @@ void point_cloud_receive_loop(pc::receiver::Context &ctx,
   // and sync it with the socket each loop
   SubscriptionSnapshot subscriptions;
 
+  pc::StringMap<zmq::message_t> latest_payloads;
+
   while (!ctx.point_cloud_stopping.load(std::memory_order_acquire)) {
 
     subscriptions = sync_subscriptions(subscriptions, socket, [&ctx] {
@@ -255,9 +258,10 @@ void point_cloud_receive_loop(pc::receiver::Context &ctx,
       return ctx.point_cloud_subscriptions;
     });
 
-    // block for the first frame so an idle socket doesn't spin, then drain the
-    // rest without blocking & dump the latest raw bytes per channel
+    latest_payloads.clear();
 
+    // block for the first frame so an idle socket doesn't spin, then drain the
+    // rest without blocking
     auto receive_flags = zmq::recv_flags::none;
     for (zmq::message_t message; socket.recv(message, receive_flags);) {
       receive_flags = zmq::recv_flags::dontwait;
@@ -265,16 +269,46 @@ void point_cloud_receive_loop(pc::receiver::Context &ctx,
       const auto separator = frame.find('\0');
       if (separator == std::string_view::npos) continue;
       const auto address = frame.substr(0, separator);
+      const auto it = latest_payloads.find(address);
+      if (it == latest_payloads.end()) {
+        latest_payloads.emplace(std::string(address), std::move(message));
+      } else {
+        it->second = std::move(message);
+      }
+    }
+
+    const auto message_bytes = [](const zmq::message_t &message) {
+      return std::span<const std::byte>{
+          static_cast<const std::byte *>(message.data()), message.size()};
+    };
+
+    for (auto &[address, payload] : latest_payloads) {
+      const auto cloud_bytes =
+          message_bytes(payload).subspan(address.size() + 1);
+
+      std::shared_ptr<const PointCloud> cloud;
+      try {
+        cloud = std::make_shared<const PointCloud>(
+            PointCloud::deserialize(cloud_bytes));
+      } catch (const std::exception &e) {
+        pc::logger()->warn("point_cloud deserialize threw: {} (size={})",
+                           e.what(), cloud_bytes.size());
+        continue;
+      } catch (...) {
+        pc::logger()->warn(
+            "point_cloud deserialize threw unknown exception (size={})",
+            cloud_bytes.size());
+        continue;
+      }
+
       {
         std::lock_guard lock(ctx.point_cloud_stream_mutex);
         auto it = ctx.point_cloud_frames.find(address);
         if (it == ctx.point_cloud_frames.end()) {
-          it = ctx.point_cloud_frames
-                   .emplace(std::string(address), PointCloudFrame{})
-                   .first;
+          it = ctx.point_cloud_frames.emplace(address, PointCloudFrame{}).first;
           ctx.known_point_cloud_addresses.emplace(address);
         }
-        it->second.payload = std::move(message);
+        it->second.incoming_cloud = std::move(cloud);
         it->second.timestamp = ++ctx.point_cloud_stream_timestamp;
         it->second.pending = true;
       }
@@ -569,7 +603,7 @@ pointreceiver_status pointreceiver_dequeue_point_cloud(
     pointreceiver_point_cloud_frame *out_frame, int timeout_ms) {
   using namespace pc::receiver;
 
-  if (!ctx || !out_frame || !out_address || address_capacity <= 0) {
+  if (!ctx || !out_frame || !out_address || address_capacity == 0) {
     return POINTRECEIVER_ERROR_INVALID_ARGUMENT;
   }
 
@@ -597,33 +631,12 @@ pointreceiver_status pointreceiver_dequeue_point_cloud(
 
     PointCloudFrame &frame = oldest_pending->second;
     frame.pending = false;
-    const zmq::message_t incoming_payload = std::move(frame.payload);
+    frame.current_cloud = std::move(frame.incoming_cloud);
+    const auto cloud = frame.current_cloud;
     copy_to_buffer(out_address, address_capacity, oldest_pending->first);
 
     lock.unlock();
 
-    const auto *data = static_cast<const std::byte *>(incoming_payload.data());
-    const auto size = incoming_payload.size();
-    const auto *separator =
-        static_cast<const std::byte *>(std::memchr(data, 0, size));
-    if (!separator) return POINTRECEIVER_ERROR_DECODE_FAILED;
-    const std::span<const std::byte> payload_data(separator + 1, data + size);
-
-    std::shared_ptr<pc::PointCloud> cloud;
-    try {
-      cloud = std::make_shared<pc::PointCloud>(
-          pc::PointCloud::deserialize(payload_data));
-    } catch (const std::exception &e) {
-      pc::logger()->warn("point_cloud deserialize threw: {} (size={})",
-                         e.what(), size);
-      return POINTRECEIVER_ERROR_DECODE_FAILED;
-    } catch (...) {
-      pc::logger()->warn(
-          "point_cloud deserialize threw unknown exception (size={})", size);
-      return POINTRECEIVER_ERROR_DECODE_FAILED;
-    }
-
-    frame.cloud = cloud;
     out_frame->point_count = cloud->size();
     out_frame->positions = reinterpret_cast<const pointreceiver_position_t *>(
         cloud->positions.data());
